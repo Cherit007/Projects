@@ -538,6 +538,10 @@ nav.navbar.bootsnav ul.nav > li > a:hover,nav.navbar.bootsnav ul.nav > li > a:fo
     background: #fedb5d none repeat scroll 0 0;
     padding:27px 0 32px;
 }
+#contact_form .container {
+    display: flex;
+    flex-direction: column;
+}
 #contact_form h2 {
     margin: 20px 0 0;
     color:#73757e;

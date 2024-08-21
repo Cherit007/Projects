@@ -1,7 +1,59 @@
 // import "./custom.css";
+import { useState } from "react";
 import { Helmet } from "react-helmet";
 
 function App() {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    message: "",
+  });
+  const [mailStatus, setMailStatus] = useState(false);
+  const [error, setError] = useState(false);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+  };
+
+  const handleSendEmail = async (e) => {
+    e.preventDefault();
+    try {
+      if (!formData.name || !formData.email || !formData.message) {
+        setError(true);
+        return;
+      }
+      setError(false);
+      const response = await fetch("http://localhost:3001/submit-form", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setMailStatus(true);
+        console.log("Form successfully submitted:", result);
+        setFormData({
+          name: "",
+          email: "",
+          message: "",
+        });
+        setTimeout(() => {
+          setMailStatus(false);
+        }, 2000);
+      } else {
+        console.error("Form submission failed:", response.statusText);
+      }
+    } catch (error) {
+      console.error("Error submitting form:", error);
+    }
+    console.log(formData);
+  };
   return (
     <div classNameName="App">
       {/* <div id="loading">
@@ -97,7 +149,16 @@ function App() {
                 data-toggle="collapse"
                 data-target="#navbar-menu"
               >
-                <i className="fa fa-bars"></i>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  x="0px"
+                  y="0px"
+                  width="30"
+                  height="10"
+                  viewBox="0 0 50 50"
+                >
+                  <path d="M 5 8 A 2.0002 2.0002 0 1 0 5 12 L 45 12 A 2.0002 2.0002 0 1 0 45 8 L 5 8 z M 5 23 A 2.0002 2.0002 0 1 0 5 27 L 45 27 A 2.0002 2.0002 0 1 0 45 23 L 5 23 z M 5 38 A 2.0002 2.0002 0 1 0 5 42 L 45 42 A 2.0002 2.0002 0 1 0 45 38 L 5 38 z"></path>
+                </svg>
               </button>
               <a className="navbar-brand" href="">
                 <img className="logo" src="images/logo.jpeg" alt="" />
@@ -130,7 +191,11 @@ function App() {
         <div id="carousel" className="carousel slide" data-ride="carousel">
           <div className="carousel-inner" role="listbox">
             <div className="item active">
-              <img id="weldingimg" src="images/slider_img.jpg" alt="Construction" />
+              <img
+                id="weldingimg"
+                src="images/slider_img.jpg"
+                alt="Construction"
+              />
               <div className="overlay">
                 <div className="carousel-caption">
                   <h3>We are Certified Engineers</h3>
@@ -419,18 +484,31 @@ function App() {
       </section>
       <section id="contact_form">
         <div className="container">
-          <div className="row">
-            <div className="col-md-6">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+            className="row"
+          >
+            <div style={{ textAlign: "center" }} className="col-md-6">
               <h2>Do you have any questions?</h2>
               <h2 className="second_heading">Feel free to contact us!</h2>
             </div>
-            <form role="form" className="form-inline text-right col-md-6">
+            <form
+              onSubmit={handleSendEmail}
+              className="form-inline text-right col-md-6"
+            >
               <div className="form-group">
                 <input
                   type="text"
                   className="form-control"
                   id="name"
+                  name="name"
                   placeholder="Name"
+                  value={formData.name}
+                  onChange={handleChange}
                 />
               </div>
               <div className="form-group">
@@ -439,6 +517,9 @@ function App() {
                   className="form-control"
                   id="email"
                   placeholder="Email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
                 />
               </div>
               <div className="form-group">
@@ -447,12 +528,29 @@ function App() {
                   rows="5"
                   id="msg"
                   placeholder="Message"
+                  name="message"
+                  value={formData.message}
+                  onChange={handleChange}
                 ></textarea>
               </div>
               <button type="submit" className="btn submit_btn">
                 Submit
               </button>
             </form>
+            {mailStatus && (
+              <span
+                style={{ fontSize: "20px", color: "green", paddingTop: "20px" }}
+              >
+                Mail Sent successfully
+              </span>
+            )}
+            {error && (
+              <span
+                style={{ fontSize: "20px", color: "red", paddingTop: "20px" }}
+              >
+                Please enter all fields
+              </span>
+            )}
           </div>
         </div>
       </section>
