@@ -50,7 +50,7 @@ function App() {
         return;
       }
       setError(false);
-      const response = await fetch("http://localhost:3001/submit-form", {
+      const response = await fetch("/submit-form", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
