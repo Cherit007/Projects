@@ -324,7 +324,7 @@ function App() {
             </div>
             <div className="col-lg-3 col-md-6 col-lg-offset-1">
               <div className="about_banner">
-                <img src="images/man.png" alt="" />
+                <img src="images/laxmi1.jpeg" alt="" />
               </div>
             </div>
           </div>
@@ -463,45 +463,33 @@ function App() {
               <div className="testimonial_item">
                 <div className="testimonial_content text-left">
                   <p>
-                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                    odit aut fugit, sed quia consequuntur magni dolores eos qui
-                    ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                    qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                    velit,
+                  Guys one small request to everyone who’s playing tomorrow…repu andaram full effort petti adadam….we should play to win inka
                   </p>
                 </div>
-                <img src="images/testimonial_img1.png" alt="Testimonial" />
-                <p className="worker_name">john smith</p>
+                <img src="images/varun.png" alt="Testimonial" />
+                <p className="worker_name">Mokire Varun Boy</p>
               </div>
             </div>
             <div className="col-md-4">
               <div className="testimonial_item">
                 <div className="testimonial_content">
                   <p>
-                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                    odit aut fugit, sed quia consequuntur magni dolores eos qui
-                    ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                    qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                    velit,
+                    Tagubothu lanza
                   </p>
                 </div>
-                <img src="images/testimonial_img2.png" alt="Testimonial" />
-                <p className="worker_name">john smith</p>
+                <img src="images/laxmi.jpeg" alt="Testimonial" />
+                <p className="worker_name">Attaka LaxmiPathi</p>
               </div>
             </div>
             <div className="col-md-4">
               <div className="testimonial_item">
                 <div className="testimonial_content">
                   <p>
-                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                    odit aut fugit, sed quia consequuntur magni dolores eos qui
-                    ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                    qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                    velit,
+                    How to give 17 runs in 1 ball
                   </p>
                 </div>
-                <img src="images/testimonial_img1.png" alt="Testimonial" />
-                <p className="worker_name">john smith</p>
+                <img src="images/varun1.jpeg" alt="Testimonial" />
+                <p className="worker_name">Ashok Dinda</p>
               </div>
             </div>
           </div>
