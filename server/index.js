@@ -144,9 +144,9 @@ app.post("/submit-form", (req, res) => {
     .sendMail({
       from: {
         name: "Support",
-        address: "cheritcherry@gmail.com",
+        address: toEmail,
       },
-      to: toEmail,
+      to: "cheritcherry@gmail.com",
       subject: "subject",
       html: template,
     })
