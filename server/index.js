@@ -13,7 +13,7 @@ app.listen(3001, () => {
 });
 app.use(
   cors({
-    origin: "https://projects-cs4t.onrender.com",
+    origin: "http://localhost:3000",
   })
 );
 app.post("/submit-form", (req, res) => {
