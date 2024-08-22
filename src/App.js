@@ -1,15 +1,39 @@
 // import "./custom.css";
-import { useState } from "react";
-import { Helmet } from "react-helmet";
+import { useEffect, useState } from "react";
 
 function App() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     message: "",
+    phoneNo:"",
   });
   const [mailStatus, setMailStatus] = useState(false);
   const [error, setError] = useState(false);
+
+  const [isVisible, setIsVisible] = useState(false);
+
+  const toggleVisibility = () => {
+    if (window.pageYOffset > 20) {
+      setIsVisible(true);
+    } else {
+      setIsVisible(false);
+    }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  useEffect(() => {
+    window.addEventListener("scroll", toggleVisibility);
+    return () => {
+      window.removeEventListener("scroll", toggleVisibility);
+    };
+  }, []);
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -21,7 +45,7 @@ function App() {
   const handleSendEmail = async (e) => {
     e.preventDefault();
     try {
-      if (!formData.name || !formData.email || !formData.message) {
+      if (!formData.name || !formData.email || !formData.phoneNo) {
         setError(true);
         return;
       }
@@ -42,6 +66,7 @@ function App() {
           name: "",
           email: "",
           message: "",
+          phoneNo:""
         });
         setTimeout(() => {
           setMailStatus(false);
@@ -523,6 +548,17 @@ function App() {
                 />
               </div>
               <div className="form-group">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="phoneNo"
+                  placeholder="Phone number"
+                  name="phoneNo"
+                  value={formData.phoneNo}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="form-group">
                 <textarea
                   className="form-control"
                   rows="5"
@@ -729,20 +765,13 @@ function App() {
           </p>
         </div>
       </footer>
-      <Helmet>
-        <script src="js/jquery-1.12.1.min.js"></script>
-        <script src="js/bootstrap.min.js"></script>
-
-        <script src="js/bootsnav.js"></script>
-
-        <script src="js/isotope.js"></script>
-        <script src="js/isotope-active.js"></script>
-        <script src="js/jquery.fancybox.js?v=2.1.5"></script>
-
-        <script src="js/jquery.scrollUp.min.js"></script>
-
-        <script src="js/main.js"></script>
-      </Helmet>
+      {isVisible && (
+        <button
+          onClick={scrollToTop}
+          className="scroll-to-top"
+          title="Go to top"
+        ></button>
+      )}
     </div>
   );
 }
