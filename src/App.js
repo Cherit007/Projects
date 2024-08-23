@@ -201,9 +201,6 @@ function App() {
                   <a href="#services">Services</a>
                 </li>
                 <li>
-                  <a href="#portfolio">Portfolio</a>
-                </li>
-                <li>
                   <a href="#contact_form">Contact Us</a>
                 </li>
               </ul>
@@ -224,14 +221,10 @@ function App() {
               <div className="overlay">
                 <div className="carousel-caption">
                   <h3>We are Certified Engineers</h3>
-                  <h1>Construction Services</h1>
+                  <h1>Welding Equipment Services</h1>
                   <h1 className="second_heading">Creative & Professional</h1>
                   <p>
-                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                    odit aut fugit, sed quia consequuntur magni dolores eos qui
-                    ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                    qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                    velit,
+                  Your Trusted Partner in Welding Equipment Servicing and Maintenance
                   </p>
                   <a className="btn know_btn">know more</a>
                   <a className="btn know_btn">view project</a>
@@ -307,18 +300,9 @@ function App() {
                 <h2>Welcome to Our Company</h2>
                 <h3>Aliquam lacus purus, auctor malesuada</h3>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni dolores eos qui
-                  ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                  qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                  velit,
+                At Shree Sadguru Engineers, we are a team of experienced professionals who specialize in the repair, maintenance, and upgrading of welding equipment, particularly in the heavy fabrication units and various industries. Our expertise lies in understanding the diverse needs of our clients and providing customized solutions that meet their unique requirements
                 </p>
-                <p>
-                  sed quia non numquam eius modi tempora incidunt ut labore et
-                  dolore magnam aliquam quaerat voluptatem. Ut enim ad minima
-                  veniam, quis nostrum exercitationem ullam corporis suscipit
-                  laboriosam, nisi ut aliquid ex ea commodi consequatur?{" "}
-                </p>
+               
                 <a className="btn know_btn">know more</a>
               </div>
             </div>
@@ -338,11 +322,7 @@ function App() {
               <div className="head_title">
                 <h2>WHY CHOOSE US?</h2>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni dolores eos qui
-                  ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                  qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                  velit,
+                Here are some reasons why our clients choose us for their welding equipment repair and maintenance needs:
                 </p>
               </div>
             </div>
@@ -351,40 +331,36 @@ function App() {
             <div className="col-md-3 col-sm-6">
               <div className="why_us_item">
                 <span className="fa fa-leaf"></span>
-                <h4>We deliver quality</h4>
+                <h4>Expertise</h4>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni{" "}
+                Our team has extensive experience in welding equipment repair and maintenance.
                 </p>
               </div>
             </div>
             <div className="col-md-3 col-sm-6">
               <div className="why_us_item">
                 <span className="fa fa-futbol-o"></span>
-                <h4>Always on time</h4>
+                <h4>Customized Solutions</h4>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni
+                We provide customized solutions that meet the specific needs of our clients.
                 </p>
               </div>
             </div>
             <div className="col-md-3 col-sm-6">
               <div className="why_us_item">
                 <span className="fa fa-group"></span>
-                <h4>We are pasionate</h4>
+                <h4>Reliability</h4>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni
+                 We are committed to delivering reliable and efficient service, ensuring minimal downtime and maximum productivity
                 </p>
               </div>
             </div>
             <div className="col-md-3 col-sm-6">
               <div className="why_us_item">
                 <span className="fa fa-line-chart"></span>
-                <h4>Professional Services</h4>
+                <h4>Cost-Effective</h4>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni
+                 Our services are designed to be cost-effective, ensuring that our clients can achieve their goals without breaking the bank.
                 </p>
               </div>
             </div>
@@ -399,13 +375,9 @@ function App() {
             <div className="col-md-4">
               <div className="service_item">
                 <img src="images/service_img1.jpg" alt="Our Services" />
-                <h3>CONSTRUCTION MANAGEMENT</h3>
+                <h3>WELDING EQUIPMENT SERVICING</h3>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni dolores eos qui
-                  ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                  qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                  velit,
+                 We provide regular servicing of welding equipment, including troubleshooting and fault rectification, to ensure that our clients' equipment is running smoothly and efficiently.
                 </p>
                 <a href="#services" className="btn know_btn">
                   know more
@@ -415,13 +387,9 @@ function App() {
             <div className="col-md-4">
               <div className="service_item">
                 <img src="images/service_img2.jpg" alt="Our Services" />
-                <h3>RENOVATION</h3>
+                <h3>ANNUAL MAINTENANCE CONTRACTS</h3>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni dolores eos qui
-                  ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                  qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                  velit,
+                 We offer annual maintenance contracts for welding equipment, which includes regular servicing, maintenance, and repair to ensure that our clients' equipment is always in good working condition.
                 </p>
                 <a href="#services" className="btn know_btn">
                   know more
@@ -431,13 +399,9 @@ function App() {
             <div className="col-md-4">
               <div className="service_item">
                 <img src="images/service_img3.jpg" alt="Our Services" />
-                <h3>ARCHITECTURE</h3>
+                <h3>SPECIALIZED SERVICES FOR HEAVY FABRICATION UNITS</h3>
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni dolores eos qui
-                  ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                  qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                  velit,
+                 Our team has extensive experience in servicing welding equipment for heavy fabrication units, including those used in cement industries, automobile manufacturers, shipbuilding industries, pre-engineered buildings, railway bridges construction companies, and more.
                 </p>
                 <a href="#services" className="btn know_btn">
                   know more
@@ -590,10 +554,7 @@ function App() {
                   alt="Construction"
                 />
                 <p>
-                  Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                  odit aut fugit, sed quia consequuntur magni dolores eos qui
-                  ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                  qui dolorem
+                We are committed to delivering exceptional service and ensuring the satisfaction of our clients. We strive to build long-term relationships with our clients by providing personalized attention, expert knowledge, and a commitment to excellence.
                 </p>
 
                 <ul className="list-inline footer_social_icon">
@@ -672,53 +633,13 @@ function App() {
                 </ul>
               </div>
             </div>
-            <div className="col-lg-3 col-sm-7">
-              <div className="footer_item">
-                <h4>Latest post</h4>
-                <ul className="list-unstyled post">
-                  <li>
-                    <a href="">
-                      <span className="date">
-                        20 <small>AUG</small>
-                      </span>{" "}
-                      Luptatum omittantur duo ne mpetus indoctum
-                    </a>
-                  </li>
-                  <li>
-                    <a href="">
-                      <span className="date">
-                        20 <small>AUG</small>
-                      </span>{" "}
-                      Luptatum omittantur duo ne mpetus indoctum
-                    </a>
-                  </li>
-                  <li>
-                    <a href="">
-                      <span className="date">
-                        20 <small>AUG</small>
-                      </span>{" "}
-                      Luptatum omittantur duo ne mpetus indoctum
-                    </a>
-                  </li>
-                  <li>
-                    <a href="">
-                      <span className="date">
-                        20 <small>AUG</small>
-                      </span>{" "}
-                      Luptatum omittantur duo ne mpetus indoctum
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            </div>
             <div className="col-lg-3 col-sm-5">
               <div className="footer_item">
                 <h4>Contact us</h4>
                 <ul className="list-unstyled footer_contact">
                   <li>
                     <a href="">
-                      <span className="fa fa-map-marker"></span> 124 New Line,
-                      London UK
+                      <span className="fa fa-map-marker"></span>5-4-33, Shop-23, Sterling Appartments, Ranigunj, Secunderabad City, Secunderabad - 500003 (Near AP Tourism Bus Depo)
                     </a>
                   </li>
                   <li>
@@ -731,8 +652,8 @@ function App() {
                     <a href="">
                       <span className="fa fa-mobile"></span>
                       <p>
-                        +44 00 00 1234 <br />
-                        +44 00 00 1234
+                        08197192589 <br />
+                        9246541101
                       </p>
                     </a>
                   </li>
