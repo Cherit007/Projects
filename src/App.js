@@ -129,7 +129,7 @@ function App() {
               </li>
               <li>
                 <a href="#">
-                  <span className="fa fa-clock-o"></span> Mon - Sat 9:00 - 19:00
+                  <span className="fa fa-clock-o"></span> Mon - Sat 10:00 - 20:30
                 </a>
               </li>
             </ul>
