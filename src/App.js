@@ -1,12 +1,14 @@
 // import "./custom.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Marquee from "react-marquee-slider";
+import times from "lodash/times"; // Optional, just for repeating logos if needed
 
 function App() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     message: "",
-    phoneNo:"",
+    phoneNo: "",
   });
   const [mailStatus, setMailStatus] = useState(false);
   const [error, setError] = useState(false);
@@ -42,6 +44,19 @@ function App() {
     });
   };
 
+  const logos = [
+    { url: "images/ccl.jpeg", alt: "Company 1" },
+    { url: "images/gayatri.jpeg", alt: "Company 1" },
+    { url: "images/larsen.jpeg", alt: "Company 1" },
+    { url: "images/meil.jpeg", alt: "Company 1" },
+    { url: "images/orient.jpeg", alt: "Company 1" },
+    { url: "images/penna.jpeg", alt: "Company 1" },
+    { url: "images/shapoorji.jpeg", alt: "Company 1" },
+    { url: "images/tata.jpeg", alt: "Company 1" },
+    { url: "images/thermal.jpeg", alt: "Company 1" },
+    { url: "images/wbi.jpeg", alt: "Company 1" },
+  ];
+
   const handleSendEmail = async (e) => {
     e.preventDefault();
     try {
@@ -66,7 +81,7 @@ function App() {
           name: "",
           email: "",
           message: "",
-          phoneNo:""
+          phoneNo: "",
         });
         setTimeout(() => {
           setMailStatus(false);
@@ -108,7 +123,8 @@ function App() {
               </li>
               <li>
                 <a href="#">
-                  <span className="fa fa-envelope"></span> support@Construct.com
+                  <span className="fa fa-envelope"></span>{" "}
+                  sreesadguruengineers@gmail.com
                 </a>
               </li>
               <li>
@@ -215,7 +231,7 @@ function App() {
             <div className="item active">
               <img
                 id="weldingimg"
-                src="images/slider_img.jpg"
+                src="images/caro1.jpeg"
                 alt="Construction"
               />
               <div className="overlay">
@@ -224,48 +240,22 @@ function App() {
                   <h1>Welding Equipment Services</h1>
                   <h1 className="second_heading">Creative & Professional</h1>
                   <p>
-                  Your Trusted Partner in Welding Equipment Servicing and Maintenance
+                    Your Trusted Partner in Welding Equipment Servicing and
+                    Maintenance
                   </p>
-                  <a className="btn know_btn">know more</a>
-                  <a className="btn know_btn">view project</a>
                 </div>
               </div>
             </div>
             <div className="item">
-              <img src="images/slider_img2.jpg" alt="Construction" />
+              <img src="images/caro2.jpeg" alt="Construction" />
               <div className="overlay">
                 <div className="carousel-caption">
-                  <h3>We are Certified Engineers</h3>
-                  <h1>Construction Services</h1>
-                  <h1 className="second_heading">Creative & Professional</h1>
+                  <h1>Welding Equipment Services with</h1>
+                  <h1 className="second_heading">Experience and agility</h1>
                   <p>
-                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                    odit aut fugit, sed quia consequuntur magni dolores eos qui
-                    ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                    qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                    velit,
+                    Our team has extensive experience in servicing welding
+                    equipment for various industries
                   </p>
-                  <a className="btn know_btn">know more</a>
-                  <a className="btn know_btn">view project</a>
-                </div>
-              </div>
-            </div>
-            <div className="item">
-              <img src="images/slider_img3.jpg" alt="Construction" />
-              <div className="overlay">
-                <div className="carousel-caption">
-                  <h3>We are Certified Engineers</h3>
-                  <h1>Construction Services</h1>
-                  <h1 className="second_heading">Creative & Professional</h1>
-                  <p>
-                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-                    odit aut fugit, sed quia consequuntur magni dolores eos qui
-                    ratione voluptatem sequi nesciunt. Neque porro quisquam est,
-                    qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
-                    velit,
-                  </p>
-                  <a className="btn know_btn">know more</a>
-                  <a className="btn know_btn">view project</a>
                 </div>
               </div>
             </div>
@@ -295,21 +285,21 @@ function App() {
       <section id="about">
         <div className="container about_bg">
           <div className="row">
-            <div className="col-lg-7 col-md-6">
+            <div className="col-lg-7 col-md-6 about_content_bg">
               <div className="about_content">
                 <h2>Welcome to Our Company</h2>
-                <h3>Aliquam lacus purus, auctor malesuada</h3>
+                <h3>Quality Services . Exceptional Results.</h3>
                 <p>
-                At Shree Sadguru Engineers, we are a team of experienced professionals who specialize in the repair, maintenance, and upgrading of welding equipment, particularly in the heavy fabrication units and various industries. Our expertise lies in understanding the diverse needs of our clients and providing customized solutions that meet their unique requirements
+                  At Shree Sadguru Engineers, we are a team of experienced
+                  professionals who specialize in the repair, maintenance, and
+                  upgrading of welding equipment, particularly in the heavy
+                  fabrication units and various industries. Our expertise lies
+                  in understanding the diverse needs of our clients and
+                  providing customized solutions that meet their unique
+                  requirements
                 </p>
-               
-                <a className="btn know_btn">know more</a>
               </div>
-            </div>
-            <div className="col-lg-3 col-md-6 col-lg-offset-1">
-              <div className="about_banner">
-                <img src="images/laxmi1.jpeg" alt="" />
-              </div>
+
             </div>
           </div>
         </div>
@@ -322,7 +312,8 @@ function App() {
               <div className="head_title">
                 <h2>WHY CHOOSE US?</h2>
                 <p>
-                Here are some reasons why our clients choose us for their welding equipment repair and maintenance needs:
+                  Here are some reasons why our clients choose us for their
+                  welding equipment repair and maintenance needs:
                 </p>
               </div>
             </div>
@@ -333,7 +324,8 @@ function App() {
                 <span className="fa fa-leaf"></span>
                 <h4>Expertise</h4>
                 <p>
-                Our team has extensive experience in welding equipment repair and maintenance.
+                  Our team has extensive experience in welding equipment repair
+                  and maintenance.
                 </p>
               </div>
             </div>
@@ -342,7 +334,8 @@ function App() {
                 <span className="fa fa-futbol-o"></span>
                 <h4>Customized Solutions</h4>
                 <p>
-                We provide customized solutions that meet the specific needs of our clients.
+                  We provide customized solutions that meet the specific needs
+                  of our clients.
                 </p>
               </div>
             </div>
@@ -351,7 +344,8 @@ function App() {
                 <span className="fa fa-group"></span>
                 <h4>Reliability</h4>
                 <p>
-                 We are committed to delivering reliable and efficient service, ensuring minimal downtime and maximum productivity
+                  We are committed to delivering reliable and efficient service,
+                  ensuring minimal downtime and maximum productivity
                 </p>
               </div>
             </div>
@@ -360,7 +354,8 @@ function App() {
                 <span className="fa fa-line-chart"></span>
                 <h4>Cost-Effective</h4>
                 <p>
-                 Our services are designed to be cost-effective, ensuring that our clients can achieve their goals without breaking the bank.
+                  Our services are designed to be cost-effective, ensuring that
+                  our clients can achieve their goals without breaking the bank.
                 </p>
               </div>
             </div>
@@ -372,43 +367,69 @@ function App() {
         <div className="container">
           <h2>OUR SERVICES</h2>
           <div className="row">
-            <div className="col-md-4">
+            <div className="service_ind_item col-md-4">
               <div className="service_item">
-                <img src="images/service_img1.jpg" alt="Our Services" />
+                <img
+                  src="images/welding_equipment_service.jpg"
+                  alt="Our Services"
+                />
                 <h3>WELDING EQUIPMENT SERVICING</h3>
                 <p>
-                 We provide regular servicing of welding equipment, including troubleshooting and fault rectification, to ensure that our clients' equipment is running smoothly and efficiently.
+                  We provide regular servicing of welding equipment, including
+                  troubleshooting and fault rectification, to ensure that our
+                  clients' equipment is running smoothly and efficiently.
                 </p>
-                <a href="#services" className="btn know_btn">
-                  know more
-                </a>
               </div>
             </div>
             <div className="col-md-4">
               <div className="service_item">
-                <img src="images/service_img2.jpg" alt="Our Services" />
+                <img src="images/annual_contract.jpg" alt="Our Services" />
                 <h3>ANNUAL MAINTENANCE CONTRACTS</h3>
                 <p>
-                 We offer annual maintenance contracts for welding equipment, which includes regular servicing, maintenance, and repair to ensure that our clients' equipment is always in good working condition.
+                  We offer annual maintenance contracts for welding equipment,
+                  which includes regular servicing, maintenance, and repair to
+                  ensure that our clients' equipment is always in good working
+                  condition.
                 </p>
-                <a href="#services" className="btn know_btn">
-                  know more
-                </a>
               </div>
             </div>
             <div className="col-md-4">
               <div className="service_item">
-                <img src="images/service_img3.jpg" alt="Our Services" />
+                <img src="images/heavy_fabrication.jpg" alt="Our Services" />
                 <h3>SPECIALIZED SERVICES FOR HEAVY FABRICATION UNITS</h3>
                 <p>
-                 Our team has extensive experience in servicing welding equipment for heavy fabrication units, including those used in cement industries, automobile manufacturers, shipbuilding industries, pre-engineered buildings, railway bridges construction companies, and more.
+                  Our team has extensive experience in servicing welding
+                  equipment for heavy fabrication units, including those used in
+                  cement industries, automobile manufacturers, shipbuilding
+                  industries, pre-engineered buildings, railway bridges
+                  construction companies, and more.
                 </p>
-                <a href="#services" className="btn know_btn">
-                  know more
-                </a>
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="our_clients">
+        <h2>Our Clients</h2>
+        <div className="logo-scroll-container">
+          <Marquee
+            velocity={25} // Adjust the speed
+            resetAfterTries={200} // Number of attempts before resetting
+            scatterRandomly={false} // Keep logos in line
+            direction="ltr" // Scroll from left to right (optional)
+          >
+            {logos.concat(logos).map(
+              (
+                logo,
+                index // Repeat logos for seamless effect
+              ) => (
+                <div key={index} className="logo-item">
+                  <img src={logo?.url} alt={logo?.alt} />
+                </div>
+              )
+            )}
+          </Marquee>
         </div>
       </section>
 
@@ -427,7 +448,9 @@ function App() {
               <div className="testimonial_item">
                 <div className="testimonial_content text-left">
                   <p>
-                  Guys one small request to everyone who’s playing tomorrow…repu andaram full effort petti adadam….we should play to win inka
+                    Guys one small request to everyone who’s playing
+                    tomorrow…repu andaram full effort petti adadam….we should
+                    play to win inka
                   </p>
                 </div>
                 <img src="images/varun.png" alt="Testimonial" />
@@ -437,9 +460,7 @@ function App() {
             <div className="col-md-4">
               <div className="testimonial_item">
                 <div className="testimonial_content">
-                  <p>
-                    Tagubothu lanza
-                  </p>
+                  <p>Tagubothu lanza</p>
                 </div>
                 <img src="images/laxmi.jpeg" alt="Testimonial" />
                 <p className="worker_name">Attaka LaxmiPathi</p>
@@ -448,9 +469,7 @@ function App() {
             <div className="col-md-4">
               <div className="testimonial_item">
                 <div className="testimonial_content">
-                  <p>
-                    How to give 17 runs in 1 ball
-                  </p>
+                  <p>How to give 17 runs in 1 ball</p>
                 </div>
                 <img src="images/varun1.jpeg" alt="Testimonial" />
                 <p className="worker_name">Ashok Dinda</p>
@@ -545,16 +564,20 @@ function App() {
       <footer>
         <div className="container footer_top">
           <div className="row">
-            <div className="col-lg-4 col-sm-7">
+            <div className="col-lg-6 col-sm-7">
               <div className="footer_item">
                 <h4>About Company</h4>
                 <img
                   className="logo"
-                  src="images/logo.png"
+                  src="images/logo.jpeg"
                   alt="Construction"
                 />
                 <p>
-                We are committed to delivering exceptional service and ensuring the satisfaction of our clients. We strive to build long-term relationships with our clients by providing personalized attention, expert knowledge, and a commitment to excellence.
+                  We are committed to delivering exceptional service and
+                  ensuring the satisfaction of our clients. We strive to build
+                  long-term relationships with our clients by providing
+                  personalized attention, expert knowledge, and a commitment to
+                  excellence.
                 </p>
 
                 <ul className="list-inline footer_social_icon">
@@ -633,19 +656,21 @@ function App() {
                 </ul>
               </div>
             </div>
-            <div className="col-lg-3 col-sm-5">
+            <div className="col-lg-4 col-sm-5">
               <div className="footer_item">
                 <h4>Contact us</h4>
                 <ul className="list-unstyled footer_contact">
                   <li>
                     <a href="">
-                      <span className="fa fa-map-marker"></span>5-4-33, Shop-23, Sterling Appartments, Ranigunj, Secunderabad City, Secunderabad - 500003 (Near AP Tourism Bus Depo)
+                      <span className="fa fa-map-marker"></span>5-4-33, Shop-23,
+                      Sterling Appartments, Ranigunj, Secunderabad City,
+                      Secunderabad - 500003 (Near AP Tourism Bus Depo)
                     </a>
                   </li>
                   <li>
                     <a href="">
                       <span className="fa fa-envelope"></span>{" "}
-                      hello@psdfreebies.com
+                      sreesadguruengineers@gmail.com
                     </a>
                   </li>
                   <li>
@@ -661,17 +686,6 @@ function App() {
               </div>
             </div>
           </div>
-        </div>
-        <div className="footer_bottom text-center">
-          <p className="wow fadeInRight">
-            Made with
-            <i className="fa fa-heart"></i>
-            by
-            <a target="_blank" href="http://bootstrapthemes.co">
-              Bootstrap Themes
-            </a>
-            2016. All Rights Reserved
-          </p>
         </div>
       </footer>
       {isVisible && (
