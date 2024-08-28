@@ -414,7 +414,7 @@ function App() {
         <h2>Our Clients</h2>
         <div className="logo-scroll-container">
           <Marquee
-            velocity={25} // Adjust the speed
+            velocity={20} // Adjust the speed
             resetAfterTries={200} // Number of attempts before resetting
             scatterRandomly={false} // Keep logos in line
             direction="ltr" // Scroll from left to right (optional)
@@ -433,7 +433,7 @@ function App() {
         </div>
       </section>
 
-      <section id="testimonial">
+      {/* <section id="testimonial">
         <div className="container text-center testimonial_area">
           <h2>Customer Reviews</h2>
           <p>
@@ -477,7 +477,7 @@ function App() {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
       <section id="contact_form">
         <div className="container">
           <div
@@ -548,7 +548,7 @@ function App() {
               <span
                 style={{ fontSize: "20px", color: "green", paddingTop: "20px" }}
               >
-                Mail Sent successfully
+                Details submitted successfully
               </span>
             )}
             {error && (
