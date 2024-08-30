@@ -129,7 +129,8 @@ function App() {
               </li>
               <li>
                 <a href="#">
-                  <span className="fa fa-clock-o"></span> Mon - Sat 10:00 - 20:30
+                  <span className="fa fa-clock-o"></span> Mon - Sat 10:00 -
+                  20:30
                 </a>
               </li>
             </ul>
@@ -229,13 +230,16 @@ function App() {
         <div id="carousel" className="carousel slide" data-ride="carousel">
           <div className="carousel-inner" role="listbox">
             <div className="item active">
-              <img
-                id="weldingimg"
-                src="images/caro1.jpeg"
-                alt="Construction"
-              />
+              <img id="weldingimg" src="images/caro1.jpeg" alt="Construction" />
               <div className="overlay">
-                <div className="carousel-caption">
+                <div
+                  className="carousel-caption"
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    flexDirection: "column",
+                  }}
+                >
                   <h3>We are Certified Engineers</h3>
                   <h1>Welding Equipment Services</h1>
                   <h1 className="second_heading">Creative & Professional</h1>
@@ -249,7 +253,12 @@ function App() {
             <div className="item">
               <img src="images/caro2.jpeg" alt="Construction" />
               <div className="overlay">
-                <div className="carousel-caption">
+                <div className="carousel-caption"
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    flexDirection: "column",
+                  }}>
                   <h1>Welding Equipment Services with</h1>
                   <h1 className="second_heading">Experience and agility</h1>
                   <p>
@@ -377,7 +386,7 @@ function App() {
                 <p>
                   We provide regular servicing of welding equipment, including
                   troubleshooting and fault rectification, to ensure that our
-                  clients' equipment is running smoothly and efficiently.
+                  client's equipment is running smoothly and efficiently.
                 </p>
               </div>
             </div>
@@ -388,7 +397,7 @@ function App() {
                 <p>
                   We offer annual maintenance contracts for welding equipment,
                   which includes regular servicing, maintenance, and repair to
-                  ensure that our clients' equipment is always in good working
+                  ensure that our client's equipment is always in good working
                   condition.
                 </p>
               </div>
