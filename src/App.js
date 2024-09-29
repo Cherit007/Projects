@@ -65,7 +65,7 @@ function App() {
         return;
       }
       setError(false);
-      const response = await fetch("/submit-form", {
+      const response = await fetch("https://mail-service-ike3.onrender.com/submit-form", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
