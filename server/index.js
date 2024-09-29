@@ -7,7 +7,7 @@ const cors = require("cors");
 
 app.use(bodyParser.json());
 app.use(cors());
-app.use(express.static(path.join(__dirname, "./build")));
+// app.use(express.static(path.join(__dirname, "./build")));
 app.listen(3001, () => {
   console.log("server started");
 });
