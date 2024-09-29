@@ -13,7 +13,7 @@ app.listen(3001, () => {
 });
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: "*", 
   })
 );
 app.post("/submit-form", (req, res) => {
