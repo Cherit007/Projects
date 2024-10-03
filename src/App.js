@@ -57,6 +57,20 @@ function App() {
     { url: "images/wbi.jpeg", alt: "Company 1" },
   ];
 
+  const products = [
+    { url: "images/product1.jpeg", alt: "Company 1" },
+    { url: "images/product2.jpeg", alt: "Company 1" },
+    { url: "images/product3.jpeg", alt: "Company 1" },
+    { url: "images/product4.jpeg", alt: "Company 1" },
+    { url: "images/product5.jpeg", alt: "Company 1" },
+    { url: "images/product6.jpeg", alt: "Company 1" },
+    { url: "images/product7.jpeg", alt: "Company 1" },
+    { url: "images/product8.jpeg", alt: "Company 1" },
+    { url: "images/product9.jpeg", alt: "Company 1" },
+    { url: "images/product10.jpeg", alt: "Company 1" },
+    { url: "images/product11.jpeg", alt: "Company 1" },
+  ];
+
   const handleSendEmail = async (e) => {
     e.preventDefault();
     try {
@@ -65,13 +79,16 @@ function App() {
         return;
       }
       setError(false);
-      const response = await fetch("https://mail-service-ike3.onrender.com/submit-form", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
+      const response = await fetch(
+        "https://mail-service-ike3.onrender.com/submit-form",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        }
+      );
 
       if (response.ok) {
         const result = await response.json();
@@ -96,79 +113,7 @@ function App() {
   };
   return (
     <div classNameName="App">
-      {/* <div id="loading">
-        <div id="loading-center">
-          <div id="loading-center-absolute">
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-            <div className="object"></div>
-          </div>
-        </div>
-      </div> */}
       <header>
-        <div className="top_nav">
-          <div className="container">
-            <ul className="list-inline info">
-              <li>
-                <a href="#">
-                  <span className="fa fa-phone"></span> +91 9246541101
-                </a>
-              </li>
-              <li>
-                <a href="#">
-                  <span className="fa fa-envelope"></span>{" "}
-                  sreesadguruengineers@gmail.com
-                </a>
-              </li>
-              <li>
-                <a href="#">
-                  <span className="fa fa-clock-o"></span> Mon - Sat 10:00 -
-                  20:30
-                </a>
-              </li>
-            </ul>
-            <ul className="list-inline social_icon">
-              <li>
-                <a href="">
-                  <span className="fa fa-facebook"></span>
-                </a>
-              </li>
-              <li>
-                <a href="">
-                  <span className="fa fa-twitter"></span>
-                </a>
-              </li>
-              <li>
-                <a href="">
-                  <span className="fa fa-behance"></span>
-                </a>
-              </li>
-              <li>
-                <a href="">
-                  <span className="fa fa-dribbble"></span>
-                </a>
-              </li>
-              <li>
-                <a href="">
-                  <span className="fa fa-linkedin"></span>
-                </a>
-              </li>
-              <li>
-                <a href="">
-                  <span className="fa fa-youtube"></span>
-                </a>
-              </li>
-            </ul>
-          </div>
-        </div>
-
         <nav className="navbar bootsnav">
           <div className="top-search">
             <div className="container">
@@ -253,14 +198,18 @@ function App() {
             <div className="item">
               <img src="images/caro2.jpeg" alt="Construction" />
               <div className="overlay">
-                <div className="carousel-caption"
+                <div
+                  className="carousel-caption"
                   style={{
                     display: "flex",
                     justifyContent: "center",
                     flexDirection: "column",
-                  }}>
-                  <h1>Welding Equipment Services with</h1>
-                  <h1 className="second_heading">Experience and agility</h1>
+                  }}
+                >
+                  <h1>Spark your success with top-quality </h1>
+                  <h1 className="second_heading">
+                    welding equipment sales and service.
+                  </h1>
                   <p>
                     Our team has extensive experience in servicing welding
                     equipment for various industries
@@ -308,7 +257,6 @@ function App() {
                   requirements
                 </p>
               </div>
-
             </div>
           </div>
         </div>
@@ -368,6 +316,31 @@ function App() {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="products">
+        <div className="container">
+          <h2 style={{ textAlign: "center", marginTop: 10 }}>OUR PRODUCTS</h2>
+          <div className="logo-scroll-container">
+            <Marquee
+              velocity={20} // Adjust the speed
+              resetAfterTries={200} // Number of attempts before resetting
+              scatterRandomly={false} // Keep logos in line
+              direction="ltr" // Scroll from left to right (optional)
+            >
+              {products.concat(products).map(
+                (
+                  product,
+                  index // Repeat logos for seamless effect
+                ) => (
+                  <div key={index} className="product-item">
+                    <img src={product?.url} alt={product?.alt} />
+                  </div>
+                )
+              )}
+            </Marquee>
           </div>
         </div>
       </section>
@@ -511,7 +484,7 @@ function App() {
                   className="form-control"
                   id="name"
                   name="name"
-                  placeholder="Name"
+                  placeholder="Name/Company Name"
                   value={formData.name}
                   onChange={handleChange}
                 />

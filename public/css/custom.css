@@ -395,6 +395,34 @@ nav.navbar.bootsnav ul.nav > li > a:focus {
   max-height: 100%;
   object-fit: contain;
 }
+
+.product-item {
+  flex-shrink: 0;
+  width: 300px;
+  height: 300px; 
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2rem;
+  overflow: hidden; /* Ensure overflow is hidden */
+  position: relative; /* Add relative positioning for uniform alignment */
+}
+
+.product-item img {
+  width: 100%; /* Ensure full width */
+  height: 100%; /* Ensure full height */
+  object-fit: contain; /* Keep aspect ratio while fitting */
+  position: absolute; /* Image fills the container while centered */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto; /* Center the image */
+  display: block; /* Fix for any inline-block alignment issues */
+}
 /* Services */
 #services h2 {
   margin: 85px 0 50px;
@@ -1205,5 +1233,42 @@ footer::after {
   }
   #contact_form .form-inline .form-group #phoneNo {
     width: 200px;
+  }
+}
+
+
+
+/* for desktop */
+.whatsapp_float {
+  position: fixed;
+  width: 60px;
+  height: 60px;
+  bottom: 80px;
+  right: 20px;
+  background-color: #25d366;
+  color: #FFF;
+  border-radius: 50px;
+  text-align: center;
+  font-size: 30px;
+  box-shadow: 2px 2px 3px #999;
+  z-index: 100;
+}
+
+.whatsapp-icon {
+  margin-top: 16px;
+}
+
+/* for mobile */
+@media screen and (max-width: 767px) {
+  .whatsapp-icon {
+      margin-top: 10px;
+  }
+
+  .whatsapp_float {
+      width: 40px;
+      height: 40px;
+      bottom: 60px;
+      right: 10px;
+      font-size: 22px;
   }
 }
