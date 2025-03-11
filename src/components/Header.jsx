@@ -1,23 +1,39 @@
-import React from "react";
+import React from 'react';
+import { MapPin, Clock, Phone, Facebook, Twitter, Linkedin, Instagram } from 'lucide-react';
+import '../index.css'; // Make sure to create this CSS file
 
 const Header = () => {
   return (
-    <div className="container-fluid p-0">
-      <div className="owl-carousel header-carousel position-relative">
-        <div className="owl-carousel-item position-relative">
-          <img className="img-fluid" src="img/carousel-1.jpg" alt="" />
-          <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center" style={{ background: "rgba(53, 53, 53, .7)" }}>
-            <div className="container">
-              <div className="row justify-content-center">
-                <div className="col-12 col-lg-8 text-center">
-                  <h5 className="text-white text-uppercase mb-3 animated slideInDown">Welcome To WooDY</h5>
-                  <h1 className="display-3 text-white animated slideInDown mb-4">Best Carpenter & Craftsman Services</h1>
-                  <p className="fs-5 fw-medium text-white mb-4 pb-2">Vero elitr justo clita lorem. Ipsum dolor at sed stet sit diam no. Kasd rebum ipsum et diam justo clita et kasd rebum sea elitr.</p>
-                  <a href="" className="btn btn-primary py-md-3 px-md-5 me-3 animated slideInLeft">Read More</a>
-                  <a href="" className="btn btn-light py-md-3 px-md-5 animated slideInRight">Free Quote</a>
-                </div>
-              </div>
-            </div>
+    <div className="header-container">
+      <div className="header-content">
+        <div className="left-section">
+          <div className="info-item">
+            <MapPin className="icon primary-icon" />
+            <small>123 Street, New York, USA</small>
+          </div>
+          <div className="info-item">
+            <Clock className="icon primary-icon" />
+            <small>Mon - Fri : 09.00 AM - 09.00 PM</small>
+          </div>
+        </div>
+        <div className="right-section">
+          <div className="info-item">
+            <Phone className="icon primary-icon" />
+            <small>+012 345 6789</small>
+          </div>
+          <div className="social-icons">
+            <a className="social-icon-link" href="">
+              <Facebook className="icon" />
+            </a>
+            <a className="social-icon-link" href="">
+              <Twitter className="icon" />
+            </a>
+            <a className="social-icon-link" href="">
+              <Linkedin className="icon" />
+            </a>
+            <a className="social-icon-link" href="">
+              <Instagram className="icon" />
+            </a>
           </div>
         </div>
       </div>

@@ -10,7 +10,6 @@ const Home = () => {
   return (
     <>
       <Navbar />
-      <Header />
       {/* Add other sections here */}
       <Carousel />
       <Services />
