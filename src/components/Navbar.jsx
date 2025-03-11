@@ -44,6 +44,8 @@ const Navbar = () => {
           <Link to="/projects" className="nav-item nav-link">
             Project
           </Link>
+          <Link to="/events" className="nav-link">Events</Link>
+
 
           {/* Dropdown Menu */}
           <div className="nav-item dropdown">

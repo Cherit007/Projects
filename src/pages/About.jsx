@@ -1,12 +1,11 @@
 import React from "react";
-import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
 const About = () => {
   return (
     <>
       {/* Navbar */}
-      <Navbar />
+      {/* <Navbar /> */}
 
       {/* Page Header */}
       <div className="container-fluid page-header py-5 mb-5">
