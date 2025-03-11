@@ -2,334 +2,334 @@
 
 /* Carousel Container */
 .carousel {
-    position: relative;
-    width: 100%;
-    height: 100vh;
-    overflow: hidden;
-  }
-  
-  /* Carousel Slide */
-  .carousel-slide {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-size: cover;
-    background-position: center;
-    opacity: 0;
-    transition: opacity 1s ease-in-out;
-  }
-  
-  .carousel-slide.active {
-    opacity: 1;
-  }
-  
-  /* Carousel Overlay */
-  .carousel-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    color: white;
-  }
-  
-  /* Carousel Content */
-  .carousel-content {
-    max-width: 800px;
-    padding: 20px;
-  }
-  
-  .carousel-content h5 {
-    font-size: 1.5rem;
-    margin-bottom: 10px;
-  }
-  
-  .carousel-content h1 {
-    font-size: 3rem;
-    margin-bottom: 20px;
-  }
-  
-  .carousel-content p {
-    font-size: 1.2rem;
-    margin-bottom: 30px;
-  }
-  
-  /* Carousel Buttons */
-  .carousel-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-  }
-  
-  .btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-  }
-  
-  .btn-primary {
-    background-color: #007bff;
-    color: white;
-  }
-  
-  .btn-primary:hover {
-    background-color: #0056b3;
-  }
-  
-  .btn-light {
-    background-color: white;
-    color: #007bff;
-  }
-  
-  .btn-light:hover {
-    background-color: #f8f9fa;
-  }
-  
-  /* Navigation Buttons at Bottom Center */
-  .carousel-navigation {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 10px;
-  }
-  
-  .carousel-prev,
-  .carousel-next {
-    background-color: rgba(255, 255, 255, 0.8);
-    color: #333;
-    border: none;
-    padding: 10px 20px;
-    font-size: 1.5rem;
-    cursor: pointer;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s ease;
-  }
-  
-  .carousel-prev:hover,
-  .carousel-next:hover {
-    background-color: rgba(255, 255, 255, 1);
-  }
- 
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Carousel Slide */
+.carousel-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 1s ease-in-out;
+}
+
+.carousel-slide.active {
+  opacity: 1;
+}
+
+/* Carousel Overlay */
+.carousel-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: white;
+}
+
+/* Carousel Content */
+.carousel-content {
+  max-width: 800px;
+  padding: 20px;
+}
+
+.carousel-content h5 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+
+.carousel-content h1 {
+  font-size: 3rem;
+  margin-bottom: 20px;
+}
+
+.carousel-content p {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+}
+
+/* Carousel Buttons */
+.carousel-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+.btn-light {
+  background-color: white;
+  color: #007bff;
+}
+
+.btn-light:hover {
+  background-color: #f8f9fa;
+}
+
+/* Navigation Buttons at Bottom Center */
+.carousel-navigation {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+
+.carousel-prev,
+.carousel-next {
+  background-color: rgba(255, 255, 255, 0.8);
+  color: #333;
+  border: none;
+  padding: 10px 20px;
+  font-size: 1.5rem;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.carousel-prev:hover,
+.carousel-next:hover {
+  background-color: rgba(255, 255, 255, 1);
+}
 
 
-  /* Navbar Base Styles */
+
+/* Navbar Base Styles */
 .navbar {
+  background-color: white;
+  padding: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+  font-size: 24px;
+  font-weight: bold;
+  color: #007bff !important;
+}
+
+.navbar-toggler {
+  border: none;
+  padding: 0.5rem;
+}
+
+.navbar-toggler:focus {
+  outline: none;
+}
+
+.navbar-toggler-icon {
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='rgba(0, 123, 255, 1)' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3E%3C/svg%3E");
+}
+
+/* Navbar Links */
+.navbar-nav {
+  margin-left: auto;
+}
+
+.nav-item {
+  margin: 0 10px;
+}
+
+.nav-link {
+  color: #333 !important;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  color: #007bff !important;
+}
+
+/* Dropdown Menu */
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  background-color: white;
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-menu.show {
+  display: block;
+}
+
+.dropdown-item {
+  color: #333 !important;
+  padding: 10px 20px;
+  transition: background-color 0.3s ease;
+}
+
+.dropdown-item:hover {
+  background-color: #f8f9fa;
+}
+
+/* Get A Quote Button */
+.btn-primary {
+  background-color: #007bff;
+  border: none;
+  padding: 10px 20px;
+  font-weight: 500;
+  transition: background-color 0.3s ease;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+/* Mobile Menu */
+@media (max-width: 991.98px) {
+  .navbar-collapse {
     background-color: white;
-    padding: 0;
+    padding: 20px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   }
-  
-  .navbar-brand {
-    font-size: 24px;
-    font-weight: bold;
-    color: #007bff !important;
-  }
-  
-  .navbar-toggler {
-    border: none;
-    padding: 0.5rem;
-  }
-  
-  .navbar-toggler:focus {
-    outline: none;
-  }
-  
-  .navbar-toggler-icon {
-    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='rgba(0, 123, 255, 1)' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3E%3C/svg%3E");
-  }
-  
-  /* Navbar Links */
+
   .navbar-nav {
-    margin-left: auto;
+    margin: 0;
   }
-  
+
   .nav-item {
-    margin: 0 10px;
+    margin: 10px 0;
   }
-  
-  .nav-link {
-    color: #333 !important;
-    font-weight: 500;
-    transition: color 0.3s ease;
-  }
-  
-  .nav-link:hover,
-  .nav-link.active {
-    color: #007bff !important;
-  }
-  
-  /* Dropdown Menu */
+
   .dropdown-menu {
-    display: none;
-    position: absolute;
-    background-color: white;
-    border: none;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    position: static;
+    box-shadow: none;
   }
-  
-  .dropdown-menu.show {
-    display: block;
-  }
-  
-  .dropdown-item {
-    color: #333 !important;
-    padding: 10px 20px;
-    transition: background-color 0.3s ease;
-  }
-  
-  .dropdown-item:hover {
-    background-color: #f8f9fa;
-  }
-  
-  /* Get A Quote Button */
+
   .btn-primary {
-    background-color: #007bff;
-    border: none;
-    padding: 10px 20px;
-    font-weight: 500;
-    transition: background-color 0.3s ease;
+    margin-top: 20px;
   }
-  
-  .btn-primary:hover {
-    background-color: #0056b3;
-  }
-  
-  /* Mobile Menu */
-  @media (max-width: 991.98px) {
-    .navbar-collapse {
-      background-color: white;
-      padding: 20px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
-  
-    .navbar-nav {
-      margin: 0;
-    }
-  
-    .nav-item {
-      margin: 10px 0;
-    }
-  
-    .dropdown-menu {
-      position: static;
-      box-shadow: none;
-    }
-  
-    .btn-primary {
-      margin-top: 20px;
-    }
-  }
+}
 
 
-  /* services */
+/* services */
 
 /* Services Container */
 .services-container {
-    padding: 60px 20px;
-    background-color: #f8f9fa;
-  }
-  
-  .section-title {
-    margin-bottom: 40px;
-  }
-  
-  .section-title h1 {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #333;
-  }
-  
-  /* Services Grid */
+  padding: 60px 20px;
+  background-color: #f8f9fa;
+}
+
+.section-title {
+  margin-bottom: 40px;
+}
+
+.section-title h1 {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #333;
+}
+
+/* Services Grid */
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  justify-content: center;
+}
+
+/* Service Item */
+.service-item {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.service-item:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.service-item img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.service-content {
+  padding: 20px;
+  text-align: center;
+}
+
+.service-content h4 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.service-content p {
+  font-size: 1rem;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.service-content a {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.service-content a:hover {
+  color: #0056b3;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
   .services-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-    justify-content: center;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   }
-  
-  /* Service Item */
-  .service-item {
-    background-color: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    overflow: hidden;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+@media (max-width: 480px) {
+  .services-grid {
+    grid-template-columns: 1fr;
   }
-  
-  .service-item:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-  }
-  
-  .service-item img {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-  }
-  
-  .service-content {
-    padding: 20px;
-    text-align: center;
-  }
-  
-  .service-content h4 {
-    font-size: 1.5rem;
-    margin-bottom: 10px;
-    color: #333;
-  }
-  
-  .service-content p {
-    font-size: 1rem;
-    color: #666;
-    margin-bottom: 20px;
-  }
-  
-  .service-content a {
-    color: #007bff;
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.3s ease;
-  }
-  
-  .service-content a:hover {
-    color: #0056b3;
-  }
-  
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    .services-grid {
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .services-grid {
-      grid-template-columns: 1fr;
-    }
-  }
+}
 
 
-  /* testimonials */
+/* testimonials */
 
 
-  /* Testimonials Container */
+/* Testimonials Container */
 /* Testimonials Container */
 /* Testimonials Container */
 .testimonials-container {
@@ -354,12 +354,14 @@
 }
 
 .testimonial-item {
-  display: none; /* Hide all testimonials by default */
+  display: none;
+  /* Hide all testimonials by default */
   transition: opacity 1s ease-in-out;
 }
 
 .testimonial-item.active {
-  display: block; /* Show the active testimonial */
+  display: block;
+  /* Show the active testimonial */
 }
 
 .testimonial-image {
@@ -458,7 +460,8 @@
   padding: 0 15px;
 }
 
-.left-section, .right-section {
+.left-section,
+.right-section {
   display: flex;
   align-items: center;
 }
@@ -510,4 +513,41 @@
   .header-content {
     display: none;
   }
+}
+
+/* Hide Default Google Translate Widget */
+#google_translate_element {
+  display: none;
+}
+
+/* Translate Buttons Styling */
+.translate-buttons {
+  display: flex;
+  gap: 10px;
+  margin-left: 15px;
+}
+
+
+.translate-btn {
+  background-color: rgb(188, 117, 67);
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  transition: background-color 0.3s ease-in-out;
+  width: auto;
+  height: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  /* Push it to the right */
+}
+
+.navbar .translate-btn {
+  margin-left: 0px;
+  /* Ensure spacing from other navbar items */
+  margin-top: 25px;
 }

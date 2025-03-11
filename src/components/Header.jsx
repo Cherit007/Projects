@@ -42,6 +42,7 @@ const Header = () => {
       </div>
 
       <Navbar /> 
+      <div id="google_translate_element" className="translate-widget"></div>
     </div>
   );
 };
