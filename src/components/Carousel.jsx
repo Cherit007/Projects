@@ -6,7 +6,7 @@ const Carousel = () => {
 
   const slides = [
     {
-      image: "img/carousel-1.jpg",
+      image: "img/cover.avif",
       title: "Best Carpenter & Craftsman Services",
       description: "Vero elitr justo clita lorem. Ipsum dolor at sed stet sit diam no. Kasd rebum ipsum et diam justo clita et kasd rebum sea elitr.",
     },

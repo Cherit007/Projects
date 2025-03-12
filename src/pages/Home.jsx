@@ -1,8 +1,10 @@
 import React from "react";
 import Footer from "../components/Footer";
-import Testimonials from "../components/Testimonials";
+import Objective from "../components/Objective";
 import Services from "../components/Services";
 import Carousel from "../components/Carousel";
+import Donation from "../components/Donation";
+
 
 const Home = () => {
   return (
@@ -12,7 +14,7 @@ const Home = () => {
       <Carousel />
       <Services />
 
-      <Testimonials />
+      <Objective />
       <Footer />
     </>
   );

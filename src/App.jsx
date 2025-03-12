@@ -4,6 +4,8 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import { initializeScripts } from "./utils/init";
 import Services from "./components/Services";
+import Objective from "./components/Objective";
+import Donate from "./pages/donate";
 import Testimonials from "./components/Testimonials";
 import Events from "./pages/Events"; 
 import EventDetails from "./pages/EventDetails"; // Import EventDetails page
@@ -19,6 +21,8 @@ function App() {
           <Route path="/events" element={<Events />} />
           <Route path="/about" element={<About />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/objective" element={<Objective />} />
+          <Route path="/donate" element={<Donate />} />
           <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/events/:eventId" element={<EventDetails />} /> 
 
