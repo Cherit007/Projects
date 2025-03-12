@@ -4,7 +4,9 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import { initializeScripts } from "./utils/init";
 import Services from "./components/Services";
-import Testimonials from "./components/Testimonials";
+import Objective from "./components/Objective";
+import Donate from "./pages/donate";
+
 
 function App() {
   return (
@@ -14,7 +16,9 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/services" element={<Services />} />
-          <Route path="/testimonials" element={<Testimonials />} />
+          <Route path="/objective" element={<Objective />} />
+          <Route path="/donate" element={<Donate />} />
+
           {/* 
         <Route path="/projects" element={<Projects />} />
         <Route path="/team" element={<Team />} />

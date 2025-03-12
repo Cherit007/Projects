@@ -1,15 +1,15 @@
 import React from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import CommunityTable from "../components/Members";
+import Donation from "../components/Donation";
 
-const About = () => {
+const Donate = () => {
   return (
     <>
       {/* Navbar */}
       <Navbar />
 
-    <CommunityTable/>
+    <Donation/>
 
       {/* Footer */}
       <Footer />
@@ -17,4 +17,4 @@ const About = () => {
   );
 };
 
-export default About;
+export default Donate;

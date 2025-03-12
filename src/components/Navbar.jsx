@@ -41,8 +41,8 @@ const Navbar = () => {
           <Link to="/services" className="nav-item nav-link">
             Service
           </Link>
-          <Link to="/projects" className="nav-item nav-link">
-            Project
+          <Link to="/donate" className="nav-item nav-link">
+            Donations
           </Link>
 
           {/* Dropdown Menu */}
@@ -64,8 +64,8 @@ const Navbar = () => {
               <Link to="/team" className="dropdown-item">
                 Our Team
               </Link>
-              <Link to="/testimonials" className="dropdown-item">
-                Testimonial
+              <Link to="/Objective" className="dropdown-item">
+                Objective
               </Link>
               <Link to="/404" className="dropdown-item">
                 404 Page
