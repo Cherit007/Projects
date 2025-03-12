@@ -159,34 +159,9 @@ const Navbar = () => {
             Donations
           </Link>
           <Link to="/events" className="nav-link">Events</Link>
+          <Link to="/members" className="nav-link">Members</Link>
 
-          {/* Dropdown Menu */}
-          <div className="nav-item dropdown">
-            <a
-              href="#"
-              className="nav-link dropdown-toggle"
-              onClick={toggleDropdown}
-            >
-              Pages
-            </a>
-            <div className={`dropdown-menu fade-up m-0 ${isDropdownOpen ? "show" : ""}`}>
-              <Link to="/feature" className="dropdown-item">
-                Feature
-              </Link>
-              <Link to="/quote" className="dropdown-item">
-                Free Quote
-              </Link>
-              <Link to="/team" className="dropdown-item">
-                Our Team
-              </Link>
-              <Link to="/Objective" className="dropdown-item">
-                Objective
-              </Link>
-              <Link to="/404" className="dropdown-item">
-                404 Page
-              </Link>
-            </div>
-          </div>
+          {/* Dropdown Menu */}          
 
           {/* Language Toggle Button */}
           <div className="translate-buttons">

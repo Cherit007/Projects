@@ -9,6 +9,7 @@ import Donate from "./pages/donate";
 import Testimonials from "./components/Testimonials";
 import Events from "./pages/Events"; 
 import EventDetails from "./pages/EventDetails"; // Import EventDetails page
+import CommunityTable from "./components/Members";
 
 
 
@@ -25,6 +26,7 @@ function App() {
           <Route path="/donate" element={<Donate />} />
           <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/events/:eventId" element={<EventDetails />} /> 
+          <Route path="/members" element={<CommunityTable />} /> 
 
           {/* 
         <Route path="/projects" element={<Projects />} />

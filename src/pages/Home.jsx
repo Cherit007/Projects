@@ -13,9 +13,7 @@ const Home = () => {
       {/* Add other sections here */}
       <Carousel />
       <Services />
-
       <Objective />
-      <Footer />
     </>
   );
 };

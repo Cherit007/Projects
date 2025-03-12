@@ -424,11 +424,11 @@
 }
 
 .carousel-prev {
-  left: 20px;
+  left: 0px;
 }
 
 .carousel-next {
-  right: 20px;
+  right: 10px;
 }
 
 /* Responsive Design */

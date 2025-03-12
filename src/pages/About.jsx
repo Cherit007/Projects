@@ -7,11 +7,7 @@ const About = () => {
     <>
       {/* Navbar */}
       {/* <Navbar /> */}
-
-    <CommunityTable/>
-
       {/* Footer */}
-      <Footer />
     </>
   );
 };

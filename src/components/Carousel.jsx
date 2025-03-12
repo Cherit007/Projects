@@ -58,10 +58,10 @@ const Carousel = () => {
 
 <div className="carousel-navigation">
         <button className="carousel-prev" onClick={prevSlide}>
-          &#10094;
+        &#10095;
         </button>
         <button className="carousel-next" onClick={nextSlide}>
-          &#10095;
+        &#10094;
         </button>
       </div>
     </div>

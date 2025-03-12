@@ -7,12 +7,9 @@ const Donate = () => {
   return (
     <>
       {/* Navbar */}
-      <Navbar />
-
     <Donation/>
 
       {/* Footer */}
-      <Footer />
     </>
   );
 };
