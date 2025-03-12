@@ -1,0 +1,49 @@
+.event-details-container {
+    max-width: 800px;
+    margin: 50px auto;
+    padding: 20px;
+    background: #fff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    text-align: center;
+  }
+  
+  .event-title {
+    font-size: 2rem;
+    color: #333;
+  }
+  
+  .event-image {
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin: 20px 0;
+  }
+  
+  .event-meta {
+    font-size: 1rem;
+    color: #777;
+  }
+  
+  .countdown-timer {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #d9534f;
+    margin-top: 15px;
+  }
+  
+  .event-details-heading {
+    font-size: 1.5rem;
+    margin-top: 20px;
+    color: #222;
+  }
+  
+  .event-details-text {
+    font-size: 1.2rem;
+    color: #444;
+    text-align: left;
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+  
