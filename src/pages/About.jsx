@@ -1,5 +1,4 @@
 import React from "react";
-import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import CommunityTable from "../components/Members";
 
@@ -7,7 +6,7 @@ const About = () => {
   return (
     <>
       {/* Navbar */}
-      <Navbar />
+      {/* <Navbar /> */}
 
     <CommunityTable/>
 

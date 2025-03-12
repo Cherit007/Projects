@@ -1,6 +1,4 @@
 import React from "react";
-import Navbar from "../components/Navbar";
-import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Objective from "../components/Objective";
 import Services from "../components/Services";
@@ -11,7 +9,7 @@ import Donation from "../components/Donation";
 const Home = () => {
   return (
     <>
-      <Navbar />
+      {/* <Navbar /> */}
       {/* Add other sections here */}
       <Carousel />
       <Services />
