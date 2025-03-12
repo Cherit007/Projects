@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import About from "./pages/About";
-import { initializeScripts } from "./utils/init";
 import Services from "./components/Services";
 import Objective from "./components/Objective";
 import Donate from "./pages/donate";
@@ -10,8 +9,9 @@ import Testimonials from "./components/Testimonials";
 import Events from "./pages/Events"; 
 import EventDetails from "./pages/EventDetails"; // Import EventDetails page
 import CommunityTable from "./components/Members";
-
-
+import Admin from "./pages/Admin";
+import "react-toastify/dist/ReactToastify.css";
+import "react-datepicker/dist/react-datepicker.css";
 
 function App() {
   return (
@@ -27,6 +27,7 @@ function App() {
           <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/events/:eventId" element={<EventDetails />} /> 
           <Route path="/members" element={<CommunityTable />} /> 
+          <Route path="/admin" element={<Admin />} /> 
 
           {/* 
         <Route path="/projects" element={<Projects />} />

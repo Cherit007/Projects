@@ -160,6 +160,7 @@ const Navbar = () => {
           </Link>
           <Link to="/events" className="nav-link">Events</Link>
           <Link to="/members" className="nav-link">Members</Link>
+          <Link to="/admin" className="nav-link">Login</Link>
 
           {/* Dropdown Menu */}          
 
