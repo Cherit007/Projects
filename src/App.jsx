@@ -17,6 +17,7 @@ import AdminHome from "./pages/AdminHome";
 import EventsPage from "./components/EventPage";
 import EventForm from "./components/EventForm";
 import RegistrationRequests from "./pages/RegistrationRequests";
+import RegistrationForm from "./components/registrationForm";
 
 function App() {
   return (
@@ -40,12 +41,7 @@ function App() {
           <Route path="events/add" element={<EventForm />} />
           <Route path="member-request" element={<RegistrationRequests />} />
         </Route>
-        {/* 
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/team" element={<Team />} />
-        
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/quote" element={<Quote />} /> */}
+        <Route path="/registration" element={<RegistrationForm />} />
       </Routes>
       {/* </Router> */}
     </>
@@ -53,3 +49,4 @@ function App() {
 }
 
 export default App;
+
