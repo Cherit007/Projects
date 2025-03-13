@@ -116,6 +116,9 @@ const Navbar = () => {
               <Link to="/donate" className="nav-item nav-link">
                 Donations
               </Link>
+              <Link to="/registration" className="nav-item nav-link">
+            Registration
+          </Link>
             </>
           )}
           <Link
@@ -145,6 +148,9 @@ const Navbar = () => {
               Logout
             </button>
           )}
+          
+
+          {/* Dropdown Menu */}
 
           {/* Language Toggle Buttons */}
           <div className="translate-buttons">
@@ -180,5 +186,6 @@ const Navbar = () => {
     </nav>
   );
 };
+
 
 export default Navbar;
