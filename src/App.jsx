@@ -17,6 +17,7 @@ import AdminHome from "./pages/AdminHome";
 import EventsPage from "./components/EventPage";
 import EventForm from "./components/EventForm";
 import RegistrationRequests from "./pages/RegistrationRequests";
+import ProtectedRoute from "./components/ProtectedRoute";
 import RegistrationForm from "./components/registrationForm";
 
 function App() {
@@ -34,7 +35,14 @@ function App() {
         <Route path="/events/:eventId" element={<EventDetails />} />
         <Route path="/members" element={<CommunityTable />} />
         <Route path="/admin/login" element={<Login />} />
-        <Route path="/admin" element={<Admin />}>
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <Admin />
+            </ProtectedRoute>
+          }
+        >
           <Route path="dashboard" element={<AdminHome />} />
           <Route path="events" element={<EventsPage />} />
           <Route path="events/edit/:id" element={<EventForm />} />
