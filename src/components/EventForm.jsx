@@ -5,16 +5,47 @@ import { toast, ToastContainer } from "react-toastify"; // Import toast for noti
 import "react-toastify/dist/ReactToastify.css"; // Toast CSS
 import DatePicker from "react-datepicker"; // Import date picker
 import "react-datepicker/dist/react-datepicker.css"; // Date picker CSS
+import { useParams, useNavigate } from "react-router-dom"; // Import useParams and useNavigate
 import "../index.css";
 
-const EventForm = () => {
+const EventForm = ({ onUpdate }) => {
+  const { id } = useParams(); // Get the event ID from the URL
+  const navigate = useNavigate();
   const [eventName, setEventName] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventLocation, setEventLocation] = useState("");
-  const [eventDateTime, setEventDateTime] = useState(new Date()); // Combined date and time
+  const [eventDateTime, setEventDateTime] = useState(new Date());
   const [eventImage, setEventImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null); // State for image preview
+  const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Fetch event data if in edit mode
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+    if (id) {
+      const fetchEvent = async () => {
+        try {
+          const response = await databases.getDocument(
+            "67cff2840013b293be3c", // Replace with your database ID
+            "67cff28f0032d7a0fbbf", // Replace with your collection ID
+            id // Event ID from the URL
+          );
+          setEventName(response.title);
+          setEventDescription(response.description);
+          setEventLocation(response.location);
+          setEventDateTime(new Date(response.date));
+          setImagePreview(response.image);
+        } catch (error) {
+          console.error("Error fetching event:", error);
+          toast.error("Failed to fetch event details. Please try again.");
+        }
+      };
+      fetchEvent();
+    }
+  }, [id]);
 
   // Handle image selection
   const handleImageChange = (e) => {
@@ -31,8 +62,8 @@ const EventForm = () => {
     setIsUploading(true);
 
     try {
-      // Upload image to Appwrite Storage
-      let imageUrl = "";
+      // Upload image to Appwrite Storage (if a new image is selected)
+      let imageUrl = imagePreview || "";
       if (eventImage) {
         const fileUploadResponse = await storage.createFile(
           "67d1ccb0002c6f93d356", // Replace with your bucket ID
@@ -41,65 +72,53 @@ const EventForm = () => {
         );
 
         // Get the file URL
-        const fileUrl = storage.getFilePreview("67d1ccb0002c6f93d356", fileUploadResponse.$id);
+        const fileUrl = storage.getFilePreview(
+          "67d1ccb0002c6f93d356",
+          fileUploadResponse.$id
+        );
         imageUrl = fileUrl;
       }
 
-      // Push data to Appwrite database
-      const response = await databases.createDocument(
-        "67cff2840013b293be3c", // Database ID
-        "67cff28f0032d7a0fbbf", // Collection ID
-        ID.unique(), // Auto-generate document ID
-        {
-          title: eventName,
-          description: eventDescription,
-          location: eventLocation,
-          date: eventDateTime.toISOString(), // Convert date and time to ISO string
-          image: imageUrl,
-          eventdetails:
-            "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",
-          createdAt: new Date(),
-        }
-      );
+      const eventData = {
+        title: eventName,
+        description: eventDescription,
+        location: eventLocation,
+        date: eventDateTime.toISOString(),
+        image: imageUrl,
+      };
 
-      console.log("Event created successfully:", response);
-
-      // Show toast notification
-      toast.success("Event created successfully!", {
-        position: "top-right",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
-
-      // Reset form fields
-      setEventName("");
-      setEventDescription("");
-      setEventLocation("");
-      setEventDateTime(new Date()); // Reset date and time to current
-      setEventImage(null);
-      setImagePreview(null); // Clear image preview
-      document.getElementById("fileInput").value = ""; // Clear file input
-
-      // Scroll to bottom after adding the event
+      if (id) {
+        // Update existing event
+        const response = await databases.updateDocument(
+          "67cff2840013b293be3c", // Database ID
+          "67cff28f0032d7a0fbbf", // Collection ID
+          id, // Event ID from the URL
+          eventData
+        );
+        toast.success("Event updated successfully!");
+        // Call the onUpdate function
+      } else {
+        // Create new event
+        const response = await databases.createDocument(
+          "67cff2840013b293be3c", // Database ID
+          "67cff28f0032d7a0fbbf", // Collection ID
+          ID.unique(), // Auto-generate document ID
+          eventData
+        );
+        toast.success("Event created successfully!");
+      }
       window.scrollTo({
         top: 0,
         behavior: "smooth",
       });
+      setTimeout(() => {
+        navigate("/admin/events"); // Redirect to the events list
+      }, 1000);
     } catch (error) {
-      console.error("Error creating event:", error);
-
-      // Show error toast
-      toast.error("Failed to create event. Please try again.", {
-        position: "top-right",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      console.error("Error saving event:", error);
+      toast.error(
+        `Failed to ${id ? "update" : "create"} event. Please try again.`
+      );
     } finally {
       setIsUploading(false);
     }
@@ -107,7 +126,7 @@ const EventForm = () => {
 
   return (
     <div className="event-form-container">
-      <h2>Add New Event</h2>
+      <h2>{id ? "Update Event" : "Add New Event"}</h2>
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Event Name:</label>
@@ -166,6 +185,8 @@ const EventForm = () => {
         <button type="submit" className="submit-button" disabled={isUploading}>
           {isUploading ? (
             <div className="spinner"></div> // Show spinner when uploading
+          ) : id ? (
+            "Update Event"
           ) : (
             "Add Event"
           )}
