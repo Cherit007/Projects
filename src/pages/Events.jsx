@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import "../styles/Events.css"; 
 import { databases } from "../appwriteConfig"; 
+import defaultEventImg from '/img/default_event.png'
 
 const Events = () => {
   const [events, setEvents] = useState([]);
@@ -33,7 +34,7 @@ const Events = () => {
           {events.map((event) => (
             <div key={event.$id} className="event-card">
               <img
-                src={event.image || "https://via.placeholder.com/300"}
+                src={event.image || defaultEventImg}
                 alt={event.title}
                 className="event-image"
               />

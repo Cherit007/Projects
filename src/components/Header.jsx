@@ -1,7 +1,15 @@
-import React from 'react';
-import { MapPin, Clock, Phone, Facebook, Twitter, Linkedin, Instagram } from 'lucide-react';
-import '../index.css'; 
-import Navbar from './Navbar'; 
+import React, { useEffect } from "react";
+import {
+  MapPin,
+  Clock,
+  Phone,
+  Facebook,
+  Twitter,
+  Linkedin,
+  Instagram,
+} from "lucide-react";
+import "../index.css";
+import Navbar from "./Navbar";
 
 const Header = () => {
   return (
@@ -41,8 +49,8 @@ const Header = () => {
         </div>
       </div>
 
-      <Navbar /> 
       <div id="google_translate_element" className="translate-widget"></div>
+      <Navbar />
     </div>
   );
 };

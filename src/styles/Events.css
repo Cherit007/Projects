@@ -47,8 +47,10 @@
   
   /* 📌 Grid Layout for Events */
   .events-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    display: flex;
+    /* grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); */
+    flex-wrap: wrap;
+    justify-content: space-around;
     gap: 20px;
   }
   
