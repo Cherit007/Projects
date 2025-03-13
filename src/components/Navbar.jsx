@@ -206,10 +206,9 @@ const Navbar = () => {
           >
             Events
           </Link>
-
-          {/* <button onClick={handleLogout} className="logout-button">
-            Logout
-          </button> */}
+          <Link to="/registration" className="nav-item nav-link">
+            Registration
+          </Link>
 
           {/* Dropdown Menu */}
 
@@ -238,3 +237,4 @@ const Navbar = () => {
 };
 
 export default Navbar;
+
