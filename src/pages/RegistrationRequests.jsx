@@ -8,6 +8,8 @@ import Loader from "../components/Loader";
 const RegistrationRequests = () => {
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isApproved, setIsApproved] = useState(false);
+  const [isRejected, setIsRejected] = useState(false);
 
   // Initialize Appwrite Database
   const databases = new Databases(client);
@@ -32,6 +34,7 @@ const RegistrationRequests = () => {
   // Approve a registration request
   const approveRequest = async (requestId) => {
     try {
+      setIsApproved(true);
       await databases.updateDocument(
         "67cff2840013b293be3c", // Replace with your database ID
         "67d301a8000b5dd7e089", // Replace with your collection ID
@@ -40,6 +43,7 @@ const RegistrationRequests = () => {
       );
       toast.success("Registration request approved!");
       fetchRequests(); // Refresh the list
+      setIsApproved(false);
     } catch (error) {
       console.error("Error approving request:", error);
       toast.error("Failed to approve request. Please try again.");
@@ -49,6 +53,7 @@ const RegistrationRequests = () => {
   // Reject a registration request
   const rejectRequest = async (requestId) => {
     try {
+      setIsRejected(true);
       await databases.updateDocument(
         "67cff2840013b293be3c", // Replace with your database ID
         "67d301a8000b5dd7e089", // Replace with your collection ID
@@ -57,6 +62,7 @@ const RegistrationRequests = () => {
       );
       toast.success("Registration request rejected!");
       fetchRequests(); // Refresh the list
+      setIsRejected(false);
     } catch (error) {
       console.error("Error rejecting request:", error);
       toast.error("Failed to reject request. Please try again.");
@@ -66,6 +72,7 @@ const RegistrationRequests = () => {
   // Toggle core committee status
   const toggleCoreCommittee = async (requestId, currentStatus) => {
     try {
+
       await databases.updateDocument(
         "67cff2840013b293be3c", // Replace with your database ID
         "67d301a8000b5dd7e089", // Replace with your collection ID
@@ -109,8 +116,12 @@ const RegistrationRequests = () => {
                 <td>{request.status}</td>
                 <td>
                   <button
-                    className={`toggle-button ${request.isCoreMember ? "active" : ""}`}
-                    onClick={() => toggleCoreCommittee(request.$id, request.isCoreMember)}
+                    className={`toggle-button ${
+                      request.isCoreMember ? "active" : ""
+                    }`}
+                    onClick={() =>
+                      toggleCoreCommittee(request.$id, request.isCoreMember)
+                    }
                   >
                     {request.isCoreMember ? "Remove from Core" : "Add to Core"}
                   </button>
@@ -122,13 +133,21 @@ const RegistrationRequests = () => {
                         className="approve-button"
                         onClick={() => approveRequest(request.$id)}
                       >
-                        Approve
+                        {isApproved ? (
+                          <div className="spinner"></div>
+                        ) : (
+                          "Approve"
+                        )}
                       </button>
                       <button
                         className="reject-button"
                         onClick={() => rejectRequest(request.$id)}
                       >
-                        Reject
+                        {isRejected ? (
+                          <div className="spinner"></div>
+                        ) : (
+                          "Reject"
+                        )}
                       </button>
                     </>
                   )}

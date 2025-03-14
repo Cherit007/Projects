@@ -28,12 +28,10 @@ const Login = () => {
       } else {
         console.log("User does not have the 'admin' role. Deleting session...");
         await account.deleteSession("current"); // Delete the session
-        toast.error("You do not have permission to access the admin dashboard.");
         navigate("/admin/login"); // Redirect back to login
       }
     } catch (error) {
       console.error("Error during login:", error);
-      toast.error("Failed to log in. Please try again.");
     }
   };
 
