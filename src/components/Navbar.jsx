@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../index.css"; // Import CSS for styling
 import { account } from "../appwriteConfig";
-import { ToastContainer } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false); // State to track login status
+  const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
 
   // Check if the user is logged in
@@ -14,8 +15,13 @@ const Navbar = () => {
     const checkAuth = async () => {
       try {
         const user = await account.get();
+        console.log(user,"user");
+        if(user.labels.includes("admin")){
+          setIsAdmin(true);
+        } else setIsAdmin(false);
         setIsLoggedIn(true); // User is logged in
       } catch (error) {
+        setIsAdmin(false);
         setIsLoggedIn(false); // User is not logged in
       }
     };
@@ -143,7 +149,7 @@ const Navbar = () => {
           </Link>
 
           {/* Logout Button (Conditional Rendering) */}
-          {isLoggedIn && (
+          {isLoggedIn && isAdmin && window.location.pathname.includes("admin") && (
             <button onClick={handleLogout} className="logout-button">
               Logout
             </button>
@@ -172,7 +178,7 @@ const Navbar = () => {
 
       {/* Hidden Google Translate Element */}
       <div id="google_translate_element"></div>
-      <ToastContainer
+      {/* <ToastContainer
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
@@ -182,7 +188,7 @@ const Navbar = () => {
         pauseOnFocusLoss
         draggable
         pauseOnHover
-      />
+      /> */}
     </nav>
   );
 };

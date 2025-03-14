@@ -680,6 +680,12 @@
   background-color: #c0392b; /* Darker red on hover */
 }
 
+@media (max-width: 992px) {
+.logout-button{
+  width: 80px;
+}
+}
+
 
 .login-container {
   background: white;
@@ -752,7 +758,7 @@
 /* Navbar */
 .navbar {
   display: flex;
-  justify-content: space-around;
+  justify-content: space-between;
   padding: 10px;
   background-color: #333;
 }

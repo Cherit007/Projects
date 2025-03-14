@@ -142,7 +142,7 @@ const EventsPage = () => {
           </Link>
         </>
       )}
-      <ToastContainer />
+      {/* <ToastContainer /> */}
     </div>
   );
 };

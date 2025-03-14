@@ -192,7 +192,7 @@ const EventForm = ({ onUpdate }) => {
           )}
         </button>
       </form>
-      <ToastContainer /> {/* Toast container for notifications */}
+      {/* <ToastContainer /> Toast container for notifications */}
     </div>
   );
 };

@@ -1,9 +1,9 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { account } from "../appwriteConfig";
-import { toast, ToastContainer } from "react-toastify"; // Import toast and ToastContainer
-import "react-toastify/dist/ReactToastify.css"; // Import toast CSS
-import "../index.css"; // Import the CSS file
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import "../index.css";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -11,16 +11,28 @@ const Login = () => {
   // Handle Google OAuth login
   const handleLogin = async () => {
     try {
-      // Redirect to Google OAuth login
+      console.log("Redirecting to Google OAuth...");
       await account.createOAuth2Session(
         "google", // Provider (Google)
         "http://localhost:5173/admin/dashboard", // Success URL
         "http://localhost:5173/admin/login" // Failure URL
       );
-      // Show success toast
+
+      // After OAuth flow completes, check the user's role
+      const user = await account.get();
+      console.log("User data after login:", user);
+
+      if (user.labels && user.labels.includes("admin")) {
+        console.log("User has the 'admin' role. Allowing access.");
+        navigate("/admin/dashboard"); // Redirect to dashboard
+      } else {
+        console.log("User does not have the 'admin' role. Deleting session...");
+        await account.deleteSession("current"); // Delete the session
+        toast.error("You do not have permission to access the admin dashboard.");
+        navigate("/admin/login"); // Redirect back to login
+      }
     } catch (error) {
       console.error("Error during login:", error);
-      // Show error toast
       toast.error("Failed to log in. Please try again.");
     }
   };
@@ -40,7 +52,7 @@ const Login = () => {
         </button>
       </div>
       {/* Toast Container */}
-      <ToastContainer
+      {/* <ToastContainer
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
@@ -50,7 +62,7 @@ const Login = () => {
         pauseOnFocusLoss
         draggable
         pauseOnHover
-      />
+      /> */}
     </div>
   );
 };

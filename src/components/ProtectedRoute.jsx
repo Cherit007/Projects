@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { account } from "../appwriteConfig"; // Import Appwrite Auth
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify"; // Import toast
+import "react-toastify/dist/ReactToastify.css"; // Import toast CSS
 import Loader from "./Loader";
 
 const ProtectedRoute = ({ children }) => {
@@ -13,20 +15,30 @@ const ProtectedRoute = ({ children }) => {
     const checkAuth = async () => {
       try {
         const user = await account.get();
+        console.log("User data:", user); // Debugging: Log user data
+
         // Check if the user has the "admin" role
-        if (user.labels.includes("admin")) {
-          setIsAuthenticated(true);
+        if (user.labels && user.labels.includes("admin")) {
+          console.log("User is authenticated and has the 'admin' role.");
+          setIsAuthenticated(true); // User is authenticated and has the "admin" role
         } else {
           // Log out if the user does not have the "admin" role
+          console.log("User does not have the 'admin' role. Logging out...");
           await account.deleteSession("current");
-          navigate("/admin/login");
+          toast.error(
+            "You do not have permission to access the admin dashboard."
+          ); // Toast message
+          setTimeout(() => {
+            navigate("/admin/login"); // Redirect after toast is shown
+          }, 1000); // Delay redirect by 1 second
         }
       } catch (error) {
         console.error("Error checking authentication:", error);
-        // Redirect to login if the user is not authenticated
-        navigate("/admin/login");
+        setTimeout(() => {
+          navigate("/admin/login"); // Redirect after toast is shown
+        }, 1000); // Delay redirect by 1 second
       } finally {
-        setIsLoading(false);
+        setIsLoading(false); // Stop loading
       }
     };
 
