@@ -16,8 +16,9 @@ const Navbar = () => {
       try {
         const user = await account.get();
         console.log(user,"user");
-        if(user.labels.includes("admin")){
+        if(user.labels.includes("admin") && window.location.pathname.includes("admin")){
           setIsAdmin(true);
+          navigate("/admin/dashboard")
         } else setIsAdmin(false);
         setIsLoggedIn(true); // User is logged in
       } catch (error) {
