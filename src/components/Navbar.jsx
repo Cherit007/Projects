@@ -139,6 +139,12 @@ const Navbar = () => {
             Members
           </Link>
           <Link
+            to="/coremembers"
+            className="nav-link"
+          >
+            Core Members
+          </Link>
+          <Link
             to={
               window.location.pathname.includes("admin")
                 ? "/admin/events"
