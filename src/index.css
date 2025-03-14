@@ -1149,12 +1149,12 @@
 }
 
 .toggle-button.active {
-  background-color: #28a745; /* Green for active state */
+  background-color: #dc3545; /* Green for active state */
   color: white;
 }
 
 .toggle-button:not(.active) {
-  background-color: #dc3545; /* Red for inactive state */
+  background-color: #28a745; /* Red for inactive state */
   color: white;
 }
 

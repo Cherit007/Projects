@@ -115,19 +115,23 @@ const RegistrationRequests = () => {
                 <td>{request.email}</td>
                 <td>{request.status}</td>
                 <td>
-                  <button
-                    className={`toggle-button ${
-                      request.isCoreMember ? "active" : ""
-                    }`}
-                    onClick={() =>
-                      toggleCoreCommittee(request.$id, request.isCoreMember)
-                    }
-                  >
-                    {request.isCoreMember ? "Remove from Core" : "Add to Core"}
-                  </button>
+                  {request.status === "approved" && (
+                    <button
+                      className={`toggle-button ${
+                        request.isCoreMember ? "active" : ""
+                      }`}
+                      onClick={() =>
+                        toggleCoreCommittee(request.$id, request.isCoreMember)
+                      }
+                    >
+                      {request.isCoreMember
+                        ? "Remove from Core"
+                        : "Add to Core"}
+                    </button>
+                  )}
                 </td>
                 <td>
-                  {request.status === "pending" && (
+                  {request.status === "pending" ? (
                     <>
                       <button
                         className="approve-button"
@@ -150,6 +154,8 @@ const RegistrationRequests = () => {
                         )}
                       </button>
                     </>
+                  ) : (
+                    request.status === "rejected" ? "Member Rejected" : "Approved Member"
                   )}
                 </td>
               </tr>
