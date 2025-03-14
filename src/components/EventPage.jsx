@@ -26,7 +26,7 @@ const EventsPage = () => {
         "67cff28f0032d7a0fbbf" // Replace with your collection ID
       );
       setEvents(response.documents);
-      setFilteredEvents(response.documents); // Initialize filtered events
+      filterEvents(response.documents); // Initialize filtered events
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to fetch events. Please try again.");
@@ -44,7 +44,9 @@ const EventsPage = () => {
         eventId
       );
       setEvents(events.filter((event) => event.$id !== eventId));
-      setFilteredEvents(filteredEvents.filter((event) => event.$id !== eventId));
+      setFilteredEvents(
+        filteredEvents.filter((event) => event.$id !== eventId)
+      );
       toast.success("Event deleted successfully!");
     } catch (error) {
       console.error("Error deleting event:", error);
@@ -68,38 +70,52 @@ const EventsPage = () => {
   };
 
   // Filter events based on the selected filter
-  const filterEvents = (filterType) => {
+  const filterEvents = (events, filterType = "") => {
     const now = new Date();
+
+    let filteredEvents = [];
+
     switch (filterType) {
       case "upcoming":
-        setFilteredEvents(
-          events.filter((event) => new Date(event.date) > now)
-        );
+        filteredEvents = events
+          .filter((event) => new Date(event.date) > now)
+          .sort((a, b) => new Date(b.date) - new Date(a.date)); // Newest first
         break;
+
       case "expired":
-        setFilteredEvents(
-          events.filter((event) => new Date(event.date) < now)
-        );
+        filteredEvents = events
+          .map((event) => ({
+            ...event,
+            isExpiredEvent: new Date(event.date) < now,
+          }))
+          .filter((event) => new Date(event.date) < now)
+          .sort((a, b) => new Date(a.date) - new Date(b.date)); // Oldest expired first
         break;
+
       case "live":
-        setFilteredEvents(
-          events.filter(
+        filteredEvents = events
+          .filter(
             (event) =>
               new Date(event.date) <= now &&
-              new Date(event.date).getTime() + 24 * 60 * 60 * 1000 > now // Events within 24 hours are considered "live"
+              new Date(event.date).getTime() + 24 * 60 * 60 * 1000 > now // Events within 24 hours
           )
-        );
+          .sort((a, b) => new Date(b.date) - new Date(a.date)); // Newest live first
         break;
+
       default:
-        setFilteredEvents(events); // Show all events
+        filteredEvents = events.sort(
+          (a, b) => new Date(b.date) - new Date(a.date)
+        ); // Show all with newest first
         break;
     }
+
+    setFilteredEvents(filteredEvents);
   };
 
   // Handle filter change
   const handleFilterChange = (filterType) => {
     setFilter(filterType);
-    filterEvents(filterType);
+    filterEvents(events, filterType);
   };
 
   // Fetch events on component mount
@@ -129,13 +145,19 @@ const EventsPage = () => {
       ) : (
         <>
           <div className="event-list">
-            {filteredEvents.map((event) => (
-              <EventCard
-                key={event.$id}
-                event={event}
-                onDelete={handleDeleteEvent}
-              />
-            ))}
+            {filteredEvents.length > 0 ? (
+              filteredEvents.map((event) => {
+                return (
+                  <EventCard
+                    key={event.$id}
+                    event={event}
+                    onDelete={handleDeleteEvent}
+                  />
+                );
+              })
+            ) : (
+              <p>No Events...</p>
+            )}
           </div>
           <Link to="/admin/events/add" className="add-event-button">
             +
