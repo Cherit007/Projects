@@ -22,6 +22,8 @@ import EventForm from "./components/EventForm";
 import RegistrationRequests from "./pages/RegistrationRequests";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RegistrationForm from "./components/RegistrationForm";
+import ContactUsForm from "./components/ContactUs";
+
 
 function App() {
   return (
@@ -33,6 +35,8 @@ function App() {
           <Route path="/services" element={<Services />} />
           <Route path="/objective" element={<Objective />} />
           <Route path="/donate" element={<Donate />} />
+          <Route path="/contactus" element={<ContactUsForm />} />
+
           <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/events/:eventId" element={<EventDetails />} />
           <Route path="/members" element={<CommunityTable />} />

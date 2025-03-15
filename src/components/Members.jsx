@@ -16,8 +16,6 @@ const CommunityTable = () => {
           "67d301a8000b5dd7e089",
            [Query.equal("status", "approved")]
         );
-        console.log(response,'responseresponse')
-        // if(response.)
         setMembers(response.documents);
       } catch (error) {
         console.error("Error fetching members:", error);

@@ -7,19 +7,10 @@ const Carousel = () => {
   const slides = [
     {
       image: "img/cover.avif",
-      title: "Best Carpenter & Craftsman Services",
+      title: "Welcome to Our Community",
       description: "Vero elitr justo clita lorem. Ipsum dolor at sed stet sit diam no. Kasd rebum ipsum et diam justo clita et kasd rebum sea elitr.",
     },
-    {
-      image: "img/carousel-2.jpg",
-      title: "Welcome To WooDY",
-      description: "Vero elitr justo clita lorem. Ipsum dolor at sed stet sit diam no. Kasd rebum ipsum et diam justo clita et kasd rebum sea elitr.",
-    },
-    {
-      image: "img/carousel-3.jpg",
-      title: "Quality Carpentry Services",
-      description: "Vero elitr justo clita lorem. Ipsum dolor at sed stet sit diam no. Kasd rebum ipsum et diam justo clita et kasd rebum sea elitr.",
-    },
+   
   ];
 
   const nextSlide = () => {
@@ -48,7 +39,7 @@ const Carousel = () => {
         >
           <div className="carousel-overlay">
             <div className="carousel-content">
-              <h5 className="text-white">WELCOME TO WOODY</h5>
+              {/* <h5 className="text-white">WELCOME TO WOODY</h5> */}
               <h1 className="text-white">{slide.title}</h1>
               <p className="text-white">{slide.description}</p>
             </div>
@@ -56,14 +47,14 @@ const Carousel = () => {
         </div>
       ))}
 
-<div className="carousel-navigation">
+{/* <div className="carousel-navigation">
         <button className="carousel-prev" onClick={prevSlide}>
         &#10095;
         </button>
         <button className="carousel-next" onClick={nextSlide}>
         &#10094;
         </button>
-      </div>
+      </div> */}
     </div>
   );
 };

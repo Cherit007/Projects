@@ -16,7 +16,6 @@ const CoreCommunityTable = () => {
           "67d301a8000b5dd7e089",
           [Query.equal("isCoreMember", true)]
         );
-       console.log(response)
         setMembers(response.documents);
       } catch (error) {
         console.error("Error fetching members:", error);
