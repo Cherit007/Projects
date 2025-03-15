@@ -14,8 +14,8 @@ const Login = () => {
       console.log("Redirecting to Google OAuth...");
       await account.createOAuth2Session(
         "google", // Provider (Google)
-        "http://localhost:5173/admin/dashboard", // Success URL
-        "http://localhost:5173/admin/login" // Failure URL
+        import.meta.env.VITE_LOGIN_SUCCESS_URL, // Success URL
+        import.meta.env.VITE_LOGIN_FAILURE_URL // Failure URL
       );
 
       // After OAuth flow completes, check the user's role
