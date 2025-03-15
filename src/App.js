@@ -109,7 +109,6 @@ function App() {
     } catch (error) {
       console.error("Error submitting form:", error);
     }
-    console.log(formData);
   };
   return (
     <div classNameName="App">

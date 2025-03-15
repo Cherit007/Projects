@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const mailer = require("nodemailer");
 const path = require("path");
+require("dotenv").config();
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
@@ -13,13 +14,15 @@ app.listen(3001, () => {
 });
 app.use(
   cors({
-    origin: "*", 
+    origin: "*",
   })
 );
 app.post("/submit-form", (req, res) => {
   const formData = req.body;
   const toEmail = formData?.email;
+  const service = formData?.service || "welding";
   const toName = formData?.name;
+  const subject = formData?.subject;
   const message = formData?.message;
   const phoneNo = formData?.phoneNo;
   const transport = mailer.createTransport({
@@ -27,8 +30,8 @@ app.post("/submit-form", (req, res) => {
     port: 465,
     secure: true,
     auth: {
-      user: "cheritcherry@gmail.com",
-      pass: "vtre vvbi ffwb hpwb",
+      user: process.env.FROM_EMAIL_ADDRESS,
+      pass: process.env.EMAIL_PASS,
     },
   });
   const template = `<!DOCTYPE html>
@@ -103,32 +106,37 @@ app.post("/submit-form", (req, res) => {
   
   <div class="email-container">
       <div class="email-header">
-          <h1>New Welding Service Inquiry</h1>
+          <h1>${
+            service === "community"
+              ? "New Contact Enquiry"
+              : "New Welding Service Inquiry"
+          }</h1>
       </div>
       <div class="email-body">
           <h2>Customer Details</h2>
           <table class="details-table">
               <tr>
                   <th>Name</th>
-                  <td>${toName}</td>
+                  <td>${toName || "Not provided"}</td>
               </tr>
+              ${
+                toEmail
+                  ? `
               <tr>
                   <th>Email</th>
                   <td>${toEmail}</td>
-              </tr>
+              </tr>`
+                  : ""
+              }
               <tr>
                   <th>Phone Number</th>
-                  <td>${phoneNo}</td>
-              </tr>
-              <tr>
-                  <th>Preferred Contact Method</th>
-                  <td>-</td>
+                  <td>${phoneNo || "Not provided"}</td>
               </tr>
           </table>
   
           <h2>Message</h2>
           <div class="message-box">
-            ${message}
+              ${message || "No message provided"}
           </div>
   
           <p>Please review the above details and reach out to the customer as soon as possible.</p>
@@ -146,8 +154,8 @@ app.post("/submit-form", (req, res) => {
         name: "Support",
         address: toEmail,
       },
-      to: "cheritcherry@gmail.com",
-      subject: "subject",
+      to: process.env.FROM_EMAIL_ADDRESS,
+      subject: subject || "Contact Enquiry",
       html: template,
     })
     .then(() => {
