@@ -12,6 +12,8 @@ import Testimonials from "./components/Testimonials";
 import Events from "./pages/Events";
 import EventDetails from "./pages/EventDetails"; // Import EventDetails page
 import CommunityTable from "./components/Members";
+import CoreCommunityTable from "./components/coreMembers";
+
 import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import AdminHome from "./pages/AdminHome";
@@ -19,7 +21,9 @@ import EventsPage from "./components/EventPage";
 import EventForm from "./components/EventForm";
 import RegistrationRequests from "./pages/RegistrationRequests";
 import ProtectedRoute from "./components/ProtectedRoute";
-import RegistrationForm from "./components/registrationForm";
+import RegistrationForm from "./components/RegistrationForm";
+import ContactUsForm from "./components/ContactUs";
+
 
 function App() {
   return (
@@ -31,9 +35,13 @@ function App() {
           <Route path="/services" element={<Services />} />
           <Route path="/objective" element={<Objective />} />
           <Route path="/donate" element={<Donate />} />
+          <Route path="/contactus" element={<ContactUsForm />} />
+
           <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/events/:eventId" element={<EventDetails />} />
           <Route path="/members" element={<CommunityTable />} />
+          <Route path="/coremembers" element={<CoreCommunityTable />} />
+
           <Route path="/admin/login" element={<Login />} />
           <Route
             path="/admin"

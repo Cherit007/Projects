@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { databases } from "../appwriteConfig";
 import { Query } from "appwrite";
 
-const CommunityTable = () => {
+const CoreCommunityTable = () => {
   const [members, setMembers] = useState([]);
   const [selectedState, setSelectedState] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
@@ -14,7 +14,7 @@ const CommunityTable = () => {
         const response = await databases.listDocuments(
           "67cff2840013b293be3c",
           "67d301a8000b5dd7e089",
-           [Query.equal("status", "approved")]
+          [Query.equal("isCoreMember", true)]
         );
         setMembers(response.documents);
       } catch (error) {
@@ -38,7 +38,7 @@ const CommunityTable = () => {
 
   return (
     <div className="p-4 flex flex-col items-center w-full"  style={{ width: "100%" }}>
-      <h2 className="text-xl font-bold mb-4">Community Members</h2>
+      <h2 className="text-xl font-bold mb-4">Core Community Members</h2>
       
       <div className="mb-4 w-full flex justify-center">
         <label className="mr-2">Filter by State:</label>
@@ -104,4 +104,4 @@ const CommunityTable = () => {
   );
 };
 
-export default CommunityTable;
+export default CoreCommunityTable;
