@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import "../styles/Events.css"; 
-import { databases } from "../appwriteConfig"; 
-import defaultEventImg from '/img/default_event.png'
+import "../styles/Events.css";
+import { databases } from "../appwriteConfig";
+import defaultEventImg from "/img/default_event.png";
 
 const Events = () => {
   const [events, setEvents] = useState([]);
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     databases
@@ -18,6 +19,20 @@ const Events = () => {
       });
   }, []);
 
+  const today = new Date().setHours(0, 0, 0, 0);
+
+  const liveEvents = events.filter(event => {
+    const eventDate = new Date(event.date).setHours(0, 0, 0, 0);
+    return eventDate === today;
+  });
+
+  const upcomingEvents = events.filter(event => new Date(event.date) > today);
+  const expiredEvents = events.filter(event => new Date(event.date) < today);
+
+  const filteredEvents = filter === "live" ? liveEvents :
+                        filter === "upcoming" ? upcomingEvents :
+                        filter === "expired" ? expiredEvents : events;
+
   return (
     <div className="events-page">
       <div className="banner">
@@ -28,23 +43,30 @@ const Events = () => {
         </div>
       </div>
 
+      <div className="filter-container">
+        <br/>
+        <br/>
+        <br/>
+
+        <label htmlFor="filter">Filter Events:</label>
+        <select id="filter" value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="all">All Events</option>
+          <option value="live">Live Events</option>
+          <option value="upcoming">Upcoming Events</option>
+          <option value="expired">Expired Events</option>
+        </select>
+      </div>
+
       <div className="events-container">
-        <h2>🎉 Upcoming Events</h2>
         <div className="events-grid">
-          {events.map((event) => (
+          {filteredEvents.map((event) => (
             <div key={event.$id} className="event-card">
-              <img
-                src={event.image || defaultEventImg}
-                alt={event.title}
-                className="event-image"
-              />
+              <img src={event.image || defaultEventImg} alt={event.title} className="event-image" />
               <div className="event-content">
                 <h3>{event.title}</h3>
                 <p>{event.description}</p>
                 <p className="event-date">📅 {new Date(event.date).toDateString()}</p>
-                <Link to={`/events/${event.$id}`} className="learn-more-btn">
-                  Learn More
-                </Link>
+                <Link to={`/events/${event.$id}`} className="learn-more-btn">Learn More</Link>
               </div>
             </div>
           ))}
@@ -57,24 +79,24 @@ const Events = () => {
 export default Events;
 
 
-// title
-// string
-// -
-// description
-// string
-// -
-// date
-// datetime
-// -
-// location
-// string
-// -
-// image
-// url
-// -
-// createdAt
-// datetime
-// -
-// eventdetails
-// string
-// -
+// // title
+// // string
+// // -
+// // description
+// // string
+// // -
+// // date
+// // datetime
+// // -
+// // location
+// // string
+// // -
+// // image
+// // url
+// // -
+// // createdAt
+// // datetime
+// // -
+// // eventdetails
+// // string
+// // -
