@@ -132,6 +132,15 @@ app.post("/submit-form", (req, res) => {
                   <th>Phone Number</th>
                   <td>${phoneNo || "Not provided"}</td>
               </tr>
+              ${
+                subject
+                  ? `
+              <tr>
+                  <th>Subject</th>
+                  <td>${subject}</td>
+              </tr>`
+                  : ""
+              }
           </table>
   
           <h2>Message</h2>
@@ -155,7 +164,10 @@ app.post("/submit-form", (req, res) => {
         address: toEmail,
       },
       to: process.env.FROM_EMAIL_ADDRESS,
-      subject: subject || "Contact Enquiry",
+      subject:
+        service === "community"
+          ? "New Contact Enquiry for Community"
+          : "Contact Enquiry",
       html: template,
     })
     .then(() => {
