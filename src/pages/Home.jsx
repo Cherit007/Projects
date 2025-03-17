@@ -13,8 +13,8 @@ const Home = () => {
       {/* <Navbar /> */}
       {/* Add other sections here */}
       <Carousel />
-      <Services />
-      <Objective />
+      {/* <Services /> */}
+      {/* <Objective /> */}
       <ContactUsForm />
     </>
   );
