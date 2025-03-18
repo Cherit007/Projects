@@ -42,13 +42,14 @@ const Events = () => {
     <div className="events-page">
       <div className="banner">
         <img
-          src="https://fastly.picsum.photos/id/564/200/300.jpg?hmac=GML84ZsOUsd0_XLIMleR9RvRFT8-pojH0AwU7tRHoCg"
+          src="/img/members.jpeg"
           alt="Events Banner"
+          className="banner-event-img"
         />
-        <div className="banner-text">
+        {/* <div className="banner-text">
           <h1>Upcoming Events</h1>
-          <p>Discover the latest events happening near you!</p>
-        </div>
+          <h2>Discover the latest events happening near you!</h2>
+        </div> */}
       </div>
 
       <div className="filter-container">
