@@ -104,7 +104,7 @@ const RegistrationRequests = () => {
               <th>Name</th>
               <th>Email</th>
               <th>Status</th>
-              <th>Core Committee</th>
+              {/* <th>Core Committee</th> */}
               <th>Actions</th>
             </tr>
           </thead>
@@ -114,7 +114,7 @@ const RegistrationRequests = () => {
                 <td>{request.name}</td>
                 <td>{request.email}</td>
                 <td>{request.status}</td>
-                <td>
+                {/* <td>
                   {request.status === "approved" && (
                     <button
                       className={`toggle-button ${
@@ -129,7 +129,7 @@ const RegistrationRequests = () => {
                         : "Add to Core"}
                     </button>
                   )}
-                </td>
+                </td> */}
                 <td>
                   {request.status === "pending" ? (
                     <>

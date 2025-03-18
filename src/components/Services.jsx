@@ -4,35 +4,20 @@ import "../index.css"; // Add CSS for styling
 const Services = () => {
   const services = [
     {
-      image: "img/service-1.jpg",
-      title: "General Carpentry",
+      image: "https://t4.ftcdn.net/jpg/04/42/21/29/360_F_442212933_x52WP2tG23txpK2x7PvydD1xxPlWta1F.jpg",
+      title: "Our community",
       description: "Stet stet justo dolor sed duo. Ut clita sea sit ipsum diam lorem diam.",
     },
     {
-      image: "img/service-2.jpg",
-      title: "Furniture Manufacturing",
+      image: "https://media.istockphoto.com/id/857146092/photo/sea-of-hands.jpg?s=612x612&w=0&k=20&c=mpZdzYstDIE_OGQ9PivyYdtA5Vq8wwbZF_uazfbfuwo=",
+      title: "Community",
       description: "Stet stet justo dolor sed duo. Ut clita sea sit ipsum diam lorem diam.",
     },
     {
-      image: "img/service-3.jpg",
-      title: "Furniture Remodeling",
+      image: "https://images.twinkl.co.uk/tr/image/upload/t_illustration/illustation/community-cohesion.png",
+      title: "Community",
       description: "Stet stet justo dolor sed duo. Ut clita sea sit ipsum diam lorem diam.",
-    },
-    {
-      image: "img/service-4.jpg",
-      title: "Wooden Floor",
-      description: "Stet stet justo dolor sed duo. Ut clita sea sit ipsum diam lorem diam.",
-    },
-    {
-      image: "img/service-5.jpg",
-      title: "Wooden Furniture",
-      description: "Stet stet justo dolor sed duo. Ut clita sea sit ipsum diam lorem diam.",
-    },
-    {
-      image: "img/service-6.jpg",
-      title: "Custom Work",
-      description: "Stet stet justo dolor sed duo. Ut clita sea sit ipsum diam lorem diam.",
-    },
+    }
   ];
 
   return (

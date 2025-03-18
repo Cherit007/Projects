@@ -17,7 +17,11 @@ const EventCard = ({ event, onDelete }) => {
       </div>
       <div className="event-details">
         <h3>{event.title}</h3>
-        <p>{event.description}</p>
+        {event.description
+                    ? event.description.length > 150
+                      ? `${event.description.slice(0, 100)}...`
+                      : event.description
+                    : "No details available"}
         <p>
           <strong>Location:</strong> {event.location}
         </p>

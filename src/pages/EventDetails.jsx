@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { databases } from "../appwriteConfig"; 
+import { databases } from "../appwriteConfig";
 
-import "../styles/EventDetails.css"; 
+import "../styles/EventDetails.css";
 
 const EventDetails = () => {
-  const { eventId } = useParams(); 
+  const { eventId } = useParams();
   const [event, setEvent] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(""); 
+  const [timeLeft, setTimeLeft] = useState("");
 
   useEffect(() => {
     databases
@@ -63,7 +63,7 @@ const EventDetails = () => {
       <img
         src={event.image || "https://via.placeholder.com/600"}
         alt={event.title}
-        className="event-image"
+        className="event-image-1"
       />
       <p className="event-meta">
         📍 Location: {event.location || "TBA"} | 📅{" "}
@@ -71,7 +71,9 @@ const EventDetails = () => {
       </p>
       <p className="countdown-timer">⏳ Countdown: {timeLeft}</p>
       <h2 className="event-details-heading">Event Details</h2>
-      <p className="event-details-text">{event.eventdetails || "No details available"}</p>
+      <pre className="event-details-text">
+        {event.description || "No details available"}
+      </pre>{" "}
     </div>
   );
 };
