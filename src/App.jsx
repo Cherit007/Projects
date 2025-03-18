@@ -28,37 +28,37 @@ import ContactUsForm from "./components/ContactUs";
 function App() {
   return (
     <>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/services" element={<Services />} />
-          <Route path="/objective" element={<Objective />} />
-          <Route path="/donate" element={<Donate />} />
-          <Route path="/contactus" element={<ContactUsForm />} />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/events" element={<Events />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/objective" element={<Objective />} />
+        <Route path="/donate" element={<Donate />} />
+        <Route path="/contactus" element={<ContactUsForm />} />
 
-          <Route path="/testimonials" element={<Testimonials />} />
-          <Route path="/events/:eventId" element={<EventDetails />} />
-          <Route path="/members" element={<CommunityTable />} />
-          <Route path="/coremembers" element={<CoreCommunityTable />} />
+        <Route path="/testimonials" element={<Testimonials />} />
+        <Route path="/events/:eventId" element={<EventDetails />} />
+        <Route path="/coremembers" element={<CoreCommunityTable />} />
 
-          <Route path="/admin/login" element={<Login />} />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <Admin />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="dashboard" element={<AdminHome />} />
-            <Route path="events" element={<EventsPage />} />
-            <Route path="events/edit/:id" element={<EventForm />} />
-            <Route path="events/add" element={<EventForm />} />
-            <Route path="member-request" element={<RegistrationRequests />} />
-          </Route>
-          <Route path="/registration" element={<RegistrationForm />} />
-        </Routes>
+        <Route path="/admin/login" element={<Login />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <Admin />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="members" element={<CommunityTable />} />
+          <Route path="dashboard" element={<AdminHome />} />
+          <Route path="events" element={<EventsPage />} />
+          <Route path="events/edit/:id" element={<EventForm />} />
+          <Route path="events/add" element={<EventForm />} />
+          <Route path="member-request" element={<RegistrationRequests />} />
+        </Route>
+        <Route path="/registration" element={<RegistrationForm />} />
+      </Routes>
       {/* Toast Container */}
       <ToastContainer
         position="top-right"

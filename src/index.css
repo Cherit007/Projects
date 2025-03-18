@@ -951,6 +951,7 @@
 
 /* Event Cards */
 .event-card {
+  width:350px;
   border: 1px solid #ccc;
   border-radius: 8px;
   overflow: hidden;
@@ -958,18 +959,46 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.event-image img {
+.event-description-snippet {
+  line-height: 1.6;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.event-image-1 {
   width: 100%;
+  max-width: 800px;       /* Optional: Limit max size */
+  height: auto;           /* Maintain aspect ratio */
+  object-fit: cover;      /* Cover the container without stretching */
+  border-radius: 8px;     /* Optional: Rounded corners */
+  margin: 20px 0;         /* Spacing around image */
+  display: block;         /* Block for margin auto to work */
+  margin-left: auto;      /* Center horizontally */
+  margin-right: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Optional: Add shadow for better visuals */
+}
+.event-image img {
+  width: 200px;
   height: 200px;
   object-fit: cover;
 }
-
 .event-details {
   padding: 15px;
 }
 
 .event-details h3 {
   margin-top: 0;
+}
+
+.event-details-container {
+  padding: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.event-details-text {
+  white-space: pre-wrap;  /* Preserves both new lines and spaces */
+  line-height: 1.6;
+  font-size: 1.1rem;
 }
 
 .event-actions {
