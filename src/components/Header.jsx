@@ -19,7 +19,7 @@ const Header = () => {
           <div className="left-section">
             <div className="info-item">
               <MapPin className="icon primary-icon" />
-              <small>123 Street, New York, USA</small>
+              <small>Madhya Pradesh</small>
             </div>
             <div className="info-item">
               <Clock className="icon primary-icon" />
@@ -29,20 +29,14 @@ const Header = () => {
           <div className="right-section">
             <div className="info-item">
               <Phone className="icon primary-icon" />
-              <small>+012 345 6789</small>
+              <small>+91 91110 97070</small>
             </div>
             <div className="social-icons">
-              <a className="social-icon-link" href="">
+              <a target="_blank" className="social-icon-link" href="https://www.facebook.com/SajjanVermaOfficial/about_profile_transparency">
                 <Facebook className="icon" />
               </a>
-              <a className="social-icon-link" href="">
+              <a target="_blank" className="social-icon-link" href="https://x.com/sajjanvermainc?lang=en">
                 <Twitter className="icon" />
-              </a>
-              <a className="social-icon-link" href="">
-                <Linkedin className="icon" />
-              </a>
-              <a className="social-icon-link" href="">
-                <Instagram className="icon" />
               </a>
             </div>
           </div>
