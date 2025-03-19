@@ -23,6 +23,7 @@ const RegistrationForm = () => {
     occupation: "",
     bloodGroup: "",
     qualification: "",
+    designation: "", // Added Designation field
   });
 
   const handleChange = (e) => {
@@ -67,6 +68,7 @@ const RegistrationForm = () => {
     },
     { name: "contactAddress", label: "Contact Address" },
     { name: "mobileNumber", label: "Mobile Number", type: "tel" },
+    { name: "designation", label: "Designation" }, // Added Designation field
   ];
 
   const rightColumnFields = [
@@ -88,7 +90,6 @@ const RegistrationForm = () => {
             name={field.name}
             value={formData[field.name]}
             onChange={handleChange}
-            required
           >
             <option value="">Select {field.label}</option>
             {field.options.map((option) => (
@@ -105,7 +106,7 @@ const RegistrationForm = () => {
             name={field.name}
             value={formData[field.name]}
             onChange={handleChange}
-            required
+            
           />
         );
     }
