@@ -64,22 +64,25 @@ const CoreCommunityTable = () => {
           <table className="table-auto w-full border-collapse border border-gray-300"style={{ width: "100%" }}>
             <thead>
               <tr className="bg-gray-200">
-              <th className="border border-gray-300 p-2" style={{ width: "16.6%" }}>Photo</th>
-                <th className="border border-gray-300 p-2" style={{ width: "16.6%" }}>Name</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%" }}>Designation</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%" }}>Mobile Number</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%" }}>Email Address</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%" }}>State/City</th>
+              <th className="border border-gray-300 p-2" style={{ width: "16.6%",textAlign:"center" }}>Photo</th>
+                <th className="border border-gray-300 p-2" style={{ width: "16.6%",textAlign:"center" }}>Name</th>
+                <th className="border border-gray-300 p-2"style={{ width: "16.6%",textAlign:"center" }}>Designation</th>
+                <th className="border border-gray-300 p-2"style={{ width: "16.6%",textAlign:"center" }}>Mobile Number</th>
+                <th className="border border-gray-300 p-2"style={{ width: "16.6%",textAlign:"center" }}>Email Address</th>
+                <th className="border border-gray-300 p-2"style={{ width: "16.6%" ,textAlign:"center"}}>State/City</th>
               </tr>
             </thead>
             <tbody>
               {displayedMembers.map((member) => (
-                <tr key={member.$id} className="text-center border border-gray-300">
-                <img 
+                <tr key={member.$id} className="text-center border border-gray-300 p-2">
+                  <td className="border border-gray-300 p-2">
+                  <img 
   src={defaultImage} 
   alt={member.name} 
   style={{ width: "50px", height: "50px", borderRadius: "50%", objectFit: "cover" }} 
 />
+                  </td>
+                
                   <td className="border border-gray-300 p-2">{member.name}</td>
                   <td className="border border-gray-300 p-2">{member.designation}</td>
                   <td className="border border-gray-300 p-2">{member.mobileNumber}</td>
