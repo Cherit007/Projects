@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "../styles/CoreMembers.css";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 
@@ -45,9 +46,9 @@ const membersData = [
   }
 ];
 
-const CoreMembers = () => {
-  const [selectedMember, setSelectedMember] = useState(null);
+const CoreMembersMain = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const navigate = useNavigate();
 
   const itemsPerPage = 3;
   const totalPages = Math.ceil(membersData.length / itemsPerPage);
@@ -84,7 +85,12 @@ const CoreMembers = () => {
               </div>
               <p className="member-name">{member.name}</p>
               <p className="member-designation">{member.designation}</p>
-              <button className="show-more-button" onClick={() => setSelectedMember(member)}>Show More</button>
+              <button 
+                className="show-more-button" 
+                onClick={() => navigate(`/core-member/${member.id}`, { state: { member } })}
+              >
+                View More
+              </button>
             </div>
           ))}
         </div>
@@ -94,29 +100,8 @@ const CoreMembers = () => {
         <button className="nav-button" onClick={prevSlide} disabled={currentIndex === 0}><FaArrowLeft /></button>
         <button className="nav-button" onClick={nextSlide} disabled={currentIndex === totalPages - 1}><FaArrowRight /></button>
       </div>
-
-      {selectedMember && (
-        <div className="modal-overlay" onClick={() => setSelectedMember(null)}>
-          <div className="member-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="member-modal-header">
-              <img src={selectedMember.image} alt={selectedMember.name} className="member-modal-image" />
-              <div className="member-modal-title">
-                <h2>{selectedMember.name}</h2>
-                <p className="member-modal-designation">{selectedMember.designation}</p>
-              </div>
-            </div>
-            <div className="member-modal-body">
-              <h3>About</h3>
-              <p>{selectedMember.details}</p>
-              <h3>Achievements</h3>
-              <p>{selectedMember.achievements}</p>
-            </div>
-            <button className="close-button" onClick={() => setSelectedMember(null)}>Close</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default CoreMembers;
+export default CoreMembersMain;
