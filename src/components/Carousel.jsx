@@ -64,6 +64,7 @@
 import React from "react";
 import person1 from "../assets/person1.jpg";
 import person2 from "../assets/person2.jpg";
+import person3 from "../assets/person3.jpg"
 import "../index.css"; // Ensure styles are applied correctly
 
 const Carousel = () => {
@@ -102,7 +103,7 @@ const Carousel = () => {
         }}>
           <img src={person1} alt="Person 1" style={{ width: "180px", height: "180px", borderRadius: "50%", border: "5px solid #d32f2f" }} />
           <img src={person2} alt="Person 2" style={{ width: "180px", height: "180px", borderRadius: "50%", border: "5px solid #d32f2f" }} />
-          <img src={person2} alt="Person 3" style={{ width: "180px", height: "180px", borderRadius: "50%", border: "5px solid #d32f2f" }} />
+          <img src={person3} alt="Person 3" style={{ width: "180px", height: "180px", borderRadius: "50%", border: "5px solid #d32f2f" }} />
         </div>
 
         {/* Event Content */}

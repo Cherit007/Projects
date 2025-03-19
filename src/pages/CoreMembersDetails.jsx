@@ -24,7 +24,7 @@ const CoreMemberDetails = () => {
 
       <div className="core-member-container">
         <img 
-          src={`/src/assets/${member.image}`} 
+          src={`/${member.image}`} 
           alt={member.name} 
           className="core-member-image" 
         />
