@@ -1,6 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import "../styles/CoreMembers.css";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 
 const membersData = [
@@ -10,7 +9,6 @@ const membersData = [
     designation: "Ex. Cabinet Minister, Ex. Member of Parliament, Madhya Pradesh", 
     image: "src/assets/sajjan.jpg", 
     details: "Shri Sajjan Singh Verma is a distinguished leader whose legacy as a former Cabinet Minister and Member of Parliament from Madhya Pradesh has left an indelible mark on the political landscape of the nation. With a strong commitment to public service, he has been at the forefront of driving progressive policies that have empowered communities and contributed to the growth and development of his constituency.In addition to his remarkable political career, Shri Sajjan Singh Verma serves as the National President of the Khatik Samaj, where his leadership continues to inspire and uplift the community. His unwavering dedication to the development of the Khatik Samaj has led to transformative changes across various sectors, with a particular focus on education, politics, and business.",
-
     achievements: "As a visionary leader, Shri Sajjan Singh Verma is actively working to create equal opportunities for the members of the Khatik Samaj, enabling them to thrive and succeed in all aspects of life. Through his tireless efforts, he has facilitated access to quality education, empowered aspiring entrepreneurs, and encouraged political engagement, ensuring that the community is not only well-represented but also contributes meaningfully to the progress of the nation.Under his leadership, the Khatik Samaj has witnessed a significant shift, from a marginalized group to one that is rapidly advancing in various fields. Shri [Leader's Name] is committed to providing the resources, mentorship, and support necessary for individuals within the community to excel, be it in their professional endeavors, political careers, or business ventures."
   },
   { 
@@ -51,19 +49,24 @@ const CoreMembersMain = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const navigate = useNavigate();
 
-  const itemsPerPage = 3;
+  const itemsPerPage = 3; // Show 3 cards on larger devices
   const totalPages = Math.ceil(membersData.length / itemsPerPage);
 
+  // Auto-scroll functionality
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % totalPages);
+    }, 5000); // Auto-scroll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [currentIndex, totalPages]);
+
   const nextSlide = () => {
-    if (currentIndex < totalPages - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
+    setCurrentIndex((prev) => (prev + 1) % totalPages);
   };
 
   const prevSlide = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
+    setCurrentIndex((prev) => (prev === 0 ? totalPages - 1 : prev - 1));
   };
 
   // Calculate which members to display based on current index
@@ -78,6 +81,10 @@ const CoreMembersMain = () => {
       <p className="core-members-subtext">Meet our talented and dedicated team members.</p>
 
       <div className="scrollable-banner-container">
+        <button className="nav-button left" onClick={prevSlide}>
+          <FaArrowLeft />
+        </button>
+
         <div className="scrollable-banner">
           {visibleMembers.map((member) => (
             <div key={member.id} className="member-card">
@@ -95,11 +102,10 @@ const CoreMembersMain = () => {
             </div>
           ))}
         </div>
-      </div>
 
-      <div className="navigation-buttons">
-        <button className="nav-button" onClick={prevSlide} disabled={currentIndex === 0}><FaArrowLeft /></button>
-        <button className="nav-button" onClick={nextSlide} disabled={currentIndex === totalPages - 1}><FaArrowRight /></button>
+        <button className="nav-button right" onClick={nextSlide}>
+          <FaArrowRight />
+        </button>
       </div>
     </div>
   );
