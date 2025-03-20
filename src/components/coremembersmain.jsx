@@ -3,46 +3,61 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 
 const membersData = [
-  { 
-    id: 1, 
-    name: "Shri Sajjan Singh Verma", 
-    designation: "Ex. Cabinet Minister, Ex. Member of Parliament, Madhya Pradesh", 
-    image: "/img/sajjan.jpg", 
-    details: "Shri Sajjan Singh Verma is a distinguished leader whose legacy as a former Cabinet Minister and Member of Parliament from Madhya Pradesh has left an indelible mark on the political landscape of the nation. With a strong commitment to public service, he has been at the forefront of driving progressive policies that have empowered communities and contributed to the growth and development of his constituency.In addition to his remarkable political career, Shri Sajjan Singh Verma serves as the National President of the Khatik Samaj, where his leadership continues to inspire and uplift the community. His unwavering dedication to the development of the Khatik Samaj has led to transformative changes across various sectors, with a particular focus on education, politics, and business.",
-    achievements: "As a visionary leader, Shri Sajjan Singh Verma is actively working to create equal opportunities for the members of the Khatik Samaj, enabling them to thrive and succeed in all aspects of life. Through his tireless efforts, he has facilitated access to quality education, empowered aspiring entrepreneurs, and encouraged political engagement, ensuring that the community is not only well-represented but also contributes meaningfully to the progress of the nation.Under his leadership, the Khatik Samaj has witnessed a significant shift, from a marginalized group to one that is rapidly advancing in various fields. Shri [Leader's Name] is committed to providing the resources, mentorship, and support necessary for individuals within the community to excel, be it in their professional endeavors, political careers, or business ventures."
+  {
+    id: 1,
+    name: "श्री सज्जन सिंह वर्मा",
+    designation: "पूर्व कैबिनेट मंत्री, पूर्व सांसद, मध्य प्रदेश",
+    image: "/img/sajjan.jpg",
+    details:
+      `श्री सज्जन सिंह वर्मा एक प्रतिष्ठित नेता हैं, जिनकी पूर्व कैबिनेट मंत्री और मध्य प्रदेश से पूर्व सांसद के रूप में विरासत ने देश के राजनीतिक परिदृश्य पर अमिट छाप छोड़ी है। जनसेवा के प्रति उनकी गहरी प्रतिबद्धता ने उन्हें प्रगतिशील नीतियों को आगे बढ़ाने में अग्रणी बनाया है, जिससे समुदायों को सशक्त बनाने और अपने क्षेत्र के विकास में महत्वपूर्ण योगदान मिला है। 
+      अपनी उल्लेखनीय राजनीतिक यात्रा के साथ-साथ, श्री सज्जन सिंह वर्मा खटीक समाज के राष्ट्रीय अध्यक्ष के रूप में भी सेवा कर रहे हैं, जहाँ उनका नेतृत्व समाज को निरंतर प्रेरणा और उत्थान प्रदान करता है। खटीक समाज के विकास के प्रति उनकी अटूट निष्ठा ने शिक्षा, राजनीति और व्यवसाय जैसे विविध क्षेत्रों में परिवर्तनकारी बदलाव लाए हैं।`,
+    achievements: `दूरदर्शी नेता के रूप में श्री सज्जन सिंह वर्मा खटीक समाज के सदस्यों के लिए समान अवसरों का निर्माण करने हेतु सक्रिय रूप से कार्य कर रहे हैं, जिससे वे जीवन के प्रत्येक क्षेत्र में प्रगति कर सकें और सफल हो सकें। अपने अथक प्रयासों के माध्यम से उन्होंने गुणवत्तापूर्ण शिक्षा की पहुंच सुनिश्चित की है, नवोदित उद्यमियों को सशक्त किया है, और राजनीतिक भागीदारी को प्रोत्साहित किया है, जिससे यह सुनिश्चित हो सके कि समाज न केवल उचित रूप से प्रतिनिधित्व प्राप्त करे, बल्कि राष्ट्र की प्रगति में सार्थक योगदान भी दे।
+
+उनके नेतृत्व में खटीक समाज ने एक उल्लेखनीय परिवर्तन देखा है – एक हाशिए पर रहने वाले समुदाय से लेकर विभिन्न क्षेत्रों में तीव्र गति से आगे बढ़ते समाज तक। श्री सज्जन सिंह वर्मा इस बात के लिए प्रतिबद्ध हैं कि समाज के प्रत्येक व्यक्ति को आवश्यक संसाधन, मार्गदर्शन और सहयोग प्राप्त हो, जिससे वे अपने पेशेवर प्रयासों, राजनीतिक करियर या व्यवसाय में उत्कृष्टता प्राप्त कर सकें।`,
   },
-  { 
-    id: 2, 
-    name: "Munshiram Pal Ji", 
-    designation: "former Member of Parliament ,member of the Rashtriya Lok Dal", 
-    image: "/img/munshiram.jpg", 
-    details: "Munshiram Pal Ji is a distinguished leader, a former Member of Parliament from Bijnor, and a dedicated member of the Rashtriya Lok Dal, serving the people of Nagina District, Bijnor, Uttar Pradesh, with unwavering commitment. With a career spanning decades, Munshiram Pal Ji has been a pillar of strength for his community and has contributed immensely to the political landscape of Uttar Pradesh.Educated at the prestigious U.P. Board of High School & Intermediate Education in Allahabad from 1974 to 1976, Munshiram Pal Ji has always valued education as a means of empowerment. His academic background laid a strong foundation for his leadership, which has inspired countless individuals in his community.",
-    achievements: "For the past 40 years, Munshiram Pal Ji has been a guiding force for the Akhil Bharatiya Khatik Samaj, working tirelessly as its Chief Patron to uplift and empower the Khatik community. His leadership has transformed lives, helping community members gain access to education, employment opportunities, and political representation. His contributions have not only provided a platform for the community to thrive but also ensured that its voices are heard at all levels of government.The Khatik community is truly fortunate to have a leader like Munshiram Pal Ji, whose decades of service and dedication continue to shape the future of the community. His efforts have made a lasting impact, and his commitment to the cause remains unwavering as he works towards a brighter, more prosperous future for the Khatik Samaj."
+  {
+    id: 2,
+    name: "मुंशीराम पाल जी",
+    designation: "पूर्व सांसद, सदस्य – राष्ट्रीय लोक दल",
+    image: "/img/munshiram.jpg",
+    details:
+      `मुंशीराम पाल जी एक प्रतिष्ठित नेता हैं, जो बिजनौर से पूर्व सांसद रह चुके हैं और राष्ट्रीय लोक दल के समर्पित सदस्य के रूप में, उत्तर प्रदेश के नगिना जनपद, बिजनौर की जनता की सेवा में निरंतर कार्यरत रहे हैं। दशकों लंबे अपने राजनीतिक जीवन में, मुंशीराम पाल जी ने अपने समुदाय के लिए एक मजबूत स्तंभ के रूप में कार्य किया है और उत्तर प्रदेश के राजनीतिक परिदृश्य में महत्वपूर्ण योगदान दिया है।
+
+मुंशीराम पाल जी ने वर्ष 1974 से 1976 तक इलाहाबाद स्थित प्रतिष्ठित उत्तर प्रदेश बोर्ड ऑफ हाई स्कूल एंड इंटरमीडिएट एजुकेशन से शिक्षा प्राप्त की है। उन्होंने हमेशा शिक्षा को सशक्तिकरण का माध्यम माना है। उनका शैक्षिक पृष्ठभूमि उनके नेतृत्व की मजबूत नींव रही है, जिसने उनके समुदाय के अनगिनत लोगों को प्रेरित किया है।`,
+    achievements:
+      `पिछले 40 वर्षों से मुंशीराम पाल जी अखिल भारतीय खटीक समाज के मुख्य संरक्षक के रूप में समाज का मार्गदर्शन करते आ रहे हैं। उन्होंने खटीक समाज को सशक्त और उन्नत बनाने के लिए निरंतर अथक प्रयास किए हैं। उनके नेतृत्व ने अनेक जीवनों में सकारात्मक परिवर्तन लाया है, जिससे समाज के सदस्यों को शिक्षा, रोजगार के अवसरों और राजनीतिक प्रतिनिधित्व की बेहतर सुविधाएँ प्राप्त हुई हैं। उनके योगदानों ने न केवल समाज को आगे बढ़ने का मंच प्रदान किया है, बल्कि यह भी सुनिश्चित किया है कि खटीक समाज की आवाज़ शासन के हर स्तर पर सुनी जाए।
+
+खटीक समाज वास्तव में सौभाग्यशाली है कि उसे मुंशीराम पाल जी जैसे समर्पित और सेवा-निष्ठ नेता का मार्गदर्शन प्राप्त है, जिनकी दशकों की सेवा और प्रतिबद्धता आज भी समाज के भविष्य को आकार दे रही है। उनके प्रयासों ने स्थायी प्रभाव छोड़ा है और वे समाज को एक उज्ज्वल, समृद्ध भविष्य की ओर ले जाने के लिए निरंतर प्रतिबद्ध हैं।`,
   },
-  { 
-    id: 3, 
-    name: "Alice Brown", 
-    designation: "CFO", 
-    image: "/img/download.jpg", 
-    details: "Alice Brown manages our financial strategies with precision and foresight. Her expertise in financial planning has been instrumental in our consistent growth and profitability. She oversees all aspects of our financial operations, including investment strategies, risk management, and financial reporting.",
-    achievements: "CPA, Former Investment Banker, Led 3 successful IPOs"
+  {
+    id: 3,
+    name: "नेथिकार प्रेमलाल",
+    designation: "तेलंगाना राष्ट्र आर कटिका संगम में सामाजिक कार्यकर्ता",
+    image: "/img/mann.jpeg",
+    details:
+      "Alice Brown manages our financial strategies with precision and foresight. Her expertise in financial planning has been instrumental in our consistent growth and profitability. She oversees all aspects of our financial operations, including investment strategies, risk management, and financial reporting.",
+    achievements: "CPA, Former Investment Banker, Led 3 successful IPOs",
   },
-  { 
-    id: 4, 
-    name: "Bob White", 
-    designation: "COO", 
-    image: "/img/download.jpg", 
-    details: "Bob White optimizes our operational workflows and ensures seamless execution across all departments. His methodical approach to operations management has significantly improved our efficiency and scalability. He works closely with all teams to implement best practices and continuous improvement processes.",
-    achievements: "Six Sigma Black Belt, MBA from Wharton, Reduced operational costs by 30%"
+  {
+    id: 4,
+    name: "Bob White",
+    designation: "COO",
+    image: "/img/download.jpg",
+    details:
+      "Bob White optimizes our operational workflows and ensures seamless execution across all departments. His methodical approach to operations management has significantly improved our efficiency and scalability. He works closely with all teams to implement best practices and continuous improvement processes.",
+    achievements:
+      "Six Sigma Black Belt, MBA from Wharton, Reduced operational costs by 30%",
   },
-  { 
-    id: 5, 
-    name: "Emma Green", 
-    designation: "CMO", 
-    image: "/img/download.jpg", 
-    details: "Emma Green directs our marketing initiatives with creativity and data-driven strategies. Her innovative campaigns have substantially increased our brand recognition and market penetration. She leads a talented team of marketing professionals who excel in digital marketing, content creation, and brand development.",
-    achievements: "Digital Marketing Award 2023, Former Marketing Director at Fortune 100 company, 200% ROI on marketing campaigns"
-  }
+  {
+    id: 5,
+    name: "Emma Green",
+    designation: "CMO",
+    image: "/img/download.jpg",
+    details:
+      "Emma Green directs our marketing initiatives with creativity and data-driven strategies. Her innovative campaigns have substantially increased our brand recognition and market penetration. She leads a talented team of marketing professionals who excel in digital marketing, content creation, and brand development.",
+    achievements:
+      "Digital Marketing Award 2023, Former Marketing Director at Fortune 100 company, 200% ROI on marketing campaigns",
+  },
 ];
 
 const CoreMembersMain = () => {
@@ -77,8 +92,10 @@ const CoreMembersMain = () => {
 
   return (
     <div className="core-members">
-      <h2 className="core-members-heading">Core Members</h2>
-      <p className="core-members-subtext">Meet our talented and dedicated team members.</p>
+      <h2 className="core-members-heading">मुख्य समिति सदस्य</h2>
+      <p className="core-members-subtext">
+        हमारे प्रतिभाशाली और समर्पित टीम सदस्यों से मिलिए।
+      </p>
 
       <div className="scrollable-banner-container">
         <button className="nav-button left" onClick={prevSlide}>
@@ -89,13 +106,19 @@ const CoreMembersMain = () => {
           {visibleMembers.map((member) => (
             <div key={member.id} className="member-card">
               <div className="member-image-container">
-                <img src={member.image} alt={member.name} className="member-image" />
+                <img
+                  src={member.image}
+                  alt={member.name}
+                  className="member-image"
+                />
               </div>
               <p className="member-name">{member.name}</p>
               <p className="member-designation">{member.designation}</p>
-              <button 
-                className="show-more-button" 
-                onClick={() => navigate(`/core-member/${member.id}`, { state: { member } })}
+              <button
+                className="show-more-button"
+                onClick={() =>
+                  navigate(`/core-member/${member.id}`, { state: { member } })
+                }
               >
                 View More
               </button>

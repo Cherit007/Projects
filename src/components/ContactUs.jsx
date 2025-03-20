@@ -64,7 +64,7 @@ const ContactUsForm = () => {
         <img src={defaultEventImg} alt="Contact Us" />
       </div>
       <form onSubmit={handleSendEmail} className="contact-form">
-        <h2>If you have any questions, please contact us</h2>
+        <h2>यदि आपके कोई प्रश्न हैं, तो कृपया हमसे संपर्क करें।</h2>
         <div className="form-row">
           <input
             type="text"
@@ -98,7 +98,7 @@ const ContactUsForm = () => {
           onChange={handleChange}
           required
         />
-        <button type="submit">
+        <button style={{backgroundColor:"#FFD700",color:"black"}} type="submit">
           Send Message <span>➡️</span>
         </button>
       </form>
