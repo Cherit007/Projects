@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import person1 from "../assets/person1.jpg";
-import person2 from "../assets/person2.jpg";
-import person3 from "../assets/person3.jpg";
+import person1 from "/img/person1.jpg";
+import person2 from "/img/person2.jpg";
+import person3 from "/img/person3.jpg";
 import banner1 from "/img/banner1.jpeg";
 import banner2 from "/img/banner2.jpeg";
-import banner3 from "/img/banner3.jpeg";
-import banner4 from "/img/banner4.jpeg";
+import banner3 from "/img/banner31.jpg";
+import banner4 from "/img/banner41.jpg";
 import "../index.css"; // Ensure styles are applied correctly
 
 const Carousel = () => {
@@ -14,24 +14,40 @@ const Carousel = () => {
   // Dynamic JSON data for slides
   const slides = [
     {
-      // image: banner1, // Background image for the first slide
-      personImages: [person1, person2, person3], // Three circular images
-      title: "Akhil Bharatiya Khatik Samaj",
-      description: "Registered N-441 | Established - 1982",
-      event: "47th National Executive Committee Annual Meeting",
-      venue: "Jain Bhavan, Gol Market, New Delhi",
+      // First slide with three images and text
+      personImages: [person1, person2, person3], // Three images
+      title: "अखिल भारतीय खटीक समाज",
+      description: "पंजीकृत संख्या - N-441 | स्थापना - 1982",
+      event:
+        "अखिल भारतीय खटीक समाज (पंजीकृत संख्या - N-441) की स्थापना 1982 में राजनाथ सोनकर शास्त्री और गंगाराम निर्वाण के नेतृत्व में हुई थी। यह संगठन खटीक समुदाय के सामाजिक, शैक्षणिक और आर्थिक उत्थान के लिए समर्पित है, जिससे समाज में एकता और प्रगति को बढ़ावा मिलता है।",
     },
     {
-      image: banner1, // Full-width image for the second slide
+      // Second slide with image on the right and text on the left
+      image: banner2,
+      title: "समुदाय की एकता",
+      description:
+        "हमारा उद्देश्य समुदाय को एकजुट करना और उनके अधिकारों के लिए लड़ना है।",
+      event: "समुदाय की एकता और विकास के लिए हमारे प्रयास",
+      venue: "नई दिल्ली, भारत",
     },
     {
-      image: banner2, // Full-width image for the second slide
+      // Third slide with image on the right and text on the left
+      image: banner3,
+      title: "शिक्षा और प्रगति",
+      description:
+        "हम शिक्षा के माध्यम से समुदाय के युवाओं को सशक्त बनाने का प्रयास करते हैं।",
+      event: "शिक्षा और प्रगति के लिए हमारे कार्यक्रम",
+      venue: "मुंबई, भारत",
     },
     {
-      image: banner3, // Full-width image for the third slide
-    },
-    {
-      image: banner4, // Full-width image for the third slide
+      // Fourth slide with image on the right and text on the left
+      image: banner4,
+      title: "आर्थिक सशक्तिकरण",
+      description:
+        "हम समुदाय के लोगों को आर्थिक रूप से सशक्त बनाने के लिए कार्यक्रम चलाते हैं।",
+      event: "आर्थिक सशक्तिकरण के लिए हमारे प्रयास",
+      venue: "बेंगलुरु, भारत",
+      isTopContent: true,
     },
   ];
 
@@ -58,13 +74,14 @@ const Carousel = () => {
     <div
       className="carousel"
       style={{
-        backgroundColor: "#e3e3e3",
+        // backgroundColor: "#e3e3e3",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
         width: "100vw",
-        padding: "20px",
+        marginBottom:"10px",
+        // padding: "20px",
         overflow: "hidden", // Prevent overflow
       }}
     >
@@ -72,16 +89,16 @@ const Carousel = () => {
         className="carousel-content"
         style={{
           backgroundColor: "white",
-          padding: "50px",
+          // padding: "50px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           width: "100%",
-          height: "97vh",
-          marginTop: "0",
+          height: "100vh",
+          marginTop: "0px",
           borderRadius: "15px",
-          boxShadow: "0",
+          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
           textAlign: "center",
           position: "relative", // For absolute positioning of arrows
           overflow: "hidden", // Prevent overflow
@@ -125,49 +142,41 @@ const Carousel = () => {
           &#10095;
         </button>
 
-        {/* Full-Width Image for All Slides */}
-        <div
-          className="full-width-image"
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundImage: `url(${slides[currentSlide].image})`,
-            backgroundSize: "contain", // Ensure the entire image is visible
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat", // Prevent image repetition
-            borderRadius: "15px",
-            zIndex: 1, // Ensure it's behind the content
-          }}
-        ></div>
-
         {/* Conditional Rendering for First Slide */}
         {currentSlide === 0 && (
           <>
-            {/* Three Circular Images for First Slide */}
+            {/* Three Images for First Slide */}
             <div
               className="image-container"
               style={{
+                width: "100%",
                 display: "flex",
-                gap: "40px",
+                gap: "20px",
                 marginBottom: "30px",
                 zIndex: 2, // Ensure it's above the full-width image
               }}
             >
               {slides[currentSlide].personImages.map((img, index) => (
-                <img
+                <div
                   key={index}
-                  src={img}
-                  alt={`Person ${index + 1}`}
                   style={{
-                    width: "180px",
-                    height: "180px",
-                    borderRadius: "50%",
-                    border: "5px solid #d32f2f",
+                    marginTop: "10px",
+                    width: "100%",
+                    height: "400px",
+                    overflow: "hidden",
                   }}
-                />
+                >
+                  <img
+                    src={img}
+                    alt={`Person ${index + 1}`}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "10%",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
               ))}
             </div>
 
@@ -175,10 +184,13 @@ const Carousel = () => {
             <div
               className="event-details"
               style={{
-                maxWidth: "800px",
                 fontFamily: "'Poppins', sans-serif",
                 color: "#333",
-                zIndex: 2, // Ensure it's above the full-width image
+                zIndex: 2,
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                padding: "20px",
+                borderRadius: "10px",
+                boxShadow: "0 5px 15px rgba(0, 0, 0, 0.1)",
               }}
             >
               <h1
@@ -192,7 +204,6 @@ const Carousel = () => {
               >
                 {slides[currentSlide].title}
               </h1>
-
               <p
                 style={{
                   fontSize: "18px",
@@ -203,10 +214,9 @@ const Carousel = () => {
               >
                 {slides[currentSlide].description}
               </p>
-
               <h2
                 style={{
-                  fontSize: "28px",
+                  fontSize: "20px",
                   fontWeight: "bold",
                   color: "#222",
                   marginBottom: "15px",
@@ -214,18 +224,100 @@ const Carousel = () => {
               >
                 {slides[currentSlide].event}
               </h2>
-
-              <p
-                style={{
-                  fontSize: "20px",
-                  fontWeight: "600",
-                  color: "#444",
-                }}
-              >
-                <strong>Venue:</strong> {slides[currentSlide].venue}
-              </p>
             </div>
           </>
+        )}
+
+        {/* Conditional Rendering for Slides 2, 3, and 4 */}
+        {currentSlide > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              height: "100%",
+              gap: "10px",
+              zIndex: 2,
+            }}
+          >
+            {/* Text Content on the Left */}
+            {!slides[currentSlide].isTopContent && (
+              <div
+                style={{
+                  flex: 1,
+                  fontFamily: "'Poppins', sans-serif",
+                  color: "#333",
+                  padding: "20px",
+                  backgroundColor: "rgba(255, 255, 255, 0.8)",
+                  borderRadius: "10px",
+                  // boxShadow: "0 5px 15px rgba(0, 0, 0, 0.1)",
+                }}
+              >
+                <h1
+                  style={{
+                    color: "#d32f2f",
+                    fontSize: "36px",
+                    fontWeight: "bold",
+                    letterSpacing: "1px",
+                    marginBottom: "10px",
+                  }}
+                >
+                  {slides[currentSlide].title}
+                </h1>
+                <p
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "500",
+                    color: "#555",
+                    marginBottom: "15px",
+                  }}
+                >
+                  {slides[currentSlide].description}
+                </p>
+                <h2
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "bold",
+                    color: "#222",
+                    marginBottom: "15px",
+                  }}
+                >
+                  {slides[currentSlide].event}
+                </h2>
+                <p
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "600",
+                    color: "#444",
+                  }}
+                >
+                  {slides[currentSlide].venue}
+                </p>
+              </div>
+            )}
+
+            {/* Image on the Right */}
+            <div
+              style={{
+                flex: 1,
+                height: "100%",
+                overflow: "hidden",
+                borderRadius: "10%",
+              }}
+            >
+              <img
+                src={slides[currentSlide].image}
+                alt="Slide Image"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: window.innerWidth < 900 ? "contain" : "cover",
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

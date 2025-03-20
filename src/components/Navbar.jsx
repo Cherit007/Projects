@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import "../index.css"; // Import CSS for styling
 import { account } from "../appwriteConfig";
 import { toast, ToastContainer } from "react-toastify";
 import logo from "/img/logo.jpg";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // State to track login status
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1200); // Check screen width
   const navigate = useNavigate();
+
+  // Check screen width on resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1200);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Check if the user is logged in
   useEffect(() => {
@@ -24,10 +34,10 @@ const Navbar = () => {
           setIsAdmin(true);
           navigate("/admin/dashboard");
         } else setIsAdmin(false);
-        setIsLoggedIn(true); // User is logged in
+        setIsLoggedIn(true);
       } catch (error) {
         setIsAdmin(false);
-        setIsLoggedIn(false); // User is not logged in
+        setIsLoggedIn(false);
       }
     };
 
@@ -38,7 +48,7 @@ const Navbar = () => {
   const handleLogout = async () => {
     try {
       await account.deleteSession("current");
-      setIsLoggedIn(false); // Update login status
+      setIsLoggedIn(false);
       setTimeout(() => {
         toast.success("Logout successful! Redirecting...");
       }, 1000);
@@ -83,10 +93,26 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="navbar navbar-expand-lg bg-white navbar-light sticky-top p-0">
-       <Link
+    <nav
+      style={{
+        backgroundColor: "#FFD700", // Sky Blue
+        padding: "0",
+        position: "sticky",
+        top: "0",
+        zIndex: "1000",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+    >
+      <Link
         to="/"
-        className="navbar-brand d-flex align-items-center px-4 px-lg-5"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          padding: "0 20px",
+          textDecoration: "none",
+        }}
       >
         <img
           src={logo}
@@ -98,121 +124,267 @@ const Navbar = () => {
             marginRight: "10px",
           }}
         />
-        
-      </Link> 
-      {/* <Link to="/" className="navbar-brand d-flex align-items-center px-4 px-lg-5">
-  <img src={logo} alt="Community Logo" className="navbar-logo" />
-</Link> */}
-      <button
-        type="button"
-        className="navbar-toggler me-4"
-        onClick={() => setIsMenuOpen(!isMenuOpen)}
-      >
-        <span className="navbar-toggler-icon"></span>
-      </button>
+      </Link>
 
+      {/* Toggle Button for Mobile */}
+      {isMobile && (
+        <button
+          type="button"
+          style={{
+            backgroundColor: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: "10px",
+            marginRight: "20px",
+          }}
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+        >
+          <span style={{ fontSize: "24px", color: "#FFFFFF" }}>☰</span>
+        </button>
+      )}
+
+      {/* Nav Links */}
       <div
-        className={`collapse navbar-collapse ${isMenuOpen ? "show" : ""}`}
-        id="navbarCollapse"
+        style={{
+          display: isMobile ? (isMenuOpen ? "flex" : "none") : "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "flex-end" : "center",
+          backgroundColor: isMobile ? "#87CEEB" : "transparent", // Sky Blue for mobile
+          padding: isMobile ? "10px" : "0",
+          position: isMobile ? "absolute" : "static",
+          top: isMobile ? "100%" : "auto",
+          right: isMobile ? "0" : "auto",
+          width: isMobile ? "100%" : "auto",
+          maxWidth: isMobile ? "300px" : "none",
+          gap: isMobile ? "0" : "20px", // Space between links for larger screens
+        }}
       >
-        <div className="navbar-nav ms-auto p-4 p-lg-0">
-          <Link to={isAdmin ? "/admin/dashboard" : "/"} className="nav-item nav-link active">
-            Home
-          </Link>
-          {!isAdmin && (
-            <>
-              <Link to="/about" className="nav-item nav-link">
-                About
-              </Link>
-              <Link to="/registration" className="nav-item nav-link">
-                Registration
-              </Link>
-              <Link
-                    to="/coremembers"
-                    className="nav-item nav-link"
-                  >
-                   Core Community Members
-                  </Link>
-              <Link to="/donate" className="nav-item nav-link">
-                Donations
-              </Link>
-              <div className="nav-item dropdown">
-                <a
-                  href="#"
-                  className="nav-link dropdown-toggle"
+        <Link
+          to={isAdmin ? "/admin/dashboard" : "/"}
+          style={{
+            color: "black", // White
+            textDecoration: "none",
+            padding: "10px",
+            fontSize: "16px",
+          }}
+        >
+          Home
+        </Link>
+        {!isAdmin && (
+          <>
+            <Link
+              to="/about"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "16px",
+              }}
+            >
+              About
+            </Link>
+            <Link
+              to="/registration"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "16px",
+              }}
+            >
+              Registration
+            </Link>
+            <Link
+              to="/coremembers"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "16px",
+              }}
+            >
+              Core Community Members
+            </Link>
+            <Link
+              to="/donate"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "16px",
+              }}
+            >
+              Donations
+            </Link>
+            <div className="nav-item dropdown">
+              <a
+                href="#"
+                className="nav-link dropdown-toggle"
+                style={{
+                  color: "black", // White
+                  textDecoration: "none",
+                  padding: "10px",
+                  fontSize: "16px",
+                }}
                   data-bs-toggle="dropdown"
+              >
+                Others
+              </a>
+              <div
+                className="dropdown-menu fade-down m-0"
+              >
+                <Link
+                  to="/events"
+                  className="dropdown-item"
                 >
-                  Others
-                </a>
-                <div className="dropdown-menu fade-down m-0">
-                  <Link to="/events" className="dropdown-item">
-                    Events
-                  </Link>
-                  <Link to="/contactus" className="dropdown-item">
-                    Contact Us
-                  </Link>
-                </div>
+                  Events
+                </Link>
+                <Link
+                  to="/contactus"
+                 className="dropdown-item"
+                >
+                  Contact Us
+                </Link>
               </div>
-            </>
-          )}
-          {isAdmin && (
-            <>
-              <div className="nav-item dropdown">
-                <a
-                  href="#"
-                  className="nav-link dropdown-toggle"
+            </div>
+          </>
+        )}
+        {isAdmin && (
+          <>
+            <div style={{ position: "relative" }}>
+              <a
+                href="#"
+                className="nav-link dropdown-toggle"
                   data-bs-toggle="dropdown"
+              >
+                Members
+              </a>
+              <div
+                className="dropdown-menu fade-down m-0"
+              >
+                <Link
+                  to="/admin/member-request"
+                  className="dropdown-item"
                 >
-                  Members
-                </a>
-                <div className="dropdown-menu fade-down m-0">
-                  <Link
-                    to="/admin/member-request"
-                    className="dropdown-item"
-                  >
-                    Member Requests
-                  </Link>
-                  <Link
-                    to="/admin/members"
-                    className="dropdown-item"
-                  >
-                    Community Members
-                  </Link>
-                </div>
+                  Member Requests
+                </Link>
+                <Link
+                  to="/admin/members"
+                  className="dropdown-item"
+                >
+                  Community Members
+                </Link>
               </div>
+            </div>
+            <Link
+              to="/admin/events"
+              style={{
+                color: "#FFFFFF", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "16px",
+              }}
+            >
+              Events
+            </Link>
+          </>
+        )}
 
-              <Link to="/admin/events" className="nav-item nav-link">
-                Events
-              </Link>
-            </>
-          )}
-
-          {isLoggedIn && isAdmin && (
-            <button onClick={handleLogout} className="logout-button">
-              Logout
+        {/* Language Buttons */}
+        {isMobile && (
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              marginTop: isMobile ? "10px" : "0",
+            }}
+          >
+            <button
+              onClick={() => changeLanguage("en")}
+              style={{
+                backgroundColor: "#FFD700", // Sunshine Yellow
+                color: "#000000", // Black
+                border: "none",
+                padding: "5px 10px",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              🇺🇸 English
             </button>
-          )}
-        </div>
+            <button
+              onClick={() => changeLanguage("hi")}
+              style={{
+                backgroundColor: "#FFD700", // Sunshine Yellow
+                color: "#000000", // Black
+                border: "none",
+                padding: "5px 10px",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              🇮🇳 हिंदी
+            </button>
+          </div>
+        )}
 
-        {/* Language Toggle Buttons */}
+        {isLoggedIn && isAdmin && (
+          <button
+            onClick={handleLogout}
+            style={{
+              backgroundColor: "#FF7F50", // Coral Orange
+              color: "#FFFFFF", // White
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "5px",
+              cursor: "pointer",
+              marginTop: isMobile ? "10px" : "0",
+            }}
+          >
+            Logout
+          </button>
+        )}
+      </div>
+
+      {/* Language Buttons for Larger Screens */}
+      {!isMobile && (
         <div
-          className="translate-buttons"
-          style={{ marginLeft: "10px", marginBottom: "26px" }}
+          style={{
+            display: isMobile ? (isMenuOpen ? "flex" : "none") : "flex",
+            marginLeft: "10px",
+            alignItems:"center",
+            // marginBottom: "26px",
+            gap: "10px",
+          }}
         >
           <button
-            className="translate-btn btn btn-sm btn-secondary mx-1"
             onClick={() => changeLanguage("en")}
+            style={{
+              backgroundColor: "#FFD700", // Sunshine Yellow
+              color: "#000000", // Black
+              border: "none",
+              padding: "5px 10px",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
           >
             🇺🇸 English
           </button>
           <button
-            className="translate-btn btn btn-sm btn-secondary mx-1"
             onClick={() => changeLanguage("hi")}
+            style={{
+              backgroundColor: "#FFD700", // Sunshine Yellow
+              color: "#000000", // Black
+              border: "none",
+              padding: "5px 10px",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
           >
             🇮🇳 हिंदी
           </button>
         </div>
-      </div>
+      )}
 
       {/* Hidden Google Translate Element */}
       <div id="google_translate_element" style={{ display: "none" }}></div>
