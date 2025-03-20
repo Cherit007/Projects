@@ -1594,3 +1594,43 @@
   color: #555;
   line-height: 1.5;
 }
+
+.navbar {
+  height: 150px; /* Increase navbar height */
+  font-size: 18px; /* Increase font size */
+  padding: 20px 50px; /* Increase padding */
+}
+
+.navbar-brand img {
+  width: 90px !important;
+  height: 90px !important;
+}
+
+.navbar-nav .nav-link {
+  font-size: 18px; /* Make nav items bigger */
+  padding: 15px 20px; /* Adjust padding */
+}
+
+.navbar-toggler {
+  font-size: 24px; /* Increase menu button size */
+}
+
+.logout-button {
+  font-size: 18px;
+  padding: 10px 15px;
+}
+
+.navbar-logo {
+  width: 100px !important;
+  height: 100px !important;
+  max-width: none !important; /* Prevents restrictions */
+  max-height: none !important;
+  object-fit: cover;
+}
+.navbar-brand img {
+  width: 150px !important;
+  height: 150px !important;
+  max-width: none !important;
+  display: block; /* Ensures it respects the size */
+  /* margin-top:3px */
+}
