@@ -26,7 +26,7 @@ const Carousel = () => {
       image: banner2,
       title: "समुदाय की एकता",
       description:
-        "हमारा उद्देश्य समुदाय को एकजुट करना और उनके अधिकारों के लिए लड़ना है।",
+        `श्री सज्जन सिंह वर्मा एक प्रतिष्ठित नेता हैं, जिनकी पूर्व कैबिनेट मंत्री और मध्य प्रदेश से पूर्व सांसद के रूप में विरासत ने देश के राजनीतिक परिदृश्य पर अमिट छाप छोड़ी है। जनसेवा के प्रति उनकी गहरी प्रतिबद्धता ने उन्हें प्रगतिशील नीतियों को आगे बढ़ाने में अग्रणी बनाया है, जिससे समुदायों को सशक्त बनाने और अपने क्षेत्र के विकास में महत्वपूर्ण योगदान मिला है।`,
       event: "समुदाय की एकता और विकास के लिए हमारे प्रयास",
       venue: "नई दिल्ली, भारत",
     },
@@ -35,7 +35,7 @@ const Carousel = () => {
       image: banner3,
       title: "शिक्षा और प्रगति",
       description:
-        "हम शिक्षा के माध्यम से समुदाय के युवाओं को सशक्त बनाने का प्रयास करते हैं।",
+        `दूरदर्शी नेता के रूप में श्री सज्जन सिंह वर्मा खटीक समाज के सदस्यों के लिए समान अवसरों का निर्माण करने हेतु सक्रिय रूप से कार्य कर रहे हैं, जिससे वे जीवन के प्रत्येक क्षेत्र में प्रगति कर सकें और सफल हो सकें। अपने अथक प्रयासों के माध्यम से उन्होंने गुणवत्तापूर्ण शिक्षा की पहुंच सुनिश्चित की है, नवोदित उद्यमियों को सशक्त किया है, और राजनीतिक भागीदारी को प्रोत्साहित किया है, जिससे यह सुनिश्चित हो सके कि समाज न केवल उचित रूप से प्रतिनिधित्व प्राप्त करे, बल्कि राष्ट्र की प्रगति में सार्थक योगदान भी दे।`,
       event: "शिक्षा और प्रगति के लिए हमारे कार्यक्रम",
       venue: "मुंबई, भारत",
     },
@@ -245,57 +245,77 @@ const Carousel = () => {
             {/* Text Content on the Left */}
             {!slides[currentSlide].isTopContent && (
               <div
+              style={{
+                flex: 1,
+                overflow:"hidden",
+                height:"100%",
+                display:"flex",
+                justifyContent:"center",
+                flexDirection:"column",
+
+                fontFamily: "'Poppins', sans-serif",
+                color: "#333",
+                padding: "20px",
+                borderRadius: "10%", // Rounded corners
+                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)", // Soft shadow for depth
+                animation: "fadeIn 1s ease-in-out", // Fade-in animation
+                // maxWidth: "800px", // Limit width for better readability
+                // width: "90%", // Responsive width
+                margin: "0 auto", // Center the container
+                backdropFilter: "blur(10px)", // Blur effect for modern look
+                border: "1px solid rgba(255, 255, 255, 0.2)", // Subtle border
+                background: "linear-gradient(135deg, rgba(232, 241, 49, 0.9), rgba(245, 245, 245, 0.9))", // Light gradient background
+              }}
+            >
+              <h1
                 style={{
-                  flex: 1,
-                  fontFamily: "'Poppins', sans-serif",
-                  color: "#333",
-                  padding: "20px",
-                  backgroundColor: "rgba(255, 255, 255, 0.8)",
-                  borderRadius: "10px",
-                  // boxShadow: "0 5px 15px rgba(0, 0, 0, 0.1)",
+                  color: "#d32f2f", // Red color for emphasis
+                  fontSize: "clamp(28px, 5vw, 36px)", // Responsive font size
+                  fontWeight: "bold",
+                  letterSpacing: "1px",
+                  marginBottom: "10px",
+                  animation: "slideInLeft 1s ease-in-out", // Slide-in animation
+                  textShadow: "2px 2px 4px rgba(0, 0, 0, 0.1)", // Subtle text shadow
                 }}
               >
-                <h1
-                  style={{
-                    color: "#d32f2f",
-                    fontSize: "36px",
-                    fontWeight: "bold",
-                    letterSpacing: "1px",
-                    marginBottom: "10px",
-                  }}
-                >
-                  {slides[currentSlide].title}
-                </h1>
-                <p
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: "500",
-                    color: "#555",
-                    marginBottom: "15px",
-                  }}
-                >
-                  {slides[currentSlide].description}
-                </p>
-                <h2
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: "bold",
-                    color: "#222",
-                    marginBottom: "15px",
-                  }}
-                >
-                  {slides[currentSlide].event}
-                </h2>
-                <p
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: "600",
-                    color: "#444",
-                  }}
-                >
-                  {slides[currentSlide].venue}
-                </p>
-              </div>
+                {slides[currentSlide].title}
+              </h1>
+              <p
+                style={{
+                  fontSize: "clamp(16px, 3vw, 18px)", // Responsive font size
+                  fontWeight: "500",
+                  color: "#555",
+                  marginBottom: "15px",
+                  animation: "fadeIn 1.5s ease-in-out", // Fade-in animation
+                  lineHeight: "1.6", // Improved readability
+                }}
+              >
+                {slides[currentSlide].description}
+              </p>
+              <h2
+                style={{
+                  fontSize: "clamp(18px, 4vw, 20px)", // Responsive font size
+                  fontWeight: "bold",
+                  color: "#222",
+                  marginBottom: "15px",
+                  animation: "slideInRight 1s ease-in-out", // Slide-in animation
+                  textShadow: "1px 1px 2px rgba(0, 0, 0, 0.1)", // Subtle text shadow
+                }}
+              >
+                {slides[currentSlide].event}
+              </h2>
+              <p
+                style={{
+                  fontSize: "clamp(16px, 3vw, 20px)", // Responsive font size
+                  fontWeight: "600",
+                  color: "#444",
+                  animation: "fadeIn 2s ease-in-out", // Fade-in animation
+                  marginBottom: "0", // Remove bottom margin
+                }}
+              >
+                {slides[currentSlide].venue}
+              </p>
+            </div>
             )}
 
             {/* Image on the Right */}
