@@ -125,7 +125,6 @@ const EventsPage = () => {
 
   return (
     <div className="events-page">
-      <h2>Events</h2>
       {/* Filter Dropdown */}
       <div className="filter-container">
         <label>Filter by:</label>

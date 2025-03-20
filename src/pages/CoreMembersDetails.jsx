@@ -1,6 +1,5 @@
 import React, { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import "../styles/CoreMembersDetails.css";
 
 const CoreMemberDetails = () => {
   const location = useLocation();
@@ -24,7 +23,7 @@ const CoreMemberDetails = () => {
 
       <div className="core-member-container">
         <img 
-          src={`/${member.image}`} 
+          src={`${member.image}`} 
           alt={member.name} 
           className="core-member-image" 
         />
