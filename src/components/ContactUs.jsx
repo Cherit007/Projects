@@ -99,7 +99,7 @@ const ContactUsForm = () => {
           required
         />
         <button style={{backgroundColor:"#FFD700",color:"black"}} type="submit">
-        संदेश भेजें <span>➡️</span>
+          Send Message <span>➡️</span>
         </button>
       </form>
     </div>
