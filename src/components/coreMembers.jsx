@@ -5,7 +5,7 @@ import defaultImage from '/img/male-face-icon-default-profile-image--c3f2c592f9.
 
 const CoreCommunityTable = () => {
   const [members, setMembers] = useState([]);
-  const [selectedState, setSelectedState] = useState("All");
+  const [selectedState, setSelectedState] = useState("सभी");
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 5;
 
@@ -15,11 +15,11 @@ const CoreCommunityTable = () => {
         const response = await databases.listDocuments(
           "67cff2840013b293be3c",
           "67d301a8000b5dd7e089",
-          [Query.equal("isCoreMember", true),Query.limit(100)]
+          [Query.equal("isCoreMember", true), Query.limit(100)]
         );
         setMembers(response.documents);
       } catch (error) {
-        console.error("Error fetching members:", error);
+        console.error("सदस्यों को लाने में त्रुटि:", error);
       }
     };
 
@@ -27,7 +27,7 @@ const CoreCommunityTable = () => {
   }, []);
 
   const filteredMembers =
-    selectedState === "All"
+    selectedState === "सभी"
       ? members
       : members.filter((member) => member.stateName === selectedState);
 
@@ -35,14 +35,14 @@ const CoreCommunityTable = () => {
   const startIndex = (currentPage - 1) * rowsPerPage;
   const displayedMembers = filteredMembers.slice(startIndex, startIndex + rowsPerPage);
 
-  const uniqueStates = ["All", ...new Set(members.map((m) => m.stateName))];
+  const uniqueStates = ["सभी", ...new Set(members.map((m) => m.stateName))];
 
   return (
-    <div className="p-4 flex flex-col items-center w-full"  style={{ width: "100%" }}>
-      <h2 className="text-xl font-bold mb-4">Core Community Members</h2>
-      
+    <div className="p-4 flex flex-col items-center w-full" style={{ width: "100%" }}>
+      <h2 className="text-xl font-bold mb-4">मुख्य समुदाय सदस्य</h2>
+
       <div className="mb-4 w-full flex justify-center">
-        <label className="mr-2">Filter by State:</label>
+        <label className="mr-2">राज्य द्वारा फ़िल्टर करें:</label>
         <select
           className="border p-2"
           value={selectedState}
@@ -58,59 +58,57 @@ const CoreCommunityTable = () => {
           ))}
         </select>
       </div>
-      
+
       <div className="w-full" style={{ width: "100%" }}>
         <div className="overflow-x-auto w-full">
-          <table className="table-auto w-full border-collapse border border-gray-300"style={{ width: "100%" }}>
+          <table className="table-auto w-full border-collapse border border-gray-300" style={{ width: "100%" }}>
             <thead>
               <tr className="bg-gray-200">
-              <th className="border border-gray-300 p-2" style={{ width: "16.6%",textAlign:"center" }}>Photo</th>
-                <th className="border border-gray-300 p-2" style={{ width: "16.6%",textAlign:"center" }}>Name</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%",textAlign:"center" }}>Designation</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%",textAlign:"center" }}>Mobile Number</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%",textAlign:"center" }}>Email Address</th>
-                <th className="border border-gray-300 p-2"style={{ width: "16.6%" ,textAlign:"center"}}>State/City</th>
+                <th className="border border-gray-300 p-2" style={{ width: "16.6%", textAlign: "center" }}>फोटो</th>
+                <th className="border border-gray-300 p-2" style={{ width: "16.6%", textAlign: "center" }}>नाम</th>
+                <th className="border border-gray-300 p-2" style={{ width: "16.6%", textAlign: "center" }}>पदनाम</th>
+                <th className="border border-gray-300 p-2" style={{ width: "16.6%", textAlign: "center" }}>मोबाइल नंबर</th>
+                <th className="border border-gray-300 p-2" style={{ width: "16.6%", textAlign: "center" }}>ईमेल पता</th>
+                <th className="border border-gray-300 p-2" style={{ width: "16.6%", textAlign: "center" }}>राज्य/शहर</th>
               </tr>
             </thead>
             <tbody>
               {displayedMembers.map((member) => (
                 <tr key={member.$id} className="text-center border border-gray-300 p-2">
                   <td className="border border-gray-300 p-2">
-                  <img 
-  src={defaultImage} 
-  alt={member.name} 
-  style={{ width: "50px", height: "50px", borderRadius: "50%", objectFit: "cover" }} 
-/>
+                    <img 
+                      src={defaultImage} 
+                      alt={member.name} 
+                      style={{ width: "50px", height: "50px", borderRadius: "50%", objectFit: "cover" }} 
+                    />
                   </td>
-                
                   <td className="border border-gray-300 p-2">{member.name}</td>
                   <td className="border border-gray-300 p-2">{member.designation}</td>
                   <td className="border border-gray-300 p-2">{member.mobileNumber}</td>
                   <td className="border border-gray-300 p-2">{member.email}</td>
                   <td className="border border-gray-300 p-2">{member.stateName}</td>
-
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-      
+
       <div className="flex justify-center items-center mt-4 space-x-2">
         <button
           className={`px-3 py-1 border rounded ${currentPage === 1 ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-200"}`}
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
           disabled={currentPage === 1}
         >
-          Prev
+          पिछला
         </button>
-        <span className="px-4">Page {currentPage} of {totalPages}</span>
+        <span className="px-4">पृष्ठ {currentPage} का {totalPages}</span>
         <button
           className={`px-3 py-1 border rounded ${currentPage === totalPages ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-200"}`}
           onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
           disabled={currentPage === totalPages}
         >
-          Next
+          अगला
         </button>
       </div>
     </div>

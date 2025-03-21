@@ -6,6 +6,8 @@ import Carousel from "../components/Carousel";
 import Donation from "../components/Donation";
 import ContactUsForm from "../components/ContactUs";
 import CoreMembers from "../components/coremembersmain";
+import About from "./About";
+
 
 
 
@@ -15,6 +17,7 @@ const Home = () => {
       {/* <Navbar /> */}
       {/* Add other sections here */}
       <Carousel />
+      <About />
       {/* <Services /> */}
       {/* <Objective /> */}
       <CoreMembers />

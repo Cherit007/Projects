@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { account } from "../appwriteConfig";
-import { toast, ToastContainer } from "react-toastify";
-import logo from "/img/logo.jpg";
+import { toast } from "react-toastify";
+import logo from "/img/newlogo.png";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -26,7 +26,6 @@ const Navbar = () => {
     const checkAuth = async () => {
       try {
         const user = await account.get();
-        console.log(user, "user");
         if (
           user.labels.includes("admin") &&
           window.location.pathname.includes("admin")
@@ -40,7 +39,6 @@ const Navbar = () => {
         setIsLoggedIn(false);
       }
     };
-
     checkAuth();
   }, []);
 
@@ -54,41 +52,7 @@ const Navbar = () => {
       }, 1000);
       navigate("/admin/login");
     } catch (error) {
-      console.error("Error during logout:", error);
       toast.error("Failed to log out. Please try again.");
-    }
-  };
-
-  // Load Google Translate Script
-  useEffect(() => {
-    const existingScript = document.getElementById("google-translate-script");
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.id = "google-translate-script";
-      script.src =
-        "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-
-    window.googleTranslateElementInit = () => {
-      new window.google.translate.TranslateElement(
-        {
-          pageLanguage: "en",
-          includedLanguages: "en,hi",
-          autoDisplay: false,
-        },
-        "google_translate_element"
-      );
-    };
-  }, []);
-
-  // Function to change language
-  const changeLanguage = (lang) => {
-    const select = document.querySelector(".goog-te-combo");
-    if (select) {
-      select.value = lang;
-      select.dispatchEvent(new Event("change"));
     }
   };
 
@@ -105,26 +69,19 @@ const Navbar = () => {
         alignItems: "center",
       }}
     >
-      <Link
-        to="/"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "0 20px",
-          textDecoration: "none",
-        }}
-      >
-        <img
-          src={logo}
-          alt="Community Logo"
-          style={{
-            width: "75px",
-            height: "75px",
-            borderRadius: "50%",
-            marginRight: "10px",
-          }}
-        />
-      </Link>
+     <Link to="/" className="navbar-brand d-flex align-items-center">
+          <img
+            src={logo}
+            alt="Community Logo"
+            className="navbar-logo"
+            style={{
+              width: "120px", // Adjust size as needed
+              height: "auto",
+              maxWidth: "100%",
+              borderRadius:"65%"
+            }}
+          />
+        </Link>
 
       {/* Toggle Button for Mobile */}
       {isMobile && (
@@ -165,10 +122,10 @@ const Navbar = () => {
             color: "black", // White
             textDecoration: "none",
             padding: "10px",
-            fontSize: "16px",
+            fontSize: "20px",
           }}
         >
-          Home
+        होम
         </Link>
         {!isAdmin && (
           <>
@@ -178,10 +135,10 @@ const Navbar = () => {
                 color: "black", // White
                 textDecoration: "none",
                 padding: "10px",
-                fontSize: "16px",
+                fontSize: "20px",
               }}
             >
-              About
+              परिचय
             </Link>
             <Link
               to="/registration"
@@ -189,10 +146,10 @@ const Navbar = () => {
                 color: "black", // White
                 textDecoration: "none",
                 padding: "10px",
-                fontSize: "16px",
+                fontSize: "20px",
               }}
             >
-              Registration
+              पंजीकरण
             </Link>
             <Link
               to="/coremembers"
@@ -200,10 +157,21 @@ const Navbar = () => {
                 color: "black", // White
                 textDecoration: "none",
                 padding: "10px",
-                fontSize: "16px",
+                fontSize: "20px",
               }}
             >
-              Core Community Members
+              मुख्य समुदाय सदस्य
+            </Link>
+            <Link
+              to="/founders"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              संस्थापक
             </Link>
             <Link
               to="/donate"
@@ -211,10 +179,10 @@ const Navbar = () => {
                 color: "black", // White
                 textDecoration: "none",
                 padding: "10px",
-                fontSize: "16px",
+                fontSize: "20px",
               }}
             >
-              Donations
+              दान
             </Link>
             <div className="nav-item dropdown">
               <a
@@ -224,11 +192,11 @@ const Navbar = () => {
                   color: "black", // White
                   textDecoration: "none",
                   padding: "10px",
-                  fontSize: "16px",
+                  fontSize: "20px",
                 }}
                   data-bs-toggle="dropdown"
               >
-                Others
+                अन्य
               </a>
               <div
                 className="dropdown-menu fade-down m-0"
@@ -237,13 +205,13 @@ const Navbar = () => {
                   to="/events"
                   className="dropdown-item"
                 >
-                  Events
+                  कार्यक्रम
                 </Link>
                 <Link
                   to="/contactus"
                  className="dropdown-item"
                 >
-                  Contact Us
+                  हमसे संपर्क करें
                 </Link>
               </div>
             </div>
@@ -282,7 +250,7 @@ const Navbar = () => {
                 color: "#FFFFFF", // White
                 textDecoration: "none",
                 padding: "10px",
-                fontSize: "16px",
+                fontSize: "20px",
               }}
             >
               Events

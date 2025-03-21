@@ -40,10 +40,11 @@ const DonateComponent = () => {
           border: 'none',
           borderRadius: '4px',
           cursor: 'pointer',
-          fontSize: '16px'
+          fontSize: '16px',
+          marginBottom:'8px'
         }}
       >
-        Donate
+        दान करें
       </button>
       
       {/* Modal */}

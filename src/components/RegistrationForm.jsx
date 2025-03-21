@@ -51,36 +51,37 @@ const RegistrationForm = () => {
   };
 
   const leftColumnFields = [
-    { name: "name", label: "Full Name" },
-    { name: "fatherHusbandName", label: "Father's/Husband's Name" },
-    { name: "dob", label: "Date of Birth", type: "date" },
+    { name: "name", label: "पूरा नाम" },
+    { name: "fatherHusbandName", label: "पिता/पति का नाम" },
+    { name: "dob", label: "जन्म तिथि", type: "date" },
     {
       name: "gender",
-      label: "Gender",
+      label: "लिंग",
       type: "select",
-      options: ["Male", "Female", "Other"],
+      options: ["पुरुष", "महिला", "अन्य"],
     },
     {
       name: "maritalStatus",
-      label: "Marital Status",
+      label: "वैवाहिक स्थिति",
       type: "select",
-      options: ["Single", "Married", "Divorced", "Widowed"],
+      options: ["अविवाहित", "विवाहित", "तलाकशुदा", "विधवा/विधुर"],
     },
-    { name: "contactAddress", label: "Contact Address" },
-    { name: "mobileNumber", label: "Mobile Number", type: "tel" },
-    { name: "designation", label: "Designation" }, // Added Designation field
+    { name: "contactAddress", label: "संपर्क पता" },
+    { name: "mobileNumber", label: "मोबाइल नंबर", type: "tel" },
+    { name: "designation", label: "पदनाम" }, // Added Designation field
   ];
-
+  
   const rightColumnFields = [
-    { name: "email", label: "Email Address", type: "email" },
-    { name: "aadharNumber", label: "Aadhar Number" },
-    { name: "stateName", label: "State Name" },
-    { name: "districtName", label: "District Name" },
-    { name: "villageCityName", label: "Village/City Name" },
-    { name: "occupation", label: "Occupation" },
-    { name: "bloodGroup", label: "Blood Group" },
-    { name: "qualification", label: "Qualification" },
+    { name: "email", label: "ईमेल पता", type: "email" },
+    { name: "aadharNumber", label: "आधार नंबर" },
+    { name: "stateName", label: "राज्य का नाम" },
+    { name: "districtName", label: "जिला का नाम" },
+    { name: "villageCityName", label: "गांव/शहर का नाम" },
+    { name: "occupation", label: "पेशा" },
+    { name: "bloodGroup", label: "रक्त समूह" },
+    { name: "qualification", label: "योग्यता" },
   ];
+  
 
   const renderField = (field) => {
     switch (field.type) {
@@ -114,7 +115,7 @@ const RegistrationForm = () => {
 
   return (
     <div className="registration-container">
-      <h2>Registration Form</h2>
+      <h2>पंजीकरण फ़ॉर्म</h2>
       <br />
 
       <form onSubmit={handleSubmit} className="registration-form">
@@ -143,7 +144,7 @@ const RegistrationForm = () => {
             {isRegistering ? (
               <div className="spinner"></div>
             ) : (
-              "Submit Registration"
+              "पंजीकरण सबमिट करें"
             )}
           </button>
         </div>

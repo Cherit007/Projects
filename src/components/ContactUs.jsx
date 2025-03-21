@@ -69,7 +69,7 @@ const ContactUsForm = () => {
           <input
             type="text"
             name="name"
-            placeholder="Your Name"
+            placeholder="आपका नाम"
             value={formData.name}
             onChange={handleChange}
             required
@@ -77,7 +77,7 @@ const ContactUsForm = () => {
           <input
             type="tel"
             name="phoneNo"
-            placeholder="Your Mobile"
+            placeholder="आपका मोबाइल"
             value={formData.phoneNo}
             onChange={handleChange}
             required
@@ -93,7 +93,7 @@ const ContactUsForm = () => {
         />
         <textarea
           name="message"
-          placeholder="Message"
+          placeholder="संदेश"
           value={formData.message}
           onChange={handleChange}
           required
