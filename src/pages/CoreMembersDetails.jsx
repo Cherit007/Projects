@@ -16,12 +16,13 @@ const CoreMemberDetails = () => {
 
   return (
     <div className="core-member-details">
-      <header className="core-member-header">
+      {/* <header className="core-member-header"> */}
         <button className="back-button" onClick={() => navigate(-1)}>
           ← Back
         </button>
-        <h2>{member.name}</h2>
-      </header>
+      {/* </header> */}
+      <h1 style={{ textAlign: "center" }}>{member.name}</h1>
+      <h3 style={{ fontSize:"20px", textAlign: "center" ,color:"#555"}}>{member.designation}</h3>
 
       <div className="core-member-container">
         <img
@@ -30,7 +31,6 @@ const CoreMemberDetails = () => {
           className="core-member-image"
         />
         <div className="core-member-info">
-          <h3>{member.designation}</h3>
           <h4>परिचय</h4>
           <p style={{ whiteSpace: "pre-line" }}>{member.details}</p>
           <h4>उपलब्धियाँ</h4>

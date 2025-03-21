@@ -52,7 +52,48 @@ const Navbar = () => {
       }, 1000);
       navigate("/admin/login");
     } catch (error) {
+      console.error("Error during logout:", error);
       toast.error("Failed to log out. Please try again.");
+    }
+  };
+
+  const [isTranslateReady, setIsTranslateReady] = useState(false);
+
+  useEffect(() => {
+    const existingScript = document.getElementById("google-translate-script");
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.id = "google-translate-script";
+      script.src =
+        "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+
+    window.googleTranslateElementInit = () => {
+      new window.google.translate.TranslateElement(
+        {
+          pageLanguage: "en",
+          includedLanguages: "en,hi",
+          autoDisplay: false,
+        },
+        "google_translate_element"
+      );
+      setIsTranslateReady(true); // Mark the script as ready
+    };
+  }, []);
+  const changeLanguage = (lang) => {
+    if (!isTranslateReady) {
+      console.log("Google Translate script is not ready yet.");
+      return;
+    }
+
+    const select = document.querySelector(".goog-te-combo");
+    if (select) {
+      select.value = lang;
+      select.dispatchEvent(new Event("change"));
+    } else {
+      console.log("Google Translate element not found.");
     }
   };
 
@@ -65,11 +106,13 @@ const Navbar = () => {
         top: "0",
         zIndex: "1000",
         display: "flex",
-        justifyContent: "space-between",
+        height: isMobile ? "auto" : "100px",
+        justifyContent: isMobile ? "space-between" :"space-around",
         alignItems: "center",
       }}
     >
-     <Link to="/" className="navbar-brand d-flex align-items-center">
+      {isMobile && (
+        <Link to="/" className="navbar-brand d-flex align-items-center">
           <img
             src={logo}
             alt="Community Logo"
@@ -78,10 +121,11 @@ const Navbar = () => {
               width: "120px", // Adjust size as needed
               height: "auto",
               maxWidth: "100%",
-              borderRadius:"65%"
+              borderRadius: "65%",
             }}
           />
         </Link>
+      )}
 
       {/* Toggle Button for Mobile */}
       {isMobile && (
@@ -96,7 +140,7 @@ const Navbar = () => {
           }}
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
-          <span style={{ fontSize: "24px", color: "#FFFFFF" }}>☰</span>
+          <span style={{ fontSize: "34px", color: "#FFFFFF" }}>☰</span>
         </button>
       )}
 
@@ -125,7 +169,7 @@ const Navbar = () => {
             fontSize: "20px",
           }}
         >
-        होम
+          होम
         </Link>
         {!isAdmin && (
           <>
@@ -194,23 +238,15 @@ const Navbar = () => {
                   padding: "10px",
                   fontSize: "20px",
                 }}
-                  data-bs-toggle="dropdown"
+                data-bs-toggle="dropdown"
               >
                 अन्य
               </a>
-              <div
-                className="dropdown-menu fade-down m-0"
-              >
-                <Link
-                  to="/events"
-                  className="dropdown-item"
-                >
+              <div className="dropdown-menu fade-down m-0">
+                <Link to="/events" className="dropdown-item">
                   कार्यक्रम
                 </Link>
-                <Link
-                  to="/contactus"
-                 className="dropdown-item"
-                >
+                <Link to="/contactus" className="dropdown-item">
                   हमसे संपर्क करें
                 </Link>
               </div>
@@ -223,23 +259,15 @@ const Navbar = () => {
               <a
                 href="#"
                 className="nav-link dropdown-toggle"
-                  data-bs-toggle="dropdown"
+                data-bs-toggle="dropdown"
               >
                 Members
               </a>
-              <div
-                className="dropdown-menu fade-down m-0"
-              >
-                <Link
-                  to="/admin/member-request"
-                  className="dropdown-item"
-                >
+              <div className="dropdown-menu fade-down m-0">
+                <Link to="/admin/member-request" className="dropdown-item">
                   Member Requests
                 </Link>
-                <Link
-                  to="/admin/members"
-                  className="dropdown-item"
-                >
+                <Link to="/admin/members" className="dropdown-item">
                   Community Members
                 </Link>
               </div>
@@ -320,7 +348,7 @@ const Navbar = () => {
           style={{
             display: isMobile ? (isMenuOpen ? "flex" : "none") : "flex",
             marginLeft: "10px",
-            alignItems:"center",
+            alignItems: "center",
             // marginBottom: "26px",
             gap: "10px",
           }}
