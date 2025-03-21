@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import "../index.css"; // Import CSS for styling
 import { account } from "../appwriteConfig";
 import { toast } from "react-toastify";
 import logo from "/img/newlogo.png";
@@ -9,7 +8,18 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1200); // Check screen width
   const navigate = useNavigate();
+
+  // Check screen width on resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1200);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Check if the user is logged in
   useEffect(() => {
@@ -37,7 +47,9 @@ const Navbar = () => {
     try {
       await account.deleteSession("current");
       setIsLoggedIn(false);
-      toast.success("Logout successful! Redirecting...");
+      setTimeout(() => {
+        toast.success("Logout successful! Redirecting...");
+      }, 1000);
       navigate("/admin/login");
     } catch (error) {
       toast.error("Failed to log out. Please try again.");
@@ -45,10 +57,19 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="navbar navbar-expand-lg bg-white navbar-light sticky-top p-2">
-      <div className="container-fluid">
-        {/* Logo */}
-        <Link to="/" className="navbar-brand d-flex align-items-center">
+    <nav
+      style={{
+        backgroundColor: "#FFD700", // Sky Blue
+        padding: "0",
+        position: "sticky",
+        top: "0",
+        zIndex: "1000",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+    >
+     <Link to="/" className="navbar-brand d-flex align-items-center">
           <img
             src={logo}
             alt="Community Logo"
@@ -57,93 +78,284 @@ const Navbar = () => {
               width: "120px", // Adjust size as needed
               height: "auto",
               maxWidth: "100%",
+              borderRadius:"65%"
             }}
           />
         </Link>
 
-        {/* Mobile Menu Toggle */}
+      {/* Toggle Button for Mobile */}
+      {isMobile && (
         <button
           type="button"
-          className="navbar-toggler"
+          style={{
+            backgroundColor: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: "10px",
+            marginRight: "20px",
+          }}
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
-          <span className="navbar-toggler-icon"></span>
+          <span style={{ fontSize: "24px", color: "#FFFFFF" }}>☰</span>
         </button>
+      )}
 
-        {/* Navbar Links */}
-        <div
-          className={`collapse navbar-collapse ${isMenuOpen ? "show" : ""}`}
-          id="navbarCollapse"
+      {/* Nav Links */}
+      <div
+        style={{
+          display: isMobile ? (isMenuOpen ? "flex" : "none") : "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "flex-end" : "center",
+          backgroundColor: isMobile ? "#87CEEB" : "transparent", // Sky Blue for mobile
+          padding: isMobile ? "10px" : "0",
+          position: isMobile ? "absolute" : "static",
+          top: isMobile ? "100%" : "auto",
+          right: isMobile ? "0" : "auto",
+          width: isMobile ? "100%" : "auto",
+          maxWidth: isMobile ? "300px" : "none",
+          gap: isMobile ? "0" : "20px", // Space between links for larger screens
+        }}
+      >
+        <Link
+          to={isAdmin ? "/admin/dashboard" : "/"}
+          style={{
+            color: "black", // White
+            textDecoration: "none",
+            padding: "10px",
+            fontSize: "20px",
+          }}
         >
-          <ul className="navbar-nav ms-auto">
-            <li className="nav-item">
-              <Link to={isAdmin ? "/admin/dashboard" : "/"} className="nav-link">
-                Home
-              </Link>
-            </li>
-            {!isAdmin && (
-              <>
-                <li className="nav-item">
-                  <Link to="/about" className="nav-link">About</Link>
-                </li>
-                <li className="nav-item">
-                  <Link to="/registration" className="nav-link">Registration</Link>
-                </li>
-                <li className="nav-item">
-                  <Link to="/coremembers" className="nav-link">Core Community Members</Link>
-                </li>
-                <li className="nav-item">
-                  <Link to="/donate" className="nav-link">Donations</Link>
-                </li>
-                <li className="nav-item dropdown">
-                  <a
-                    href="#"
-                    className="nav-link dropdown-toggle"
-                    data-bs-toggle="dropdown"
-                  >
-                    Others
-                  </a>
-                  <ul className="dropdown-menu">
-                    <li><Link to="/events" className="dropdown-item">Events</Link></li>
-                    <li><Link to="/contactus" className="dropdown-item">Contact Us</Link></li>
-                  </ul>
-                </li>
-              </>
-            )}
-            {isAdmin && (
-              <>
-                <li className="nav-item dropdown">
-                  <a href="#" className="nav-link dropdown-toggle" data-bs-toggle="dropdown">
-                    Members
-                  </a>
-                  <ul className="dropdown-menu">
-                    <li><Link to="/admin/member-request" className="dropdown-item">Member Requests</Link></li>
-                    <li><Link to="/admin/members" className="dropdown-item">Community Members</Link></li>
-                  </ul>
-                </li>
-                <li className="nav-item">
-                  <Link to="/admin/events" className="nav-link">Events</Link>
-                </li>
-              </>
-            )}
+        होम
+        </Link>
+        {!isAdmin && (
+          <>
+            <Link
+              to="/about"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              परिचय
+            </Link>
+            <Link
+              to="/registration"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              पंजीकरण
+            </Link>
+            <Link
+              to="/coremembers"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              मुख्य समुदाय सदस्य
+            </Link>
+            <Link
+              to="/founders"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              संस्थापक
+            </Link>
+            <Link
+              to="/donate"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              दान
+            </Link>
+            <div className="nav-item dropdown">
+              <a
+                href="#"
+                className="nav-link dropdown-toggle"
+                style={{
+                  color: "black", // White
+                  textDecoration: "none",
+                  padding: "10px",
+                  fontSize: "20px",
+                }}
+                  data-bs-toggle="dropdown"
+              >
+                अन्य
+              </a>
+              <div
+                className="dropdown-menu fade-down m-0"
+              >
+                <Link
+                  to="/events"
+                  className="dropdown-item"
+                >
+                  कार्यक्रम
+                </Link>
+                <Link
+                  to="/contactus"
+                 className="dropdown-item"
+                >
+                  हमसे संपर्क करें
+                </Link>
+              </div>
+            </div>
+          </>
+        )}
+        {isAdmin && (
+          <>
+            <div style={{ position: "relative" }}>
+              <a
+                href="#"
+                className="nav-link dropdown-toggle"
+                  data-bs-toggle="dropdown"
+              >
+                Members
+              </a>
+              <div
+                className="dropdown-menu fade-down m-0"
+              >
+                <Link
+                  to="/admin/member-request"
+                  className="dropdown-item"
+                >
+                  Member Requests
+                </Link>
+                <Link
+                  to="/admin/members"
+                  className="dropdown-item"
+                >
+                  Community Members
+                </Link>
+              </div>
+            </div>
+            <Link
+              to="/admin/events"
+              style={{
+                color: "#FFFFFF", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              Events
+            </Link>
+          </>
+        )}
 
-            {/* Logout Button */}
-            {isLoggedIn && isAdmin && (
-              <li className="nav-item">
-                <button onClick={handleLogout} className="btn btn-danger ms-3">
-                  Logout
-                </button>
-              </li>
-            )}
-          </ul>
-
-          {/* Language Toggle Buttons */}
-          <div className="d-flex align-items-center ms-3">
-            <button className="btn btn-sm btn-secondary mx-1">🇺🇸 English</button>
-            <button className="btn btn-sm btn-secondary mx-1">🇮🇳 हिंदी</button>
+        {/* Language Buttons */}
+        {isMobile && (
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              marginTop: isMobile ? "10px" : "0",
+            }}
+          >
+            <button
+              onClick={() => changeLanguage("en")}
+              style={{
+                backgroundColor: "#FFD700", // Sunshine Yellow
+                color: "#000000", // Black
+                border: "none",
+                padding: "5px 10px",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              🇺🇸 English
+            </button>
+            <button
+              onClick={() => changeLanguage("hi")}
+              style={{
+                backgroundColor: "#FFD700", // Sunshine Yellow
+                color: "#000000", // Black
+                border: "none",
+                padding: "5px 10px",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              🇮🇳 हिंदी
+            </button>
           </div>
-        </div>
+        )}
+
+        {isLoggedIn && isAdmin && (
+          <button
+            onClick={handleLogout}
+            style={{
+              backgroundColor: "#FF7F50", // Coral Orange
+              color: "#FFFFFF", // White
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "5px",
+              cursor: "pointer",
+              marginTop: isMobile ? "10px" : "0",
+            }}
+          >
+            Logout
+          </button>
+        )}
       </div>
+
+      {/* Language Buttons for Larger Screens */}
+      {!isMobile && (
+        <div
+          style={{
+            display: isMobile ? (isMenuOpen ? "flex" : "none") : "flex",
+            marginLeft: "10px",
+            alignItems:"center",
+            // marginBottom: "26px",
+            gap: "10px",
+          }}
+        >
+          <button
+            onClick={() => changeLanguage("en")}
+            style={{
+              backgroundColor: "#FFD700", // Sunshine Yellow
+              color: "#000000", // Black
+              border: "none",
+              padding: "5px 10px",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            🇺🇸 English
+          </button>
+          <button
+            onClick={() => changeLanguage("hi")}
+            style={{
+              backgroundColor: "#FFD700", // Sunshine Yellow
+              color: "#000000", // Black
+              border: "none",
+              padding: "5px 10px",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            🇮🇳 हिंदी
+          </button>
+        </div>
+      )}
+
+      {/* Hidden Google Translate Element */}
+      <div id="google_translate_element" style={{ display: "none" }}></div>
     </nav>
   );
 };

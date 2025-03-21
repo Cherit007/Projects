@@ -19,7 +19,7 @@ const Header = () => {
           <div className="left-section">
             <div className="info-item">
               <MapPin className="icon primary-icon" />
-              <small>Madhya Pradesh</small>
+              <small>मध्य प्रदेश</small>
             </div>
             <div className="info-item">
               <Clock className="icon primary-icon" />

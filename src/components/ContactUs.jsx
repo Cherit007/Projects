@@ -64,12 +64,12 @@ const ContactUsForm = () => {
         <img src={defaultEventImg} alt="Contact Us" />
       </div>
       <form onSubmit={handleSendEmail} className="contact-form">
-        <h2>If you have any questions, please contact us</h2>
+        <h2>यदि आपके कोई प्रश्न हैं, तो कृपया हमसे संपर्क करें।</h2>
         <div className="form-row">
           <input
             type="text"
             name="name"
-            placeholder="Your Name"
+            placeholder="आपका नाम"
             value={formData.name}
             onChange={handleChange}
             required
@@ -77,7 +77,7 @@ const ContactUsForm = () => {
           <input
             type="tel"
             name="phoneNo"
-            placeholder="Your Mobile"
+            placeholder="आपका मोबाइल"
             value={formData.phoneNo}
             onChange={handleChange}
             required
@@ -93,13 +93,13 @@ const ContactUsForm = () => {
         />
         <textarea
           name="message"
-          placeholder="Message"
+          placeholder="संदेश"
           value={formData.message}
           onChange={handleChange}
           required
         />
-        <button type="submit">
-          Send Message <span>➡️</span>
+        <button style={{backgroundColor:"#FFD700",color:"black"}} type="submit">
+        संदेश भेजें <span>➡️</span>
         </button>
       </form>
     </div>

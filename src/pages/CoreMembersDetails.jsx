@@ -17,22 +17,24 @@ const CoreMemberDetails = () => {
   return (
     <div className="core-member-details">
       <header className="core-member-header">
-        <button className="back-button" onClick={() => navigate(-1)}>← Back</button>
+        <button className="back-button" onClick={() => navigate(-1)}>
+          ← Back
+        </button>
         <h2>{member.name}</h2>
       </header>
 
       <div className="core-member-container">
-        <img 
-          src={`${member.image}`} 
-          alt={member.name} 
-          className="core-member-image" 
+        <img
+          src={`${member.image}`}
+          alt={member.name}
+          className="core-member-image"
         />
         <div className="core-member-info">
           <h3>{member.designation}</h3>
-          <h4>About</h4>
-          <p>{member.details}</p>
-          <h4>Achievements</h4>
-          <p>{member.achievements}</p>
+          <h4>परिचय</h4>
+          <p style={{ whiteSpace: "pre-line" }}>{member.details}</p>
+          <h4>उपलब्धियाँ</h4>
+          <p style={{ whiteSpace: "pre-line" }}>{member.achievements}</p>
         </div>
       </div>
     </div>
@@ -40,4 +42,3 @@ const CoreMemberDetails = () => {
 };
 
 export default CoreMemberDetails;
-

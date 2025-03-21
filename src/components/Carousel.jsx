@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import person1 from "../assets/person1.jpg";
-import person2 from "../assets/person2.jpg";
-import person3 from "../assets/person3.jpg";
+import person1 from "/img/person1.jpg";
+import person2 from "/img/person2.jpg";
+import person3 from "/img/person3.jpg";
 import banner1 from "/img/banner1.jpeg";
 import banner2 from "/img/banner2.jpeg";
-import banner3 from "/img/banner3.jpeg";
-import banner4 from "/img/banner4.jpeg";
+import banner3 from "/img/banner31.jpg";
+import banner4 from "/img/banner41.jpg";
 import "../index.css"; // Ensure styles are applied correctly
 
 const Carousel = () => {
@@ -14,24 +14,40 @@ const Carousel = () => {
   // Dynamic JSON data for slides
   const slides = [
     {
-      // image: banner1, // Background image for the first slide
-      personImages: [person1, person2, person3], // Three circular images
-      title: "Akhil Bharatiya Khatik Samaj",
-      description: "Registered N-441 | Established - 1982",
-      event: "47th National Executive Committee Annual Meeting",
-      venue: "Jain Bhavan, Gol Market, New Delhi",
+      // First slide with three images and text
+      personImages: [person1, person2, person3], // Three images
+      title: "अखिल भारतीय खटीक समाज",
+      description: "पंजीकृत संख्या - N-441 | स्थापना - 1982",
+      event:
+        "अखिल भारतीय खटीक समाज (पंजीकृत संख्या - N-441) की स्थापना 1982 में राजनाथ सोनकर शास्त्री और गंगाराम निर्वाण के नेतृत्व में हुई थी। यह संगठन खटीक समुदाय के सामाजिक, शैक्षणिक और आर्थिक उत्थान के लिए समर्पित है, जिससे समाज में एकता और प्रगति को बढ़ावा मिलता है।",
     },
     {
-      image: banner1, // Full-width image for the second slide
+      // Second slide with image on the right and text on the left
+      image: banner2,
+      title: "समुदाय की एकता",
+      description:
+        `श्री सज्जन सिंह वर्मा एक प्रतिष्ठित नेता हैं, जिनकी पूर्व कैबिनेट मंत्री और मध्य प्रदेश से पूर्व सांसद के रूप में विरासत ने देश के राजनीतिक परिदृश्य पर अमिट छाप छोड़ी है। जनसेवा के प्रति उनकी गहरी प्रतिबद्धता ने उन्हें प्रगतिशील नीतियों को आगे बढ़ाने में अग्रणी बनाया है, जिससे समुदायों को सशक्त बनाने और अपने क्षेत्र के विकास में महत्वपूर्ण योगदान मिला है।`,
+      event: "समुदाय की एकता और विकास के लिए हमारे प्रयास",
+      venue: "नई दिल्ली, भारत",
     },
     {
-      image: banner2, // Full-width image for the second slide
+      // Third slide with image on the right and text on the left
+      image: banner3,
+      title: "शिक्षा और प्रगति",
+      description:
+        `दूरदर्शी नेता के रूप में श्री सज्जन सिंह वर्मा खटीक समाज के सदस्यों के लिए समान अवसरों का निर्माण करने हेतु सक्रिय रूप से कार्य कर रहे हैं, जिससे वे जीवन के प्रत्येक क्षेत्र में प्रगति कर सकें और सफल हो सकें। अपने अथक प्रयासों के माध्यम से उन्होंने गुणवत्तापूर्ण शिक्षा की पहुंच सुनिश्चित की है, नवोदित उद्यमियों को सशक्त किया है, और राजनीतिक भागीदारी को प्रोत्साहित किया है, जिससे यह सुनिश्चित हो सके कि समाज न केवल उचित रूप से प्रतिनिधित्व प्राप्त करे, बल्कि राष्ट्र की प्रगति में सार्थक योगदान भी दे।`,
+      event: "शिक्षा और प्रगति के लिए हमारे कार्यक्रम",
+      venue: "मुंबई, भारत",
     },
     {
-      image: banner3, // Full-width image for the third slide
-    },
-    {
-      image: banner4, // Full-width image for the third slide
+      // Fourth slide with image on the right and text on the left
+      image: banner4,
+      title: "आर्थिक सशक्तिकरण",
+      description:
+        "हम समुदाय के लोगों को आर्थिक रूप से सशक्त बनाने के लिए कार्यक्रम चलाते हैं।",
+      event: "आर्थिक सशक्तिकरण के लिए हमारे प्रयास",
+      venue: "बेंगलुरु, भारत",
+      isTopContent: true,
     },
   ];
 
@@ -58,13 +74,14 @@ const Carousel = () => {
     <div
       className="carousel"
       style={{
-        backgroundColor: "#e3e3e3",
+        // backgroundColor: "#e3e3e3",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
         width: "100vw",
-        padding: "20px",
+        marginBottom:"10px",
+        // padding: "20px",
         overflow: "hidden", // Prevent overflow
       }}
     >
@@ -72,16 +89,16 @@ const Carousel = () => {
         className="carousel-content"
         style={{
           backgroundColor: "white",
-          padding: "50px",
+          // padding: "50px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           width: "100%",
-          height: "97vh",
-          marginTop: "0",
+          height: "100vh",
+          marginTop: "0px",
           borderRadius: "15px",
-          boxShadow: "0",
+          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
           textAlign: "center",
           position: "relative", // For absolute positioning of arrows
           overflow: "hidden", // Prevent overflow
@@ -125,49 +142,41 @@ const Carousel = () => {
           &#10095;
         </button>
 
-        {/* Full-Width Image for All Slides */}
-        <div
-          className="full-width-image"
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundImage: `url(${slides[currentSlide].image})`,
-            backgroundSize: "contain", // Ensure the entire image is visible
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat", // Prevent image repetition
-            borderRadius: "15px",
-            zIndex: 1, // Ensure it's behind the content
-          }}
-        ></div>
-
         {/* Conditional Rendering for First Slide */}
         {currentSlide === 0 && (
           <>
-            {/* Three Circular Images for First Slide */}
+            {/* Three Images for First Slide */}
             <div
               className="image-container"
               style={{
+                width: "100%",
                 display: "flex",
-                gap: "40px",
+                gap: "20px",
                 marginBottom: "30px",
                 zIndex: 2, // Ensure it's above the full-width image
               }}
             >
               {slides[currentSlide].personImages.map((img, index) => (
-                <img
+                <div
                   key={index}
-                  src={img}
-                  alt={`Person ${index + 1}`}
                   style={{
-                    width: "180px",
-                    height: "180px",
-                    borderRadius: "50%",
-                    border: "5px solid #d32f2f",
+                    marginTop: "10px",
+                    width: "100%",
+                    height: "400px",
+                    overflow: "hidden",
                   }}
-                />
+                >
+                  <img
+                    src={img}
+                    alt={`Person ${index + 1}`}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "10%",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
               ))}
             </div>
 
@@ -175,10 +184,13 @@ const Carousel = () => {
             <div
               className="event-details"
               style={{
-                maxWidth: "800px",
                 fontFamily: "'Poppins', sans-serif",
                 color: "#333",
-                zIndex: 2, // Ensure it's above the full-width image
+                zIndex: 2,
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                padding: "20px",
+                borderRadius: "10px",
+                boxShadow: "0 5px 15px rgba(0, 0, 0, 0.1)",
               }}
             >
               <h1
@@ -192,7 +204,6 @@ const Carousel = () => {
               >
                 {slides[currentSlide].title}
               </h1>
-
               <p
                 style={{
                   fontSize: "18px",
@@ -203,10 +214,9 @@ const Carousel = () => {
               >
                 {slides[currentSlide].description}
               </p>
-
               <h2
                 style={{
-                  fontSize: "28px",
+                  fontSize: "20px",
                   fontWeight: "bold",
                   color: "#222",
                   marginBottom: "15px",
@@ -214,18 +224,120 @@ const Carousel = () => {
               >
                 {slides[currentSlide].event}
               </h2>
-
-              <p
-                style={{
-                  fontSize: "20px",
-                  fontWeight: "600",
-                  color: "#444",
-                }}
-              >
-                <strong>Venue:</strong> {slides[currentSlide].venue}
-              </p>
             </div>
           </>
+        )}
+
+        {/* Conditional Rendering for Slides 2, 3, and 4 */}
+        {currentSlide > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              height: "100%",
+              gap: "10px",
+              zIndex: 2,
+            }}
+          >
+            {/* Text Content on the Left */}
+            {!slides[currentSlide].isTopContent && (
+              <div
+              style={{
+                flex: 1,
+                overflow:"hidden",
+                height:"100%",
+                display:"flex",
+                justifyContent:"center",
+                flexDirection:"column",
+
+                fontFamily: "'Poppins', sans-serif",
+                color: "#333",
+                padding: "20px",
+                borderRadius: "10%", // Rounded corners
+                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)", // Soft shadow for depth
+                animation: "fadeIn 1s ease-in-out", // Fade-in animation
+                // maxWidth: "800px", // Limit width for better readability
+                // width: "90%", // Responsive width
+                margin: "0 auto", // Center the container
+                backdropFilter: "blur(10px)", // Blur effect for modern look
+                border: "1px solid rgba(255, 255, 255, 0.2)", // Subtle border
+                background: "linear-gradient(135deg, rgba(232, 241, 49, 0.9), rgba(245, 245, 245, 0.9))", // Light gradient background
+              }}
+            >
+              <h1
+                style={{
+                  color: "#d32f2f", // Red color for emphasis
+                  fontSize: "clamp(28px, 5vw, 36px)", // Responsive font size
+                  fontWeight: "bold",
+                  letterSpacing: "1px",
+                  marginBottom: "10px",
+                  animation: "slideInLeft 1s ease-in-out", // Slide-in animation
+                  textShadow: "2px 2px 4px rgba(0, 0, 0, 0.1)", // Subtle text shadow
+                }}
+              >
+                {slides[currentSlide].title}
+              </h1>
+              <p
+                style={{
+                  fontSize: "clamp(16px, 3vw, 18px)", // Responsive font size
+                  fontWeight: "500",
+                  color: "#555",
+                  marginBottom: "15px",
+                  animation: "fadeIn 1.5s ease-in-out", // Fade-in animation
+                  lineHeight: "1.6", // Improved readability
+                }}
+              >
+                {slides[currentSlide].description}
+              </p>
+              <h2
+                style={{
+                  fontSize: "clamp(18px, 4vw, 20px)", // Responsive font size
+                  fontWeight: "bold",
+                  color: "#222",
+                  marginBottom: "15px",
+                  animation: "slideInRight 1s ease-in-out", // Slide-in animation
+                  textShadow: "1px 1px 2px rgba(0, 0, 0, 0.1)", // Subtle text shadow
+                }}
+              >
+                {slides[currentSlide].event}
+              </h2>
+              <p
+                style={{
+                  fontSize: "clamp(16px, 3vw, 20px)", // Responsive font size
+                  fontWeight: "600",
+                  color: "#444",
+                  animation: "fadeIn 2s ease-in-out", // Fade-in animation
+                  marginBottom: "0", // Remove bottom margin
+                }}
+              >
+                {slides[currentSlide].venue}
+              </p>
+            </div>
+            )}
+
+            {/* Image on the Right */}
+            <div
+              style={{
+                flex: 1,
+                height: "100%",
+                overflow: "hidden",
+                borderRadius: "10%",
+              }}
+            >
+              <img
+                src={slides[currentSlide].image}
+                alt="Slide Image"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: window.innerWidth < 900 ? "contain" : "cover",
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

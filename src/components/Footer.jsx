@@ -4,9 +4,9 @@ const Footer = () => {
   return (
     <div className="footer-container">
       <div className="footer-column">
-        <h4 className="footer-heading">Address</h4>
+        <h4 className="footer-heading">पता</h4>
         <p>
-          <i className="fa fa-map-marker-alt icon"></i>Madhya Pradesh, India
+          <i className="fa fa-map-marker-alt icon"></i>मध्य प्रदेश, भारत
         </p>
         <p>
           <i className="fa fa-phone-alt icon"></i>+91 91110 97070
@@ -32,21 +32,21 @@ const Footer = () => {
       </div>
 
       <div className="footer-column">
-        <h4 className="footer-heading">Quick Links</h4>
+        <h4 className="footer-heading">त्वरित लिंक</h4>
         <a className="footer-link" href="/about">
-          About Us
+          हमारे बारे में
         </a>
         <a className="footer-link" href="/contactus">
-          Contact Us
+          संपर्क करें
         </a>
         <a className="footer-link" href="/donate">
-          Donations
+          दान
         </a>
         <a className="footer-link" href="/events">
-          Events
+          आयोजन
         </a>
         <a className="footer-link" href="/coremembers">
-          Core Members
+          मुख्य सदस्य
         </a>
       </div>
     </div>
