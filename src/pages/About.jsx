@@ -5,7 +5,7 @@ import about2 from "/img/about2.jpg";
 
 const About = () => {
   const containerStyle = {
-    maxWidth: "1000px",
+    // maxWidth: "1000px",
     margin: "0 auto",
     padding: "20px",
     background: "linear-gradient(to bottom, #fff8e1, #ffffff)", // Cream to white

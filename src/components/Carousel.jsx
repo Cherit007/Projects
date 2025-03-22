@@ -78,7 +78,7 @@ const Carousel = () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh",
+        height: "500px",
         width: "100vw",
         marginBottom:"10px",
         // padding: "20px",
@@ -162,7 +162,7 @@ const Carousel = () => {
                   style={{
                     marginTop: "10px",
                     width: "100%",
-                    height: "400px",
+                    height: "300px",
                     overflow: "hidden",
                   }}
                 >
@@ -233,7 +233,6 @@ const Carousel = () => {
           <div
             style={{
               display: "flex",
-              flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
               width: "100%",
@@ -256,7 +255,7 @@ const Carousel = () => {
                 fontFamily: "'Poppins', sans-serif",
                 color: "#333",
                 padding: "20px",
-                borderRadius: "10%", // Rounded corners
+                // borderRadius: "10%", // Rounded corners
                 boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)", // Soft shadow for depth
                 animation: "fadeIn 1s ease-in-out", // Fade-in animation
                 // maxWidth: "800px", // Limit width for better readability
@@ -264,7 +263,8 @@ const Carousel = () => {
                 margin: "0 auto", // Center the container
                 backdropFilter: "blur(10px)", // Blur effect for modern look
                 border: "1px solid rgba(255, 255, 255, 0.2)", // Subtle border
-                background: "linear-gradient(135deg, rgba(232, 241, 49, 0.9), rgba(245, 245, 245, 0.9))", // Light gradient background
+                background: "linear-gradient(to bottom, #fff8e1, #ffffff)", // Cream to white
+                // background: "linear-gradient(135deg, rgba(232, 241, 49, 0.9), rgba(245, 245, 245, 0.9))", // Light gradient background
               }}
             >
               <h1
@@ -321,10 +321,11 @@ const Carousel = () => {
             {/* Image on the Right */}
             <div
               style={{
-                flex: 1,
+                // flex: 1,
+                width: slides[currentSlide].isTopContent?"100%": "40%",
                 height: "100%",
                 overflow: "hidden",
-                borderRadius: "10%",
+                // borderRadius: "10%",
               }}
             >
               <img
@@ -333,7 +334,7 @@ const Carousel = () => {
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: window.innerWidth < 900 ? "contain" : "cover",
+                  objectFit:"contain",
                 }}
               />
             </div>

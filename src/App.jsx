@@ -25,6 +25,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RegistrationForm from "./components/RegistrationForm";
 import ContactUsForm from "./components/ContactUs";
 import FoundersPage from "./components/Founders";
+import AdvertisementForm from "./pages/AdvertisementForm";
 
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
         <Route path="/donate" element={<Donate />} />
         <Route path="/contactus" element={<ContactUsForm />} />
         <Route path="/founders" element={<FoundersPage />} />
+        <Route path="/advertisement" element={<AdvertisementForm />} />
 
 
         <Route path="/testimonials" element={<Testimonials />} />
