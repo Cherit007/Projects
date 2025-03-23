@@ -53,7 +53,8 @@ const Carousel = () => {
       // Fourth slide with image on the right and text on the left
       image: banner4,
       title: "",
-      description: `एक सितारा......... जो कही गुम हो गया
+      description: 
+    `एक सितारा......... जो कही गुम हो गया
     संक्षिप्त जीवन परिचय-क्रिया कलाप एवं संसदीय सेवायें
     हम मंजिल की ओर चल रहे है... मेरे साथ हजारों साथियों का काफिला है।
     काफिले के कुछ साथी बीच रास्ते में ही साथ छोड़ देते हैं... कुछ नये
@@ -302,7 +303,7 @@ const Carousel = () => {
                     marginBottom: "15px",
                     lineHeight: "1.6",
                     whiteSpace: "pre-wrap",
-                    textIndent: "210px", // Preserve both line breaks and indentation
+                    // textIndent: "210px", // Preserve both line breaks and indentation
                   }}
                 >
                   {slides[currentSlide].description}
