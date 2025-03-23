@@ -5,12 +5,13 @@ import person3 from "/img/founder.jpeg";
 import banner1 from "/img/banner1.jpeg";
 import banner2 from "/img/banner2.jpeg";
 import banner3 from "/img/banner31.jpg";
-import banner4 from "/img/banner41.jpg";
+import banner4 from "/img/founder.jpeg";
 import "../index.css"; // Ensure styles are applied correctly
 
 const Carousel = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1000); // Check screen width
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 1000);
@@ -19,6 +20,7 @@ const Carousel = () => {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
   // Dynamic JSON data for slides
   const slides = [
     {
@@ -34,7 +36,7 @@ const Carousel = () => {
       image: banner2,
       title: "समुदाय की एकता",
       description:
-        `श्री सज्जन सिंह वर्मा एक प्रतिष्ठित नेता हैं, जिनकी पूर्व कैबिनेट मंत्री और मध्य प्रदेश से पूर्व सांसद के रूप में विरासत ने देश के राजनीतिक परिदृश्य पर अमिट छाप छोड़ी है।`,
+        "श्री सज्जन सिंह वर्मा एक प्रतिष्ठित नेता हैं, जिनकी पूर्व कैबिनेट मंत्री और मध्य प्रदेश से पूर्व सांसद के रूप में विरासत ने देश के राजनीतिक परिदृश्य पर अमिट छाप छोड़ी है।",
       event: "समुदाय की एकता और विकास के लिए हमारे प्रयास",
       venue: "नई दिल्ली, भारत",
     },
@@ -43,19 +45,29 @@ const Carousel = () => {
       image: banner3,
       title: "शिक्षा और प्रगति",
       description:
-        `दूरदर्शी नेता के रूप में श्री सज्जन सिंह वर्मा खटीक समाज के सदस्यों के लिए समान अवसरों का निर्माण करने हेतु सक्रिय रूप से कार्य कर रहे हैं, जिससे वे जीवन के प्रत्येक क्षेत्र में प्रगति कर सकें और सफल हो सकें।`,
+        "दूरदर्शी नेता के रूप में श्री सज्जन सिंह वर्मा खटीक समाज के सदस्यों के लिए समान अवसरों का निर्माण करने हेतु सक्रिय रूप से कार्य कर रहे हैं, जिससे वे जीवन के प्रत्येक क्षेत्र में प्रगति कर सकें और सफल हो सकें।",
       event: "शिक्षा और प्रगति के लिए हमारे कार्यक्रम",
       venue: "मुंबई, भारत",
     },
     {
       // Fourth slide with image on the right and text on the left
       image: banner4,
-      title: "आर्थिक सशक्तिकरण",
-      description:
-        "हम समुदाय के लोगों को आर्थिक रूप से सशक्त बनाने के लिए कार्यक्रम चलाते हैं।",
-      event: "आर्थिक सशक्तिकरण के लिए हमारे प्रयास",
-      venue: "बेंगलुरु, भारत",
-      // isTopContent: true,
+      title: "",
+      description: `एक सितारा......... जो कही गुम हो गया
+    संक्षिप्त जीवन परिचय-क्रिया कलाप एवं संसदीय सेवायें
+    हम मंजिल की ओर चल रहे है... मेरे साथ हजारों साथियों का काफिला है।
+    काफिले के कुछ साथी बीच रास्ते में ही साथ छोड़ देते हैं... कुछ नये
+    आकर मेरे काफिले में शामिल हो जाते हैं। छोड़कर जाने वालों से
+    कोई गिला नहीं... नये आने वाले से कोई उत्साह नहीं...
+    आने वाले आते रहेंगे, जाने वाले जाते रहेंगे। बस हमे
+    चलना है... सच्चाई, दृढ़ता और लगनशीलता के
+    साथ मंजिल पर पहुँचना है। हमारी मंजिल है,
+    जाति धर्म से अलग-शोषितों, कमजोरों,
+    पिछड़ों और दलितों के अधिकार
+    और सम्मान की प्राप्ति... ।
+    राजनाथ सोनकर शास्त्री`,
+      event: "",
+      venue: "",
     },
   ];
 
@@ -64,9 +76,11 @@ const Carousel = () => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, [slides.length]); // Only depends on slides.length
-  
-  console.log(currentSlide,"currentslde");
+  }, [slides.length]);
+
+  useEffect(() => {
+    console.log("Current Slide Description:", slides[currentSlide].description);
+  }, [currentSlide]);
 
   // Next slide
   const nextSlide = () => {
@@ -82,22 +96,19 @@ const Carousel = () => {
     <div
       className="carousel"
       style={{
-        // backgroundColor: "#e3e3e3",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         height: "500px",
         width: "100vw",
-        marginBottom:"10px",
-        // padding: "20px",
-        overflow: "hidden", // Prevent overflow
+        marginBottom: "10px",
+        overflow: "hidden",
       }}
     >
       <div
         className="carousel-content"
         style={{
           backgroundColor: "white",
-          // padding: "50px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -108,8 +119,8 @@ const Carousel = () => {
           borderRadius: "15px",
           boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
           textAlign: "center",
-          position: "relative", // For absolute positioning of arrows
-          overflow: "hidden", // Prevent overflow
+          position: "relative",
+          overflow: "hidden",
         }}
       >
         {/* Navigation Arrows */}
@@ -126,7 +137,7 @@ const Carousel = () => {
             fontSize: "40px",
             color: "#d32f2f",
             cursor: "pointer",
-            zIndex: 10, // Ensure arrows are above the content
+            zIndex: 10,
           }}
         >
           &#10094;
@@ -144,7 +155,7 @@ const Carousel = () => {
             fontSize: "40px",
             color: "#d32f2f",
             cursor: "pointer",
-            zIndex: 10, // Ensure arrows are above the content
+            zIndex: 10,
           }}
         >
           &#10095;
@@ -160,8 +171,7 @@ const Carousel = () => {
                 width: "100%",
                 display: "flex",
                 gap: "20px",
-                // marginBottom: "30px",
-                zIndex: 2, // Ensure it's above the full-width image
+                zIndex: 2,
               }}
             >
               {slides[currentSlide].personImages.map((img, index) => (
@@ -170,7 +180,7 @@ const Carousel = () => {
                   style={{
                     marginTop: "10px",
                     width: "100%",
-                    height: isMobile ? "200px" :"300px",
+                    height: isMobile ? "200px" : "300px",
                     overflow: "hidden",
                   }}
                 >
@@ -218,13 +228,14 @@ const Carousel = () => {
                   fontWeight: "500",
                   color: "#555",
                   marginBottom: "15px",
+                  whiteSpace: "pre-wrap", // Preserve both line breaks and indentation
                 }}
               >
                 {slides[currentSlide].description}
               </p>
               <h2
                 style={{
-                  fontSize: isMobile ? "16px": "20px",
+                  fontSize: isMobile ? "16px" : "20px",
                   fontWeight: "bold",
                   color: "#222",
                   marginBottom: "15px",
@@ -252,88 +263,82 @@ const Carousel = () => {
             {/* Text Content on the Left */}
             {!slides[currentSlide].isTopContent && (
               <div
-              style={{
-                flex: 1,
-                overflow:"hidden",
-                height:"100%",
-                display:"flex",
-                justifyContent:"center",
-                flexDirection:"column",
-
-                fontFamily: "'Poppins', sans-serif",
-                color: "#333",
-                padding: isMobile ? "0px": "20px",
-                // borderRadius: "10%", // Rounded corners
-                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)", // Soft shadow for depth
-                animation: "fadeIn 1s ease-in-out", // Fade-in animation
-                // maxWidth: "800px", // Limit width for better readability
-                // width: "90%", // Responsive width
-                margin: "0 auto", // Center the container
-                backdropFilter: "blur(10px)", // Blur effect for modern look
-                border: "1px solid rgba(255, 255, 255, 0.2)", // Subtle border
-                background: "linear-gradient(to bottom, #fff8e1, #ffffff)", // Cream to white
-                // background: "linear-gradient(135deg, rgba(232, 241, 49, 0.9), rgba(245, 245, 245, 0.9))", // Light gradient background
-              }}
-            >
-              <h1
                 style={{
-                  color: "#d32f2f", // Red color for emphasis
-                  fontSize: "clamp(28px, 5vw, 36px)", // Responsive font size
-                  fontWeight: "bold",
-                  letterSpacing: "1px",
-                  marginBottom: "10px",
-                  animation: "slideInLeft 1s ease-in-out", // Slide-in animation
-                  textShadow: "2px 2px 4px rgba(0, 0, 0, 0.1)", // Subtle text shadow
+                  flex: 1,
+                  overflow: "hidden",
+                  height: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                  flexDirection: "column",
+                  fontFamily: "'Poppins', sans-serif",
+                  color: "#333",
+                  padding: isMobile ? "0px" : "20px",
+                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
+                  animation: "fadeIn 1s ease-in-out",
+                  margin: "0 auto",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  background: "linear-gradient(to bottom, #fff8e1, #ffffff)",
                 }}
               >
-                {slides[currentSlide].title}
-              </h1>
-              <p
-                style={{
-                  fontSize: "clamp(16px, 3vw, 18px)", // Responsive font size
-                  fontWeight: "500",
-                  color: "#555",
-                  marginBottom: "15px",
-                  animation: "fadeIn 1.5s ease-in-out", // Fade-in animation
-                  lineHeight: "1.6", // Improved readability
-                }}
-              >
-                {slides[currentSlide].description}
-              </p>
-              <h2
-                style={{
-                  fontSize: "clamp(18px, 4vw, 20px)", // Responsive font size
-                  fontWeight: "bold",
-                  color: "#222",
-                  marginBottom: "15px",
-                  animation: "slideInRight 1s ease-in-out", // Slide-in animation
-                  textShadow: "1px 1px 2px rgba(0, 0, 0, 0.1)", // Subtle text shadow
-                }}
-              >
-                {slides[currentSlide].event}
-              </h2>
-              <p
-                style={{
-                  fontSize: "clamp(16px, 3vw, 20px)", // Responsive font size
-                  fontWeight: "600",
-                  color: "#444",
-                  animation: "fadeIn 2s ease-in-out", // Fade-in animation
-                  marginBottom: "0", // Remove bottom margin
-                }}
-              >
-                {slides[currentSlide].venue}
-              </p>
-            </div>
+                <h1
+                  style={{
+                    color: "#d32f2f",
+                    fontSize: "clamp(28px, 5vw, 36px)",
+                    fontWeight: "bold",
+                    letterSpacing: "1px",
+                    marginBottom: "10px",
+                    animation: "slideInLeft 1s ease-in-out",
+                    textShadow: "2px 2px 4px rgba(0, 0, 0, 0.1)",
+                  }}
+                >
+                  {slides[currentSlide].title}
+                </h1>
+                <p
+                  style={{
+                    fontSize: "clamp(16px, 3vw, 18px)",
+                    fontWeight: "500",
+                    color: "#555",
+                    marginBottom: "15px",
+                    lineHeight: "1.6",
+                    whiteSpace: "pre-wrap",
+                    textIndent: "210px", // Preserve both line breaks and indentation
+                  }}
+                >
+                  {slides[currentSlide].description}
+                </p>
+                <h2
+                  style={{
+                    fontSize: "clamp(18px, 4vw, 20px)",
+                    fontWeight: "bold",
+                    color: "#222",
+                    marginBottom: "15px",
+                    animation: "slideInRight 1s ease-in-out",
+                    textShadow: "1px 1px 2px rgba(0, 0, 0, 0.1)",
+                  }}
+                >
+                  {slides[currentSlide].event}
+                </h2>
+                <p
+                  style={{
+                    fontSize: "clamp(16px, 3vw, 20px)",
+                    fontWeight: "600",
+                    color: "#444",
+                    animation: "fadeIn 2s ease-in-out",
+                    marginBottom: "0",
+                  }}
+                >
+                  {slides[currentSlide].venue}
+                </p>
+              </div>
             )}
 
             {/* Image on the Right */}
             <div
               style={{
-                // flex: 1,
-                width: slides[currentSlide].isTopContent?"100%": "40%",
+                width: slides[currentSlide].isTopContent ? "100%" : "40%",
                 height: "100%",
                 overflow: "hidden",
-                // borderRadius: "10%",
               }}
             >
               <img
@@ -342,7 +347,7 @@ const Carousel = () => {
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit:"contain",
+                  objectFit: "contain",
                 }}
               />
             </div>
