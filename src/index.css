@@ -42,6 +42,7 @@
 
 /* Carousel Content */
 .carousel-content {
+  transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
   padding: 20px;
 }
 
@@ -763,14 +764,42 @@
   background-color: #333;
 } */
 
-.nav-link {
+.navbar-link {
   color: black;
   text-decoration: none;
+  padding: 10px;
+  font-size: 20px;
+  position: relative;
+  display: inline-block;
 }
 
-.nav-link:hover {
-  text-decoration: underline;
+.navbar-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background-color: rgb(255, 111, 97); /* Coral underline */
+  transform: scaleX(1); /* Always visible */
+  transform-origin: bottom left;
+  transition: height 0.3s ease-in-out, background-color 0.3s ease-in-out;
 }
+
+.navbar-link:hover::after {
+  height: 4px; /* Thicker on hover */
+}
+
+.navbar-link.active {
+  color: rgb(255, 111, 97); /* Highlight active text color */
+}
+
+.navbar-link.active::after {
+  background-color: rgb(255, 111, 97); /* Keep underline same color or change */
+  height: 4px; /* Optional: thicker underline for active */
+}
+
+
 
 /* Events Page */
 .events-page {
@@ -1387,7 +1416,7 @@
 .core-members {
   text-align: center;
   padding: 20px;
-  background-color: #FFD700;
+  background-color: rgb(255, 248, 225);
 }
 
 .core-members-heading {
@@ -1726,4 +1755,14 @@
     opacity: 1;
   }
 
+}
+
+.footer-main{
+  display: flex;
+  gap: "20px",
+}
+@media (max-width: 768px){
+  .footer-main{
+    flex-direction: column;
+  }
 }

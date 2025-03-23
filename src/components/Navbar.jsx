@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { account } from "../appwriteConfig";
 import { toast } from "react-toastify";
 import logo from "/img/newlogo.png";
@@ -8,13 +8,19 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1200); // Check screen width
+  const [isActivePath, setIsActivePath] = useState("");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1000); // Check screen width
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
 
+  useEffect(() => {
+    setIsActivePath(currentPath);
+  }, [currentPath]);
   // Check screen width on resize
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 1200);
+      setIsMobile(window.innerWidth < 1000);
     };
 
     window.addEventListener("resize", handleResize);
@@ -100,15 +106,16 @@ const Navbar = () => {
   return (
     <nav
       style={{
-        backgroundColor: "#FFD700", // Sky Blue
+        backgroundColor: "rgb(255, 248, 225)", // Sky Blue
         padding: "0",
         position: "sticky",
         top: "0",
         zIndex: "1000",
         display: "flex",
-        height: isMobile ? "auto" : "100px",
-        justifyContent: isMobile ? "space-between" :"space-around",
+        height: isMobile ? "auto" : "60px",
+        justifyContent: isMobile ? "space-between" : "space-around",
         alignItems: "center",
+        border: "1px solid #333",
       }}
     >
       {isMobile && (
@@ -140,7 +147,7 @@ const Navbar = () => {
           }}
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
-          <span style={{ fontSize: "34px", color: "#FFFFFF" }}>☰</span>
+          <span style={{ fontSize: "34px", color: "black" }}>☰</span>
         </button>
       )}
 
@@ -150,7 +157,8 @@ const Navbar = () => {
           display: isMobile ? (isMenuOpen ? "flex" : "none") : "flex",
           flexDirection: isMobile ? "column" : "row",
           alignItems: isMobile ? "flex-end" : "center",
-          backgroundColor: isMobile ? "#87CEEB" : "transparent", // Sky Blue for mobile
+          backgroundColor: isMobile ? "#ffffff" : "transparent", // Sky Blue for mobile
+          border: isMobile ? "1px solid #333" : "",
           padding: isMobile ? "10px" : "0",
           position: isMobile ? "absolute" : "static",
           top: isMobile ? "100%" : "auto",
@@ -162,12 +170,11 @@ const Navbar = () => {
       >
         <Link
           to={isAdmin ? "/admin/dashboard" : "/"}
-          style={{
-            color: "black", // White
-            textDecoration: "none",
-            padding: "10px",
-            fontSize: "20px",
-          }}
+          className={`navbar-link ${
+            isActivePath === (isAdmin ? "/admin/dashboard" : "/")
+              ? "active"
+              : ""
+          }`}
         >
           होम
         </Link>
@@ -175,56 +182,41 @@ const Navbar = () => {
           <>
             <Link
               to="/about"
-              style={{
-                color: "black", // White
-                textDecoration: "none",
-                padding: "10px",
-                fontSize: "20px",
-              }}
+              className={`navbar-link ${
+                isActivePath === "/about" ? "active" : ""
+              }`}
             >
               परिचय
             </Link>
             <Link
-              to="/registration"
-              style={{
-                color: "black", // White
-                textDecoration: "none",
-                padding: "10px",
-                fontSize: "20px",
-              }}
-            >
-              पंजीकरण
-            </Link>
-            <Link
-              to="/coremembers"
-              style={{
-                color: "black", // White
-                textDecoration: "none",
-                padding: "10px",
-                fontSize: "20px",
-              }}
-            >
-              मुख्य समुदाय सदस्य
-            </Link>
-            <Link
               to="/founders"
-              style={{
-                color: "black", // White
-                textDecoration: "none",
-                padding: "10px",
-                fontSize: "20px",
-              }}
+              className={`navbar-link ${
+                isActivePath === "/founders" ? "active" : ""
+              }`}
             >
               संस्थापक
             </Link>
             <Link
+              to="/coremembers"
+              className={`navbar-link ${
+                isActivePath === "/coremembers" ? "active" : ""
+              }`}
+            >
+              मुख्य समुदाय सदस्य
+            </Link>
+            <Link
+              to="/registration"
+              className={`navbar-link ${
+                isActivePath === "/registration" ? "active" : ""
+              }`}
+            >
+              पंजीकरण
+            </Link>
+            <Link
               to="/donate"
-              style={{
-                color: "black", // White
-                textDecoration: "none",
-                padding: "10px",
-                fontSize: "20px",
-              }}
+              className={`navbar-link ${
+                isActivePath === "/donate" ? "active" : ""
+              }`}
             >
               दान
             </Link>
@@ -232,13 +224,11 @@ const Navbar = () => {
               <a
                 href="#"
                 className="nav-link dropdown-toggle"
-                style={{
-                  color: "black", // White
-                  textDecoration: "none",
-                  padding: "10px",
-                  fontSize: "20px",
-                }}
                 data-bs-toggle="dropdown"
+                style={{
+                  fontSize:"20px",
+                  borderBottom: "2px solid rgb(255, 111, 97)",
+                }}
               >
                 अन्य
               </a>
@@ -248,6 +238,9 @@ const Navbar = () => {
                 </Link>
                 <Link to="/contactus" className="dropdown-item">
                   हमसे संपर्क करें
+                </Link>
+                <Link to="/advertisement" className="dropdown-item">
+                  विज्ञापन
                 </Link>
               </div>
             </div>

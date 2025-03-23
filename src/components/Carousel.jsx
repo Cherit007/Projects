@@ -10,7 +10,15 @@ import "../index.css"; // Ensure styles are applied correctly
 
 const Carousel = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1000); // Check screen width
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1000);
+    };
 
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
   // Dynamic JSON data for slides
   const slides = [
     {
@@ -26,7 +34,7 @@ const Carousel = () => {
       image: banner2,
       title: "समुदाय की एकता",
       description:
-        `श्री सज्जन सिंह वर्मा एक प्रतिष्ठित नेता हैं, जिनकी पूर्व कैबिनेट मंत्री और मध्य प्रदेश से पूर्व सांसद के रूप में विरासत ने देश के राजनीतिक परिदृश्य पर अमिट छाप छोड़ी है। जनसेवा के प्रति उनकी गहरी प्रतिबद्धता ने उन्हें प्रगतिशील नीतियों को आगे बढ़ाने में अग्रणी बनाया है, जिससे समुदायों को सशक्त बनाने और अपने क्षेत्र के विकास में महत्वपूर्ण योगदान मिला है।`,
+        `श्री सज्जन सिंह वर्मा एक प्रतिष्ठित नेता हैं, जिनकी पूर्व कैबिनेट मंत्री और मध्य प्रदेश से पूर्व सांसद के रूप में विरासत ने देश के राजनीतिक परिदृश्य पर अमिट छाप छोड़ी है।`,
       event: "समुदाय की एकता और विकास के लिए हमारे प्रयास",
       venue: "नई दिल्ली, भारत",
     },
@@ -35,7 +43,7 @@ const Carousel = () => {
       image: banner3,
       title: "शिक्षा और प्रगति",
       description:
-        `दूरदर्शी नेता के रूप में श्री सज्जन सिंह वर्मा खटीक समाज के सदस्यों के लिए समान अवसरों का निर्माण करने हेतु सक्रिय रूप से कार्य कर रहे हैं, जिससे वे जीवन के प्रत्येक क्षेत्र में प्रगति कर सकें और सफल हो सकें। अपने अथक प्रयासों के माध्यम से उन्होंने गुणवत्तापूर्ण शिक्षा की पहुंच सुनिश्चित की है, नवोदित उद्यमियों को सशक्त किया है, और राजनीतिक भागीदारी को प्रोत्साहित किया है, जिससे यह सुनिश्चित हो सके कि समाज न केवल उचित रूप से प्रतिनिधित्व प्राप्त करे, बल्कि राष्ट्र की प्रगति में सार्थक योगदान भी दे।`,
+        `दूरदर्शी नेता के रूप में श्री सज्जन सिंह वर्मा खटीक समाज के सदस्यों के लिए समान अवसरों का निर्माण करने हेतु सक्रिय रूप से कार्य कर रहे हैं, जिससे वे जीवन के प्रत्येक क्षेत्र में प्रगति कर सकें और सफल हो सकें।`,
       event: "शिक्षा और प्रगति के लिए हमारे कार्यक्रम",
       venue: "मुंबई, भारत",
     },
@@ -51,14 +59,14 @@ const Carousel = () => {
     },
   ];
 
-  // Auto-scroll functionality
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000); // Auto-play every 5 seconds
-
+    }, 5000);
     return () => clearInterval(interval);
-  }, [currentSlide, slides.length]);
+  }, [slides.length]); // Only depends on slides.length
+  
+  console.log(currentSlide,"currentslde");
 
   // Next slide
   const nextSlide = () => {
@@ -78,7 +86,7 @@ const Carousel = () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh",
+        height: "500px",
         width: "100vw",
         marginBottom:"10px",
         // padding: "20px",
@@ -95,7 +103,7 @@ const Carousel = () => {
           alignItems: "center",
           justifyContent: "center",
           width: "100%",
-          height: "100vh",
+          height: "100%",
           marginTop: "0px",
           borderRadius: "15px",
           boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
@@ -110,7 +118,7 @@ const Carousel = () => {
           onClick={prevSlide}
           style={{
             position: "absolute",
-            left: "20px",
+            left: "-5px",
             top: "50%",
             transform: "translateY(-50%)",
             background: "none",
@@ -128,7 +136,7 @@ const Carousel = () => {
           onClick={nextSlide}
           style={{
             position: "absolute",
-            right: "20px",
+            right: "-5px",
             top: "50%",
             transform: "translateY(-50%)",
             background: "none",
@@ -152,7 +160,7 @@ const Carousel = () => {
                 width: "100%",
                 display: "flex",
                 gap: "20px",
-                marginBottom: "30px",
+                // marginBottom: "30px",
                 zIndex: 2, // Ensure it's above the full-width image
               }}
             >
@@ -162,7 +170,7 @@ const Carousel = () => {
                   style={{
                     marginTop: "10px",
                     width: "100%",
-                    height: "400px",
+                    height: isMobile ? "200px" :"300px",
                     overflow: "hidden",
                   }}
                 >
@@ -188,7 +196,7 @@ const Carousel = () => {
                 color: "#333",
                 zIndex: 2,
                 backgroundColor: "rgba(255, 255, 255, 0.8)",
-                padding: "20px",
+                padding: isMobile ? "0px" : "20px",
                 borderRadius: "10px",
                 boxShadow: "0 5px 15px rgba(0, 0, 0, 0.1)",
               }}
@@ -216,7 +224,7 @@ const Carousel = () => {
               </p>
               <h2
                 style={{
-                  fontSize: "20px",
+                  fontSize: isMobile ? "16px": "20px",
                   fontWeight: "bold",
                   color: "#222",
                   marginBottom: "15px",
@@ -233,7 +241,6 @@ const Carousel = () => {
           <div
             style={{
               display: "flex",
-              flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
               width: "100%",
@@ -255,8 +262,8 @@ const Carousel = () => {
 
                 fontFamily: "'Poppins', sans-serif",
                 color: "#333",
-                padding: "20px",
-                borderRadius: "10%", // Rounded corners
+                padding: isMobile ? "0px": "20px",
+                // borderRadius: "10%", // Rounded corners
                 boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)", // Soft shadow for depth
                 animation: "fadeIn 1s ease-in-out", // Fade-in animation
                 // maxWidth: "800px", // Limit width for better readability
@@ -264,7 +271,8 @@ const Carousel = () => {
                 margin: "0 auto", // Center the container
                 backdropFilter: "blur(10px)", // Blur effect for modern look
                 border: "1px solid rgba(255, 255, 255, 0.2)", // Subtle border
-                background: "linear-gradient(135deg, rgba(232, 241, 49, 0.9), rgba(245, 245, 245, 0.9))", // Light gradient background
+                background: "linear-gradient(to bottom, #fff8e1, #ffffff)", // Cream to white
+                // background: "linear-gradient(135deg, rgba(232, 241, 49, 0.9), rgba(245, 245, 245, 0.9))", // Light gradient background
               }}
             >
               <h1
@@ -321,10 +329,11 @@ const Carousel = () => {
             {/* Image on the Right */}
             <div
               style={{
-                flex: 1,
+                // flex: 1,
+                width: slides[currentSlide].isTopContent?"100%": "40%",
                 height: "100%",
                 overflow: "hidden",
-                borderRadius: "10%",
+                // borderRadius: "10%",
               }}
             >
               <img
@@ -333,7 +342,7 @@ const Carousel = () => {
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: window.innerWidth < 900 ? "contain" : "cover",
+                  objectFit:"contain",
                 }}
               />
             </div>
