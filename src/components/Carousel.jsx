@@ -59,14 +59,13 @@ const Carousel = () => {
     },
   ];
 
-  // Auto-scroll functionality
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000); // Auto-play every 5 seconds
-
+    }, 5000);
     return () => clearInterval(interval);
-  }, [currentSlide, slides.length]);
+  }, [slides.length]); // Only depends on slides.length
+  
   console.log(currentSlide,"currentslde");
 
   // Next slide
@@ -119,7 +118,7 @@ const Carousel = () => {
           onClick={prevSlide}
           style={{
             position: "absolute",
-            left: "20px",
+            left: "-5px",
             top: "50%",
             transform: "translateY(-50%)",
             background: "none",
@@ -137,7 +136,7 @@ const Carousel = () => {
           onClick={nextSlide}
           style={{
             position: "absolute",
-            right: "20px",
+            right: "-5px",
             top: "50%",
             transform: "translateY(-50%)",
             background: "none",
