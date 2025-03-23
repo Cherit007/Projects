@@ -106,7 +106,7 @@ const Navbar = () => {
   return (
     <nav
       style={{
-        backgroundColor: "#ffffff", // Sky Blue
+        backgroundColor: "rgb(255, 248, 225)", // Sky Blue
         padding: "0",
         position: "sticky",
         top: "0",

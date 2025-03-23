@@ -16,7 +16,7 @@ const Footer = () => {
             target="_blank"
             rel="noopener noreferrer"
             className="social-button"
-            href="https://www.facebook.com/SajjanVermaOfficial/about_profile_transparency"
+            href="https://x.com/"
           >
             <i className="fab fa-twitter"></i>
           </a>
@@ -24,9 +24,25 @@ const Footer = () => {
             target="_blank"
             rel="noopener noreferrer"
             className="social-button"
-            href="https://x.com/sajjanvermainc?lang=en"
+            href="https://www.facebook.com/"
           >
             <i className="fab fa-facebook-f"></i>
+          </a>
+          <a
+            target="_blank"
+            rel="noopener noreferrer"
+            className="social-button"
+            href="https://www.instagram.com/"
+          >
+            <i className="fab fa-instagram"></i>
+          </a>
+          <a
+            target="_blank"
+            rel="noopener noreferrer"
+            className="social-button"
+            href="https://www.youtube.com/"
+          >
+            <i className="fab fa-youtube"></i>
           </a>
         </div>
       </div>

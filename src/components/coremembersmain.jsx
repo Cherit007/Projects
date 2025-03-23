@@ -46,12 +46,14 @@ const membersData = [
 
 const CoreMembersMain = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [visibleMembers, setVisibleMembers] = useState([]);
   const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768); // Check screen width
 
-  const itemsPerPage = 3; // Show 3 cards on larger devices
-  const totalPages = Math.ceil(membersData.length / itemsPerPage);
+  const itemsPerPage = isMobile ? 1 : 3; // Show 1 card on mobile, 3 cards on larger devices
+  const totalPages = Math.ceil(membersData.length / itemsPerPage); // Dynamically calculated
 
-  // Auto-scroll functionality
+  // Next slide
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % totalPages);
@@ -59,20 +61,32 @@ const CoreMembersMain = () => {
 
     return () => clearInterval(interval);
   }, [currentIndex, totalPages]);
-
   const nextSlide = () => {
     setCurrentIndex((prev) => (prev + 1) % totalPages);
   };
 
+  // Previous slide
   const prevSlide = () => {
     setCurrentIndex((prev) => (prev === 0 ? totalPages - 1 : prev - 1));
   };
 
-  // Calculate which members to display based on current index
-  const visibleMembers = membersData.slice(
-    currentIndex * itemsPerPage,
-    (currentIndex + 1) * itemsPerPage
-  );
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Update visible members when currentIndex, itemsPerPage, or membersData changes
+  useEffect(() => {
+    const startIndex = currentIndex * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    setVisibleMembers(membersData.slice(startIndex, endIndex));
+  }, [currentIndex, itemsPerPage, membersData]);
+
 
   return (
     <div className="core-members">
