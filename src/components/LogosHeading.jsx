@@ -61,7 +61,7 @@ const Heading = () => {
         <div style={{ textAlign: "center", color: "#fff", flex: "1" }}>
           <h1
             style={{
-              fontSize: "35px",
+              fontSize: "60px",
               fontWeight: "bold",
               textAlign: "center",
               margin: "0",
@@ -113,14 +113,13 @@ const Heading = () => {
             gap: "4px",
           }}
         >
-          <small style={{ fontSize: "16px" }}>
+          {/* <small style={{ fontSize: "16px" }}>
             <MapPin className="icon primary-icon" size={18} />
             मध्य प्रदेश
-          </small>
+          </small> */}
 
           <small style={{ fontSize: "16px" }}>
-            <Phone className="icon primary-icon" size={18} />
-            +91 91110 97070
+          मुख्य कार्यालय: ग्रैंड ट्रंक रोड, चाँदपुर, लेहर्टारा इंडस्ट्रियल एस्टेट, वाराणसी, उत्तर प्रदेश 221106
           </small>
         </div>
       </div>

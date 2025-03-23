@@ -1711,8 +1711,8 @@
 }
 
 .navbar-logo {
-  width: 120px !important;
-  height: 120px !important;
+  width: 150px !important;
+  height: 150px !important;
   max-width: none !important; /* Prevents restrictions */
   max-height: none !important;
   object-fit: cover;
