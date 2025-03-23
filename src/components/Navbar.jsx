@@ -188,13 +188,21 @@ const Navbar = () => {
             >
               परिचय
             </Link>
-            <Link
+            {/* <Link
               to="/registration"
               className={`navbar-link ${
                 isActivePath === "/registration" ? "active" : ""
               }`}
             >
               पंजीकरण
+            </Link> */}
+            <Link
+              to="/founders"
+              className={`navbar-link ${
+                isActivePath === "/founders" ? "active" : ""
+              }`}
+            >
+              संस्थापक
             </Link>
             <Link
               to="/coremembers"
@@ -236,14 +244,14 @@ const Navbar = () => {
                 </Link>
               </div>
             </div>
-            <Link
+            {/* <Link
               to="/founders"
               className={`navbar-link ${
                 isActivePath === "/founders" ? "active" : ""
               }`}
             >
               संस्थापक
-            </Link>
+            </Link> */}
             {/* <Link
               to="/coremembers"
               className={`navbar-link ${
@@ -252,14 +260,14 @@ const Navbar = () => {
             >
               मुख्य समुदाय सदस्य
             </Link> */}
-            {/* <Link
+            <Link
               to="/registration"
               className={`navbar-link ${
                 isActivePath === "/registration" ? "active" : ""
               }`}
             >
               पंजीकरण
-            </Link> */}
+            </Link>
             <Link
               to="/donate"
               className={`navbar-link ${
