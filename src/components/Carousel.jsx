@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import person1 from "/img/person1.jpg";
 import person2 from "/img/person2.jpg";
-import person3 from "/img/person3.jpg";
+import person3 from "/img/founder.jpeg";
 import banner1 from "/img/banner1.jpeg";
 import banner2 from "/img/banner2.jpeg";
 import banner3 from "/img/banner31.jpg";
@@ -55,7 +55,7 @@ const Carousel = () => {
         "हम समुदाय के लोगों को आर्थिक रूप से सशक्त बनाने के लिए कार्यक्रम चलाते हैं।",
       event: "आर्थिक सशक्तिकरण के लिए हमारे प्रयास",
       venue: "बेंगलुरु, भारत",
-      isTopContent: true,
+      // isTopContent: true,
     },
   ];
 

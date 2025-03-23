@@ -6,7 +6,7 @@ const Footer = () => {
       <div className="footer-column">
         <h4 className="footer-heading">पता</h4>
         <p>
-          <i className="fa fa-map-marker-alt icon"></i>मध्य प्रदेश, भारत
+          <i className="fa fa-map-marker-alt icon"></i>ग्रैंड ट्रंक रोड, चाँदपुर, लेहर्टारा इंडस्ट्रियल एस्टेट, वाराणसी, उत्तर प्रदेश 221106
         </p>
         <p>
           <i className="fa fa-phone-alt icon"></i>+91 91110 97070

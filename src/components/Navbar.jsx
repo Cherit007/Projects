@@ -189,22 +189,6 @@ const Navbar = () => {
               परिचय
             </Link>
             <Link
-              to="/founders"
-              className={`navbar-link ${
-                isActivePath === "/founders" ? "active" : ""
-              }`}
-            >
-              संस्थापक
-            </Link>
-            <Link
-              to="/coremembers"
-              className={`navbar-link ${
-                isActivePath === "/coremembers" ? "active" : ""
-              }`}
-            >
-              मुख्य समुदाय सदस्य
-            </Link>
-            <Link
               to="/registration"
               className={`navbar-link ${
                 isActivePath === "/registration" ? "active" : ""
@@ -212,6 +196,70 @@ const Navbar = () => {
             >
               पंजीकरण
             </Link>
+            <Link
+              to="/coremembers"
+              style={{
+                color: "black", // White
+                textDecoration: "none",
+                padding: "10px",
+                fontSize: "20px",
+              }}
+            >
+              मुख्य समुदाय सदस्य
+            </Link>
+            <div className="nav-item dropdown">
+              <a
+                href="#"
+                className="nav-link dropdown-toggle"
+                style={{
+                  color: "black", // White
+                  textDecoration: "none",
+                  padding: "10px",
+                  fontSize: "20px",
+                }}
+                data-bs-toggle="dropdown"
+              >
+                सेवाएँ
+              </a>
+              <div className="dropdown-menu fade-down m-0">
+                <Link to="/" className="dropdown-item">
+                शिक्षा सहायता
+                </Link>
+                <Link to="/" className="dropdown-item">
+                चिकित्सा सहायता
+                </Link>
+                <Link to="/" className="dropdown-item">
+                नौकरी पोर्टल
+                </Link>
+                <Link to="/" className="dropdown-item">
+                लग्न सेतु
+                </Link>
+              </div>
+            </div>
+            <Link
+              to="/founders"
+              className={`navbar-link ${
+                isActivePath === "/founders" ? "active" : ""
+              }`}
+            >
+              संस्थापक
+            </Link>
+            {/* <Link
+              to="/coremembers"
+              className={`navbar-link ${
+                isActivePath === "/coremembers" ? "active" : ""
+              }`}
+            >
+              मुख्य समुदाय सदस्य
+            </Link> */}
+            {/* <Link
+              to="/registration"
+              className={`navbar-link ${
+                isActivePath === "/registration" ? "active" : ""
+              }`}
+            >
+              पंजीकरण
+            </Link> */}
             <Link
               to="/donate"
               className={`navbar-link ${

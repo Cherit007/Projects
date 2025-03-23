@@ -86,8 +86,8 @@ const About = () => {
         <img src={about1} alt="Community" style={imageStyle} />
       </div>
 
-      {/* Our Vision Section */}
-      <div style={sectionStyle}>
+      {/* Our Vision Section - Content Left, Image Right */}
+      <div style={{ ...sectionStyle, flexDirection: "row-reverse" }}>
         <div style={textContainerStyle}>
           <h2 style={headingStyle}>Our Vision</h2>
           <p style={paragraphStyle}>
