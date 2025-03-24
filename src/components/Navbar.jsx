@@ -206,12 +206,9 @@ const Navbar = () => {
             </Link>
             <Link
               to="/coremembers"
-              style={{
-                color: "black", // White
-                textDecoration: "none",
-                padding: "10px",
-                fontSize: "20px",
-              }}
+              className={`navbar-link ${
+                isActivePath === "/coremembers" ? "active" : ""
+              }`}
             >
               मुख्य समुदाय सदस्य
             </Link>
@@ -220,10 +217,8 @@ const Navbar = () => {
                 href="#"
                 className="nav-link dropdown-toggle"
                 style={{
-                  color: "black", // White
-                  textDecoration: "none",
-                  padding: "10px",
-                  fontSize: "20px",
+                  fontSize:"20px",
+                  borderBottom: "2px solid rgb(255, 111, 97)",
                 }}
                 data-bs-toggle="dropdown"
               >
