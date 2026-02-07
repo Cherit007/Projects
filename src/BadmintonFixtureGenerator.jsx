@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Calendar, RotateCcw, Check, Edit2, Share2, History, TrendingUp } from 'lucide-react';
+import { Trophy, Users, Calendar, RotateCcw, Share2, History, TrendingUp, RefreshCw, ChevronDown, Edit2, X } from 'lucide-react';
+import AutocompleteInput from './components/AutocompleteInput';
+import MatchCard from './components/MatchCard';
+import FinalMatchCard from './components/FinalMatchCard';
+import Toast from './components/Toast';
+import { 
+  calculatePointsTable, 
+  calculatePlayerStats, 
+  calculateCumulativePlayerStats,
+  generateFixtures as createFixtures 
+} from './utils/calculations';
 
 const BadmintonFixtureGenerator = () => {
   // Default team configurations
@@ -18,10 +28,10 @@ const BadmintonFixtureGenerator = () => {
     { emoji: '🌈', name: 'Rainbow Rallies', player1: 'Andrew Kim', player2: 'Nicole Wang' },
   ];
 
-  // State Management
-  const [step, setStep] = useState('setup'); // setup, teams, tournament
+  // ALL STATE DECLARATIONS
+  const [step, setStep] = useState('setup');
   const [tournamentName, setTournamentName] = useState('');
-  const [numTeams, setNumTeams] = useState(4);
+  const [numTeams, setNumTeams] = useState(3);
   const [format, setFormat] = useState('1');
   const [teams, setTeams] = useState([]);
   const [fixtures, setFixtures] = useState([]);
@@ -30,30 +40,96 @@ const BadmintonFixtureGenerator = () => {
   const [loading, setLoading] = useState(false);
   const [tournamentHistory, setTournamentHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [showMatchHistory, setShowMatchHistory] = useState(false);
+  const [showAllTimeStats, setShowAllTimeStats] = useState(false);
+  const [finalMatch, setFinalMatch] = useState(null);
+  const [champion, setChampion] = useState(null);
+  
+  // Player database and last tournament config
+  const [playerDatabase, setPlayerDatabase] = useState([]);
+  const [lastTournamentConfig, setLastTournamentConfig] = useState(null);
 
-  // Load tournament history from localStorage on mount
+  // Load data from localStorage on mount (including current tournament state)
   useEffect(() => {
+    // Load tournament history
     const savedHistory = localStorage.getItem('badmintonTournamentHistory');
     if (savedHistory) {
       try {
-        setTournamentHistory(JSON.parse(savedHistory));
+        const history = JSON.parse(savedHistory);
+        setTournamentHistory(history);
+        
+        // Extract all unique players from history
+        const allPlayers = new Set();
+        history.forEach(tournament => {
+          tournament.teams?.forEach(team => {
+            if (team.player1) allPlayers.add(team.player1);
+            if (team.player2) allPlayers.add(team.player2);
+          });
+        });
+        setPlayerDatabase(Array.from(allPlayers));
       } catch (e) {
         console.error('Error loading history:', e);
       }
     }
+
+    // Load last tournament config
+    const savedConfig = localStorage.getItem('badmintonLastConfig');
+    if (savedConfig) {
+      try {
+        setLastTournamentConfig(JSON.parse(savedConfig));
+      } catch (e) {
+        console.error('Error loading last config:', e);
+      }
+    }
+
+    // NEW: Load current tournament state (for refresh persistence)
+    const savedCurrentState = localStorage.getItem('badmintonCurrentTournament');
+    if (savedCurrentState) {
+      try {
+        const currentState = JSON.parse(savedCurrentState);
+        // Restore the entire tournament state
+        setStep(currentState.step);
+        setTournamentName(currentState.tournamentName);
+        setNumTeams(currentState.numTeams);
+        setFormat(currentState.format);
+        setTeams(currentState.teams);
+        setFixtures(currentState.fixtures);
+        setActiveTab(currentState.activeTab || 'fixtures');
+        setFinalMatch(currentState.finalMatch);
+        setChampion(currentState.champion);
+      } catch (e) {
+        console.error('Error loading current tournament:', e);
+      }
+    }
   }, []);
 
-  // Save tournament history to localStorage whenever it changes
+  // Save current tournament state to localStorage whenever it changes
+  useEffect(() => {
+    if (step !== 'setup' && tournamentName) {
+      const currentState = {
+        step,
+        tournamentName,
+        numTeams,
+        format,
+        teams,
+        fixtures,
+        activeTab,
+        finalMatch,
+        champion,
+      };
+      localStorage.setItem('badmintonCurrentTournament', JSON.stringify(currentState));
+    }
+  }, [step, tournamentName, numTeams, format, teams, fixtures, activeTab, finalMatch, champion]);
+
+  // Save tournament history to localStorage
   useEffect(() => {
     if (tournamentHistory.length > 0) {
       localStorage.setItem('badmintonTournamentHistory', JSON.stringify(tournamentHistory));
     }
   }, [tournamentHistory]);
 
-  // Initialize teams array when number changes
+  // Initialize teams when step changes
   useEffect(() => {
-    if (step === 'teams') {
+    if (step === 'teams' && teams.length === 0) {
       const newTeams = Array.from({ length: numTeams }, (_, i) => ({
         id: i + 1,
         emoji: defaultTeamConfigs[i]?.emoji || '🏸',
@@ -65,313 +141,64 @@ const BadmintonFixtureGenerator = () => {
     }
   }, [step, numTeams]);
 
+  // Update player database
+  const updatePlayerDatabase = (playerName) => {
+    if (playerName && playerName.trim() !== '') {
+      setPlayerDatabase(prev => {
+        if (!prev.includes(playerName.trim())) {
+          return [...prev, playerName.trim()];
+        }
+        return prev;
+      });
+    }
+  };
+
+  // Reuse last tournament configuration
+  const reuseTournamentConfig = () => {
+    if (lastTournamentConfig) {
+      setTournamentName(lastTournamentConfig.name + ' (Rematch)');
+      setNumTeams(lastTournamentConfig.numTeams);
+      setFormat(lastTournamentConfig.format);
+      setTeams(lastTournamentConfig.teams.map((team, i) => ({
+        ...team,
+        id: i + 1,
+      })));
+      setStep('teams');
+      showToast('Previous tournament loaded! Edit teams or proceed.');
+    }
+  };
+
   // Generate Fixtures
   const generateFixtures = () => {
     setLoading(true);
+    
+    // Save current configuration
+    setLastTournamentConfig({
+      name: tournamentName,
+      numTeams: numTeams,
+      format: format,
+      teams: teams,
+    });
+    localStorage.setItem('badmintonLastConfig', JSON.stringify({
+      name: tournamentName,
+      numTeams: numTeams,
+      format: format,
+      teams: teams,
+    }));
+
+    // Update player database
+    teams.forEach(team => {
+      updatePlayerDatabase(team.player1);
+      updatePlayerDatabase(team.player2);
+    });
+
     setTimeout(() => {
-      const matchesPerPair = parseInt(format);
-      const newFixtures = [];
-      let matchId = 1;
-
-      for (let i = 0; i < teams.length; i++) {
-        for (let j = i + 1; j < teams.length; j++) {
-          for (let round = 0; round < matchesPerPair; round++) {
-            newFixtures.push({
-              id: matchId++,
-              team1: teams[i],
-              team2: teams[j],
-              score1: null,
-              score2: null,
-              completed: false,
-              round: round + 1,
-            });
-          }
-        }
-      }
-
+      const newFixtures = createFixtures(teams, format);
       setFixtures(newFixtures);
       setStep('tournament');
       setLoading(false);
       showToast('Fixtures generated successfully! 🏸');
     }, 800);
-  };
-
-  // Calculate Points Table
-  const calculatePointsTable = () => {
-    const table = teams.map(team => ({
-      ...team,
-      played: 0,
-      won: 0,
-      lost: 0,
-      points: 0,
-      scoreFor: 0,
-      scoreAgainst: 0,
-      scoreDiff: 0,
-    }));
-
-    fixtures.forEach(match => {
-      if (match.completed) {
-        const team1Index = table.findIndex(t => t.id === match.team1.id);
-        const team2Index = table.findIndex(t => t.id === match.team2.id);
-
-        table[team1Index].played++;
-        table[team2Index].played++;
-        table[team1Index].scoreFor += match.score1;
-        table[team1Index].scoreAgainst += match.score2;
-        table[team2Index].scoreFor += match.score2;
-        table[team2Index].scoreAgainst += match.score1;
-
-        if (match.score1 > match.score2) {
-          table[team1Index].won++;
-          table[team1Index].points += 2;
-          table[team2Index].lost++;
-        } else {
-          table[team2Index].won++;
-          table[team2Index].points += 2;
-          table[team1Index].lost++;
-        }
-      }
-    });
-
-    table.forEach(team => {
-      team.scoreDiff = team.scoreFor - team.scoreAgainst;
-    });
-
-    return table.sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      return b.scoreDiff - a.scoreDiff;
-    });
-  };
-
-  // Calculate Player Statistics
-  const calculatePlayerStats = () => {
-    const playerStats = {};
-
-    // Initialize all players
-    teams.forEach(team => {
-      [team.player1, team.player2].forEach(player => {
-        if (player && !playerStats[player]) {
-          playerStats[player] = {
-            name: player,
-            team: team.name,
-            teamEmoji: team.emoji,
-            matchesPlayed: 0,
-            matchesWon: 0,
-            totalScored: 0,
-            totalConceded: 0,
-            winPercentage: 0,
-          };
-        }
-      });
-    });
-
-    // Calculate stats from completed matches
-    fixtures.forEach(match => {
-      if (match.completed) {
-        const team1Won = match.score1 > match.score2;
-        
-        // Team 1 players
-        [match.team1.player1, match.team1.player2].forEach(player => {
-          if (player && playerStats[player]) {
-            playerStats[player].matchesPlayed++;
-            playerStats[player].totalScored += match.score1;
-            playerStats[player].totalConceded += match.score2;
-            if (team1Won) playerStats[player].matchesWon++;
-          }
-        });
-
-        // Team 2 players
-        [match.team2.player1, match.team2.player2].forEach(player => {
-          if (player && playerStats[player]) {
-            playerStats[player].matchesPlayed++;
-            playerStats[player].totalScored += match.score2;
-            playerStats[player].totalConceded += match.score1;
-            if (!team1Won) playerStats[player].matchesWon++;
-          }
-        });
-      }
-    });
-
-    // Calculate win percentage
-    Object.values(playerStats).forEach(player => {
-      if (player.matchesPlayed > 0) {
-        player.winPercentage = ((player.matchesWon / player.matchesPlayed) * 100).toFixed(1);
-      }
-    });
-
-    return Object.values(playerStats).sort((a, b) => b.matchesWon - a.matchesWon);
-  };
-
-  // Calculate cumulative player stats across ALL tournaments
-  const calculateCumulativePlayerStats = () => {
-    const cumulativeStats = {};
-
-    // Process all tournaments in history
-    tournamentHistory.forEach(tournament => {
-      // Process all fixtures in the tournament
-      tournament.fixtures?.forEach(match => {
-        if (match.completed) {
-          const team1Won = match.score1 > match.score2;
-          
-          // Team 1 players
-          [match.team1.player1, match.team1.player2].forEach(player => {
-            if (player) {
-              if (!cumulativeStats[player]) {
-                cumulativeStats[player] = {
-                  name: player,
-                  tournamentsPlayed: new Set(),
-                  matchesPlayed: 0,
-                  matchesWon: 0,
-                  totalScored: 0,
-                  totalConceded: 0,
-                  championships: 0,
-                };
-              }
-              cumulativeStats[player].tournamentsPlayed.add(tournament.id);
-              cumulativeStats[player].matchesPlayed++;
-              cumulativeStats[player].totalScored += match.score1;
-              cumulativeStats[player].totalConceded += match.score2;
-              if (team1Won) cumulativeStats[player].matchesWon++;
-            }
-          });
-
-          // Team 2 players
-          [match.team2.player1, match.team2.player2].forEach(player => {
-            if (player) {
-              if (!cumulativeStats[player]) {
-                cumulativeStats[player] = {
-                  name: player,
-                  tournamentsPlayed: new Set(),
-                  matchesPlayed: 0,
-                  matchesWon: 0,
-                  totalScored: 0,
-                  totalConceded: 0,
-                  championships: 0,
-                };
-              }
-              cumulativeStats[player].tournamentsPlayed.add(tournament.id);
-              cumulativeStats[player].matchesPlayed++;
-              cumulativeStats[player].totalScored += match.score2;
-              cumulativeStats[player].totalConceded += match.score1;
-              if (!team1Won) cumulativeStats[player].matchesWon++;
-            }
-          });
-        }
-      });
-
-      // Count championships
-      if (tournament.champion) {
-        [tournament.champion.player1, tournament.champion.player2].forEach(player => {
-          if (player && cumulativeStats[player]) {
-            cumulativeStats[player].championships++;
-          }
-        });
-      }
-    });
-
-    // Calculate additional stats
-    const statsArray = Object.values(cumulativeStats).map(player => ({
-      ...player,
-      tournamentsPlayed: player.tournamentsPlayed.size,
-      winPercentage: player.matchesPlayed > 0 
-        ? ((player.matchesWon / player.matchesPlayed) * 100).toFixed(1)
-        : 0,
-      avgScorePerMatch: player.matchesPlayed > 0
-        ? (player.totalScored / player.matchesPlayed).toFixed(1)
-        : 0,
-      scoreDiff: player.totalScored - player.totalConceded,
-    }));
-
-    return statsArray.sort((a, b) => {
-      if (b.championships !== a.championships) return b.championships - a.championships;
-      if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
-      return b.winPercentage - a.winPercentage;
-    });
-  };
-
-  // Calculate Player Statistics
-  const calculatePlayerStatsOld = () => {
-    const playerStats = {};
-
-    // Initialize all players
-    teams.forEach(team => {
-      [team.player1, team.player2].forEach(player => {
-        if (player && !playerStats[player]) {
-          playerStats[player] = {
-            name: player,
-            team: team.name,
-            teamEmoji: team.emoji,
-            matchesPlayed: 0,
-            matchesWon: 0,
-            totalScored: 0,
-            totalConceded: 0,
-            winPercentage: 0,
-          };
-        }
-      });
-    });
-
-    // Calculate stats from completed matches
-    fixtures.forEach(match => {
-      if (match.completed) {
-        const team1Won = match.score1 > match.score2;
-        
-        // Team 1 players
-        [match.team1.player1, match.team1.player2].forEach(player => {
-          if (player && playerStats[player]) {
-            playerStats[player].matchesPlayed++;
-            playerStats[player].totalScored += match.score1;
-            playerStats[player].totalConceded += match.score2;
-            if (team1Won) playerStats[player].matchesWon++;
-          }
-        });
-
-        // Team 2 players
-        [match.team2.player1, match.team2.player2].forEach(player => {
-          if (player && playerStats[player]) {
-            playerStats[player].matchesPlayed++;
-            playerStats[player].totalScored += match.score2;
-            playerStats[player].totalConceded += match.score1;
-            if (!team1Won) playerStats[player].matchesWon++;
-          }
-        });
-      }
-    });
-
-    // Add final match stats if completed
-    if (finalMatch && finalMatch.completed) {
-      const finalists = getFinalists();
-      if (finalists) {
-        const team1Won = finalMatch.score1 > finalMatch.score2;
-        
-        [finalists[0].player1, finalists[0].player2].forEach(player => {
-          if (player && playerStats[player]) {
-            playerStats[player].matchesPlayed++;
-            playerStats[player].totalScored += finalMatch.score1;
-            playerStats[player].totalConceded += finalMatch.score2;
-            if (team1Won) playerStats[player].matchesWon++;
-          }
-        });
-
-        [finalists[1].player1, finalists[1].player2].forEach(player => {
-          if (player && playerStats[player]) {
-            playerStats[player].matchesPlayed++;
-            playerStats[player].totalScored += finalMatch.score2;
-            playerStats[player].totalConceded += finalMatch.score1;
-            if (!team1Won) playerStats[player].matchesWon++;
-          }
-        });
-      }
-    }
-
-    // Calculate win percentage
-    Object.values(playerStats).forEach(player => {
-      if (player.matchesPlayed > 0) {
-        player.winPercentage = Math.round((player.matchesWon / player.matchesPlayed) * 100);
-      }
-    });
-
-    return Object.values(playerStats).sort((a, b) => b.winPercentage - a.winPercentage || b.totalScored - a.totalScored);
   };
 
   // Save Match Result
@@ -399,13 +226,9 @@ const BadmintonFixtureGenerator = () => {
   // Get finalists
   const getFinalists = () => {
     if (!allLeagueMatchesComplete()) return null;
-    const table = calculatePointsTable();
+    const table = calculatePointsTable(teams, fixtures);
     return [table[0], table[1]];
   };
-
-  // Final match state
-  const [finalMatch, setFinalMatch] = useState(null);
-  const [champion, setChampion] = useState(null);
 
   // Save final result
   const saveFinalResult = (score1, score2) => {
@@ -416,55 +239,113 @@ const BadmintonFixtureGenerator = () => {
 
     const finalists = getFinalists();
     const winner = parseInt(score1) > parseInt(score2) ? finalists[0] : finalists[1];
-    setFinalMatch({ score1: parseInt(score1), score2: parseInt(score2), completed: true });
+    
+    setFinalMatch({
+      team1: finalists[0],
+      team2: finalists[1],
+      score1: parseInt(score1),
+      score2: parseInt(score2),
+    });
     setChampion(winner);
-    showToast('🎉 Tournament Complete!');
+
+    // Save to history
+    const tournament = {
+      id: Date.now(),
+      name: tournamentName,
+      date: new Date().toLocaleDateString(),
+      teams: teams,
+      fixtures: fixtures,
+      finalMatch: {
+        team1: finalists[0],
+        team2: finalists[1],
+        score1: parseInt(score1),
+        score2: parseInt(score2),
+      },
+      champion: winner,
+      format: format,
+    };
+
+    setTournamentHistory(prev => [tournament, ...prev]);
+    showToast(`🎉 ${winner.name} are the champions!`);
   };
 
-  // Toast notification
+  // Reset Tournament
+  const resetTournament = () => {
+    if (window.confirm('Are you sure you want to start a new tournament?')) {
+      // Clear current tournament from localStorage
+      localStorage.removeItem('badmintonCurrentTournament');
+      
+      setStep('setup');
+      setTournamentName('');
+      setNumTeams(3);
+      setTeams([]);
+      setFixtures([]);
+      setChampion(null);
+      setFinalMatch(null);
+      setActiveTab('fixtures');
+    }
+  };
+
+  // Re-run tournament with same teams
+  const rerunTournament = () => {
+    setFixtures([]);
+    setChampion(null);
+    setFinalMatch(null);
+    setActiveTab('fixtures');
+    
+    setTimeout(() => {
+      const newFixtures = createFixtures(teams, format);
+      setFixtures(newFixtures);
+      showToast('Rematch started! Same teams, fresh tournament! 🏸');
+    }, 500);
+  };
+
+  // Share Tournament
+  const shareTournament = () => {
+    if (!champion) return;
+    
+    const pointsTable = calculatePointsTable(teams, fixtures);
+    let message = `🏸 *${tournamentName}*\n\n`;
+    message += `🏆 *CHAMPIONS:* ${champion.name}\n`;
+    message += `   ${champion.player1} & ${champion.player2}\n\n`;
+    
+    if (finalMatch) {
+      message += `⚡ *FINAL MATCH*\n`;
+      message += `${finalMatch.team1.name}: ${finalMatch.score1}\n`;
+      message += `${finalMatch.team2.name}: ${finalMatch.score2}\n\n`;
+    }
+    
+    message += `📊 *LEAGUE STANDINGS*\n`;
+    pointsTable.forEach((team, idx) => {
+      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`;
+      message += `${medal} ${team.name} - ${team.points}pts\n`;
+    });
+
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
+  // Show Toast
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Reset Tournament
-  const resetTournament = () => {
-    if (confirm('Are you sure you want to start a new tournament? Current tournament will be saved to history.')) {
-      // Save current tournament to history if it has data
-      if (tournamentName && fixtures.length > 0) {
-        const completedTournament = {
-          id: Date.now(),
-          name: tournamentName,
-          date: new Date().toLocaleDateString(),
-          teams: teams,
-          fixtures: fixtures,
-          champion: champion,
-          finalMatch: finalMatch,
-          format: format,
-        };
-        setTournamentHistory(prev => [completedTournament, ...prev]);
-      }
-      
-      // Reset all state
-      setStep('setup');
-      setTournamentName('');
-      setNumTeams(4);
-      setFormat('1');
-      setTeams([]);
-      setFixtures([]);
-      setFinalMatch(null);
-      setChampion(null);
-      setActiveTab('fixtures');
-      showToast('New tournament started. Previous tournament saved to history.');
+  // Delete tournament from history
+  const deleteTournamentFromHistory = (tournamentId) => {
+    if (window.confirm('Delete this tournament from history?')) {
+      setTournamentHistory(prev => prev.filter(t => t.id !== tournamentId));
+      showToast('Tournament deleted from history');
     }
   };
 
-  // Export all data
+  // Export data
   const exportAllData = () => {
     const exportData = {
       exportDate: new Date().toISOString(),
       tournamentHistory: tournamentHistory,
-      version: '1.0'
+      playerDatabase: playerDatabase,
+      version: '2.0'
     };
     
     const dataStr = JSON.stringify(exportData, null, 2);
@@ -472,12 +353,12 @@ const BadmintonFixtureGenerator = () => {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `badminton-tournaments-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `badminton-data-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast('Tournament data exported successfully! 📥');
+    showToast('Data exported successfully! 📥');
   };
 
   // Import data
@@ -491,291 +372,384 @@ const BadmintonFixtureGenerator = () => {
         const importedData = JSON.parse(e.target.result);
         if (importedData.tournamentHistory) {
           setTournamentHistory(importedData.tournamentHistory);
-          showToast('Tournament data imported successfully! 📤');
-        } else {
-          showToast('Invalid file format', 'error');
         }
+        if (importedData.playerDatabase) {
+          setPlayerDatabase(importedData.playerDatabase);
+        }
+        showToast('Data imported successfully! 📤');
       } catch (error) {
         showToast('Error importing data', 'error');
         console.error('Import error:', error);
       }
     };
     reader.readAsText(file);
-    // Reset file input
     event.target.value = '';
   };
 
-  // Start new tournament after completion
-  const startNewTournament = () => {
-    if (champion) {
-      // Save to history
-      const completedTournament = {
-        id: Date.now(),
-        name: tournamentName,
-        date: new Date().toLocaleDateString(),
-        teams: teams,
-        fixtures: fixtures,
-        champion: champion,
-        finalMatch: finalMatch,
-        format: format,
-      };
-      setTournamentHistory(prev => [completedTournament, ...prev]);
-      
-      // Reset
-      setStep('setup');
-      setTournamentName('');
-      setNumTeams(4);
-      setFormat('1');
-      setTeams([]);
-      setFixtures([]);
-      setFinalMatch(null);
-      setChampion(null);
-      setActiveTab('fixtures');
-      showToast('🏆 Tournament saved! Start a new one.');
-    }
-  };
-
-  // Share tournament summary
-  const shareTournament = (tournament) => {
-    const summary = `
-🏸 ${tournament.name} 🏸
-📅 ${tournament.date}
-
-🏆 CHAMPION: ${tournament.champion.name}
-${tournament.champion.player1} & ${tournament.champion.player2}
-
-📊 Final Score: ${tournament.finalMatch.score1} - ${tournament.finalMatch.score2}
-
-🎯 Tournament Format: ${tournament.format} League Match(es) + Final
-👥 Teams: ${tournament.teams.length}
-
-Generated with Badminton Fixture Maker
-    `.trim();
-    
-    copyToClipboard(summary);
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-      showToast('Tournament summary copied! Share it on WhatsApp.');
-    }).catch(() => {
-      // Fallback: create a text area
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      showToast('Tournament summary copied! Share it on WhatsApp.');
-    });
-  };
-
   // Render Setup Screen
-  const renderSetup = () => (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4">
-      <div className="max-w-2xl mx-auto pt-8">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 transform transition-all hover:scale-[1.02]">
+  const renderSetup = () => {
+    const allTimeStats = calculateCumulativePlayerStats(tournamentHistory);
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
+        <div className="max-w-2xl mx-auto">
           <div className="text-center mb-8">
             <div className="text-6xl mb-4">🏸</div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              Doubles Fixture Maker
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              Badminton Tournament
             </h1>
-            <p className="text-gray-600">Create badminton fixtures in seconds</p>
+            <p className="text-gray-600">Round-robin league + knockout final</p>
           </div>
 
-          {/* Quick Actions */}
-          {tournamentHistory.length > 0 && (
-            <div className="mb-6 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setShowHistory(true)}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200 transition-all font-semibold"
-              >
-                <History size={18} />
-                History ({tournamentHistory.length})
-              </button>
-              <button
-                onClick={exportAllData}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-green-100 text-green-600 rounded-xl hover:bg-green-200 transition-all font-semibold"
-              >
-                <Share2 size={18} />
-                Export Data
-              </button>
-            </div>
-          )}
-
-          {/* Import Data */}
-          <div className="mb-6">
-            <label className="block w-full">
-              <input
-                type="file"
-                accept=".json"
-                onChange={importData}
-                className="hidden"
-                id="import-file"
-              />
-              <div className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-100 text-blue-600 rounded-xl hover:bg-blue-200 transition-all font-semibold cursor-pointer">
-                <Calendar size={18} />
-                Import Previous Data
+          <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-6">
+            {/* Quick action to reuse last tournament */}
+            {lastTournamentConfig && (
+              <div className="mb-6 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-300 rounded-xl p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">🔄 Previous Tournament Available</p>
+                    <p className="text-xs text-gray-600">"{lastTournamentConfig.name}" - {lastTournamentConfig.numTeams} teams</p>
+                  </div>
+                  <button
+                    onClick={reuseTournamentConfig}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold text-sm whitespace-nowrap"
+                  >
+                    <RefreshCw size={16} />
+                    Reuse Teams
+                  </button>
+                </div>
               </div>
-            </label>
-          </div>
+            )}
 
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tournament Name
+            {/* Quick Actions */}
+            <div className="mb-6 grid grid-cols-2 gap-3">
+              {tournamentHistory.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowHistory(true)}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200 transition-all font-semibold"
+                  >
+                    <History size={18} />
+                    History ({tournamentHistory.length})
+                  </button>
+                  <button
+                    onClick={() => setShowAllTimeStats(true)}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-100 text-orange-600 rounded-xl hover:bg-orange-200 transition-all font-semibold"
+                  >
+                    <TrendingUp size={18} />
+                    All-Time Stats
+                  </button>
+                </>
+              )}
+              {tournamentHistory.length > 0 && (
+                <button
+                  onClick={exportAllData}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-green-100 text-green-600 rounded-xl hover:bg-green-200 transition-all font-semibold"
+                >
+                  <Share2 size={18} />
+                  Export Data
+                </button>
+              )}
+              <label className="block">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={importData}
+                  className="hidden"
+                />
+                <div className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-100 text-blue-600 rounded-xl hover:bg-blue-200 transition-all font-semibold cursor-pointer">
+                  <Calendar size={18} />
+                  Import Data
+                </div>
               </label>
-              <input
-                type="text"
-                value={tournamentName}
-                onChange={(e) => setTournamentName(e.target.value)}
-                placeholder="e.g., Summer Badminton Cup"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-              />
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Number of Teams
-              </label>
-              <input
-                type="number"
-                min="3"
-                max="12"
-                value={numTeams}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === '') {
-                    setNumTeams(3);
-                  } else {
-                    const num = parseInt(value);
-                    if (!isNaN(num)) {
-                      setNumTeams(Math.max(3, Math.min(12, num)));
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Tournament Name
+                </label>
+                <input
+                  type="text"
+                  value={tournamentName}
+                  onChange={(e) => setTournamentName(e.target.value)}
+                  placeholder="e.g., Summer Smash 2024"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Number of Teams
+                </label>
+                <input
+                  type="number"
+                  min="3"
+                  max="12"
+                  value={numTeams}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setNumTeams(3);
+                    } else {
+                      const num = parseInt(value);
+                      if (!isNaN(num)) {
+                        setNumTeams(Math.max(3, Math.min(12, num)));
+                      }
                     }
-                  }
-                }}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-              />
-              <p className="text-xs text-gray-500 mt-1">Min: 3, Max: 12 teams</p>
-            </div>
+                  }}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all"
+                />
+                <p className="text-xs text-gray-500 mt-1">Min: 3, Max: 12 teams</p>
+              </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tournament Format
-              </label>
-              <select
-                value={format}
-                onChange={(e) => setFormat(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all bg-white"
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Tournament Format
+                </label>
+                <select
+                  value={format}
+                  onChange={(e) => setFormat(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all bg-white"
+                >
+                  <option value="1">1 League Match + Final</option>
+                  <option value="2">2 League Matches + Final</option>
+                </select>
+              </div>
+
+              <button
+                onClick={() => tournamentName ? setStep('teams') : showToast('Please enter tournament name', 'error')}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all"
               >
-                <option value="1">1 League Match + Final</option>
-                <option value="2">2 League Matches + Final</option>
-              </select>
+                <div className="flex items-center justify-center gap-2">
+                  <Users size={20} />
+                  Next: Enter Teams
+                </div>
+              </button>
             </div>
-
-            <button
-              onClick={() => tournamentName ? setStep('teams') : showToast('Please enter tournament name', 'error')}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-            >
-              <Users size={20} />
-              Generate Teams Form
-            </button>
           </div>
         </div>
-      </div>
-    </div>
-  );
 
-  // Render Teams Entry
+        {/* History Modal */}
+        {showHistory && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <History size={24} />
+                  Tournament History
+                </h3>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
+                {tournamentHistory.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <History size={48} className="mx-auto mb-4 text-gray-300" />
+                    <p>No tournament history yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {tournamentHistory.map(tournament => (
+                      <div key={tournament.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
+                            <p className="text-xs text-gray-500">{tournament.date}</p>
+                          </div>
+                          <button
+                            onClick={() => deleteTournamentFromHistory(tournament.id)}
+                            className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all flex-shrink-0"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        {tournament.champion && (
+                          <div className="flex items-center gap-3 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                            <span className="text-3xl">{tournament.champion.emoji}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-gray-800 flex items-center gap-2">
+                                <Trophy size={16} className="text-yellow-600" />
+                                {tournament.champion.name}
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                {tournament.champion.player1} & {tournament.champion.player2}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* All-Time Player Stats Modal */}
+        {showAllTimeStats && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+              <div className="bg-gradient-to-r from-orange-600 to-red-600 p-6 flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <TrendingUp size={24} />
+                  All-Time Player Statistics
+                </h3>
+                <button
+                  onClick={() => setShowAllTimeStats(false)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[calc(80vh-88px)]">
+                {allTimeStats.length === 0 ? (
+                  <div className="p-12 text-center text-gray-500">
+                    <TrendingUp size={48} className="mx-auto mb-4 text-gray-300" />
+                    <p>No player statistics available yet</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-100 sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Player</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">🏆</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Tournaments</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Played</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Won</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Win %</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Avg Score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allTimeStats.map((player, index) => (
+                          <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="px-4 py-4 text-center font-bold text-lg">
+                              {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                            </td>
+                            <td className="px-4 py-4">
+                              <p className="font-bold text-gray-800">{player.name}</p>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-bold text-sm">
+                                {player.championships}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-center font-semibold">{player.tournamentsPlayed}</td>
+                            <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
+                            <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm">
+                                {player.winPercentage}%
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-center font-semibold text-blue-600">{player.avgScorePerMatch}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render Teams Entry Screen
   const renderTeamsEntry = () => (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4">
-      <div className="max-w-4xl mx-auto pt-8">
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-3xl font-bold text-gray-800">Enter Team Details</h2>
-              <p className="text-sm text-gray-500 mt-1">Teams are pre-filled, but you can customize them</p>
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Enter Team Details</h2>
+              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                {playerDatabase.length > 0 ? (
+                  <>
+                    <ChevronDown size={14} className="text-blue-500" />
+                    Start typing to see {playerDatabase.length} saved player names
+                  </>
+                ) : (
+                  'Player names will be saved for future use'
+                )}
+              </p>
             </div>
             <button
               onClick={() => setStep('setup')}
-              className="text-gray-600 hover:text-gray-800 font-medium px-4 py-2 rounded-lg hover:bg-gray-100 transition-all"
+              className="text-gray-600 hover:text-gray-800 text-sm flex items-center gap-1"
             >
               ← Back
             </button>
           </div>
 
-          {loading ? (
-            <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="bg-gray-100 rounded-2xl h-40 animate-pulse"></div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
+          {teams.length > 0 && (
+            <div className="space-y-4 mb-6">
               {teams.map((team, index) => (
-                <div key={team.id} className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-2xl border-2 border-transparent hover:border-blue-300 transition-all hover:shadow-lg">
+                <div key={team.id} className="border-2 border-gray-200 rounded-2xl p-4 md:p-6 hover:border-blue-300 transition-all">
                   <div className="flex items-center gap-4 mb-4">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="text-4xl bg-white w-16 h-16 rounded-xl flex items-center justify-center shadow-md">
-                        {team.emoji}
-                      </div>
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={team.name}
-                          onChange={(e) => {
-                            const newTeams = [...teams];
-                            newTeams[index].name = e.target.value;
-                            setTeams(newTeams);
-                          }}
-                          placeholder="Team Name"
-                          className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all font-semibold text-lg"
-                        />
-                      </div>
+                    <div className="text-3xl bg-gray-50 rounded-xl p-3 cursor-pointer" onClick={() => {
+                      const emojis = ['🔥', '⚡', '🌟', '💎', '🎯', '🚀', '👑', '🌊', '🏆', '⭐', '🎨', '🌈', '💪', '🎪', '🎭'];
+                      const currentIndex = emojis.indexOf(team.emoji);
+                      const nextEmoji = emojis[(currentIndex + 1) % emojis.length];
+                      const newTeams = [...teams];
+                      newTeams[index].emoji = nextEmoji;
+                      setTeams(newTeams);
+                    }}>
+                      {team.emoji}
                     </div>
-                    <button
-                      onClick={() => {
-                        const emojis = ['🔥', '⚡', '🌟', '💎', '🎯', '🚀', '👑', '🌊', '🏆', '⭐', '🎨', '🌈', '💪', '🎪', '🎭', '🎸'];
-                        const currentIndex = emojis.indexOf(team.emoji);
-                        const nextEmoji = emojis[(currentIndex + 1) % emojis.length];
+                    <input
+                      type="text"
+                      value={team.name}
+                      onChange={(e) => {
                         const newTeams = [...teams];
-                        newTeams[index].emoji = nextEmoji;
+                        newTeams[index].name = e.target.value;
                         setTeams(newTeams);
                       }}
-                      className="bg-white p-2 rounded-lg hover:bg-gray-100 transition-all shadow-sm"
-                      title="Change emoji"
-                    >
-                      <Edit2 size={18} className="text-gray-600" />
-                    </button>
+                      placeholder="Team Name"
+                      className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none font-semibold"
+                    />
                   </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Player 1</label>
-                      <input
-                        type="text"
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block flex items-center gap-1">
+                        Player 1
+                        {playerDatabase.length > 0 && <ChevronDown size={12} className="text-blue-500" />}
+                      </label>
+                      <AutocompleteInput
                         value={team.player1}
-                        onChange={(e) => {
+                        onChange={(value) => {
                           const newTeams = [...teams];
-                          newTeams[index].player1 = e.target.value;
+                          newTeams[index].player1 = value;
                           setTeams(newTeams);
                         }}
                         placeholder="Player 1 Name"
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all"
+                        playerDatabase={playerDatabase}
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Player 2</label>
-                      <input
-                        type="text"
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block flex items-center gap-1">
+                        Player 2
+                        {playerDatabase.length > 0 && <ChevronDown size={12} className="text-blue-500" />}
+                      </label>
+                      <AutocompleteInput
                         value={team.player2}
-                        onChange={(e) => {
+                        onChange={(value) => {
                           const newTeams = [...teams];
-                          newTeams[index].player2 = e.target.value;
+                          newTeams[index].player2 = value;
                           setTeams(newTeams);
                         }}
                         placeholder="Player 2 Name"
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none transition-all"
+                        playerDatabase={playerDatabase}
                       />
                     </div>
                   </div>
@@ -799,7 +773,8 @@ Generated with Badminton Fixture Maker
 
   // Render Tournament View
   const renderTournament = () => {
-    const pointsTable = calculatePointsTable();
+    const pointsTable = calculatePointsTable(teams, fixtures);
+    const playerStats = calculatePlayerStats(teams, fixtures);
     const finalists = getFinalists();
 
     return (
@@ -807,36 +782,20 @@ Generated with Badminton Fixture Maker
         {/* Header */}
         <div className="sticky top-0 bg-white shadow-md z-10">
           <div className="max-w-6xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-800">🏸 {tournamentName}</h1>
                 <p className="text-sm text-gray-600">{format} League Match(es) + Final</p>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => setShowMatchHistory(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-600 rounded-xl hover:bg-blue-200 transition-all"
-                  title="View match history"
-                >
-                  <Calendar size={18} />
-                  <span className="hidden md:inline">Matches</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('playerstats')}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-600 rounded-xl hover:bg-green-200 transition-all"
-                  title="View player statistics"
-                >
-                  <TrendingUp size={18} />
-                  <span className="hidden md:inline">Stats</span>
-                </button>
-                {tournamentHistory.length > 0 && (
+                {champion && (
                   <button
-                    onClick={() => setShowHistory(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200 transition-all"
-                    title="View tournament history"
+                    onClick={rerunTournament}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all font-semibold"
                   >
-                    <History size={18} />
-                    <span className="hidden md:inline">History ({tournamentHistory.length})</span>
+                    <RefreshCw size={18} />
+                    <span className="hidden md:inline">Re-run with Same Teams</span>
+                    <span className="md:hidden">Rematch</span>
                   </button>
                 )}
                 <button
@@ -850,10 +809,10 @@ Generated with Badminton Fixture Maker
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto pb-2">
               <button
                 onClick={() => setActiveTab('fixtures')}
-                className={`px-6 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
+                className={`px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
                   activeTab === 'fixtures'
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -863,7 +822,7 @@ Generated with Badminton Fixture Maker
               </button>
               <button
                 onClick={() => setActiveTab('table')}
-                className={`px-6 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
+                className={`px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
                   activeTab === 'table'
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -872,9 +831,9 @@ Generated with Badminton Fixture Maker
                 Points Table
               </button>
               <button
-                onClick={() => setActiveTab('playerstats')}
-                className={`px-6 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'playerstats'
+                onClick={() => setActiveTab('stats')}
+                className={`px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'stats'
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
@@ -883,7 +842,7 @@ Generated with Badminton Fixture Maker
               </button>
               <button
                 onClick={() => setActiveTab('final')}
-                className={`px-6 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
+                className={`px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap ${
                   activeTab === 'final'
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -897,10 +856,8 @@ Generated with Badminton Fixture Maker
 
         {/* Content */}
         <div className="max-w-6xl mx-auto px-4 py-6">
-          {/* Fixtures Tab */}
           {activeTab === 'fixtures' && (
             <div className="space-y-4">
-              {/* Progress Indicator */}
               {fixtures.length > 0 && (
                 <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
                   <div className="flex items-center justify-between mb-3">
@@ -911,15 +868,9 @@ Generated with Badminton Fixture Maker
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-green-500 to-blue-500 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                      className="bg-gradient-to-r from-green-500 to-blue-500 h-4 rounded-full transition-all duration-500"
                       style={{ width: `${(fixtures.filter(f => f.completed).length / fixtures.length) * 100}%` }}
-                    >
-                      {fixtures.filter(f => f.completed).length > 0 && (
-                        <span className="text-xs font-bold text-white">
-                          {Math.round((fixtures.filter(f => f.completed).length / fixtures.length) * 100)}%
-                        </span>
-                      )}
-                    </div>
+                    />
                   </div>
                   {allLeagueMatchesComplete() && (
                     <p className="text-center text-sm font-semibold text-green-600 mt-3">
@@ -929,213 +880,143 @@ Generated with Badminton Fixture Maker
                 </div>
               )}
               
-              {fixtures.length === 0 ? (
-                <div className="bg-white rounded-2xl p-12 text-center">
-                  <Calendar size={64} className="mx-auto text-gray-300 mb-4" />
-                  <p className="text-gray-500">No fixtures generated yet</p>
+              {fixtures.map((match) => (
+                <MatchCard key={match.id} match={match} onSave={saveMatchResult} />
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'table' && (
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Trophy size={24} />
+                  Points Table
+                </h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Pos</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Team</th>
+                      <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">P</th>
+                      <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">W</th>
+                      <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">L</th>
+                      <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Pts</th>
+                      <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">For</th>
+                      <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Against</th>
+                      <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Diff</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pointsTable.map((team, index) => (
+                      <tr key={team.id} className={`border-b border-gray-200 hover:bg-gray-50 ${
+                        index < 2 ? 'bg-green-50' : ''
+                      }`}>
+                        <td className="px-4 py-4">
+                          <span className="font-bold text-lg">
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{team.emoji}</span>
+                            <div>
+                              <p className="font-bold text-gray-800">{team.name}</p>
+                              <p className="text-xs text-gray-600">{team.player1} & {team.player2}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center font-semibold">{team.played}</td>
+                        <td className="px-4 py-4 text-center font-semibold text-green-600">{team.won}</td>
+                        <td className="px-4 py-4 text-center font-semibold text-red-600">{team.lost}</td>
+                        <td className="px-4 py-4 text-center">
+                          <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold">
+                            {team.points}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center font-semibold">{team.scoreFor}</td>
+                        <td className="px-4 py-4 text-center font-semibold">{team.scoreAgainst}</td>
+                        <td className={`px-4 py-4 text-center font-bold ${
+                          team.scoreDiff > 0 ? 'text-green-600' : team.scoreDiff < 0 ? 'text-red-600' : 'text-gray-600'
+                        }`}>
+                          {team.scoreDiff > 0 ? '+' : ''}{team.scoreDiff}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {pointsTable.length > 0 && (
+                <div className="p-4 bg-gray-50 text-xs text-gray-600">
+                  <p className="mb-1"><strong>Note:</strong> Top 2 teams qualify for the final</p>
+                  <p>Win = 2 points | Tiebreaker: Score difference</p>
                 </div>
-              ) : (
-                fixtures.map((match) => (
-                  <MatchCard key={match.id} match={match} onSave={saveMatchResult} />
-                ))
               )}
             </div>
           )}
 
-          {/* Points Table Tab */}
-          {activeTab === 'table' && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              {pointsTable.length === 0 ? (
-                <div className="p-12 text-center">
-                  <Users size={64} className="mx-auto text-gray-300 mb-4" />
-                  <p className="text-gray-500">No results yet</p>
+          {activeTab === 'stats' && (
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <TrendingUp size={24} />
+                  Player Statistics
+                </h2>
+              </div>
+              {playerStats.length === 0 ? (
+                <div className="p-12 text-center text-gray-500">
+                  <Users size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p>No match results yet. Complete matches to see player stats.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                    <thead className="bg-gray-100">
                       <tr>
-                        <th className="px-4 py-4 text-left">Rank</th>
-                        <th className="px-4 py-4 text-left">Team</th>
-                        <th className="px-4 py-4 text-center">Played</th>
-                        <th className="px-4 py-4 text-center">Won</th>
-                        <th className="px-4 py-4 text-center">Lost</th>
-                        <th className="px-4 py-4 text-center">Points</th>
-                        <th className="px-4 py-4 text-center">+/-</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Player</th>
+                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Played</th>
+                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Won</th>
+                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Win %</th>
+                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Scored</th>
+                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Conceded</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pointsTable.map((team, index) => (
-                        <tr
-                          key={team.id}
-                          className={`border-b hover:bg-gray-50 transition-colors ${
-                            index < 2 ? 'bg-gradient-to-r from-green-50 to-emerald-50' : ''
-                          }`}
-                        >
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-2">
-                              {index === 0 && <span className="text-2xl">🥇</span>}
-                              {index === 1 && <span className="text-2xl">🥈</span>}
-                              {index === 2 && <span className="text-2xl">🥉</span>}
-                              {index > 2 && <span className="font-bold text-gray-600">{index + 1}</span>}
-                            </div>
+                      {playerStats.map((player, index) => (
+                        <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="px-4 py-4 text-center font-bold text-lg">
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="text-2xl bg-white w-10 h-10 rounded-lg flex items-center justify-center shadow-sm">
-                                {team.emoji}
-                              </div>
+                              <span className="text-xl">{player.teamEmoji}</span>
                               <div>
-                                <div className="font-bold text-gray-800">{team.name}</div>
-                                <div className="text-xs text-gray-500">
-                                  {team.player1} & {team.player2}
-                                </div>
+                                <p className="font-bold text-gray-800">{player.name}</p>
+                                <p className="text-xs text-gray-600">{player.team}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-center font-semibold">{team.played}</td>
+                          <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
+                          <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
                           <td className="px-4 py-4 text-center">
-                            <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg font-bold">
-                              {team.won}
+                            <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm">
+                              {player.winPercentage}%
                             </span>
                           </td>
-                          <td className="px-4 py-4 text-center">
-                            <span className="bg-red-100 text-red-700 px-2 py-1 rounded-lg font-bold">
-                              {team.lost}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-bold text-lg">
-                              {team.points}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <span className={`font-bold text-lg ${team.scoreDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {team.scoreDiff > 0 ? '+' : ''}{team.scoreDiff}
-                            </span>
-                          </td>
+                          <td className="px-4 py-4 text-center font-semibold text-blue-600">{player.totalScored}</td>
+                          <td className="px-4 py-4 text-center font-semibold text-red-600">{player.totalConceded}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {allLeagueMatchesComplete() && (
-                    <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 border-t-2 border-yellow-300">
-                      <p className="text-center text-sm font-semibold text-gray-700">
-                        🏆 Top 2 teams qualify for the final! Check the <button onClick={() => setActiveTab('final')} className="text-blue-600 underline">Final tab</button>
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Player Stats Tab */}
-          {activeTab === 'playerstats' && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              {(() => {
-                const playerStats = calculatePlayerStats();
-                return playerStats.length === 0 || playerStats.every(p => p.matchesPlayed === 0) ? (
-                  <div className="p-12 text-center">
-                    <TrendingUp size={64} className="mx-auto text-gray-300 mb-4" />
-                    <p className="text-gray-500">No player statistics yet</p>
-                    <p className="text-sm text-gray-400 mt-2">Complete some matches to see player stats</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-                        <tr>
-                          <th className="px-4 py-4 text-left">Rank</th>
-                          <th className="px-4 py-4 text-left">Player</th>
-                          <th className="px-4 py-4 text-center">Played</th>
-                          <th className="px-4 py-4 text-center">Won</th>
-                          <th className="px-4 py-4 text-center">Points</th>
-                          <th className="px-4 py-4 text-center">Win %</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {playerStats.map((player, index) => (
-                          <tr
-                            key={player.name}
-                            className={`border-b hover:bg-gray-50 transition-colors ${
-                              index < 3 ? 'bg-gradient-to-r from-purple-50 to-pink-50' : ''
-                            }`}
-                          >
-                            <td className="px-4 py-4">
-                              <div className="flex items-center gap-2">
-                                {index === 0 && <span className="text-2xl">🥇</span>}
-                                {index === 1 && <span className="text-2xl">🥈</span>}
-                                {index === 2 && <span className="text-2xl">🥉</span>}
-                                {index > 2 && <span className="font-bold text-gray-600">{index + 1}</span>}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="text-2xl bg-white w-10 h-10 rounded-lg flex items-center justify-center shadow-sm">
-                                  {player.teamEmoji}
-                                </div>
-                                <div>
-                                  <div className="font-bold text-gray-800">{player.name}</div>
-                                  <div className="text-xs text-gray-500">{player.team}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
-                            <td className="px-4 py-4 text-center">
-                              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg font-bold">
-                                {player.matchesWon}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                              <div className="text-sm">
-                                <span className="text-green-600 font-bold">{player.totalScored}</span>
-                                <span className="text-gray-400 mx-1">/</span>
-                                <span className="text-red-600 font-bold">{player.totalConceded}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                              <div className="flex items-center justify-center gap-2">
-                                <div className="relative w-16 h-16">
-                                  <svg className="transform -rotate-90" width="64" height="64">
-                                    <circle
-                                      cx="32"
-                                      cy="32"
-                                      r="28"
-                                      fill="none"
-                                      stroke="#e5e7eb"
-                                      strokeWidth="6"
-                                    />
-                                    <circle
-                                      cx="32"
-                                      cy="32"
-                                      r="28"
-                                      fill="none"
-                                      stroke={player.winPercentage >= 70 ? '#10b981' : player.winPercentage >= 50 ? '#f59e0b' : '#ef4444'}
-                                      strokeWidth="6"
-                                      strokeDasharray={`${(player.winPercentage / 100) * 175.93} 175.93`}
-                                      strokeLinecap="round"
-                                    />
-                                  </svg>
-                                  <div className="absolute inset-0 flex items-center justify-center">
-                                    <span className={`text-sm font-bold ${player.winPercentage >= 70 ? 'text-green-600' : player.winPercentage >= 50 ? 'text-orange-600' : 'text-red-600'}`}>
-                                      {player.winPercentage}%
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* Final Tab */}
           {activeTab === 'final' && (
             <div className="space-y-6">
               {!finalists ? (
@@ -1148,115 +1029,34 @@ Generated with Badminton Fixture Maker
                 </div>
               ) : champion ? (
                 <div>
-                  {/* Podium Display */}
-                  <div className="bg-gradient-to-br from-yellow-100 via-orange-100 to-red-100 rounded-3xl p-8 mb-6">
-                    <div className="text-center mb-8">
-                      <div className="text-6xl mb-4">🏆 TOURNAMENT COMPLETE 🏆</div>
-                      <h2 className="text-3xl font-bold text-gray-800">{tournamentName}</h2>
-                    </div>
-
-                    {/* Podium */}
-                    <div className="flex items-end justify-center gap-4 mb-8 max-w-3xl mx-auto">
-                      {/* 2nd Place */}
-                      {pointsTable[1] && (
-                        <div className="flex-1 max-w-xs">
-                          <div className="bg-gradient-to-br from-gray-300 to-gray-400 rounded-t-3xl p-6 text-center text-white shadow-xl transform hover:scale-105 transition-all" style={{height: '200px'}}>
-                            <div className="text-5xl mb-3">{pointsTable[1].emoji}</div>
-                            <div className="text-6xl mb-2">🥈</div>
-                            <h3 className="font-bold text-xl mb-1">{pointsTable[1].name}</h3>
-                            <p className="text-sm opacity-90">{pointsTable[1].player1}</p>
-                            <p className="text-sm opacity-90">{pointsTable[1].player2}</p>
-                            <div className="mt-3 bg-white bg-opacity-30 rounded-lg py-1">
-                              <p className="text-sm font-bold">{pointsTable[1].points} points</p>
-                            </div>
-                          </div>
-                          <div className="bg-gray-400 h-24 rounded-b-xl flex items-center justify-center text-white font-bold text-2xl">
-                            2nd
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 1st Place - Champion */}
-                      <div className="flex-1 max-w-xs -mt-8">
-                        <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-t-3xl p-8 text-center text-white shadow-2xl transform hover:scale-105 transition-all" style={{height: '280px'}}>
-                          <div className="text-6xl mb-3 animate-bounce">{champion.emoji}</div>
-                          <div className="text-7xl mb-2">🥇</div>
-                          <h3 className="font-bold text-2xl mb-2">{champion.name}</h3>
-                          <p className="text-base opacity-95">{champion.player1}</p>
-                          <p className="text-base opacity-95">{champion.player2}</p>
-                          <div className="mt-4 bg-white bg-opacity-30 rounded-lg py-2">
-                            <p className="text-lg font-bold">CHAMPIONS!</p>
-                            <p className="text-sm font-bold">{champion.points} points</p>
-                          </div>
-                        </div>
-                        <div className="bg-gradient-to-br from-yellow-500 to-orange-600 h-32 rounded-b-xl flex items-center justify-center text-white font-bold text-3xl shadow-lg">
-                          1st
-                        </div>
-                      </div>
-
-                      {/* 3rd Place */}
-                      {pointsTable[2] && (
-                        <div className="flex-1 max-w-xs">
-                          <div className="bg-gradient-to-br from-amber-600 to-amber-700 rounded-t-3xl p-6 text-center text-white shadow-xl transform hover:scale-105 transition-all" style={{height: '160px'}}>
-                            <div className="text-4xl mb-2">{pointsTable[2].emoji}</div>
-                            <div className="text-5xl mb-2">🥉</div>
-                            <h3 className="font-bold text-lg mb-1">{pointsTable[2].name}</h3>
-                            <p className="text-xs opacity-90">{pointsTable[2].player1}</p>
-                            <p className="text-xs opacity-90">{pointsTable[2].player2}</p>
-                            <div className="mt-2 bg-white bg-opacity-30 rounded-lg py-1">
-                              <p className="text-xs font-bold">{pointsTable[2].points} points</p>
-                            </div>
-                          </div>
-                          <div className="bg-amber-700 h-16 rounded-b-xl flex items-center justify-center text-white font-bold text-xl">
-                            3rd
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Final Match Result */}
-                    <div className="max-w-2xl mx-auto bg-white rounded-2xl p-6 shadow-lg">
-                      <h3 className="text-center text-xl font-bold text-gray-800 mb-4">🏆 Final Match Result</h3>
-                      <div className="flex items-center justify-center gap-8">
-                        <div className="text-center">
-                          <div className="text-3xl mb-2">{pointsTable[0].emoji}</div>
-                          <p className="font-bold text-gray-800">{pointsTable[0].name}</p>
-                          <p className="text-3xl font-bold text-green-600 mt-2">{finalMatch.score1}</p>
-                        </div>
-                        <div className="text-4xl font-bold text-gray-400">-</div>
-                        <div className="text-center">
-                          <div className="text-3xl mb-2">{pointsTable[1].emoji}</div>
-                          <p className="font-bold text-gray-800">{pointsTable[1].name}</p>
-                          <p className="text-3xl font-bold text-red-600 mt-2">{finalMatch.score2}</p>
-                        </div>
+                  <div className="bg-gradient-to-br from-yellow-100 via-orange-100 to-red-100 rounded-3xl p-8 mb-6 text-center">
+                    <div className="text-6xl mb-4">🏆 TOURNAMENT COMPLETE 🏆</div>
+                    <h2 className="text-3xl font-bold text-gray-800 mb-8">{tournamentName}</h2>
+                    
+                    <div className="bg-white rounded-2xl p-6 max-w-md mx-auto">
+                      <div className="text-5xl mb-3">{champion.emoji}</div>
+                      <h3 className="text-2xl font-bold text-gray-800 mb-2">{champion.name}</h3>
+                      <p className="text-gray-600">{champion.player1} & {champion.player2}</p>
+                      <div className="mt-4 bg-yellow-100 rounded-lg py-2">
+                        <p className="text-lg font-bold text-gray-800">CHAMPIONS!</p>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Action buttons after tournament completion */}
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
-                      onClick={() => shareTournament({
-                        id: Date.now(),
-                        name: tournamentName,
-                        date: new Date().toLocaleDateString(),
-                        teams: teams,
-                        fixtures: fixtures,
-                        champion: champion,
-                        finalMatch: finalMatch,
-                        format: format,
-                      })}
+                      onClick={shareTournament}
                       className="flex items-center justify-center gap-2 bg-green-600 text-white py-4 rounded-xl font-semibold hover:bg-green-700 transition-all shadow-lg"
                     >
                       <Share2 size={20} />
                       Share to WhatsApp
                     </button>
                     <button
-                      onClick={startNewTournament}
+                      onClick={rerunTournament}
                       className="flex items-center justify-center gap-2 bg-blue-600 text-white py-4 rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg"
                     >
-                      <Trophy size={20} />
-                      New Tournament
+                      <RefreshCw size={20} />
+                      Rematch
                     </button>
                   </div>
                 </div>
@@ -1275,674 +1075,9 @@ Generated with Badminton Fixture Maker
       {step === 'setup' && renderSetup()}
       {step === 'teams' && renderTeamsEntry()}
       {step === 'tournament' && renderTournament()}
-
-      {/* Match History Modal */}
-      {showMatchHistory && typeof showMatchHistory !== 'object' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] min-h-[400px] flex flex-col overflow-hidden shadow-2xl my-auto">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Calendar size={24} />
-                    Match History
-                  </h2>
-                  <p className="text-sm opacity-90 mt-1">{tournamentName}</p>
-                </div>
-                <button
-                  onClick={() => setShowMatchHistory(false)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1 min-h-0">
-              {fixtures.filter(f => f.completed).length === 0 ? (
-                <div className="text-center text-gray-500 py-12">
-                  <Calendar size={64} className="mx-auto mb-4 opacity-30" />
-                  <p className="text-lg font-semibold">No completed matches yet</p>
-                  <p className="text-sm mt-2">Complete some fixtures to see match history</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {fixtures
-                    .filter(f => f.completed)
-                    .map((match) => (
-                      <div key={match.id} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200 hover:border-blue-300 transition-all">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-bold text-gray-600">Match {match.id}</span>
-                          <div className="flex items-center gap-2">
-                            {match.round > 1 && (
-                              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-bold">
-                                Round {match.round}
-                              </span>
-                            )}
-                            <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
-                              Completed
-                            </span>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 items-center">
-                          <div className="text-center">
-                            <div className="text-2xl mb-1">{match.team1.emoji}</div>
-                            <p className="text-sm font-bold text-gray-800">{match.team1.name}</p>
-                            <p className="text-xs text-gray-600">{match.team1.player1} & {match.team1.player2}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-2xl font-bold">
-                              <span className={match.score1 > match.score2 ? 'text-green-600' : 'text-gray-400'}>{match.score1}</span>
-                              <span className="text-gray-400 mx-1">-</span>
-                              <span className={match.score2 > match.score1 ? 'text-green-600' : 'text-gray-400'}>{match.score2}</span>
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1 font-semibold">
-                              {match.score1 > match.score2 ? '← Winner' : 'Winner →'}
-                            </p>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-2xl mb-1">{match.team2.emoji}</div>
-                            <p className="text-sm font-bold text-gray-800">{match.team2.name}</p>
-                            <p className="text-xs text-gray-600">{match.team2.player1} & {match.team2.player2}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-            
-            <div className="p-6 border-t bg-gray-50 flex-shrink-0">
-              <button
-                onClick={() => setShowMatchHistory(false)}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tournament History Modal */}
-      {showHistory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] min-h-[400px] flex flex-col overflow-hidden shadow-2xl my-auto">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-6 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-bold flex items-center gap-2">
-                    <Trophy size={32} />
-                    Tournament History
-                  </h2>
-                  <p className="text-sm opacity-90 mt-1">Past tournaments and champions</p>
-                </div>
-                <button
-                  onClick={() => setShowHistory(false)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1 min-h-0">
-              {tournamentHistory.length === 0 ? (
-                <div className="text-center text-gray-500 py-12">
-                  <Trophy size={64} className="mx-auto mb-4 opacity-30" />
-                  <p className="text-lg font-semibold">No tournament history yet</p>
-                  <p className="text-sm mt-2">Complete tournaments to build your history</p>
-                </div>
-              ) : (
-                <>
-                  {/* Cumulative Stats Button */}
-                  <div className="mb-6">
-                    <button
-                      onClick={() => {
-                        const stats = calculateCumulativePlayerStats();
-                        setShowMatchHistory({ 
-                          name: 'All-Time Player Statistics',
-                          isAllTimeStats: true,
-                          cumulativeStats: stats 
-                        });
-                      }}
-                      className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                    >
-                      <TrendingUp size={20} />
-                      View All-Time Player Stats
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {tournamentHistory.map((tournament) => (
-                      <div key={tournament.id} className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl p-6 border-2 border-gray-200 hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <h3 className="font-bold text-xl text-gray-800 mb-1">{tournament.name}</h3>
-                            <p className="text-sm text-gray-600">{tournament.date}</p>
-                          </div>
-                          <button
-                            onClick={() => setShowMatchHistory(tournament)}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold"
-                          >
-                            View Details
-                          </button>
-                        </div>
-                        
-                        {tournament.champion && (
-                          <div className="bg-gradient-to-r from-yellow-100 to-orange-100 rounded-xl p-4 border-2 border-yellow-300">
-                            <div className="flex items-center gap-3">
-                              <div className="text-3xl">{tournament.champion.emoji}</div>
-                              <div className="flex-1">
-                                <p className="text-xs font-semibold text-yellow-700 uppercase mb-1">Champion</p>
-                                <p className="font-bold text-lg text-gray-800">{tournament.champion.name}</p>
-                                <p className="text-sm text-gray-600">{tournament.champion.player1} & {tournament.champion.player2}</p>
-                              </div>
-                              <Trophy size={32} className="text-yellow-600" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <div className="p-6 border-t bg-gray-50 flex-shrink-0">
-              <button
-                onClick={() => setShowHistory(false)}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Detailed Match History from Tournament History Modal */}
-      {showMatchHistory && typeof showMatchHistory === 'object' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] min-h-[400px] flex flex-col overflow-hidden shadow-2xl my-auto">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold">📋 {showMatchHistory.name}</h2>
-                  <p className="text-sm opacity-90 mt-1">Match Results & History</p>
-                </div>
-                <button
-                  onClick={() => setShowMatchHistory(false)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1 min-h-0">
-              {showMatchHistory.isAllTimeStats ? (
-                /* All-Time Player Stats View */
-                <div className="space-y-3">
-                  {showMatchHistory.cumulativeStats && showMatchHistory.cumulativeStats.length > 0 ? (
-                    showMatchHistory.cumulativeStats.map((player, index) => (
-                      <div key={player.name} className="bg-gradient-to-br from-white to-blue-50 rounded-xl p-4 border-2 border-gray-200 hover:border-blue-300 transition-all">
-                        <div className="flex items-center gap-4 mb-3">
-                          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-xl">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-bold text-lg text-gray-800">{player.name}</h3>
-                            <div className="flex gap-2 mt-1">
-                              {player.championships > 0 && (
-                                <span className="bg-yellow-500 text-white px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
-                                  <Trophy size={12} />
-                                  {player.championships}
-                                </span>
-                              )}
-                              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-semibold">
-                                {player.tournamentsPlayed} tournaments
-                              </span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-green-600">{player.matchesWon}</p>
-                            <p className="text-xs text-gray-600">wins</p>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-4 gap-2">
-                          <div className="bg-white rounded-lg p-2 text-center border border-gray-200">
-                            <p className="text-xs text-gray-600">Win %</p>
-                            <p className="font-bold text-sm text-blue-600">{player.winPercentage}%</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-2 text-center border border-gray-200">
-                            <p className="text-xs text-gray-600">Matches</p>
-                            <p className="font-bold text-sm">{player.matchesPlayed}</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-2 text-center border border-gray-200">
-                            <p className="text-xs text-gray-600">Avg Score</p>
-                            <p className="font-bold text-sm text-purple-600">{player.avgScorePerMatch}</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-2 text-center border border-gray-200">
-                            <p className="text-xs text-gray-600">+/-</p>
-                            <p className={`font-bold text-sm ${player.scoreDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {player.scoreDiff > 0 ? '+' : ''}{player.scoreDiff}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center text-gray-500 py-12">
-                      <TrendingUp size={64} className="mx-auto mb-4 opacity-30" />
-                      <p className="text-lg font-semibold">No player statistics yet</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Tournament Match History View */
-                <div className="space-y-3">{showMatchHistory.fixtures?.map((match) => (
-                  <div key={match.id} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-bold text-gray-600">Match {match.id}</span>
-                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
-                        Completed
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 items-center">
-                      <div className="text-center">
-                        <div className="text-2xl mb-1">{match.team1.emoji}</div>
-                        <p className="text-sm font-bold text-gray-800">{match.team1.name}</p>
-                        <p className="text-xs text-gray-600">{match.team1.player1} & {match.team1.player2}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold">
-                          <span className={match.score1 > match.score2 ? 'text-green-600' : 'text-red-600'}>{match.score1}</span>
-                          <span className="text-gray-400 mx-1">-</span>
-                          <span className={match.score2 > match.score1 ? 'text-green-600' : 'text-red-600'}>{match.score2}</span>
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {match.score1 > match.score2 ? '← Winner' : 'Winner →'}
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl mb-1">{match.team2.emoji}</div>
-                        <p className="text-sm font-bold text-gray-800">{match.team2.name}</p>
-                        <p className="text-xs text-gray-600">{match.team2.player1} & {match.team2.player2}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Final Match */}
-                {showMatchHistory.finalMatch && (
-                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-4 border-2 border-yellow-300 mt-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-bold text-gray-800">🏆 FINAL MATCH</span>
-                      <span className="bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                        Championship
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 items-center">
-                      <div className="text-center">
-                        <div className="text-3xl mb-1">{showMatchHistory.champion?.emoji}</div>
-                        <p className="text-sm font-bold text-gray-800">{showMatchHistory.champion?.name}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-3xl font-bold">
-                          <span className="text-green-600">{showMatchHistory.finalMatch.score1}</span>
-                          <span className="text-gray-400 mx-1">-</span>
-                          <span className="text-red-600">{showMatchHistory.finalMatch.score2}</span>
-                        </p>
-                        <p className="text-xs text-yellow-700 font-bold mt-1">CHAMPIONS!</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-3xl mb-1">{showMatchHistory.teams?.[1]?.emoji}</div>
-                        <p className="text-sm font-bold text-gray-800">{showMatchHistory.teams?.[1]?.name}</p>
-                      </div>
-                    </div></div>
-                )}
-              </div>
-              )}
-            </div>
-            
-            <div className="p-6 border-t bg-gray-50 flex-shrink-0">
-              <button
-                onClick={() => {
-                  setShowMatchHistory(false);
-                  setShowHistory(true);
-                }}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
-              >
-                ← Back to Tournament History
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
-          <div
-            className={`px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 ${
-              toast.type === 'error'
-                ? 'bg-red-500 text-white'
-                : 'bg-green-500 text-white'
-            }`}
-          >
-            {toast.type === 'success' && <Check size={20} />}
-            <span className="font-semibold">{toast.message}</span>
-          </div>
-        </div>
-      )}
-
-      <style jsx>{`
-        @keyframes slide-up {
-          from {
-            transform: translateY(100px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-      `}</style>
-    </>
-  );
-};
-
-// Match Card Component
-const MatchCard = ({ match, onSave }) => {
-  const [score1, setScore1] = useState(match.score1 !== null ? match.score1 : '');
-  const [score2, setScore2] = useState(match.score2 !== null ? match.score2 : '');
-  const [isEditing, setIsEditing] = useState(!match.completed);
-
-  // Update local state when match props change
-  useEffect(() => {
-    setScore1(match.score1 !== null ? match.score1 : '');
-    setScore2(match.score2 !== null ? match.score2 : '');
-  }, [match.score1, match.score2]);
-
-  const handleSave = () => {
-    onSave(match.id, score1, score2);
-    setIsEditing(false);
-  };
-
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
-
-  return (
-    <div className={`bg-white rounded-2xl shadow-lg p-6 transition-all relative ${
-      match.completed ? 'border-2 border-green-400 bg-green-50/30' : 'border-2 border-gray-200 hover:border-blue-400 hover:shadow-xl'
-    }`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-            Match {match.id}
-          </span>
-          {match.round && parseInt(match.round) > 1 && (
-            <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs font-semibold">
-              Round {match.round}
-            </span>
-          )}
-        </div>
-        {match.completed && (
-          <div className="flex items-center gap-2">
-            <span className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-              <Check size={14} /> Done
-            </span>
-            {!isEditing && (
-              <button
-                onClick={handleEdit}
-                className="text-blue-600 hover:text-blue-700 p-1"
-                title="Edit result"
-              >
-                <Edit2 size={16} />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4 relative">
-        {/* Team 1 */}
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-5 border-2 border-blue-200">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="text-3xl bg-white w-12 h-12 rounded-xl flex items-center justify-center shadow-md">
-              {match.team1.emoji}
-            </div>
-            <div>
-              <h3 className="font-bold text-lg text-gray-800">{match.team1.name}</h3>
-              <p className="text-xs text-gray-600">{match.team1.player1} & {match.team1.player2}</p>
-            </div>
-          </div>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={score1}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || /^\d+$/.test(value)) {
-                setScore1(value);
-              }
-            }}
-            disabled={!isEditing}
-            placeholder="Score"
-            className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none disabled:bg-gray-100 text-center text-2xl font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-        </div>
-
-        {/* VS Badge */}
-        <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-blue-600 to-purple-600 text-white w-14 h-14 rounded-full items-center justify-center font-bold shadow-xl z-10 text-sm">
-          VS
-        </div>
-        <div className="md:hidden text-center my-2">
-          <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-1 rounded-full text-sm font-bold">
-            VS
-          </span>
-        </div>
-
-        {/* Team 2 */}
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-5 border-2 border-purple-200">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="text-3xl bg-white w-12 h-12 rounded-xl flex items-center justify-center shadow-md">
-              {match.team2.emoji}
-            </div>
-            <div>
-              <h3 className="font-bold text-lg text-gray-800">{match.team2.name}</h3>
-              <p className="text-xs text-gray-600">{match.team2.player1} & {match.team2.player2}</p>
-            </div>
-          </div>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={score2}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || /^\d+$/.test(value)) {
-                setScore2(value);
-              }
-            }}
-            disabled={!isEditing}
-            placeholder="Score"
-            className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 text-center text-2xl font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-        </div>
-      </div>
-
-      {isEditing && (
-        <button
-          onClick={handleSave}
-          className="w-full mt-4 bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-        >
-          <Check size={18} />
-          {match.completed ? 'Update Result' : 'Save Result'}
-        </button>
-      )}
       
-      {match.completed && match.score1 !== null && match.score2 !== null && !isEditing && (
-        <div className="mt-4 text-center">
-          <p className="text-sm font-semibold text-gray-600">
-            Winner: <span className={`${match.score1 > match.score2 ? 'text-blue-600' : 'text-purple-600'} font-bold`}>
-              {match.score1 > match.score2 ? match.team1.name : match.team2.name}
-            </span>
-          </p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Final Match Card Component
-const FinalMatchCard = ({ finalists, onSave }) => {
-  const [score1, setScore1] = useState('');
-  const [score2, setScore2] = useState('');
-
-  const handleSave = () => {
-    onSave(score1, score2);
-  };
-
-  return (
-    <div className="bg-gradient-to-br from-yellow-100 via-orange-100 to-red-100 rounded-3xl shadow-2xl p-8 border-4 border-yellow-400">
-      <div className="text-center mb-8">
-        <div className="text-7xl mb-4 animate-bounce">🏆</div>
-        <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-600 to-red-600 bg-clip-text text-transparent mb-2">
-          FINAL MATCH
-        </h2>
-        <p className="text-gray-700 font-semibold text-lg">Top 2 teams battle for the championship!</p>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-6 relative mb-6">
-        {/* Finalist 1 */}
-        <div className="bg-white rounded-2xl p-6 shadow-xl transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-              🥇 1st Place
-            </div>
-            <div className="text-4xl">
-              {finalists[0].emoji}
-            </div>
-          </div>
-          <h3 className="font-bold text-2xl mb-2">{finalists[0].name}</h3>
-          <p className="text-sm text-gray-600 mb-4">{finalists[0].player1} & {finalists[0].player2}</p>
-          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg p-4 mb-4 border border-yellow-200">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="font-semibold text-gray-700">League Points:</span>
-              <span className="font-bold text-blue-600 text-lg">{finalists[0].points}</span>
-            </div>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="font-semibold text-gray-700">Matches Won:</span>
-              <span className="font-bold text-green-600">{finalists[0].won}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="font-semibold text-gray-700">Score Difference:</span>
-              <span className={`font-bold ${finalists[0].scoreDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {finalists[0].scoreDiff > 0 ? '+' : ''}{finalists[0].scoreDiff}
-              </span>
-            </div>
-          </div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Final Match Score</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={score1}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || /^\d+$/.test(value)) {
-                setScore1(value);
-              }
-            }}
-            placeholder="Enter score"
-            className="w-full px-4 py-4 border-3 border-yellow-400 rounded-xl focus:border-yellow-500 focus:ring-4 focus:ring-yellow-200 outline-none text-2xl font-bold text-center bg-gradient-to-r from-yellow-50 to-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-        </div>
-
-        {/* VS Badge */}
-        <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white w-20 h-20 rounded-full items-center justify-center font-bold text-2xl shadow-2xl z-10 animate-pulse">
-          VS
-        </div>
-        <div className="md:hidden text-center my-4">
-          <span className="bg-gradient-to-r from-yellow-500 to-red-500 text-white px-6 py-2 rounded-full text-lg font-bold shadow-lg">
-            VS
-          </span>
-        </div>
-
-        {/* Finalist 2 */}
-        <div className="bg-white rounded-2xl p-6 shadow-xl transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-gradient-to-r from-gray-400 to-gray-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-              🥈 2nd Place
-            </div>
-            <div className="text-4xl">
-              {finalists[1].emoji}
-            </div>
-          </div>
-          <h3 className="font-bold text-2xl mb-2">{finalists[1].name}</h3>
-          <p className="text-sm text-gray-600 mb-4">{finalists[1].player1} & {finalists[1].player2}</p>
-          <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg p-4 mb-4 border border-gray-200">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="font-semibold text-gray-700">League Points:</span>
-              <span className="font-bold text-blue-600 text-lg">{finalists[1].points}</span>
-            </div>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="font-semibold text-gray-700">Matches Won:</span>
-              <span className="font-bold text-green-600">{finalists[1].won}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="font-semibold text-gray-700">Score Difference:</span>
-              <span className={`font-bold ${finalists[1].scoreDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {finalists[1].scoreDiff > 0 ? '+' : ''}{finalists[1].scoreDiff}
-              </span>
-            </div>
-          </div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Final Match Score</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={score2}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || /^\d+$/.test(value)) {
-                setScore2(value);
-              }
-            }}
-            placeholder="Enter score"
-            className="w-full px-4 py-4 border-3 border-gray-400 rounded-xl focus:border-gray-500 focus:ring-4 focus:ring-gray-200 outline-none text-2xl font-bold text-center bg-gradient-to-r from-gray-50 to-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-        </div>
-      </div>
-
-      <button
-        onClick={handleSave}
-        disabled={!score1 || !score2 || score1 === score2}
-        className="w-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white py-5 rounded-2xl font-bold text-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-      >
-        <Trophy size={24} />
-        Declare Champion!
-      </button>
-      {score1 === score2 && score1 !== '' && (
-        <p className="text-center text-red-600 text-sm mt-2 font-semibold">
-          Scores must be different to declare a winner
-        </p>
-      )}
-    </div>
+      <Toast message={toast?.message} type={toast?.type} />
+    </>
   );
 };
 
