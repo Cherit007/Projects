@@ -47,6 +47,10 @@ const BadmintonFixtureGenerator = () => {
   // Player database and last tournament config
   const [playerDatabase, setPlayerDatabase] = useState([]);
   const [lastTournamentConfig, setLastTournamentConfig] = useState(null);
+  
+  // Tournament name editing
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempTournamentName, setTempTournamentName] = useState('');
 
   // Load data from localStorage on mount (including current tournament state)
   useEffect(() => {
@@ -127,9 +131,10 @@ const BadmintonFixtureGenerator = () => {
     }
   }, [tournamentHistory]);
 
-  // Initialize teams when step changes
+  // Initialize teams when step changes or numTeams changes
   useEffect(() => {
-    if (step === 'teams' && teams.length === 0) {
+    if (step === 'teams') {
+      // Always regenerate teams when entering teams step or when numTeams changes
       const newTeams = Array.from({ length: numTeams }, (_, i) => ({
         id: i + 1,
         emoji: defaultTeamConfigs[i]?.emoji || '🏸',
@@ -783,8 +788,56 @@ const BadmintonFixtureGenerator = () => {
         <div className="sticky top-0 bg-white shadow-md z-10">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-800">🏸 {tournamentName}</h1>
+              <div className="flex-1">
+                {isEditingName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={tempTournamentName}
+                      onChange={(e) => setTempTournamentName(e.target.value)}
+                      className="text-2xl md:text-3xl font-bold text-gray-800 border-2 border-blue-500 rounded-lg px-3 py-1 outline-none"
+                      autoFocus
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          setTournamentName(tempTournamentName);
+                          setIsEditingName(false);
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        setTournamentName(tempTournamentName);
+                        setIsEditingName(false);
+                      }}
+                      className="text-green-600 hover:text-green-700 p-2"
+                    >
+                      <Check size={20} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTempTournamentName(tournamentName);
+                        setIsEditingName(false);
+                      }}
+                      className="text-red-600 hover:text-red-700 p-2"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800">🏸 {tournamentName}</h1>
+                    <button
+                      onClick={() => {
+                        setTempTournamentName(tournamentName);
+                        setIsEditingName(true);
+                      }}
+                      className="text-gray-400 hover:text-gray-600 p-1"
+                      title="Edit tournament name"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                  </div>
+                )}
                 <p className="text-sm text-gray-600">{format} League Match(es) + Final</p>
               </div>
               <div className="flex gap-2 flex-wrap">
