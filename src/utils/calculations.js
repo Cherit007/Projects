@@ -206,3 +206,174 @@ export const generateFixtures = (teams, format) => {
 
   return newFixtures;
 };
+
+// ELO Rating System
+const K_FACTOR = 32;
+
+const getExpectedScore = (ratingA, ratingB) => {
+  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+};
+
+export const calculateNewElo = (currentRating, opponentRating, actualScore) => {
+  const expectedScore = getExpectedScore(currentRating, opponentRating);
+  const newRating = currentRating + K_FACTOR * (actualScore - expectedScore);
+  return Math.round(newRating);
+};
+
+export const updatePlayerRatingsAfterMatch = (playerRatings, match) => {
+  const updatedRatings = { ...playerRatings };
+  
+  const players = [
+    match.team1.player || match.team1.player1,
+    match.team1.player2,
+    match.team2.player || match.team2.player1,
+    match.team2.player2
+  ].filter(Boolean);
+  
+  players.forEach(player => {
+    if (player && !updatedRatings[player]) {
+      updatedRatings[player] = { rating: 1000, matchesPlayed: 0, history: [] };
+    }
+  });
+  
+  const team1Players = [match.team1.player || match.team1.player1, match.team1.player2].filter(Boolean);
+  const team2Players = [match.team2.player || match.team2.player1, match.team2.player2].filter(Boolean);
+  
+  const team1AvgRating = team1Players.reduce((sum, p) => sum + (updatedRatings[p]?.rating || 1000), 0) / team1Players.length;
+  const team2AvgRating = team2Players.reduce((sum, p) => sum + (updatedRatings[p]?.rating || 1000), 0) / team2Players.length;
+  
+  const team1Score = match.score1 > match.score2 ? 1 : 0;
+  const team2Score = match.score2 > match.score1 ? 1 : 0;
+  
+  team1Players.forEach(player => {
+    if (player && updatedRatings[player]) {
+      const oldRating = updatedRatings[player].rating;
+      const newRating = calculateNewElo(oldRating, team2AvgRating, team1Score);
+      const change = newRating - oldRating;
+      
+      updatedRatings[player] = {
+        rating: newRating,
+        matchesPlayed: updatedRatings[player].matchesPlayed + 1,
+        history: [
+          ...updatedRatings[player].history,
+          {
+            matchId: match.id,
+            oldRating,
+            newRating,
+            change,
+            opponent: team2Players.join(' & '),
+            result: team1Score === 1 ? 'win' : 'loss',
+            date: new Date().toISOString()
+          }
+        ]
+      };
+    }
+  });
+  
+  team2Players.forEach(player => {
+    if (player && updatedRatings[player]) {
+      const oldRating = updatedRatings[player].rating;
+      const newRating = calculateNewElo(oldRating, team1AvgRating, team2Score);
+      const change = newRating - oldRating;
+      
+      updatedRatings[player] = {
+        rating: newRating,
+        matchesPlayed: updatedRatings[player].matchesPlayed + 1,
+        history: [
+          ...updatedRatings[player].history,
+          {
+            matchId: match.id,
+            oldRating,
+            newRating,
+            change,
+            opponent: team1Players.join(' & '),
+            result: team2Score === 1 ? 'win' : 'loss',
+            date: new Date().toISOString()
+          }
+        ]
+      };
+    }
+  });
+  
+  return updatedRatings;
+};
+
+export const getPlayerLeaderboard = (playerRatings) => {
+  return Object.entries(playerRatings)
+    .map(([name, data]) => ({ name, ...data }))
+    .sort((a, b) => b.rating - a.rating);
+};
+
+// Generate knockout bracket
+export const generateKnockoutBracket = (teams, format) => {
+  const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+  let matchId = 1;
+  
+  if (format === 'semiFinal') {
+    const bracket = [
+      [
+        { id: matchId++, team1: shuffledTeams[0], team2: shuffledTeams[1], score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 3 },
+        { id: matchId++, team1: shuffledTeams[2], team2: shuffledTeams[3], score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 3 }
+      ],
+      [
+        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'final' }
+      ]
+    ];
+    return bracket;
+  } else if (format === 'fullKnockout') {
+    const bracket = [
+      [
+        { id: matchId++, team1: shuffledTeams[0], team2: shuffledTeams[1], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 5 },
+        { id: matchId++, team1: shuffledTeams[2], team2: shuffledTeams[3], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 5 },
+        { id: matchId++, team1: shuffledTeams[4], team2: shuffledTeams[5], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 6 },
+        { id: matchId++, team1: shuffledTeams[6], team2: shuffledTeams[7], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 6 }
+      ],
+      [
+        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 7 },
+        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 7 }
+      ],
+      [
+        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'final' }
+      ]
+    ];
+    return bracket;
+  }
+};
+
+export const updateBracket = (bracket, matchId, score1, score2) => {
+  const updatedBracket = JSON.parse(JSON.stringify(bracket));
+  let matchFound = false;
+  let winner = null;
+
+  for (let roundIndex = 0; roundIndex < updatedBracket.length; roundIndex++) {
+    for (let matchIndex = 0; matchIndex < updatedBracket[roundIndex].length; matchIndex++) {
+      const match = updatedBracket[roundIndex][matchIndex];
+      if (match.id === matchId) {
+        match.score1 = score1;
+        match.score2 = score2;
+        match.completed = true;
+        winner = score1 > score2 ? match.team1 : match.team2;
+        matchFound = true;
+
+        if (match.nextMatchId) {
+          for (let nextRoundIndex = roundIndex + 1; nextRoundIndex < updatedBracket.length; nextRoundIndex++) {
+            for (let nextMatchIndex = 0; nextMatchIndex < updatedBracket[nextRoundIndex].length; nextMatchIndex++) {
+              const nextMatch = updatedBracket[nextRoundIndex][nextMatchIndex];
+              if (nextMatch.id === match.nextMatchId) {
+                if (nextMatch.team1 === null) {
+                  nextMatch.team1 = winner;
+                } else if (nextMatch.team2 === null) {
+                  nextMatch.team2 = winner;
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
+    }
+    if (matchFound) break;
+  }
+
+  return updatedBracket;
+};

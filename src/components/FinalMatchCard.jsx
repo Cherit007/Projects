@@ -1,139 +1,196 @@
 import React, { useState } from 'react';
-import { Trophy } from 'lucide-react';
+import { Trophy, Sparkles } from 'lucide-react';
 
-const FinalMatchCard = ({ finalists, onSave }) => {
+const FinalMatchCard = ({ finalists, onSave, playerRatings = {} }) => {
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = () => {
-    onSave(score1, score2);
+  if (!finalists || finalists.length < 2) {
+    return (
+      <div className="bg-white rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center">
+        <Trophy size={40} className="mx-auto text-gray-300 mb-4 sm:w-12 sm:h-12" />
+        <p className="text-gray-500 text-sm sm:text-base">Finalists will be determined after league matches</p>
+      </div>
+    );
+  }
+
+  const getPlayerRating = (playerName) => {
+    return playerRatings[playerName]?.rating || 1000;
+  };
+
+  const team1Rating = Math.round((
+    getPlayerRating(finalists[0].player || finalists[0].player1) + 
+    (finalists[0].player2 ? getPlayerRating(finalists[0].player2) : 0)
+  ) / (finalists[0].player2 ? 2 : 1));
+
+  const team2Rating = Math.round((
+    getPlayerRating(finalists[1].player || finalists[1].player1) + 
+    (finalists[1].player2 ? getPlayerRating(finalists[1].player2) : 0)
+  ) / (finalists[1].player2 ? 2 : 1));
+
+  const handleSubmit = () => {
+    if (!score1 || !score2 || score1 === score2) return;
+    
+    setIsSubmitting(true);
+    setTimeout(() => {
+      onSave(parseInt(score1), parseInt(score2));
+      setIsSubmitting(false);
+    }, 1500);
   };
 
   return (
-    <div className="bg-gradient-to-br from-yellow-100 via-orange-100 to-red-100 rounded-3xl shadow-2xl p-4 sm:p-8 border-4 border-yellow-400">
-      <div className="text-center mb-6 sm:mb-8">
-        <div className="text-5xl sm:text-7xl mb-4 animate-bounce">🏆</div>
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-600 to-red-600 bg-clip-text text-transparent mb-2 px-2">
-          FINAL MATCH
-        </h2>
-        <p className="text-gray-700 font-semibold text-base sm:text-lg px-4">Top 2 teams battle for the championship!</p>
+    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white px-4 sm:px-6 py-4 sm:py-6 text-center">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 mb-2">
+          <Trophy size={24} className="sm:w-8 sm:h-8" />
+          <h2 className="text-2xl sm:text-3xl font-bold">GRAND FINAL</h2>
+          <Trophy size={24} className="sm:w-8 sm:h-8" />
+        </div>
+        <p className="text-xs sm:text-sm opacity-90">Top 2 Teams Battle for Championship</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 relative mb-6">
-        {/* Finalist 1 */}
-        <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+      <div className="p-4 sm:p-8">
+        {/* Finalists Display */}
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          {/* Finalist 1 - Champion Position */}
+          <div className="relative">
+            <div className="absolute -top-2 -left-2 bg-yellow-500 text-white text-xs font-bold px-2 sm:px-3 py-1 rounded-full flex items-center gap-1">
               🥇 1st Place
             </div>
-            <div className="text-3xl sm:text-4xl">
-              {finalists[0].emoji}
+            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 sm:border-4 border-yellow-400">
+              <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="text-3xl sm:text-5xl bg-white w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg ring-2 ring-yellow-400">
+                  {finalists[0].emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg sm:text-2xl text-gray-800 mb-1 truncate">{finalists[0].name}</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">
+                    {finalists[0].player || finalists[0].player1}
+                    {finalists[0].player2 && <> & {finalists[0].player2}</>}
+                  </p>
+                </div>
+              </div>
+
+              {/* ELO Rating */}
+              <div className="bg-white rounded-lg p-2 sm:p-3 mb-3 sm:mb-4 border border-yellow-300">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-600">ELO Rating</span>
+                  <div className="flex items-center gap-1">
+                    <Sparkles size={12} className="text-yellow-600 sm:w-3.5 sm:h-3.5" />
+                    <span className="font-bold text-yellow-600 text-sm sm:text-base">{team1Rating}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Score Input */}
+              <div>
+                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">Final Score</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={score1}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setScore1(value);
+                    }
+                  }}
+                  placeholder="0"
+                  className="w-full px-4 sm:px-6 py-3 sm:py-4 border-2 sm:border-4 border-yellow-400 rounded-xl sm:rounded-2xl focus:border-yellow-600 focus:ring-2 sm:focus:ring-4 focus:ring-yellow-200 outline-none text-center text-3xl sm:text-4xl font-bold bg-white transition-all"
+                  disabled={isSubmitting}
+                />
+              </div>
             </div>
           </div>
-          <h3 className="font-bold text-xl sm:text-2xl mb-2 break-words">{finalists[0].name}</h3>
-          <p className="text-sm text-gray-600 mb-4 break-words">{finalists[0].player1} & {finalists[0].player2}</p>
-          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg p-3 sm:p-4 mb-4 border border-yellow-200">
-            <div className="flex justify-between text-xs sm:text-sm mb-2">
-              <span className="font-semibold text-gray-700">League Points:</span>
-              <span className="font-bold text-blue-600 text-base sm:text-lg">{finalists[0].points}</span>
-            </div>
-            <div className="flex justify-between text-xs sm:text-sm mb-2">
-              <span className="font-semibold text-gray-700">Matches Won:</span>
-              <span className="font-bold text-green-600">{finalists[0].won}</span>
-            </div>
-            <div className="flex justify-between text-xs sm:text-sm">
-              <span className="font-semibold text-gray-700">Score Difference:</span>
-              <span className={`font-bold ${finalists[0].scoreDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {finalists[0].scoreDiff > 0 ? '+' : ''}{finalists[0].scoreDiff}
-              </span>
+
+          {/* Mobile VS separator */}
+          <div className="flex items-center justify-center -my-2">
+            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-8 py-2 rounded-full font-bold text-lg sm:text-xl shadow-lg">
+              VS
             </div>
           </div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Final Match Score</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={score1}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || /^\d+$/.test(value)) {
-                setScore1(value);
-              }
-            }}
-            placeholder="Enter score"
-            className="w-full px-4 py-3 sm:py-4 border-3 border-yellow-400 rounded-xl focus:border-yellow-500 focus:ring-4 focus:ring-yellow-200 outline-none text-xl sm:text-2xl font-bold text-center bg-gradient-to-r from-yellow-50 to-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-        </div>
 
-        {/* VS Badge */}
-        <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white w-20 h-20 rounded-full items-center justify-center font-bold text-2xl shadow-2xl z-10 animate-pulse">
-          VS
-        </div>
-        <div className="md:hidden text-center my-2">
-          <span className="bg-gradient-to-r from-yellow-500 to-red-500 text-white px-6 py-2 rounded-full text-lg font-bold shadow-lg">
-            VS
-          </span>
-        </div>
-
-        {/* Finalist 2 */}
-        <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl transform hover:scale-105 transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-gradient-to-r from-gray-400 to-gray-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+          {/* Finalist 2 - Runner-up Position */}
+          <div className="relative">
+            <div className="absolute -top-2 -right-2 bg-gray-400 text-white text-xs font-bold px-2 sm:px-3 py-1 rounded-full flex items-center gap-1">
               🥈 2nd Place
             </div>
-            <div className="text-3xl sm:text-4xl">
-              {finalists[1].emoji}
-            </div>
-          </div>
-          <h3 className="font-bold text-xl sm:text-2xl mb-2 break-words">{finalists[1].name}</h3>
-          <p className="text-sm text-gray-600 mb-4 break-words">{finalists[1].player1} & {finalists[1].player2}</p>
-          <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg p-3 sm:p-4 mb-4 border border-gray-200">
-            <div className="flex justify-between text-xs sm:text-sm mb-2">
-              <span className="font-semibold text-gray-700">League Points:</span>
-              <span className="font-bold text-blue-600 text-base sm:text-lg">{finalists[1].points}</span>
-            </div>
-            <div className="flex justify-between text-xs sm:text-sm mb-2">
-              <span className="font-semibold text-gray-700">Matches Won:</span>
-              <span className="font-bold text-green-600">{finalists[1].won}</span>
-            </div>
-            <div className="flex justify-between text-xs sm:text-sm">
-              <span className="font-semibold text-gray-700">Score Difference:</span>
-              <span className={`font-bold ${finalists[1].scoreDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {finalists[1].scoreDiff > 0 ? '+' : ''}{finalists[1].scoreDiff}
-              </span>
-            </div>
-          </div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Final Match Score</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={score2}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || /^\d+$/.test(value)) {
-                setScore2(value);
-              }
-            }}
-            placeholder="Enter score"
-            className="w-full px-4 py-4 border-3 border-gray-400 rounded-xl focus:border-gray-500 focus:ring-4 focus:ring-gray-200 outline-none text-2xl font-bold text-center bg-gradient-to-r from-gray-50 to-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-        </div>
-      </div>
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 sm:border-4 border-gray-300">
+              <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="text-3xl sm:text-5xl bg-white w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg ring-2 ring-gray-300">
+                  {finalists[1].emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg sm:text-2xl text-gray-800 mb-1 truncate">{finalists[1].name}</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">
+                    {finalists[1].player || finalists[1].player1}
+                    {finalists[1].player2 && <> & {finalists[1].player2}</>}
+                  </p>
+                </div>
+              </div>
 
-      <button
-        onClick={handleSave}
-        disabled={!score1 || !score2 || score1 === score2}
-        className="w-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white py-5 rounded-2xl font-bold text-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-      >
-        <Trophy size={24} />
-        Declare Champion!
-      </button>
-      {score1 === score2 && score1 !== '' && (
-        <p className="text-center text-red-600 text-sm mt-2 font-semibold">
-          Scores must be different to declare a winner
-        </p>
-      )}
+              {/* ELO Rating */}
+              <div className="bg-white rounded-lg p-2 sm:p-3 mb-3 sm:mb-4 border border-gray-300">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-600">ELO Rating</span>
+                  <div className="flex items-center gap-1">
+                    <Sparkles size={12} className="text-gray-600 sm:w-3.5 sm:h-3.5" />
+                    <span className="font-bold text-gray-600 text-sm sm:text-base">{team2Rating}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Score Input */}
+              <div>
+                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">Final Score</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={score2}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setScore2(value);
+                    }
+                  }}
+                  placeholder="0"
+                  className="w-full px-4 sm:px-6 py-3 sm:py-4 border-2 sm:border-4 border-gray-400 rounded-xl sm:rounded-2xl focus:border-gray-600 focus:ring-2 sm:focus:ring-4 focus:ring-gray-200 outline-none text-center text-3xl sm:text-4xl font-bold bg-white transition-all"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <button
+          onClick={handleSubmit}
+          disabled={!score1 || !score2 || score1 === score2 || isSubmitting}
+          className="w-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white py-4 sm:py-6 rounded-xl sm:rounded-2xl font-bold text-base sm:text-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3"
+        >
+          {isSubmitting ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white"></div>
+              <span className="text-sm sm:text-base">Determining Champion...</span>
+            </>
+          ) : (
+            <>
+              <Trophy size={20} className="sm:w-6 sm:h-6" />
+              <span className="text-sm sm:text-base">Declare Champion</span>
+            </>
+          )}
+        </button>
+
+        {score1 === score2 && score1 !== '' && (
+          <p className="text-center text-red-600 text-xs sm:text-sm mt-2 sm:mt-3 font-semibold animate-bounce">
+            ⚠️ Final scores must be different
+          </p>
+        )}
+      </div>
     </div>
   );
 };
