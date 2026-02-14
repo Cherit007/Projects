@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist -b badminton"
+    "deploy": "gh-pages -d dist -b badminton-v2"
   },
   "dependencies": {
     "@rollup/rollup-darwin-arm64": "^4.57.1",
