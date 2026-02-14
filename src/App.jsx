@@ -4,5 +4,4 @@ function App() {
   return <BadmintonFixtureGenerator />;
 }
 
-
 export default App;
