@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Users, Calendar, History, TrendingUp, Trophy, Share2, RefreshCw, X } from 'lucide-react';
+import TournamentViewer from './TournamentViewer';
 
 const SetupScreen = ({ 
   tournamentName, 
@@ -25,9 +26,11 @@ const SetupScreen = ({
   onExportData,
   onImportData,
   onDeleteTournament,
+  onViewTournament,
   allTimeStats,
   eloLeaderboard
 }) => {
+  const [selectedTournament, setSelectedTournament] = useState(null);
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -185,19 +188,26 @@ const SetupScreen = ({
               ) : (
                 <div className="space-y-4">
                   {tournamentHistory.map(tournament => (
-                    <div key={tournament.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all">
+                    <div key={tournament.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all bg-gradient-to-r from-white to-gray-50">
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
-                          <p className="text-xs text-gray-500">{tournament.date}</p>
+                          <p className="text-xs text-gray-500">{tournament.date} • {tournament.teams?.length || 0} teams</p>
                         </div>
-                        <button onClick={() => onDeleteTournament(tournament.id)}
-                          className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all">
-                          Delete
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setSelectedTournament(tournament)}
+                            className="text-blue-600 hover:text-blue-700 text-xs px-3 py-1 rounded-lg hover:bg-blue-50 transition-all font-semibold whitespace-nowrap">
+                            View
+                          </button>
+                          <button onClick={() => onDeleteTournament(tournament.id)}
+                            className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap">
+                            Delete
+                          </button>
+                        </div>
                       </div>
                       {tournament.champion && (
-                        <div className="flex items-center gap-3 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                        <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-50 to-orange-50 p-3 rounded-lg border-2 border-yellow-200">
                           <span className="text-3xl">{tournament.champion.emoji}</span>
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-gray-800 flex items-center gap-2">
@@ -313,7 +323,6 @@ const SetupScreen = ({
                         <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Rating</th>
                         <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Matches</th>
                         <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Last Change</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -344,23 +353,6 @@ const SetupScreen = ({
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-4 text-center">
-                              <button
-                                onClick={() => {
-                                  if (window.confirm(`Delete ${player.name} from leaderboard?`)) {
-                                    const updatedRatings = { ...eloLeaderboard };
-                                    delete updatedRatings[player.name];
-                                    // This will be handled by parent component
-                                    if (window.onDeletePlayer) {
-                                      window.onDeletePlayer(player.name);
-                                    }
-                                  }
-                                }}
-                                className="text-red-500 hover:text-red-700 text-sm px-2 py-1 rounded hover:bg-red-50"
-                              >
-                                Delete
-                              </button>
-                            </td>
                           </tr>
                         );
                       })}
@@ -371,6 +363,14 @@ const SetupScreen = ({
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Tournament Viewer Modal */}
+      {selectedTournament && (
+        <TournamentViewer
+          tournament={selectedTournament}
+          onClose={() => setSelectedTournament(null)}
+        />
       )}
     </div>
   );

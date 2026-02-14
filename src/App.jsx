@@ -318,39 +318,227 @@ const App = () => {
   const importData = (event) => {
     const file = event.target.files[0];
     if (!file) return;
+    
+    // Check file type
+    if (!file.name.endsWith('.json')) {
+      showToast('Please select a JSON file', 'error');
+      event.target.value = '';
+      return;
+    }
+    
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target.result);
-        if (data.tournamentHistory) setTournamentHistory(data.tournamentHistory);
-        if (data.playerDatabase) setPlayerDatabase(data.playerDatabase);
-        if (data.playerRatings) setPlayerRatings(data.playerRatings);
-        showToast('Data imported! 📤');
+        const content = e.target.result;
+        if (!content) {
+          throw new Error('File is empty');
+        }
+        
+        const data = JSON.parse(content);
+        console.log('Imported data structure:', {
+          hasTournamentHistory: !!data.tournamentHistory,
+          tournamentsCount: data.tournamentHistory?.length || 0,
+          hasPlayerDatabase: !!data.playerDatabase,
+          playersCount: data.playerDatabase?.length || 0
+        });
+        
+        let successMessage = '';
+        
+        // Import tournament history
+        if (data.tournamentHistory && Array.isArray(data.tournamentHistory)) {
+          console.log('Processing tournaments:', data.tournamentHistory.length);
+          setTournamentHistory(data.tournamentHistory);
+          
+          // Recalculate ELO ratings from imported tournament history
+          console.log('Starting ELO recalculation...');
+          const recalculatedRatings = recalculateEloFromHistory(data.tournamentHistory);
+          
+          const playerCount = Object.keys(recalculatedRatings).length;
+          console.log('ELO calculation complete:', {
+            playersCount: playerCount,
+            ratings: recalculatedRatings
+          });
+          
+          if (playerCount > 0) {
+            setPlayerRatings(recalculatedRatings);
+            localStorage.setItem('badmintonPlayerRatings', JSON.stringify(recalculatedRatings));
+            successMessage = `✅ Imported ${data.tournamentHistory.length} tournaments, ${playerCount} players rated`;
+          } else {
+            successMessage = `⚠️ Imported ${data.tournamentHistory.length} tournaments (no completed matches)`;
+          }
+        } else {
+          console.warn('No tournament history in import');
+          showToast('No tournament history found in file', 'error');
+          event.target.value = '';
+          return;
+        }
+        
+        // Import player database
+        if (data.playerDatabase && Array.isArray(data.playerDatabase)) {
+          console.log('Importing player database:', data.playerDatabase.length);
+          setPlayerDatabase(data.playerDatabase);
+        }
+        
+        showToast(successMessage);
+        
       } catch (error) {
-        showToast('Import failed', 'error');
+        console.error('Import error details:', error);
+        showToast(`Import failed: ${error.message}`, 'error');
       }
     };
+    
+    reader.onerror = () => {
+      showToast('Error reading file', 'error');
+    };
+    
     reader.readAsText(file);
     event.target.value = '';
   };
 
   const deletePlayer = (playerName) => {
-    if (window.confirm(`Delete ${playerName} from leaderboard?`)) {
-      const updatedRatings = { ...playerRatings };
-      delete updatedRatings[playerName];
-      setPlayerRatings(updatedRatings);
-      localStorage.setItem('badmintonPlayerRatings', JSON.stringify(updatedRatings));
-      showToast(`${playerName} deleted from leaderboard`);
-    }
+    // Player deletion removed - ratings are recalculated from tournament history
   };
 
-  // Make delete function available globally for modal
-  useEffect(() => {
-    window.onDeletePlayer = deletePlayer;
-    return () => {
-      delete window.onDeletePlayer;
-    };
-  }, [playerRatings]);
+  const recalculateEloFromHistory = (history) => {
+    let ratings = {};
+    
+    if (!Array.isArray(history)) {
+      console.error('Invalid history data');
+      return ratings;
+    }
+    
+    // Process all tournaments in chronological order (oldest first)
+    const sortedHistory = [...history].sort((a, b) => (a.id || 0) - (b.id || 0));
+    
+    sortedHistory.forEach(tournament => {
+      if (!tournament) return;
+      
+      // Initialize players if not present
+      const teams = tournament.teams || [];
+      teams.forEach(team => {
+        if (!team) return;
+        const players = [team.player || team.player1, team.player2].filter(Boolean);
+        players.forEach(player => {
+          if (player && !ratings[player]) {
+            ratings[player] = { rating: 1000, matchesPlayed: 0, history: [] };
+          }
+        });
+      });
+
+      // Process all matches in this tournament
+      const allMatches = [
+        ...(Array.isArray(tournament.fixtures) ? tournament.fixtures : []),
+        ...(tournament.finalMatch ? [tournament.finalMatch] : [])
+      ];
+
+      // For bracket tournaments, extract matches
+      if (Array.isArray(tournament.bracket)) {
+        tournament.bracket.forEach(round => {
+          if (Array.isArray(round)) {
+            round.forEach(match => {
+              if (match && match.completed) {
+                allMatches.push(match);
+              }
+            });
+          }
+        });
+      }
+
+      allMatches.forEach(match => {
+        if (match && match.completed && match.team1 && match.team2) {
+          try {
+            ratings = updatePlayerRatingsAfterMatchStatic(ratings, match);
+          } catch (error) {
+            console.error('Error updating ratings for match:', error);
+          }
+        }
+      });
+    });
+
+    return ratings;
+  };
+
+  const updatePlayerRatingsAfterMatchStatic = (currentRatings, match) => {
+    if (!match || !match.team1 || !match.team2) {
+      return currentRatings;
+    }
+    
+    const updatedRatings = { ...currentRatings };
+    
+    const team1Players = [match.team1.player || match.team1.player1, match.team1.player2].filter(Boolean);
+    const team2Players = [match.team2.player || match.team2.player1, match.team2.player2].filter(Boolean);
+    
+    if (team1Players.length === 0 || team2Players.length === 0) {
+      return currentRatings;
+    }
+    
+    // Initialize if needed
+    [...team1Players, ...team2Players].forEach(player => {
+      if (player && !updatedRatings[player]) {
+        updatedRatings[player] = { rating: 1000, matchesPlayed: 0, history: [] };
+      }
+    });
+
+    const team1AvgRating = team1Players.reduce((sum, p) => sum + (updatedRatings[p]?.rating || 1000), 0) / team1Players.length;
+    const team2AvgRating = team2Players.reduce((sum, p) => sum + (updatedRatings[p]?.rating || 1000), 0) / team2Players.length;
+    
+    const team1Score = match.score1 > match.score2 ? 1 : 0;
+    const team2Score = match.score2 > match.score1 ? 1 : 0;
+    
+    team1Players.forEach(player => {
+      if (!player || !updatedRatings[player]) return;
+      
+      const oldRating = updatedRatings[player].rating;
+      const expectedScore = 1 / (1 + Math.pow(10, (team2AvgRating - oldRating) / 400));
+      const newRating = Math.round(oldRating + 32 * (team1Score - expectedScore));
+      const change = newRating - oldRating;
+      
+      updatedRatings[player] = {
+        rating: newRating,
+        matchesPlayed: (updatedRatings[player].matchesPlayed || 0) + 1,
+        history: [
+          ...(updatedRatings[player].history || []),
+          {
+            matchId: match.id,
+            oldRating,
+            newRating,
+            change,
+            opponent: team2Players.join(' & '),
+            result: team1Score === 1 ? 'win' : 'loss',
+            date: new Date().toISOString()
+          }
+        ]
+      };
+    });
+    
+    team2Players.forEach(player => {
+      if (!player || !updatedRatings[player]) return;
+      
+      const oldRating = updatedRatings[player].rating;
+      const expectedScore = 1 / (1 + Math.pow(10, (team1AvgRating - oldRating) / 400));
+      const newRating = Math.round(oldRating + 32 * (team2Score - expectedScore));
+      const change = newRating - oldRating;
+      
+      updatedRatings[player] = {
+        rating: newRating,
+        matchesPlayed: (updatedRatings[player].matchesPlayed || 0) + 1,
+        history: [
+          ...(updatedRatings[player].history || []),
+          {
+            matchId: match.id,
+            oldRating,
+            newRating,
+            change,
+            opponent: team1Players.join(' & '),
+            result: team2Score === 1 ? 'win' : 'loss',
+            date: new Date().toISOString()
+          }
+        ]
+      };
+    });
+
+    return updatedRatings;
+  };
 
   return (
     <>
@@ -391,8 +579,13 @@ const App = () => {
           onImportData={importData}
           onDeleteTournament={(id) => {
             if (window.confirm('Delete this tournament?')) {
-              setTournamentHistory(prev => prev.filter(t => t.id !== id));
-              showToast('Tournament deleted');
+              const updatedHistory = tournamentHistory.filter(t => t.id !== id);
+              setTournamentHistory(updatedHistory);
+              // Recalculate ELO ratings from remaining tournaments
+              const recalculatedRatings = recalculateEloFromHistory(updatedHistory);
+              setPlayerRatings(recalculatedRatings);
+              localStorage.setItem('badmintonPlayerRatings', JSON.stringify(recalculatedRatings));
+              showToast('Tournament deleted - ratings recalculated');
             }
           }}
           allTimeStats={calculateCumulativePlayerStats(tournamentHistory)}

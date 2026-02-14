@@ -282,46 +282,51 @@ const TournamentView = ({
                 <p className="text-sm sm:text-base">No match results yet. Complete matches to see player stats.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[500px]">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Rank</th>
-                      <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Player</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Played</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Won</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Win %</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Scored</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {playerStats.map((player, index) => (
-                      <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-bold text-base sm:text-lg">
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4">
-                          <div className="flex items-center gap-2 sm:gap-3">
-                            <span className="text-lg sm:text-xl">{player.teamEmoji}</span>
-                            <div className="min-w-0">
-                              <p className="font-bold text-sm sm:text-base text-gray-800 truncate">{player.name}</p>
-                              <p className="text-xs text-gray-600 truncate">{player.team}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-sm">{player.matchesPlayed}</td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-green-600 text-sm">{player.matchesWon}</td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
-                          <span className="bg-purple-100 text-purple-700 px-2 sm:px-3 py-1 rounded-full font-bold text-xs sm:text-sm">
-                            {player.winPercentage}%
-                          </span>
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-blue-600 text-sm">{player.totalScored}</td>
+              <>
+                <div className="overflow-x-auto scrollbar-thin">
+                  <table className="w-full min-w-[600px]">
+                    <thead className="bg-gray-100 sticky top-0">
+                      <tr>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Rank</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Player</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Played</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Won</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Win %</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Scored</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {playerStats.map((player, index) => (
+                        <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-bold text-base sm:text-lg">
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4">
+                            <div className="flex items-center gap-2 sm:gap-3">
+                              <span className="text-lg sm:text-xl">{player.teamEmoji}</span>
+                              <div className="min-w-0">
+                                <p className="font-bold text-sm sm:text-base text-gray-800 truncate">{player.name}</p>
+                                <p className="text-xs text-gray-600 truncate">{player.team}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-sm">{player.matchesPlayed}</td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-green-600 text-sm">{player.matchesWon}</td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                            <span className="bg-purple-100 text-purple-700 px-2 sm:px-3 py-1 rounded-full font-bold text-xs sm:text-sm">
+                              {player.winPercentage}%
+                            </span>
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-blue-600 text-sm">{player.totalScored}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-3 sm:p-4 bg-gray-50 text-xs text-gray-600 border-t border-gray-200">
+                  <p>📱 Swipe left to see all columns • Sorted by win percentage</p>
+                </div>
+              </>
             )}
           </div>
         )}
