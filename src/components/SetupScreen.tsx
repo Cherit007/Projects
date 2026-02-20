@@ -14,23 +14,32 @@ const SetupScreen = ({
   tournamentFormat,
   setTournamentFormat,
   onNext,
+  onRecordCasualMatch,
   lastTournamentConfig,
   onReuseTournament,
   tournamentHistory,
+  casualMatches,
   showHistory,
   setShowHistory,
+  showCasualHistory,
+  setShowCasualHistory,
   showAllTimeStats,
   setShowAllTimeStats,
   showEloLeaderboard,
   setShowEloLeaderboard,
-  onExportData,
-  onImportData,
   onDeleteTournament,
+  onDeleteCasualMatch,
   onViewTournament,
   allTimeStats,
   eloLeaderboard
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
+  const formatCasualTeam = (team) => {
+    if (!team) return 'Unknown';
+    if (team.player) return team.player;
+    return [team.player1, team.player2].filter(Boolean).join(' & ');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -57,39 +66,29 @@ const SetupScreen = ({
             </div>
           )}
 
-          <div className="mb-6 grid grid-cols-2 gap-2 sm:gap-3">
-            {tournamentHistory.length > 0 && (
-              <>
-                <button onClick={() => setShowHistory(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-purple-100 text-purple-600 rounded-lg sm:rounded-xl hover:bg-purple-200 transition-all font-semibold text-xs sm:text-sm">
-                  <History size={14} className="sm:w-4 sm:h-4" /> 
-                  <span className="hidden xs:inline">History</span>
-                  <span className="xs:hidden">📜</span>
-                  <span className="hidden sm:inline">({tournamentHistory.length})</span>
-                </button>
-                <button onClick={() => setShowAllTimeStats(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-orange-100 text-orange-600 rounded-lg sm:rounded-xl hover:bg-orange-200 transition-all font-semibold text-xs sm:text-sm">
-                  <TrendingUp size={14} className="sm:w-4 sm:h-4" /> 
-                  <span className="hidden xs:inline">All-Time</span>
-                  <span className="xs:hidden">📊</span>
-                </button>
-                <button onClick={() => setShowEloLeaderboard(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-yellow-100 text-yellow-700 rounded-lg sm:rounded-xl hover:bg-yellow-200 transition-all font-semibold text-xs sm:text-sm">
-                  <Trophy size={14} className="sm:w-4 sm:h-4" /> 
-                  <span className="hidden xs:inline">ELO Rank</span>
-                  <span className="xs:hidden">🏆</span>
-                </button>
-                <button onClick={onExportData} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-green-100 text-green-600 rounded-lg sm:rounded-xl hover:bg-green-200 transition-all font-semibold text-xs sm:text-sm">
-                  <Share2 size={14} className="sm:w-4 sm:h-4" /> 
-                  <span className="hidden xs:inline">Export</span>
-                  <span className="xs:hidden">💾</span>
-                </button>
-              </>
-            )}
-            <label className="block col-span-2">
-              <input type="file" accept=".json" onChange={onImportData} className="hidden" />
-              <div className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-blue-100 text-blue-600 rounded-lg sm:rounded-xl hover:bg-blue-200 transition-all font-semibold cursor-pointer text-xs sm:text-sm">
-                <Calendar size={14} className="sm:w-4 sm:h-4" /> 
-                <span>Import Data</span>
-              </div>
-            </label>
+          <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            <button onClick={() => setShowHistory(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-purple-100 text-purple-600 rounded-lg sm:rounded-xl hover:bg-purple-200 transition-all font-semibold text-xs sm:text-sm">
+              <History size={14} className="sm:w-4 sm:h-4" /> 
+              <span className="hidden xs:inline">History</span>
+              <span className="xs:hidden">📜</span>
+              <span className="hidden sm:inline">({tournamentHistory.length})</span>
+            </button>
+            <button onClick={() => setShowCasualHistory(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-green-100 text-green-700 rounded-lg sm:rounded-xl hover:bg-green-200 transition-all font-semibold text-xs sm:text-sm">
+              <Calendar size={14} className="sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Casual</span>
+              <span className="xs:hidden">🎯</span>
+              <span className="hidden sm:inline">({casualMatches.length})</span>
+            </button>
+            <button onClick={() => setShowAllTimeStats(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-orange-100 text-orange-600 rounded-lg sm:rounded-xl hover:bg-orange-200 transition-all font-semibold text-xs sm:text-sm">
+              <TrendingUp size={14} className="sm:w-4 sm:h-4" /> 
+              <span className="hidden xs:inline">All-Time</span>
+              <span className="xs:hidden">📊</span>
+            </button>
+            <button onClick={() => setShowEloLeaderboard(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-yellow-100 text-yellow-700 rounded-lg sm:rounded-xl hover:bg-yellow-200 transition-all font-semibold text-xs sm:text-sm">
+              <Trophy size={14} className="sm:w-4 sm:h-4" /> 
+              <span className="hidden xs:inline">ELO Rank</span>
+              <span className="xs:hidden">🏆</span>
+            </button>
           </div>
 
           <div className="space-y-6">
@@ -157,12 +156,26 @@ const SetupScreen = ({
               </p>
             </div>
 
+            {/* Record Casual Match Button */}
+            <button 
+              onClick={onRecordCasualMatch}
+              className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mb-3"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Trophy size={20} /> Record Casual Match
+              </div>
+            </button>
+
             <button onClick={onNext} disabled={!tournamentName.trim()}
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50">
               <div className="flex items-center justify-center gap-2">
-                <Users size={20} /> Next: Enter Teams
+                <Users size={20} /> Start Tournament
               </div>
             </button>
+
+            <p className="text-center text-xs text-gray-500 mt-3">
+              💡 Record individual matches or start a full tournament
+            </p>
           </div>
         </div>
       </div>
@@ -223,6 +236,63 @@ const SetupScreen = ({
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Casual Match History Modal */}
+      {showCasualHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between">
+              <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Calendar size={24} /> Casual Match History
+              </h3>
+              <button onClick={() => setShowCasualHistory(false)} className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
+              {casualMatches.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p>No casual match history yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {casualMatches.map((match, index) => {
+                    const team1Name = formatCasualTeam(match.team1);
+                    const team2Name = formatCasualTeam(match.team2);
+                    const score1 = Number(match.score1);
+                    const score2 = Number(match.score2);
+                    const isTeam1Winner = score1 > score2;
+                    const matchId = match.id || match.appwriteId;
+                    return (
+                      <div key={matchId || index} className="border-2 border-gray-200 rounded-xl p-4 bg-gradient-to-r from-white to-gray-50">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="min-w-0">
+                            <p className="text-xs text-gray-500 mb-1">
+                              {match.matchType === 'doubles' ? '👥 Doubles' : '🎯 Singles'} • {new Date(match.date || match.createdAt || Date.now()).toLocaleString()}
+                            </p>
+                            <p className="font-semibold text-gray-800 truncate">
+                              <span className={isTeam1Winner ? 'text-green-700' : ''}>{team1Name}</span> vs <span className={!isTeam1Winner ? 'text-green-700' : ''}>{team2Name}</span>
+                            </p>
+                            <p className="text-sm text-gray-700 mt-1">Score: {score1} - {score2}</p>
+                          </div>
+                          <button
+                            onClick={() => onDeleteCasualMatch(matchId)}
+                            disabled={!matchId}
+                            className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

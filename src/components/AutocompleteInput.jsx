@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Users } from 'lucide-react';
 
 const AutocompleteInput = ({ 
@@ -9,32 +9,31 @@ const AutocompleteInput = ({
   className = "" 
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
-  const inputRef = useRef(null);
-  const dropdownRef = useRef(null);
+  const containerRef = useRef(null);
 
-  // Filter suggestions based on input
-  useEffect(() => {
-    if (value && value.trim() !== '') {
-      const searchTerm = value.toLowerCase().trim();
-      const filtered = playerDatabase
-        .filter(player => player.toLowerCase().includes(searchTerm))
-        .slice(0, 5);
-      setSuggestions(filtered);
-    } else {
-      setSuggestions([]);
+  const suggestions = useMemo(() => {
+    const normalizedPlayers = playerDatabase
+      .filter(player => typeof player === 'string' && player.trim() !== '')
+      .map(player => player.trim());
+
+    const uniquePlayers = [...new Set(normalizedPlayers)];
+    const searchTerm = value.toLowerCase().trim();
+
+    if (searchTerm === '') {
+      return uniquePlayers.slice(0, 8);
     }
+
+    return uniquePlayers
+      .filter(player =>
+        player.toLowerCase().includes(searchTerm)
+      )
+      .slice(0, 8);
   }, [value, playerDatabase]);
 
-  // Close dropdown when clicking outside
+  // FIX: use mousedown and container ref
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target)
-      ) {
+      if (!containerRef.current?.contains(event.target)) {
         setShowDropdown(false);
       }
     };
@@ -49,25 +48,25 @@ const AutocompleteInput = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <input
-        ref={inputRef}
         type="text"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setShowDropdown(true);
+        }}
         onFocus={() => setShowDropdown(true)}
         placeholder={placeholder}
         className={`w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all ${className}`}
       />
+
       {showDropdown && suggestions.length > 0 && (
-        <div
-          ref={dropdownRef}
-          className="absolute z-50 w-full mt-1 bg-white border-2 border-blue-300 rounded-xl shadow-lg max-h-40 overflow-y-auto"
-        >
+        <div className="absolute z-50 w-full mt-1 bg-white border-2 border-blue-300 rounded-xl shadow-lg max-h-40 overflow-y-auto">
           {suggestions.map((suggestion, index) => (
             <div
-              key={index}
-              onClick={() => handleSelect(suggestion)}
+              key={`${suggestion}-${index}`}
+              onMouseDown={() => handleSelect(suggestion)} 
               className="px-4 py-2 hover:bg-blue-50 cursor-pointer transition-colors flex items-center gap-2"
             >
               <Users size={14} className="text-blue-500" />

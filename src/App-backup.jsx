@@ -2,11 +2,8 @@ import React, { useState, useEffect } from 'react';
 import SetupScreen from './components/SetupScreen';
 import TeamEntry from './components/TeamEntry';
 import TournamentView from './components/Tournamentview';
-import CasualMatch from './components/CasualMatch';
 import Toast from './components/Toast';
-import { useAppwriteSync } from './hooks/useAppwriteSync';
-import { casualMatchService } from './services/casualmatchservice';
-import {
+import { 
   calculatePointsTable, 
   calculatePlayerStats, 
   calculateCumulativePlayerStats,
@@ -29,7 +26,6 @@ const App = () => {
     { emoji: '🌊', name: 'Wave Smashers', player1: 'Daniel Kim', player2: 'Olivia Wu' },
   ];
 
-  // State
   const [step, setStep] = useState('setup');
   const [tournamentName, setTournamentName] = useState('');
   const [numTeams, setNumTeams] = useState(3);
@@ -45,144 +41,80 @@ const App = () => {
   const [playerDatabase, setPlayerDatabase] = useState([]);
   const [playerRatings, setPlayerRatings] = useState({});
   const [tournamentHistory, setTournamentHistory] = useState([]);
-  const [casualMatches, setCasualMatches] = useState([]);
-  const [showCasualMatch, setShowCasualMatch] = useState(false);
   const [lastTournamentConfig, setLastTournamentConfig] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [showCasualHistory, setShowCasualHistory] = useState(false);
   const [showAllTimeStats, setShowAllTimeStats] = useState(false);
   const [showEloLeaderboard, setShowEloLeaderboard] = useState(false);
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-  // Appwrite Integration
-  const {
-    isAppwriteEnabled,
-    isConfigChecked,
-    isSyncing,
-    currentTournamentId,
-    setCurrentTournamentId,
-    sessionState,
-    loadSessionState,
-    saveSessionState,
-    clearSessionState,
-    loadFromAppwrite,
-    saveTournamentToAppwrite,
-    deleteTournamentFromAppwrite,
-    saveRatingsToAppwrite,
-    savePlayerDatabaseToAppwrite,
-    syncCurrentTournament,
-  } = useAppwriteSync(showToast);
 
-  // Load data on mount - Appwrite only
+  // Load from localStorage
   useEffect(() => {
-    if (!isConfigChecked) return;
-
-    let mounted = true;
-  
-    const loadInitialData = async () => {
-      setLoading(true);
-    
+    const savedHistory = localStorage.getItem('badmintonTournamentHistory');
+    if (savedHistory) {
       try {
-        // 1️⃣ Load session state always
-        const savedSession = loadSessionState();
-        if (mounted && savedSession) {
-          setStep(savedSession.step);
-          setTournamentName(savedSession.tournamentName);
-          setNumTeams(savedSession.numTeams);
-          setFormat(savedSession.format);
-          setGameMode(savedSession.gameMode);
-          setTournamentFormat(savedSession.tournamentFormat);
-          setTeams(savedSession.teams || []);
-          setFixtures(savedSession.fixtures || []);
-          setBracket(savedSession.bracket || []);
-          setChampion(savedSession.champion);
-          setCurrentTournamentId(savedSession.currentTournamentId);
-        }
-    
-        // 2️⃣ LOCAL MODE SUPPORT
-        if (!isAppwriteEnabled) {
-          console.log("Running in LOCAL MODE");
-    
-          const localPlayers = JSON.parse(localStorage.getItem("badminton_players") || "[]");
-          const localRatings = JSON.parse(localStorage.getItem("badminton_ratings") || "{}");
-          const localHistory = JSON.parse(localStorage.getItem("badminton_history") || "[]");
-          const localCasualMatches = JSON.parse(localStorage.getItem("badminton_casual_matches") || "[]");
-    
-          if (mounted) {
-            setPlayerDatabase(localPlayers);
-            setPlayerRatings(localRatings);
-            setTournamentHistory(localHistory);
-            setCasualMatches(localCasualMatches);
-          }
-    
-          return;
-        }
-    
-        // 3️⃣ APPWRITE MODE
-        const appwriteData = await loadFromAppwrite();
-    
-        if (mounted && appwriteData) {
-          setTournamentHistory(appwriteData.tournaments || []);
-          setPlayerDatabase(appwriteData.playerDatabase || []);
-          setPlayerRatings(appwriteData.playerRatings || {});
-        }
-    
-        const matches = await casualMatchService.getAllCasualMatches();
-        if (mounted) setCasualMatches(matches || []);
-    
-      } catch (error) {
-        console.error("Error loading:", error);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    
-    loadInitialData();
-  
-    return () => {
-      mounted = false;
-    };
-  }, [isAppwriteEnabled, isConfigChecked]); // Load after Appwrite config is resolved
+        const history = JSON.parse(savedHistory);
+        setTournamentHistory(history);
+        const allPlayers = new Set();
+        history.forEach(t => t.teams?.forEach(team => {
+          if (team.player1 || team.player) allPlayers.add(team.player1 || team.player);
+          if (team.player2) allPlayers.add(team.player2);
+        }));
+        setPlayerDatabase(Array.from(allPlayers));
+      } catch (e) {}
+    }
 
-  // Auto-save player ratings to Appwrite
+    const savedRatings = localStorage.getItem('badmintonPlayerRatings');
+    if (savedRatings) {
+      try {
+        setPlayerRatings(JSON.parse(savedRatings));
+      } catch (e) {}
+    }
+
+    const savedConfig = localStorage.getItem('badmintonLastConfig');
+    if (savedConfig) {
+      try {
+        setLastTournamentConfig(JSON.parse(savedConfig));
+      } catch (e) {}
+    }
+
+    const savedCurrentState = localStorage.getItem('badmintonCurrentTournament');
+    if (savedCurrentState) {
+      try {
+        const state = JSON.parse(savedCurrentState);
+        setStep(state.step);
+        setTournamentName(state.tournamentName);
+        setNumTeams(state.numTeams);
+        setFormat(state.format);
+        setGameMode(state.gameMode || 'doubles');
+        setTournamentFormat(state.tournamentFormat || 'league');
+        setTeams(state.teams);
+        setFixtures(state.fixtures || []);
+        setBracket(state.bracket || []);
+        setChampion(state.champion);
+      } catch (e) {}
+    }
+  }, []);
+
+  // Save to localStorage
+  useEffect(() => {
+    if (tournamentHistory.length > 0) {
+      localStorage.setItem('badmintonTournamentHistory', JSON.stringify(tournamentHistory));
+    }
+  }, [tournamentHistory]);
+
   useEffect(() => {
     if (Object.keys(playerRatings).length > 0) {
-      if (isAppwriteEnabled) {
-        saveRatingsToAppwrite(playerRatings);
-      } else {
-        localStorage.setItem("badminton_ratings", JSON.stringify(playerRatings));
-      }
+      localStorage.setItem('badmintonPlayerRatings', JSON.stringify(playerRatings));
     }
-    
-  }, [playerRatings, isAppwriteEnabled]);
+  }, [playerRatings]);
 
-  // Auto-sync current tournament state to Appwrite and save session
-// Auto-save session state (debounced)
-useEffect(() => {
-  if (step !== 'setup' && tournamentName) {
-    const timer = setTimeout(() => {
-      saveSessionState({
-        step,
-        tournamentName,
-        numTeams,
-        format,
-        gameMode,
-        tournamentFormat,
-        teams,
-        fixtures,
-        bracket,
-        champion,
-        currentTournamentId,
-      });
-    }, 500); // ✅ Debounce 500ms
+  useEffect(() => {
+    if (step !== 'setup' && tournamentName) {
+      localStorage.setItem('badmintonCurrentTournament', JSON.stringify({
+        step, tournamentName, numTeams, format, gameMode, tournamentFormat, teams, fixtures, bracket, champion
+      }));
+    }
+  }, [step, tournamentName, numTeams, format, gameMode, tournamentFormat, teams, fixtures, bracket, champion]);
 
-    return () => clearTimeout(timer);
-  }
-}, [step, tournamentName, numTeams, format, gameMode, 
-    tournamentFormat, teams, fixtures, bracket, 
-    champion, currentTournamentId, saveSessionState]);
   // Initialize teams
   useEffect(() => {
     if (step === 'teams') {
@@ -198,28 +130,23 @@ useEffect(() => {
   }, [step, numTeams]);
 
   const updatePlayerDatabase = (playerName) => {
-    if (!playerName || playerName.trim() === "") return;
-  
-    setPlayerDatabase(prev => {
-      if (prev.includes(playerName.trim())) return prev;
-  
-      const updated = [...prev, playerName.trim()];
-  
-      if (isAppwriteEnabled) {
-        savePlayerDatabaseToAppwrite(updated);
-      } else {
-        localStorage.setItem("badminton_players", JSON.stringify(updated));
-      }
-  
-      return updated;
-    });
+    if (playerName && playerName.trim() !== '') {
+      setPlayerDatabase(prev => {
+        if (!prev.includes(playerName.trim())) {
+          return [...prev, playerName.trim()];
+        }
+        return prev;
+      });
+    }
   };
-  
 
   const generateFixtures = () => {
     setLoading(true);
-    setLastTournamentConfig({ name: tournamentName, numTeams, format, teams, gameMode, tournamentFormat });
     
+    setLastTournamentConfig({ name: tournamentName, numTeams, format, teams, gameMode, tournamentFormat });
+    localStorage.setItem('badmintonLastConfig', JSON.stringify({ name: tournamentName, numTeams, format, teams, gameMode, tournamentFormat }));
+
+    // Initialize ELO ratings for all tournament players
     const updatedRatings = { ...playerRatings };
     teams.forEach(team => {
       const player1 = team.player || team.player1;
@@ -228,6 +155,7 @@ useEffect(() => {
       updatePlayerDatabase(player1);
       if (player2) updatePlayerDatabase(player2);
       
+      // Initialize rating if new player
       if (player1 && !updatedRatings[player1]) {
         updatedRatings[player1] = { rating: 1000, matchesPlayed: 0, history: [] };
       }
@@ -237,38 +165,14 @@ useEffect(() => {
     });
     setPlayerRatings(updatedRatings);
 
-    setTimeout(async () => {
-      let newFixtures = [];
-      let newBracket = [];
-
+    setTimeout(() => {
       if (tournamentFormat === 'league') {
-        newFixtures = createFixtures(teams, format);
+        const newFixtures = createFixtures(teams, format);
         setFixtures(newFixtures);
       } else {
-        newBracket = generateKnockoutBracket(teams, tournamentFormat);
+        const newBracket = generateKnockoutBracket(teams, tournamentFormat);
         setBracket(newBracket);
       }
-
-      // Save tournament to Appwrite
-      if (isAppwriteEnabled) {
-        const tournamentData = {
-          name: tournamentName,
-          date: new Date().toLocaleDateString(),
-          teams,
-          fixtures: newFixtures,
-          bracket: newBracket.length > 0 ? newBracket : null,
-          format,
-          gameMode,
-          tournamentFormat,
-          status: 'active',
-        };
-
-        const saved = await saveTournamentToAppwrite(tournamentData);
-        if (saved) {
-          setCurrentTournamentId(saved.id);
-        }
-      }
-
       setStep('tournament');
       setLoading(false);
       showToast('Tournament generated! 🏸');
@@ -286,8 +190,8 @@ useEffect(() => {
 
     const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, completedMatch);
     setPlayerRatings(updatedRatings);
+
     setFixtures(prev => prev.map(m => m.id === matchId ? completedMatch : m));
-    
     showToast('Result saved! ✓');
   };
 
@@ -300,31 +204,19 @@ useEffect(() => {
       match = round.find(m => m.id === matchId);
       if (match) break;
     }
-    
     if (match && match.completed) {
       const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, match);
       setPlayerRatings(updatedRatings);
       
       const finalRound = updatedBracket[updatedBracket.length - 1];
       const finalMatch = finalRound[0];
-      
       if (finalMatch.completed) {
         const winner = finalMatch.score1 > finalMatch.score2 ? finalMatch.team1 : finalMatch.team2;
         setChampion(winner);
-        
-        const tournament = {
-          id: currentTournamentId || Date.now(),
-          appwriteId: currentTournamentId,
-          name: tournamentName,
-          date: new Date().toLocaleDateString(),
-          teams,
-          bracket: updatedBracket,
-          champion: winner,
-          format: tournamentFormat,
-          gameMode
-        };
-
-        saveTournamentHistory(tournament);
+        setTournamentHistory(prev => [{ 
+          id: Date.now(), name: tournamentName, date: new Date().toLocaleDateString(), 
+          teams, bracket: updatedBracket, champion: winner, format: tournamentFormat, gameMode 
+        }, ...prev]);
       }
     }
     
@@ -354,9 +246,8 @@ useEffect(() => {
     setPlayerRatings(updatedRatings);
     setChampion(winner);
 
-    const tournament = {
-      id: currentTournamentId || Date.now(),
-      appwriteId: currentTournamentId,
+    setTournamentHistory(prev => [{
+      id: Date.now(),
       name: tournamentName,
       date: new Date().toLocaleDateString(),
       teams,
@@ -365,80 +256,14 @@ useEffect(() => {
       champion: winner,
       format,
       gameMode
-    };
+    }, ...prev]);
 
-    saveTournamentHistory(tournament);
     showToast(`🎉 ${winner.name} are the champions!`);
-  };
-
-  const saveTournamentHistory = async (tournament) => {
-    const updatedHistory = [tournament, ...tournamentHistory];
-    setTournamentHistory(updatedHistory);
-  
-    if (isAppwriteEnabled && tournament.appwriteId) {
-      await saveTournamentToAppwrite({
-        ...tournament,
-        status: 'completed',
-      });
-    } else {
-      localStorage.setItem("badminton_history", JSON.stringify(updatedHistory));
-    }
-  };
-  
-
-  const saveCasualMatch = async (matchData) => {
-    try {
-      // Determine winner
-      const winner = matchData.score1 > matchData.score2 ? 'team1' : 'team2';
-      const matchWithWinner = { ...matchData, winner };
-
-      // Update ELO ratings
-      const match = {
-        id: `casual-${Date.now()}`,
-        team1: matchData.team1,
-        team2: matchData.team2,
-        score1: matchData.score1,
-        score2: matchData.score2,
-        completed: true,
-      };
-
-      const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, match);
-      setPlayerRatings(updatedRatings);
-
-      // Save ratings to Appwrite
-      if (isAppwriteEnabled) {
-        await saveRatingsToAppwrite(updatedRatings);
-      }
-
-      // Save match to Appwrite
-      if (isAppwriteEnabled) {
-        const savedMatch = await casualMatchService.createCasualMatch(matchWithWinner);
-        setCasualMatches(prev => [savedMatch, ...prev]);
-        console.log('✅ Casual match saved to Appwrite');
-      } else {
-        const localMatch = {
-          ...matchWithWinner,
-          id: `casual-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-        };
-        setCasualMatches(prev => {
-          const updatedMatches = [localMatch, ...prev];
-          localStorage.setItem("badminton_casual_matches", JSON.stringify(updatedMatches));
-          return updatedMatches;
-        });
-      }
-
-      showToast('✅ Match recorded & ELO updated!');
-      setShowCasualMatch(false);
-    } catch (error) {
-      console.error('Error saving casual match:', error);
-      showToast('Failed to save match', 'error');
-    }
   };
 
   const resetTournament = () => {
     if (window.confirm('Start new tournament?')) {
-      clearSessionState();
+      localStorage.removeItem('badmintonCurrentTournament');
       setStep('setup');
       setTournamentName('');
       setNumTeams(3);
@@ -446,7 +271,6 @@ useEffect(() => {
       setFixtures([]);
       setBracket([]);
       setChampion(null);
-      setCurrentTournamentId(null);
     }
   };
 
@@ -454,8 +278,6 @@ useEffect(() => {
     setFixtures([]);
     setBracket([]);
     setChampion(null);
-    setCurrentTournamentId(null);
-    
     setTimeout(() => {
       if (tournamentFormat === 'league') {
         const newFixtures = createFixtures(teams, format);
@@ -468,14 +290,130 @@ useEffect(() => {
     }, 500);
   };
 
-  const recalculateEloFromHistory = (history, casualMatchHistory = []) => {
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const exportAllData = () => {
+    const dataStr = JSON.stringify({ 
+      exportDate: new Date().toISOString(), 
+      tournamentHistory, 
+      playerDatabase, 
+      playerRatings, 
+      version: '3.0' 
+    }, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `badminton-data-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Data exported! 📥');
+  };
+
+  const importData = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Check file type
+    if (!file.name.endsWith('.json')) {
+      showToast('Please select a JSON file', 'error');
+      event.target.value = '';
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target.result;
+        if (!content) {
+          throw new Error('File is empty');
+        }
+        
+        const data = JSON.parse(content);
+        console.log('Imported data structure:', {
+          hasTournamentHistory: !!data.tournamentHistory,
+          tournamentsCount: data.tournamentHistory?.length || 0,
+          hasPlayerDatabase: !!data.playerDatabase,
+          playersCount: data.playerDatabase?.length || 0
+        });
+        
+        let successMessage = '';
+        
+        // Import tournament history
+        if (data.tournamentHistory && Array.isArray(data.tournamentHistory)) {
+          console.log('Processing tournaments:', data.tournamentHistory.length);
+          setTournamentHistory(data.tournamentHistory);
+          
+          // Recalculate ELO ratings from imported tournament history
+          console.log('Starting ELO recalculation...');
+          const recalculatedRatings = recalculateEloFromHistory(data.tournamentHistory);
+          
+          const playerCount = Object.keys(recalculatedRatings).length;
+          console.log('ELO calculation complete:', {
+            playersCount: playerCount,
+            ratings: recalculatedRatings
+          });
+          
+          if (playerCount > 0) {
+            setPlayerRatings(recalculatedRatings);
+            localStorage.setItem('badmintonPlayerRatings', JSON.stringify(recalculatedRatings));
+            successMessage = `✅ Imported ${data.tournamentHistory.length} tournaments, ${playerCount} players rated`;
+          } else {
+            successMessage = `⚠️ Imported ${data.tournamentHistory.length} tournaments (no completed matches)`;
+          }
+        } else {
+          console.warn('No tournament history in import');
+          showToast('No tournament history found in file', 'error');
+          event.target.value = '';
+          return;
+        }
+        
+        // Import player database
+        if (data.playerDatabase && Array.isArray(data.playerDatabase)) {
+          console.log('Importing player database:', data.playerDatabase.length);
+          setPlayerDatabase(data.playerDatabase);
+        }
+        
+        showToast(successMessage);
+        
+      } catch (error) {
+        console.error('Import error details:', error);
+        showToast(`Import failed: ${error.message}`, 'error');
+      }
+    };
+    
+    reader.onerror = () => {
+      showToast('Error reading file', 'error');
+    };
+    
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
+  const deletePlayer = (playerName) => {
+    // Player deletion removed - ratings are recalculated from tournament history
+  };
+
+  const recalculateEloFromHistory = (history) => {
     let ratings = {};
-    const tournamentHistoryList = Array.isArray(history) ? history : [];
-    const sortedHistory = [...tournamentHistoryList].sort((a, b) => (a.id || 0) - (b.id || 0));
+    
+    if (!Array.isArray(history)) {
+      console.error('Invalid history data');
+      return ratings;
+    }
+    
+    // Process all tournaments in chronological order (oldest first)
+    const sortedHistory = [...history].sort((a, b) => (a.id || 0) - (b.id || 0));
     
     sortedHistory.forEach(tournament => {
       if (!tournament) return;
       
+      // Initialize players if not present
       const teams = tournament.teams || [];
       teams.forEach(team => {
         if (!team) return;
@@ -487,16 +425,20 @@ useEffect(() => {
         });
       });
 
+      // Process all matches in this tournament
       const allMatches = [
         ...(Array.isArray(tournament.fixtures) ? tournament.fixtures : []),
         ...(tournament.finalMatch ? [tournament.finalMatch] : [])
       ];
 
+      // For bracket tournaments, extract matches
       if (Array.isArray(tournament.bracket)) {
         tournament.bracket.forEach(round => {
           if (Array.isArray(round)) {
             round.forEach(match => {
-              if (match && match.completed) allMatches.push(match);
+              if (match && match.completed) {
+                allMatches.push(match);
+              }
             });
           }
         });
@@ -513,31 +455,24 @@ useEffect(() => {
       });
     });
 
-    casualMatchHistory.forEach(match => {
-      if (!match || !match.team1 || !match.team2) return;
-      const normalizedMatch = {
-        ...match,
-        score1: Number(match.score1),
-        score2: Number(match.score2),
-        completed: true,
-      };
-
-      if (Number.isNaN(normalizedMatch.score1) || Number.isNaN(normalizedMatch.score2)) return;
-      ratings = updatePlayerRatingsAfterMatchStatic(ratings, normalizedMatch);
-    });
-
     return ratings;
   };
 
   const updatePlayerRatingsAfterMatchStatic = (currentRatings, match) => {
-    if (!match || !match.team1 || !match.team2) return currentRatings;
+    if (!match || !match.team1 || !match.team2) {
+      return currentRatings;
+    }
     
     const updatedRatings = { ...currentRatings };
+    
     const team1Players = [match.team1.player || match.team1.player1, match.team1.player2].filter(Boolean);
     const team2Players = [match.team2.player || match.team2.player1, match.team2.player2].filter(Boolean);
     
-    if (team1Players.length === 0 || team2Players.length === 0) return currentRatings;
+    if (team1Players.length === 0 || team2Players.length === 0) {
+      return currentRatings;
+    }
     
+    // Initialize if needed
     [...team1Players, ...team2Players].forEach(player => {
       if (player && !updatedRatings[player]) {
         updatedRatings[player] = { rating: 1000, matchesPlayed: 0, history: [] };
@@ -552,6 +487,7 @@ useEffect(() => {
     
     team1Players.forEach(player => {
       if (!player || !updatedRatings[player]) return;
+      
       const oldRating = updatedRatings[player].rating;
       const expectedScore = 1 / (1 + Math.pow(10, (team2AvgRating - oldRating) / 400));
       const newRating = Math.round(oldRating + 32 * (team1Score - expectedScore));
@@ -562,13 +498,22 @@ useEffect(() => {
         matchesPlayed: (updatedRatings[player].matchesPlayed || 0) + 1,
         history: [
           ...(updatedRatings[player].history || []),
-          { matchId: match.id, oldRating, newRating, change, opponent: team2Players.join(' & '), result: team1Score === 1 ? 'win' : 'loss', date: new Date().toISOString() }
+          {
+            matchId: match.id,
+            oldRating,
+            newRating,
+            change,
+            opponent: team2Players.join(' & '),
+            result: team1Score === 1 ? 'win' : 'loss',
+            date: new Date().toISOString()
+          }
         ]
       };
     });
     
     team2Players.forEach(player => {
       if (!player || !updatedRatings[player]) return;
+      
       const oldRating = updatedRatings[player].rating;
       const expectedScore = 1 / (1 + Math.pow(10, (team1AvgRating - oldRating) / 400));
       const newRating = Math.round(oldRating + 32 * (team2Score - expectedScore));
@@ -579,7 +524,15 @@ useEffect(() => {
         matchesPlayed: (updatedRatings[player].matchesPlayed || 0) + 1,
         history: [
           ...(updatedRatings[player].history || []),
-          { matchId: match.id, oldRating, newRating, change, opponent: team1Players.join(' & '), result: team2Score === 1 ? 'win' : 'loss', date: new Date().toISOString() }
+          {
+            matchId: match.id,
+            oldRating,
+            newRating,
+            change,
+            opponent: team1Players.join(' & '),
+            result: team2Score === 1 ? 'win' : 'loss',
+            date: new Date().toISOString()
+          }
         ]
       };
     });
@@ -602,7 +555,6 @@ useEffect(() => {
           tournamentFormat={tournamentFormat}
           setTournamentFormat={setTournamentFormat}
           onNext={() => setStep('teams')}
-          onRecordCasualMatch={() => setShowCasualMatch(true)}
           lastTournamentConfig={lastTournamentConfig}
           onReuseTournament={() => {
             if (lastTournamentConfig) {
@@ -617,72 +569,27 @@ useEffect(() => {
             }
           }}
           tournamentHistory={tournamentHistory}
-          casualMatches={casualMatches}
           showHistory={showHistory}
           setShowHistory={setShowHistory}
-          showCasualHistory={showCasualHistory}
-          setShowCasualHistory={setShowCasualHistory}
           showAllTimeStats={showAllTimeStats}
           setShowAllTimeStats={setShowAllTimeStats}
           showEloLeaderboard={showEloLeaderboard}
           setShowEloLeaderboard={setShowEloLeaderboard}
-          onDeleteTournament={async (id) => {
+          onExportData={exportAllData}
+          onImportData={importData}
+          onDeleteTournament={(id) => {
             if (window.confirm('Delete this tournament?')) {
-              const tournament = tournamentHistory.find(t => t.id === id);
-              
-              // Delete from Appwrite if applicable
-              if (isAppwriteEnabled && tournament?.appwriteId) {
-                await deleteTournamentFromAppwrite(tournament.appwriteId);
-              }
-
               const updatedHistory = tournamentHistory.filter(t => t.id !== id);
               setTournamentHistory(updatedHistory);
-              
-              const recalculatedRatings = recalculateEloFromHistory(updatedHistory, casualMatches);
+              // Recalculate ELO ratings from remaining tournaments
+              const recalculatedRatings = recalculateEloFromHistory(updatedHistory);
               setPlayerRatings(recalculatedRatings);
-              
-              // Save updated ratings to Appwrite
-              if (isAppwriteEnabled) {
-                await saveRatingsToAppwrite(recalculatedRatings);
-              } else {
-                localStorage.setItem("badminton_history", JSON.stringify(updatedHistory));
-              }
-              
+              localStorage.setItem('badmintonPlayerRatings', JSON.stringify(recalculatedRatings));
               showToast('Tournament deleted - ratings recalculated');
-            }
-          }}
-          onDeleteCasualMatch={async (id) => {
-            if (window.confirm('Delete this casual match?')) {
-              try {
-                if (isAppwriteEnabled) {
-                  await casualMatchService.deleteCasualMatch(id);
-                }
-
-                const updatedCasualMatches = casualMatches.filter(match => (match.id || match.appwriteId) !== id);
-                setCasualMatches(updatedCasualMatches);
-
-                if (!isAppwriteEnabled) {
-                  localStorage.setItem("badminton_casual_matches", JSON.stringify(updatedCasualMatches));
-                }
-
-                const recalculatedRatings = recalculateEloFromHistory(tournamentHistory, updatedCasualMatches);
-                setPlayerRatings(recalculatedRatings);
-
-                if (isAppwriteEnabled) {
-                  await saveRatingsToAppwrite(recalculatedRatings);
-                }
-
-                showToast('Casual match deleted - ratings recalculated');
-              } catch (error) {
-                console.error('Error deleting casual match:', error);
-                showToast('Failed to delete casual match', 'error');
-              }
             }
           }}
           allTimeStats={calculateCumulativePlayerStats(tournamentHistory)}
           eloLeaderboard={getPlayerLeaderboard(playerRatings)}
-          isAppwriteEnabled={isAppwriteEnabled}
-          isSyncing={isSyncing}
         />
       )}
 
@@ -717,16 +624,6 @@ useEffect(() => {
           calculatePointsTable={calculatePointsTable}
           calculatePlayerStats={calculatePlayerStats}
           getPlayerLeaderboard={getPlayerLeaderboard}
-        />
-      )}
-
-      {showCasualMatch && (
-        <CasualMatch
-          playerDatabase={playerDatabase}
-          playerRatings={playerRatings}
-          onSaveMatch={saveCasualMatch}
-          onAddPlayer={updatePlayerDatabase}
-          onClose={() => setShowCasualMatch(false)}
         />
       )}
 
