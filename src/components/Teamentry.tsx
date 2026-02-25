@@ -7,25 +7,26 @@ const TeamEntry = ({
   setTeams,
   gameMode,
   playerDatabase,
+  teamNameDatabase = [],
   onGenerate,
   loading,
   onBack
 }) => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
+    <div className="theme-page py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        <div className="theme-card rounded-2xl p-6 md:p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Enter Team Details</h2>
               <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                {playerDatabase.length > 0 ? (
+                {playerDatabase.length > 0 || teamNameDatabase.length > 0 ? (
                   <>
                     <ChevronDown size={14} className="text-blue-500" />
-                    Start typing to see {playerDatabase.length} saved names
+                    Suggestions: {playerDatabase.length} players, {teamNameDatabase.length} team names
                   </>
                 ) : (
-                  'Player names will be saved for future use'
+                  'Player and team names will be saved for future use'
                 )}
               </p>
             </div>
@@ -49,11 +50,19 @@ const TeamEntry = ({
                     }}>
                       {team.emoji}
                     </div>
-                    <input type="text" value={team.name} onChange={(e) => {
-                      const newTeams = [...teams];
-                      newTeams[index].name = e.target.value;
-                      setTeams(newTeams);
-                    }} placeholder="Team Name" className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none font-semibold" />
+                    <div className="flex-1">
+                      <AutocompleteInput
+                        value={team.name}
+                        onChange={(value) => {
+                          const newTeams = [...teams];
+                          newTeams[index].name = value;
+                          setTeams(newTeams);
+                        }}
+                        placeholder="Team Name"
+                        playerDatabase={teamNameDatabase}
+                        className="font-semibold"
+                      />
+                    </div>
                   </div>
                   
                   {gameMode === 'singles' ? (
@@ -117,7 +126,7 @@ const TeamEntry = ({
 
           <button onClick={onGenerate}
             disabled={loading || teams.some(t => !t.name || (!t.player && !t.player1) || (gameMode !== 'singles' && !t.player2))}
-            className="w-full mt-6 bg-gradient-to-r from-green-600 to-blue-600 text-white py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            className="btn-brand w-full mt-6 py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             <Calendar size={20} />
             {loading ? 'Generating...' : 'Generate Tournament'}
           </button>

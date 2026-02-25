@@ -1,1 +1,79 @@
 @import "tailwindcss";
+
+:root {
+  --bg-1: #f3f7ff;
+  --bg-2: #e9f7f2;
+  --bg-3: #fff5e9;
+  --ink-1: #0f172a;
+  --ink-2: #334155;
+  --card: rgba(255, 255, 255, 0.84);
+  --card-border: rgba(148, 163, 184, 0.25);
+  --brand-1: #0f766e;
+  --brand-2: #0ea5a4;
+  --brand-3: #1d4ed8;
+  --brand-4: #2563eb;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  color: var(--ink-1);
+  background:
+    radial-gradient(1200px 600px at -10% -20%, #dbeafe 0%, transparent 60%),
+    radial-gradient(900px 500px at 110% 0%, #d1fae5 0%, transparent 55%),
+    radial-gradient(1200px 700px at 50% 120%, #ffedd5 0%, transparent 65%),
+    linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 55%, var(--bg-3) 100%);
+  min-height: 100vh;
+}
+
+.theme-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 400px at 0% 0%, rgba(59, 130, 246, 0.14) 0%, transparent 65%),
+    radial-gradient(800px 400px at 100% 5%, rgba(16, 185, 129, 0.12) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.7), rgba(241, 245, 249, 0.55));
+}
+
+.theme-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  box-shadow:
+    0 20px 50px -25px rgba(15, 23, 42, 0.35),
+    0 8px 20px -14px rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(8px);
+}
+
+.theme-topbar {
+  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  backdrop-filter: blur(12px);
+}
+
+.theme-title {
+  background: linear-gradient(110deg, #0f766e 0%, #0ea5a4 45%, #2563eb 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.btn-brand {
+  background: linear-gradient(110deg, var(--brand-1), var(--brand-2), var(--brand-3));
+  color: #fff;
+}
+
+.btn-brand:hover {
+  filter: saturate(1.08);
+}
+
+.btn-brand-alt {
+  background: linear-gradient(110deg, #0b6178, #0ea5a4);
+  color: #fff;
+}
+
+.tab-active {
+  background: linear-gradient(110deg, #0f766e, #0ea5a4, #2563eb);
+  color: #fff;
+}

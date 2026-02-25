@@ -218,14 +218,15 @@ const generateFixtures = () => {
   /*
   <div>
     <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Teams</label>
-    <input type="number" min="3" max="12" value={numTeams}
+    <input type="text" inputMode="numeric" pattern="[0-9]*" value={String(numTeams)}
       disabled={tournamentFormat !== 'league'}
       onChange={(e) => {
         const value = e.target.value;
         if (value === '') {
           setNumTeams(3);
         } else {
-          const num = parseInt(value);
+          const numericValue = value.replace(/\D/g, '');
+          const num = parseInt(numericValue);
           if (!isNaN(num)) {
             setNumTeams(Math.max(3, Math.min(12, num)));
           }

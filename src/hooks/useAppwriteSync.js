@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { isAppwriteConfigured } from '../appwrite.config';
 import { tournamentService } from '../services/tournamentService';
 import { playerService } from '../services/playerService';
+import { appDataService } from '../services/appDataService';
 
 /**
  * Custom hook to manage Appwrite sync with session state
@@ -28,30 +29,40 @@ export const useAppwriteSync = (showToast) => {
   /**
    * Load session state from sessionStorage (for page refresh)
    */
-  const loadSessionState = useCallback(() => {
+  const loadSessionState = useCallback(async () => {
     try {
-      const saved = sessionStorage.getItem('badminton_session_state');
-      if (saved) {
-        const state = JSON.parse(saved);
-        console.log('📥 Session state available');
-        return state;
+      if (isAppwriteEnabled) {
+        const cloudState = await appDataService.getSessionState();
+        if (cloudState) return cloudState;
+      }
+
+      const localState = sessionStorage.getItem('badminton_session_state');
+      if (localState) {
+        return JSON.parse(localState);
       }
     } catch (error) {
       console.error('Error loading session state:', error);
     }
     return null;
-  }, []);
+  }, [isAppwriteEnabled]);
 
   /**
    * Save session state to sessionStorage
    */
   const saveSessionState = useCallback((state) => {
     try {
-      sessionStorage.setItem('badminton_session_state', JSON.stringify(state));
+      if (isAppwriteEnabled) {
+        appDataService.saveSessionState(state).catch((error) => {
+          console.error('Error saving cloud session state:', error);
+          sessionStorage.setItem('badminton_session_state', JSON.stringify(state));
+        });
+      } else {
+        sessionStorage.setItem('badminton_session_state', JSON.stringify(state));
+      }
     } catch (error) {
       console.error('Error saving session state:', error);
     }
-  }, []);
+  }, [isAppwriteEnabled]);
 
   /**
    * Clear session state
@@ -59,10 +70,15 @@ export const useAppwriteSync = (showToast) => {
   const clearSessionState = useCallback(() => {
     try {
       sessionStorage.removeItem('badminton_session_state');
+      if (isAppwriteEnabled) {
+        appDataService.clearSessionState().catch((error) => {
+          console.error('Error clearing cloud session state:', error);
+        });
+      }
     } catch (error) {
       console.error('Error clearing session state:', error);
     }
-  }, []);
+  }, [isAppwriteEnabled]);
 
   /**
    * Load all data from Appwrite
@@ -73,16 +89,20 @@ export const useAppwriteSync = (showToast) => {
     try {
       setIsSyncing(true);
 
-      const [tournaments, playerDb, ratings] = await Promise.all([
+      const [tournaments, playerDb, ratings, meta] = await Promise.all([
         tournamentService.getAllTournaments(),
         playerService.getPlayerDatabase(),
         playerService.getPlayerRatings(),
+        appDataService.getAppMeta().catch(() => null),
       ]);
 
       return {
         tournaments: tournaments || [],
         playerDatabase: playerDb?.players || [],
         playerRatings: ratings?.ratings || {},
+        members: meta?.members || [],
+        templates: meta?.templates || [],
+        playerPhotos: meta?.playerPhotos || {},
       };
     } catch (error) {
       console.error('Error loading from Appwrite:', error);
@@ -181,6 +201,7 @@ export const useAppwriteSync = (showToast) => {
         bracket: tournamentData.bracket,
         champion: tournamentData.champion,
         finalMatch: tournamentData.finalMatch,
+        aiSummaries: tournamentData.aiSummaries,
         status: tournamentData.champion ? 'completed' : 'active',
       });
     } catch (error) {
@@ -202,6 +223,9 @@ export const useAppwriteSync = (showToast) => {
     deleteTournamentFromAppwrite,
     saveRatingsToAppwrite,
     savePlayerDatabaseToAppwrite,
+    saveMembersToAppwrite: (members) => appDataService.saveAppMeta({ members }),
+    saveTemplatesToAppwrite: (templates) => appDataService.saveAppMeta({ templates }),
+    savePlayerPhotosToAppwrite: (playerPhotos) => appDataService.saveAppMeta({ playerPhotos }),
     syncCurrentTournament,
   };
 };

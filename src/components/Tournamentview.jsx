@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
-import { Trophy, RotateCcw, RefreshCw, Edit2, TrendingUp, Users } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Trophy, RotateCcw, RefreshCw, Edit2, TrendingUp, Users, MessageCircle, Copy, Undo2, House } from 'lucide-react';
 import LiveMatchView from './LiveMatchView';
 import MatchCard from './MatchCard';
 import FinalMatchCard from './FinalMatchCard';
 import BracketView from './BracketView';
 import BracketMatchModal from './BracketMatchModal';
+import PlayerProfileModal from './PlayerProfileModal';
+import MatchSummaryFeed from './MatchSummaryFeed';
+import { buildPlayerAdvancedProfile } from '../utils/playerProfileAnalytics';
+import { buildPlayerAchievements } from '../utils/playerAchievements';
+import { buildPlayerGamification } from '../utils/playerGamification';
+import PlayerAvatar from './PlayerAvatar';
 
 const TournamentView = ({
   tournamentName,
@@ -15,10 +21,22 @@ const TournamentView = ({
   bracket,
   teams,
   champion,
+  members,
   playerRatings,
+  gameMode,
+  tournamentHistory = [],
+  casualMatches = [],
+  aiMatchSummaries = [],
+  playerPhotos = {},
+  onUpdatePlayerPhoto,
+  inviteList = [],
   onSaveMatchResult,
+  onPrioritizeMatch,
   onSaveBracketResult,
   onSaveFinalResult,
+  canUndo,
+  onUndoLastAction,
+  onGoHome,
   onResetTournament,
   onRerunTournament,
   calculatePointsTable,
@@ -29,6 +47,9 @@ const TournamentView = ({
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempTournamentName, setTempTournamentName] = useState(tournamentName);
   const [selectedBracketMatch, setSelectedBracketMatch] = useState(null);
+  const [selectedPlayerName, setSelectedPlayerName] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState('');
 
   // Find current match (first incomplete)
   const currentMatch = tournamentFormat === 'league' 
@@ -37,7 +58,7 @@ const TournamentView = ({
 
   // Get next matches
   const nextMatches = tournamentFormat === 'league'
-    ? fixtures.filter(m => !m.completed).slice(1, 4)
+    ? fixtures.filter(m => !m.completed).slice(1)
     : [];
 
   const pointsTable = tournamentFormat === 'league' ? calculatePointsTable(teams, fixtures) : [];
@@ -53,6 +74,52 @@ const TournamentView = ({
   
   const allEloLeaderboard = getPlayerLeaderboard(playerRatings);
   const eloLeaderboard = allEloLeaderboard.filter(player => currentTournamentPlayers.has(player.name));
+  const selectedPlayerProfile = selectedPlayerName ? playerRatings[selectedPlayerName] : null;
+  const selectedPlayerTeam = selectedPlayerName
+    ? teams.find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(selectedPlayerName))
+    : null;
+  const selectedPlayerAdvancedStats = useMemo(() => buildPlayerAdvancedProfile({
+    playerName: selectedPlayerName,
+    tournamentHistory,
+    casualMatches,
+    liveTournament: {
+      tournamentName,
+      tournamentFormat,
+      gameMode,
+      fixtures,
+      bracket,
+    },
+  }), [
+    selectedPlayerName,
+    tournamentHistory,
+    casualMatches,
+    tournamentName,
+    tournamentFormat,
+    gameMode,
+    fixtures,
+    bracket,
+  ]);
+  const selectedPlayerAchievements = useMemo(() => buildPlayerAchievements({
+    playerName: selectedPlayerName,
+    playerRatings,
+    tournamentHistory,
+    casualMatches,
+  }), [selectedPlayerName, playerRatings, tournamentHistory, casualMatches]);
+  const selectedPlayerGamification = useMemo(() => buildPlayerGamification({
+    playerName: selectedPlayerName,
+    tournamentHistory,
+    casualMatches,
+  }), [selectedPlayerName, tournamentHistory, casualMatches]);
+  const eloGamificationMap = useMemo(() => Object.fromEntries(
+    eloLeaderboard.map(player => [
+      player.name,
+      buildPlayerGamification({
+        playerName: player.name,
+        tournamentHistory,
+        casualMatches,
+      }),
+    ])
+  ), [eloLeaderboard, tournamentHistory, casualMatches]);
 
   const allLeagueMatchesComplete = () => {
     return fixtures.length > 0 && fixtures.every(match => match.completed);
@@ -64,10 +131,37 @@ const TournamentView = ({
     return [table[0], table[1]];
   };
 
+  const handleCopyInvite = async (invite) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(invite.message);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = invite.message;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedInvite(invite.name);
+      setTimeout(() => setCopiedInvite(''), 1500);
+    } catch (error) {
+      console.error('Failed to copy invite:', error);
+    }
+  };
+
+  const sendAllInvites = () => {
+    inviteList
+      .filter(invite => invite.whatsappLink)
+      .forEach(invite => {
+        window.open(invite.whatsappLink, '_blank');
+      });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+    <div className="theme-page">
       {/* Header */}
-      <div className="sticky top-0 bg-white shadow-md z-10">
+      <div className="sticky top-0 theme-topbar shadow-md z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex-1">
@@ -102,14 +196,37 @@ const TournamentView = ({
               )}
               <p className="text-sm text-gray-600">
                 {tournamentFormat === 'league' && `${format} League Match(es) + Final`}
+                {(tournamentFormat === 'knockoutByes' || tournamentFormat === 'playInFinal') && 'Knockout + Byes'}
                 {tournamentFormat === 'semiFinal' && 'Semi Final + Final'}
                 {tournamentFormat === 'fullKnockout' && 'Full Knockout Bracket'}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={onUndoLastAction}
+                disabled={!canUndo}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-xl hover:bg-amber-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Undo2 size={18} />
+                <span className="hidden md:inline">Undo</span>
+              </button>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-xl hover:bg-green-200 transition-all"
+              >
+                <MessageCircle size={18} />
+                <span className="hidden md:inline">Invite ({inviteList.filter(i => i.hasPhone).length}/{inviteList.length})</span>
+              </button>
+              {champion && (
+                <button onClick={onGoHome}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold">
+                  <House size={18} />
+                  <span className="hidden md:inline">Home</span>
+                </button>
+              )}
               {champion && (
                 <button onClick={onRerunTournament}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all font-semibold">
+                  className="btn-brand flex items-center gap-2 px-4 py-2 rounded-xl hover:shadow-lg transition-all font-semibold">
                   <RefreshCw size={18} />
                   <span className="hidden md:inline">Rematch</span>
                 </button>
@@ -117,7 +234,7 @@ const TournamentView = ({
               <button onClick={onResetTournament}
                 className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-all">
                 <RotateCcw size={18} />
-                <span className="hidden md:inline">New</span>
+                <span className="hidden md:inline">Delete & New</span>
               </button>
             </div>
           </div>
@@ -126,31 +243,31 @@ const TournamentView = ({
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             <button onClick={() => setActiveTab('fixtures')}
               className={`px-3 sm:px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
-                activeTab === 'fixtures' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                activeTab === 'fixtures' ? 'tab-active' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               Fixtures
             </button>
             {tournamentFormat === 'league' && (
               <>
                 <button onClick={() => setActiveTab('table')}
                   className={`px-3 sm:px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
-                    activeTab === 'table' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    activeTab === 'table' ? 'tab-active' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   Table
                 </button>
                 <button onClick={() => setActiveTab('stats')}
                   className={`px-3 sm:px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
-                    activeTab === 'stats' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    activeTab === 'stats' ? 'tab-active' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   Stats
                 </button>
               </>
             )}
             <button onClick={() => setActiveTab('elo')}
               className={`px-3 sm:px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
-                activeTab === 'elo' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                activeTab === 'elo' ? 'tab-active' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               ELO
             </button>
             <button onClick={() => setActiveTab('final')}
               className={`px-3 sm:px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
-                activeTab === 'final' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                activeTab === 'final' ? 'tab-active' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               Final
             </button>
           </div>
@@ -161,6 +278,7 @@ const TournamentView = ({
       <div className="max-w-7xl mx-auto px-4 py-6">
         {activeTab === 'fixtures' && (
           <div className="space-y-6">
+            <MatchSummaryFeed summaries={aiMatchSummaries} />
             {tournamentFormat === 'league' ? (
               <>
                 {/* Live Match View */}
@@ -169,8 +287,12 @@ const TournamentView = ({
                     currentMatch={currentMatch}
                     onSaveScore={onSaveMatchResult}
                     nextMatches={nextMatches}
+                    onSelectUpcomingMatch={onPrioritizeMatch}
                     tournamentName={tournamentName}
                     playerRatings={playerRatings}
+                    pointsTable={pointsTable}
+                    tournamentHistory={tournamentHistory}
+                    casualMatches={casualMatches}
                   />
                 )}
 
@@ -305,7 +427,16 @@ const TournamentView = ({
                             <div className="flex items-center gap-2 sm:gap-3">
                               <span className="text-lg sm:text-xl">{player.teamEmoji}</span>
                               <div className="min-w-0">
-                                <p className="font-bold text-sm sm:text-base text-gray-800 truncate">{player.name}</p>
+                                <div className="flex items-center gap-2">
+                                  <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedPlayerName(player.name)}
+                                    className="font-bold text-sm sm:text-base text-blue-700 hover:text-blue-900 hover:underline truncate text-left"
+                                  >
+                                    {player.name}
+                                  </button>
+                                </div>
                                 <p className="text-xs text-gray-600 truncate">{player.team}</p>
                               </div>
                             </div>
@@ -364,7 +495,21 @@ const TournamentView = ({
                             {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                           </td>
                           <td className="px-2 sm:px-4 py-3 sm:py-4">
-                            <p className="font-bold text-sm sm:text-base text-gray-800 truncate">{player.name}</p>
+                            <div className="flex items-center gap-2">
+                              <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPlayerName(player.name)}
+                                className="font-bold text-sm sm:text-base text-blue-700 hover:text-blue-900 hover:underline truncate text-left"
+                              >
+                                {player.name}
+                              </button>
+                              {eloGamificationMap[player.name]?.level && (
+                                <span className="text-[10px] sm:text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full">
+                                  {eloGamificationMap[player.name].level.icon} {eloGamificationMap[player.name].level.name}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
                             <span className={`px-2 sm:px-4 py-1 sm:py-2 rounded-full font-bold text-sm sm:text-base ${
@@ -462,6 +607,91 @@ const TournamentView = ({
           </div>
         )}
       </div>
+
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 flex items-center justify-between">
+              <h3 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                <MessageCircle size={22} /> WhatsApp Invitations
+              </h3>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(85vh-90px)]">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-gray-600">
+                  Saved members: {members?.length || 0} • Ready invites: {inviteList.filter(i => i.hasPhone).length}
+                </p>
+                <button
+                  onClick={sendAllInvites}
+                  disabled={inviteList.filter(i => i.hasPhone).length === 0}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Send All
+                </button>
+              </div>
+
+              {inviteList.length === 0 ? (
+                <p className="text-gray-500 text-center py-6">No players found for invitations.</p>
+              ) : (
+                <div className="space-y-3">
+                  {inviteList.map(invite => (
+                    <div key={`${invite.name}-${invite.teamName}`} className="border border-gray-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800 truncate">{invite.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{invite.teamName} • {invite.phone || 'No WhatsApp number'}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleCopyInvite(invite)}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-1"
+                          >
+                            <Copy size={12} /> {copiedInvite === invite.name ? 'Copied' : 'Copy'}
+                          </button>
+                          {invite.whatsappLink ? (
+                            <a
+                              href={invite.whatsappLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-semibold"
+                            >
+                              WhatsApp
+                            </a>
+                          ) : (
+                            <span className="px-3 py-1 text-xs bg-red-100 text-red-600 rounded-lg font-semibold">
+                              Missing Number
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 whitespace-pre-line">{invite.message}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <PlayerProfileModal
+        playerName={selectedPlayerName}
+        profile={selectedPlayerProfile}
+        team={selectedPlayerTeam}
+        advancedStats={selectedPlayerAdvancedStats}
+        achievements={selectedPlayerAchievements}
+        gamification={selectedPlayerGamification}
+        photoUrl={selectedPlayerName ? playerPhotos[selectedPlayerName] : ''}
+        onUpdatePhoto={onUpdatePlayerPhoto}
+        onClose={() => setSelectedPlayerName(null)}
+      />
     </div>
   );
 };

@@ -182,26 +182,63 @@ export const calculateCumulativePlayerStats = (tournamentHistory) => {
   });
 };
 
-// Generate fixtures for round-robin tournament
+const buildRoundRobinRounds = (teams) => {
+  const participants = [...teams];
+  if (participants.length % 2 !== 0) {
+    participants.push(null); // BYE for odd team counts
+  }
+
+  const totalRounds = participants.length - 1;
+  const matchesPerRound = participants.length / 2;
+  const rounds = [];
+
+  let rotating = [...participants];
+  for (let roundIndex = 0; roundIndex < totalRounds; roundIndex++) {
+    const roundMatches = [];
+
+    for (let matchIndex = 0; matchIndex < matchesPerRound; matchIndex++) {
+      const teamA = rotating[matchIndex];
+      const teamB = rotating[rotating.length - 1 - matchIndex];
+
+      if (teamA && teamB) {
+        roundMatches.push([teamA, teamB]);
+      }
+    }
+
+    rounds.push(roundMatches);
+
+    // Circle method: keep first team fixed, rotate the rest.
+    const fixed = rotating[0];
+    const rest = rotating.slice(1);
+    rest.unshift(rest.pop());
+    rotating = [fixed, ...rest];
+  }
+
+  return rounds;
+};
+
+// Generate fixtures in true round-robin order for league tournaments.
 export const generateFixtures = (teams, format) => {
-  const matchesPerPair = parseInt(format);
+  const matchesPerPair = Math.max(1, parseInt(format, 10) || 1);
+  const baseRounds = buildRoundRobinRounds(teams);
   const newFixtures = [];
   let matchId = 1;
 
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
-      for (let round = 0; round < matchesPerPair; round++) {
+  for (let cycle = 0; cycle < matchesPerPair; cycle++) {
+    baseRounds.forEach((roundMatches, roundIndex) => {
+      roundMatches.forEach(([teamA, teamB]) => {
+        const isReturnLeg = cycle % 2 === 1;
         newFixtures.push({
           id: matchId++,
-          team1: teams[i],
-          team2: teams[j],
+          team1: isReturnLeg ? teamB : teamA,
+          team2: isReturnLeg ? teamA : teamB,
           score1: null,
           score2: null,
           completed: false,
-          round: round + 1,
+          round: cycle * baseRounds.length + roundIndex + 1,
         });
-      }
-    }
+      });
+    });
   }
 
   return newFixtures;
@@ -304,39 +341,136 @@ export const getPlayerLeaderboard = (playerRatings) => {
     .sort((a, b) => b.rating - a.rating);
 };
 
+const getNextPowerOfTwo = (value) => {
+  let power = 1;
+  while (power < value) power *= 2;
+  return power;
+};
+
+const getKnockoutRoundLabel = (roundIndex, totalRounds, isPlayInRound) => {
+  if (isPlayInRound && roundIndex === 0) return 'playin';
+
+  const roundsFromFinal = totalRounds - roundIndex;
+  if (roundsFromFinal === 1) return 'final';
+  if (roundsFromFinal === 2) return 'semi';
+  if (roundsFromFinal === 3) return 'quarter';
+  if (roundsFromFinal === 4) return 'round16';
+  return `round${roundIndex + 1}`;
+};
+
+const autoAdvanceByeWinners = (bracket) => {
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (let roundIndex = 0; roundIndex < bracket.length; roundIndex++) {
+      for (let matchIndex = 0; matchIndex < bracket[roundIndex].length; matchIndex++) {
+        const match = bracket[roundIndex][matchIndex];
+        if (!match || match.completed) continue;
+
+        const hasTeam1 = Boolean(match.team1);
+        const hasTeam2 = Boolean(match.team2);
+
+        // Auto-advance only for non-final rounds; finals must be played.
+        if (((hasTeam1 && !hasTeam2) || (!hasTeam1 && hasTeam2)) && match.nextMatchId) {
+          const winner = hasTeam1 ? match.team1 : match.team2;
+          match.score1 = hasTeam1 ? 1 : 0;
+          match.score2 = hasTeam1 ? 0 : 1;
+          match.completed = true;
+
+          if (match.nextMatchId) {
+            for (let nextRoundIndex = roundIndex + 1; nextRoundIndex < bracket.length; nextRoundIndex++) {
+              const nextMatch = bracket[nextRoundIndex].find(m => m.id === match.nextMatchId);
+              if (!nextMatch) continue;
+              if (!nextMatch.team1) {
+                nextMatch.team1 = winner;
+              } else if (!nextMatch.team2) {
+                nextMatch.team2 = winner;
+              }
+              break;
+            }
+          }
+
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return bracket;
+};
+
+const generateKnockoutBracketWithByes = (teams) => {
+  const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+  const bracketSize = getNextPowerOfTwo(shuffledTeams.length);
+  const totalRounds = Math.log2(bracketSize);
+  const firstRoundMatches = bracketSize / 2;
+  const matchesToPlayInFirstRound = shuffledTeams.length - firstRoundMatches;
+  const isPlayInRound = shuffledTeams.length === 3;
+
+  let matchId = 1;
+  const roundSizes = Array.from({ length: totalRounds }, (_, roundIndex) =>
+    bracketSize / Math.pow(2, roundIndex + 1)
+  );
+  const bracket = roundSizes.map((size, roundIndex) =>
+    Array.from({ length: size }, () => ({
+      id: matchId++,
+      team1: null,
+      team2: null,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: getKnockoutRoundLabel(roundIndex, totalRounds, isPlayInRound),
+      nextMatchId: null,
+    }))
+  );
+
+  // First round: only the required matches are played, remaining teams get byes.
+  let teamCursor = 0;
+  for (let i = 0; i < firstRoundMatches; i++) {
+    const match = bracket[0][i];
+    if (i < matchesToPlayInFirstRound) {
+      match.team1 = shuffledTeams[teamCursor++] || null;
+      match.team2 = shuffledTeams[teamCursor++] || null;
+    } else {
+      match.team1 = shuffledTeams[teamCursor++] || null;
+      match.team2 = null;
+    }
+  }
+
+  // Wire next match ids (binary tree progression).
+  for (let roundIndex = 0; roundIndex < bracket.length - 1; roundIndex++) {
+    for (let matchIndex = 0; matchIndex < bracket[roundIndex].length; matchIndex++) {
+      const nextMatch = bracket[roundIndex + 1][Math.floor(matchIndex / 2)];
+      bracket[roundIndex][matchIndex].nextMatchId = nextMatch?.id || null;
+    }
+  }
+
+  return autoAdvanceByeWinners(bracket);
+};
+
 // Generate knockout bracket
 export const generateKnockoutBracket = (teams, format) => {
-  const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
-  let matchId = 1;
+  if (format === 'knockoutByes') {
+    return generateKnockoutBracketWithByes(teams);
+  }
   
-  if (format === 'semiFinal') {
+  if (format === 'playInFinal') {
+    const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
     const bracket = [
       [
-        { id: matchId++, team1: shuffledTeams[0], team2: shuffledTeams[1], score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 3 },
-        { id: matchId++, team1: shuffledTeams[2], team2: shuffledTeams[3], score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 3 }
+        { id: 1, team1: shuffledTeams[0], team2: shuffledTeams[1], score1: null, score2: null, completed: false, round: 'playin', nextMatchId: 2 }
       ],
       [
-        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'final' }
+        { id: 2, team1: shuffledTeams[2], team2: null, score1: null, score2: null, completed: false, round: 'final' }
       ]
     ];
-    return bracket;
+    return autoAdvanceByeWinners(bracket);
+  } else if (format === 'semiFinal') {
+    return generateKnockoutBracketWithByes(teams.slice(0, 4));
   } else if (format === 'fullKnockout') {
-    const bracket = [
-      [
-        { id: matchId++, team1: shuffledTeams[0], team2: shuffledTeams[1], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 5 },
-        { id: matchId++, team1: shuffledTeams[2], team2: shuffledTeams[3], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 5 },
-        { id: matchId++, team1: shuffledTeams[4], team2: shuffledTeams[5], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 6 },
-        { id: matchId++, team1: shuffledTeams[6], team2: shuffledTeams[7], score1: null, score2: null, completed: false, round: 'quarter', nextMatchId: 6 }
-      ],
-      [
-        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 7 },
-        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'semi', nextMatchId: 7 }
-      ],
-      [
-        { id: matchId++, team1: null, team2: null, score1: null, score2: null, completed: false, round: 'final' }
-      ]
-    ];
-    return bracket;
+    return generateKnockoutBracketWithByes(teams.slice(0, 8));
   }
 };
 

@@ -1,4 +1,4 @@
-import { Client, Databases, Account, ID, Query } from 'appwrite';
+import { Client, Databases, Account, Storage, ID, Query } from 'appwrite';
 
 // Appwrite Configuration
 const APPWRITE_ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1';
@@ -11,6 +11,12 @@ export const COLLECTIONS = {
   PLAYERS: import.meta.env.VITE_APPWRITE_COLLECTION_PLAYERS,
   RATINGS: import.meta.env.VITE_APPWRITE_COLLECTION_RATINGS,
   CASUAL_MATCHES: import.meta.env.VITE_APPWRITE_COLLECTION_CASUAL_MATCHES,
+  APP_META: import.meta.env.VITE_APPWRITE_COLLECTION_APP_META || '',
+  SESSION_STATE: import.meta.env.VITE_APPWRITE_COLLECTION_SESSION_STATE || '',
+};
+
+export const BUCKETS = {
+  PLAYER_PHOTOS: import.meta.env.VITE_APPWRITE_BUCKET_PLAYER_PHOTOS || '',
 };
 
 // Initialize Appwrite Client
@@ -21,6 +27,7 @@ const client = new Client()
 // Initialize Services
 export const databases = new Databases(client);
 export const account = new Account(client);
+export const storage = new Storage(client);
 
 // Export for direct use
 export { client, ID, Query };

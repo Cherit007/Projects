@@ -1,6 +1,39 @@
-import React, { useState } from 'react';
-import { Users, Calendar, History, TrendingUp, Trophy, Share2, RefreshCw, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Users, Calendar, History, TrendingUp, Trophy, RefreshCw, X, Undo2, Sparkles, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
+import TemplateManager from './TemplateManager';
+import PlayerProfileModal from './PlayerProfileModal';
+import { buildPlayerAdvancedProfile } from '../utils/playerProfileAnalytics';
+import { buildPlayerAchievements } from '../utils/playerAchievements';
+import { buildPlayerGamification } from '../utils/playerGamification';
+import PairingAnalyticsModal from './pairing/PairingAnalyticsModal';
+import FormPowerRankingsModal from './rankings/FormPowerRankingsModal';
+import PlayerAvatar from './PlayerAvatar';
+
+const ActionButton = ({
+  icon: Icon,
+  title,
+  subtitle,
+  className,
+  onClick,
+  disabled = false,
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`w-full text-left rounded-xl px-3 py-2.5 transition-all border ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+  >
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5">
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-tight">{title}</p>
+        <p className="text-xs opacity-80 mt-0.5 leading-tight">{subtitle}</p>
+      </div>
+    </div>
+  </button>
+);
 
 const SetupScreen = ({ 
   tournamentName, 
@@ -19,6 +52,11 @@ const SetupScreen = ({
   onReuseTournament,
   tournamentHistory,
   casualMatches,
+  playerDatabase,
+  teamNameDatabase,
+  members,
+  onAddMember,
+  onDeleteMember,
   showHistory,
   setShowHistory,
   showCasualHistory,
@@ -27,68 +65,209 @@ const SetupScreen = ({
   setShowAllTimeStats,
   showEloLeaderboard,
   setShowEloLeaderboard,
+  tournamentTemplates,
+  onSaveTemplate,
+  onApplyTemplate,
+  onDeleteTemplate,
+  canUndo,
+  onUndoLastAction,
   onDeleteTournament,
   onDeleteCasualMatch,
-  onViewTournament,
   allTimeStats,
-  eloLeaderboard
+  eloLeaderboard,
+  playerRatings,
+  pairingAnalytics,
+  formPowerRankings,
+  playerPhotos = {},
+  onUpdatePlayerPhoto
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [memberName, setMemberName] = useState('');
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberError, setMemberError] = useState('');
+  const [numTeamsInput, setNumTeamsInput] = useState(String(numTeams));
+  const [selectedPlayerName, setSelectedPlayerName] = useState(null);
+  const [showPairingAnalytics, setShowPairingAnalytics] = useState(false);
+  const [showPowerRankings, setShowPowerRankings] = useState(false);
+  const [showAdvancedActions, setShowAdvancedActions] = useState(false);
+
+  useEffect(() => {
+    setNumTeamsInput(String(numTeams));
+  }, [numTeams]);
+
   const formatCasualTeam = (team) => {
     if (!team) return 'Unknown';
     if (team.player) return team.player;
     return [team.player1, team.player2].filter(Boolean).join(' & ');
   };
 
+  const selectedPlayerProfile = selectedPlayerName ? playerRatings?.[selectedPlayerName] : null;
+  const selectedPlayerTeam = selectedPlayerName
+    ? [...(tournamentHistory || [])]
+        .reverse()
+        .flatMap(tournament => tournament?.teams || [])
+        .find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(selectedPlayerName))
+    : null;
+  const selectedPlayerAdvancedStats = useMemo(() => buildPlayerAdvancedProfile({
+    playerName: selectedPlayerName,
+    tournamentHistory,
+    casualMatches,
+  }), [selectedPlayerName, tournamentHistory, casualMatches]);
+  const selectedPlayerAchievements = useMemo(() => buildPlayerAchievements({
+    playerName: selectedPlayerName,
+    playerRatings,
+    tournamentHistory,
+    casualMatches,
+  }), [selectedPlayerName, playerRatings, tournamentHistory, casualMatches]);
+  const selectedPlayerGamification = useMemo(() => buildPlayerGamification({
+    playerName: selectedPlayerName,
+    tournamentHistory,
+    casualMatches,
+  }), [selectedPlayerName, tournamentHistory, casualMatches]);
+  const eloGamificationMap = useMemo(() => Object.fromEntries(
+    (eloLeaderboard || []).map(player => [
+      player.name,
+      buildPlayerGamification({
+        playerName: player.name,
+        tournamentHistory,
+        casualMatches,
+      }),
+    ])
+  ), [eloLeaderboard, tournamentHistory, casualMatches]);
+
+  const handleAddMember = () => {
+    const result = onAddMember({
+      name: memberName,
+      phone: memberPhone,
+    });
+
+    if (!result?.success) {
+      setMemberError(result?.reason || 'Unable to save member');
+      return;
+    }
+
+    setMemberName('');
+    setMemberPhone('');
+    setMemberError('');
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
+    <div className="theme-page py-8 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🏸</div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+          <h1 className="theme-title text-4xl md:text-5xl font-bold mb-2">
             Badminton Tournament
           </h1>
           <p className="text-gray-600">Professional tournament management</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-6">
+        <div className="theme-card rounded-2xl p-6 md:p-8 mb-6">
           {lastTournamentConfig && (
-            <div className="mb-6 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-300 rounded-xl p-4">
+            <div className="mb-6 bg-gradient-to-r from-emerald-50 to-cyan-50 border-2 border-emerald-200 rounded-xl p-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-700 mb-1">🔄 Previous Tournament Available</p>
                   <p className="text-xs text-gray-600">"{lastTournamentConfig.name}" - {lastTournamentConfig.numTeams} teams</p>
                 </div>
-                <button onClick={onReuseTournament} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold text-sm whitespace-nowrap">
+                <button onClick={onReuseTournament} className="btn-brand-alt flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-semibold text-sm whitespace-nowrap">
                   <RefreshCw size={16} /> Reuse
                 </button>
               </div>
             </div>
           )}
 
-          <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-            <button onClick={() => setShowHistory(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-purple-100 text-purple-600 rounded-lg sm:rounded-xl hover:bg-purple-200 transition-all font-semibold text-xs sm:text-sm">
-              <History size={14} className="sm:w-4 sm:h-4" /> 
-              <span className="hidden xs:inline">History</span>
-              <span className="xs:hidden">📜</span>
-              <span className="hidden sm:inline">({tournamentHistory.length})</span>
-            </button>
-            <button onClick={() => setShowCasualHistory(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-green-100 text-green-700 rounded-lg sm:rounded-xl hover:bg-green-200 transition-all font-semibold text-xs sm:text-sm">
-              <Calendar size={14} className="sm:w-4 sm:h-4" />
-              <span className="hidden xs:inline">Casual</span>
-              <span className="xs:hidden">🎯</span>
-              <span className="hidden sm:inline">({casualMatches.length})</span>
-            </button>
-            <button onClick={() => setShowAllTimeStats(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-orange-100 text-orange-600 rounded-lg sm:rounded-xl hover:bg-orange-200 transition-all font-semibold text-xs sm:text-sm">
-              <TrendingUp size={14} className="sm:w-4 sm:h-4" /> 
-              <span className="hidden xs:inline">All-Time</span>
-              <span className="xs:hidden">📊</span>
-            </button>
-            <button onClick={() => setShowEloLeaderboard(true)} className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-yellow-100 text-yellow-700 rounded-lg sm:rounded-xl hover:bg-yellow-200 transition-all font-semibold text-xs sm:text-sm">
-              <Trophy size={14} className="sm:w-4 sm:h-4" /> 
-              <span className="hidden xs:inline">ELO Rank</span>
-              <span className="xs:hidden">🏆</span>
-            </button>
+          <TemplateManager
+            templates={tournamentTemplates}
+            currentConfig={{ gameMode, tournamentFormat, format, numTeams }}
+            playerSuggestions={playerDatabase}
+            teamNameSuggestions={teamNameDatabase}
+            onSave={onSaveTemplate}
+            onApply={onApplyTemplate}
+            onDelete={onDeleteTemplate}
+          />
+
+          <div className="mb-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-700">Quick Access</p>
+              <button
+                type="button"
+                onClick={() => setShowAdvancedActions(prev => !prev)}
+                className="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1"
+              >
+                {showAdvancedActions ? 'Hide advanced' : 'Show advanced'}
+                {showAdvancedActions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <ActionButton
+                icon={Users}
+                title={`Members (${members.length})`}
+                subtitle="Add/update player contacts"
+                className="bg-cyan-50 text-cyan-800 border-cyan-200 hover:bg-cyan-100"
+                onClick={() => setShowMembersModal(true)}
+              />
+              <ActionButton
+                icon={History}
+                title={`Tournament History (${tournamentHistory.length})`}
+                subtitle="View/delete past tournaments"
+                className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
+                onClick={() => setShowHistory(true)}
+              />
+              <ActionButton
+                icon={Calendar}
+                title={`Casual Matches (${casualMatches.length})`}
+                subtitle="Open casual match records"
+                className="bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                onClick={() => setShowCasualHistory(true)}
+              />
+              <ActionButton
+                icon={Trophy}
+                title="ELO Leaderboard"
+                subtitle="Current rating rankings"
+                className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100"
+                onClick={() => setShowEloLeaderboard(true)}
+              />
+            </div>
+
+            {showAdvancedActions && (
+              <div className="pt-1">
+                <p className="text-xs font-semibold text-gray-600 mb-2">Advanced Tools</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <ActionButton
+                    icon={TrendingUp}
+                    title="All-Time Stats"
+                    subtitle="Career summary across tournaments"
+                    className="bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"
+                    onClick={() => setShowAllTimeStats(true)}
+                  />
+                  <ActionButton
+                    icon={Sparkles}
+                    title="Pairing Analytics"
+                    subtitle="Best combinations and chemistry"
+                    className="bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"
+                    onClick={() => setShowPairingAnalytics(true)}
+                  />
+                  <ActionButton
+                    icon={BarChart3}
+                    title="Power Rankings"
+                    subtitle="Form and momentum leaders"
+                    className="bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100"
+                    onClick={() => setShowPowerRankings(true)}
+                  />
+                  <ActionButton
+                    icon={Undo2}
+                    title="Undo Last Action"
+                    subtitle="Rollback your latest change"
+                    className="bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                    onClick={onUndoLastAction}
+                    disabled={!canUndo}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-6">
@@ -106,12 +285,23 @@ const SetupScreen = ({
               <label className="block text-sm font-semibold text-gray-700 mb-2">Tournament Format</label>
               <select value={tournamentFormat} onChange={(e) => {
                 setTournamentFormat(e.target.value);
-                if (e.target.value === 'semiFinal') setNumTeams(4);
-                else if (e.target.value === 'fullKnockout') setNumTeams(8);
-                else setNumTeams(3);
+                if (e.target.value === 'knockoutByes') {
+                  setNumTeams(4);
+                  setNumTeamsInput('4');
+                } else if (e.target.value === 'semiFinal') {
+                  setNumTeams(4);
+                  setNumTeamsInput('4');
+                } else if (e.target.value === 'fullKnockout') {
+                  setNumTeams(8);
+                  setNumTeamsInput('8');
+                } else {
+                  setNumTeams(3);
+                  setNumTeamsInput('3');
+                }
               }}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all bg-white">
                 <option value="league">📊 League + Final</option>
+                <option value="knockoutByes">🏆 Knockout + Byes (3+ teams)</option>
                 <option value="semiFinal">🏆 Semi Final + Final (4 teams)</option>
                 <option value="fullKnockout">⚔️ Full Knockout (8 teams)</option>
               </select>
@@ -123,6 +313,7 @@ const SetupScreen = ({
                 </select>
               )}
               <p className="text-xs text-gray-500 mt-2">
+                {tournamentFormat === 'knockoutByes' && '3+ teams: knockout bracket with automatic byes'}
                 {tournamentFormat === 'semiFinal' && '4 teams: 2 semi finals → 1 final'}
                 {tournamentFormat === 'fullKnockout' && '8 teams: quarters → semis → final'}
                 {tournamentFormat === 'league' && 'Round-robin, top 2 advance to final'}
@@ -137,37 +328,31 @@ const SetupScreen = ({
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Teams</label>
-              <input type="number" min="3" max="12" value={numTeams}
-                disabled={tournamentFormat !== 'league'}
+              <input type="text" inputMode="numeric" pattern="[0-9]*" value={numTeamsInput}
+                disabled={tournamentFormat !== 'league' && tournamentFormat !== 'knockoutByes'}
                 onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === '') {
-                    setNumTeams(3);
-                  } else {
-                    const num = parseInt(value);
-                    if (!isNaN(num)) {
-                      setNumTeams(Math.max(3, Math.min(12, num)));
-                    }
-                  }
+                  setNumTeamsInput(e.target.value.replace(/\D/g, ''));
                 }}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all disabled:bg-gray-100" />
               <p className="text-xs text-gray-500 mt-1">
-                {tournamentFormat === 'league' ? 'Min: 3, Max: 12 teams' : 'Fixed for this format'}
+                {tournamentFormat === 'league' && 'Min: 3, Max: 12 teams'}
+                {tournamentFormat === 'knockoutByes' && 'Min: 3, Max: 16 teams'}
+                {tournamentFormat !== 'league' && tournamentFormat !== 'knockoutByes' && 'Fixed for this format'}
               </p>
             </div>
 
             {/* Record Casual Match Button */}
             <button 
               onClick={onRecordCasualMatch}
-              className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mb-3"
+              className="btn-brand-alt w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mb-3"
             >
               <div className="flex items-center justify-center gap-2">
                 <Trophy size={20} /> Record Casual Match
               </div>
             </button>
 
-            <button onClick={onNext} disabled={!tournamentName.trim()}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50">
+            <button onClick={() => onNext(numTeamsInput)} disabled={!tournamentName.trim()}
+              className="btn-brand w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50">
               <div className="flex items-center justify-center gap-2">
                 <Users size={20} /> Start Tournament
               </div>
@@ -181,6 +366,76 @@ const SetupScreen = ({
       </div>
 
       {/* History Modal */}
+      {showMembersModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[80vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-6 flex items-center justify-between">
+              <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Users size={24} /> Tournament Members
+              </h3>
+              <button
+                onClick={() => setShowMembersModal(false)}
+                aria-label="Close members modal"
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <input
+                  type="text"
+                  value={memberName}
+                  onChange={(e) => setMemberName(e.target.value)}
+                  placeholder="Member name"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-cyan-500 outline-none transition-all"
+                />
+                <input
+                  type="text"
+                  inputMode="tel"
+                  value={memberPhone}
+                  onChange={(e) => setMemberPhone(e.target.value)}
+                  placeholder="WhatsApp number (+countrycode)"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-cyan-500 outline-none transition-all"
+                />
+              </div>
+              <button
+                onClick={handleAddMember}
+                className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
+              >
+                Add / Update Member
+              </button>
+              {memberError && (
+                <p className="text-sm text-red-600 mt-2">{memberError}</p>
+              )}
+
+              <div className="mt-5">
+                {members.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No members added yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {members.map(member => (
+                      <div key={member.id} className="flex items-center justify-between border border-gray-200 rounded-xl p-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800 truncate">{member.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{member.phone}</p>
+                        </div>
+                        <button
+                          onClick={() => onDeleteMember(member.id)}
+                          className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showHistory && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
@@ -188,7 +443,11 @@ const SetupScreen = ({
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <History size={24} /> Tournament History
               </h3>
-              <button onClick={() => setShowHistory(false)} className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all">
+              <button
+                onClick={() => setShowHistory(false)}
+                aria-label="Close tournament history"
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+              >
                 <X size={24} />
               </button>
             </div>
@@ -251,7 +510,11 @@ const SetupScreen = ({
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <Calendar size={24} /> Casual Match History
               </h3>
-              <button onClick={() => setShowCasualHistory(false)} className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all">
+              <button
+                onClick={() => setShowCasualHistory(false)}
+                aria-label="Close casual history"
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+              >
                 <X size={24} />
               </button>
             </div>
@@ -308,7 +571,11 @@ const SetupScreen = ({
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <TrendingUp size={24} /> All-Time Player Statistics
               </h3>
-              <button onClick={() => setShowAllTimeStats(false)} className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all">
+              <button
+                onClick={() => setShowAllTimeStats(false)}
+                aria-label="Close all-time stats"
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+              >
                 <X size={24} />
               </button>
             </div>
@@ -339,7 +606,16 @@ const SetupScreen = ({
                             {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                           </td>
                           <td className="px-4 py-4">
-                            <p className="font-bold text-gray-800">{player.name}</p>
+                            <div className="flex items-center gap-2">
+                              <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPlayerName(player.name)}
+                                className="font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                              >
+                                {player.name}
+                              </button>
+                            </div>
                           </td>
                           <td className="px-4 py-4 text-center">
                             <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-bold text-sm">
@@ -373,7 +649,11 @@ const SetupScreen = ({
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <Trophy size={24} /> ELO Rating Leaderboard
               </h3>
-              <button onClick={() => setShowEloLeaderboard(false)} className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all">
+              <button
+                onClick={() => setShowEloLeaderboard(false)}
+                aria-label="Close elo leaderboard"
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+              >
                 <X size={24} />
               </button>
             </div>
@@ -404,7 +684,21 @@ const SetupScreen = ({
                               {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                             </td>
                             <td className="px-4 py-4">
-                              <p className="font-bold text-gray-800">{player.name}</p>
+                              <div className="flex items-center gap-2">
+                                <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPlayerName(player.name)}
+                                  className="font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                                >
+                                  {player.name}
+                                </button>
+                                {eloGamificationMap[player.name]?.level && (
+                                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full">
+                                    {eloGamificationMap[player.name].level.icon} {eloGamificationMap[player.name].level.name}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-4 text-center">
                               <span className={`px-3 py-1 rounded-full font-bold text-sm ${
@@ -440,6 +734,32 @@ const SetupScreen = ({
         <TournamentViewer
           tournament={selectedTournament}
           onClose={() => setSelectedTournament(null)}
+        />
+      )}
+
+      <PlayerProfileModal
+        playerName={selectedPlayerName}
+        profile={selectedPlayerProfile}
+        team={selectedPlayerTeam}
+        advancedStats={selectedPlayerAdvancedStats}
+        achievements={selectedPlayerAchievements}
+        gamification={selectedPlayerGamification}
+        photoUrl={selectedPlayerName ? playerPhotos[selectedPlayerName] : ''}
+        onUpdatePhoto={onUpdatePlayerPhoto}
+        onClose={() => setSelectedPlayerName(null)}
+      />
+
+      {showPairingAnalytics && (
+        <PairingAnalyticsModal
+          analytics={pairingAnalytics}
+          onClose={() => setShowPairingAnalytics(false)}
+        />
+      )}
+
+      {showPowerRankings && (
+        <FormPowerRankingsModal
+          rankings={formPowerRankings}
+          onClose={() => setShowPowerRankings(false)}
         />
       )}
     </div>

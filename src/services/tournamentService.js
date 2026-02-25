@@ -19,6 +19,7 @@ export const tournamentService = {
         bracket: tournamentData.bracket ? JSON.stringify(tournamentData.bracket) : null,
         finalMatch: tournamentData.finalMatch ? JSON.stringify(tournamentData.finalMatch) : null,
         champion: tournamentData.champion ? JSON.stringify(tournamentData.champion) : null,
+        aiSummaries: JSON.stringify(tournamentData.aiSummaries || []),
         format: tournamentData.format || '1',
         gameMode: tournamentData.gameMode || 'doubles',
         tournamentFormat: tournamentData.tournamentFormat || 'league',
@@ -86,15 +87,17 @@ export const tournamentService = {
     try {
       const document = {};
       
-      if (updates.name) document.name = updates.name;
-      if (updates.teams) document.teams = JSON.stringify(updates.teams);
-      if (updates.fixtures) document.fixtures = JSON.stringify(updates.fixtures);
-      if (updates.bracket) document.bracket = JSON.stringify(updates.bracket);
-      if (updates.finalMatch) document.finalMatch = JSON.stringify(updates.finalMatch);
-      if (updates.champion) document.champion = JSON.stringify(updates.champion);
-      if (updates.status) document.status = updates.status;
-      if (updates.format) document.format = updates.format;
-      if (updates.gameMode) document.gameMode = updates.gameMode;
+      if (updates.name !== undefined) document.name = updates.name;
+      if (updates.teams !== undefined) document.teams = JSON.stringify(updates.teams);
+      if (updates.fixtures !== undefined) document.fixtures = JSON.stringify(updates.fixtures);
+      if (updates.bracket !== undefined) document.bracket = updates.bracket ? JSON.stringify(updates.bracket) : null;
+      if (updates.finalMatch !== undefined) document.finalMatch = updates.finalMatch ? JSON.stringify(updates.finalMatch) : null;
+      if (updates.champion !== undefined) document.champion = updates.champion ? JSON.stringify(updates.champion) : null;
+      if (updates.aiSummaries !== undefined) document.aiSummaries = JSON.stringify(updates.aiSummaries || []);
+      if (updates.status !== undefined) document.status = updates.status;
+      if (updates.format !== undefined) document.format = updates.format;
+      if (updates.gameMode !== undefined) document.gameMode = updates.gameMode;
+      if (updates.tournamentFormat !== undefined) document.tournamentFormat = updates.tournamentFormat;
 
       const response = await databases.updateDocument(
         DATABASE_ID,
@@ -140,6 +143,7 @@ export const tournamentService = {
       bracket: doc.bracket ? JSON.parse(doc.bracket) : null,
       finalMatch: doc.finalMatch ? JSON.parse(doc.finalMatch) : null,
       champion: doc.champion ? JSON.parse(doc.champion) : null,
+      aiSummaries: JSON.parse(doc.aiSummaries || '[]'),
       format: doc.format,
       gameMode: doc.gameMode,
       tournamentFormat: doc.tournamentFormat,

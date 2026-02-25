@@ -37,6 +37,11 @@ const MatchCard = ({ match, onSave }) => {
         </div>
         {match.completed && (
           <div className="flex items-center gap-2">
+            {match.upsetAlert && (
+              <span className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                UPSET
+              </span>
+            )}
             <span className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
               <Check size={14} /> Done
             </span>

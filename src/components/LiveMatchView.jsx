@@ -1,12 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Trophy, Clock, TrendingUp, Users } from 'lucide-react';
+import MatchPredictionCard from './predictions/MatchPredictionCard';
+import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
 
 const LiveMatchView = ({ 
   currentMatch, 
   onSaveScore, 
   nextMatches = [],
+  onSelectUpcomingMatch,
   tournamentName,
-  playerRatings = {}
+  playerRatings = {},
+  pointsTable = [],
+  tournamentHistory = [],
+  casualMatches = []
 }) => {
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
@@ -42,6 +48,80 @@ const LiveMatchView = ({
     Math.round(((getPlayerRating(currentMatch.team2.player || currentMatch.team2.player1) + 
     (currentMatch.team2.player2 ? getPlayerRating(currentMatch.team2.player2) : 0)) / 
     (currentMatch.team2.player2 ? 2 : 1))) : 1000;
+
+  const getProjectedTable = (winnerId, margin) => {
+    const table = pointsTable.map(team => ({ ...team }));
+    const winner = table.find(team => team.id === winnerId);
+    const loserId = winnerId === currentMatch.team1.id ? currentMatch.team2.id : currentMatch.team1.id;
+    const loser = table.find(team => team.id === loserId);
+
+    if (!winner || !loser) return [];
+
+    winner.played += 1;
+    loser.played += 1;
+    winner.won += 1;
+    loser.lost += 1;
+    winner.points += 2;
+    winner.scoreDiff += margin;
+    loser.scoreDiff -= margin;
+
+    return table.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      return b.scoreDiff - a.scoreDiff;
+    });
+  };
+
+  const getRankAfterOutcome = (teamId, winnerId, margin) => {
+    const projected = getProjectedTable(winnerId, margin);
+    return projected.findIndex(team => team.id === teamId) + 1;
+  };
+
+  const getMinWinningMarginForTop2 = (teamId) => {
+    const maxMarginToCheck = 80;
+    for (let margin = 1; margin <= maxMarginToCheck; margin += 1) {
+      const rank = getRankAfterOutcome(teamId, teamId, margin);
+      if (rank > 0 && rank <= 2) return margin;
+    }
+    return null;
+  };
+
+  const team1MinMargin = getMinWinningMarginForTop2(currentMatch.team1.id);
+  const team2MinMargin = getMinWinningMarginForTop2(currentMatch.team2.id);
+
+  const currentMatchPrediction = useMemo(() => predictMatchOutcome({
+    match: currentMatch,
+    playerRatings,
+    tournamentHistory,
+    casualMatches,
+  }), [currentMatch, playerRatings, tournamentHistory, casualMatches]);
+  const upcomingPredictions = useMemo(() => {
+    const predictionMap = {};
+    nextMatches.forEach((match) => {
+      predictionMap[match.id] = predictMatchOutcome({
+        match,
+        playerRatings,
+        tournamentHistory,
+        casualMatches,
+      });
+    });
+    return predictionMap;
+  }, [nextMatches, playerRatings, tournamentHistory, casualMatches]);
+
+  const parsedScore1 = Number.parseInt(score1, 10);
+  const parsedScore2 = Number.parseInt(score2, 10);
+  const hasValidProjection = Number.isFinite(parsedScore1) && Number.isFinite(parsedScore2) && parsedScore1 !== parsedScore2;
+  const projectedWinnerId = hasValidProjection
+    ? (parsedScore1 > parsedScore2 ? currentMatch.team1.id : currentMatch.team2.id)
+    : null;
+  const projectedMargin = hasValidProjection ? Math.abs(parsedScore1 - parsedScore2) : null;
+  const projectedWinnerRank = hasValidProjection ? getRankAfterOutcome(projectedWinnerId, projectedWinnerId, projectedMargin) : null;
+  const upsetAlert = getUpsetAlert({
+    prediction: currentMatchPrediction,
+    score1,
+    score2,
+    team1Name: currentMatch.team1?.name,
+    team2Name: currentMatch.team2?.name,
+  });
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -230,6 +310,41 @@ const LiveMatchView = ({
               ⚠️ Scores must be different
             </p>
           )}
+
+          {/* Qualification Watch */}
+          <div className="mt-4 sm:mt-5 bg-amber-50 border border-amber-200 rounded-xl p-3 sm:p-4">
+            <h4 className="font-bold text-amber-800 text-sm sm:text-base mb-2">Top 2 Qualification Watch</h4>
+            <div className="space-y-1.5 text-xs sm:text-sm text-amber-900">
+              <p>
+                <span className="font-semibold">{currentMatch.team1.name}:</span>{' '}
+                {team1MinMargin
+                  ? `Win by ${team1MinMargin}+ to be Top 2 after this match.`
+                  : 'Cannot reach Top 2 from this match alone.'}
+              </p>
+              <p>
+                <span className="font-semibold">{currentMatch.team2.name}:</span>{' '}
+                {team2MinMargin
+                  ? `Win by ${team2MinMargin}+ to be Top 2 after this match.`
+                  : 'Cannot reach Top 2 from this match alone.'}
+              </p>
+              {hasValidProjection && (
+                <p className="pt-1 font-semibold text-blue-700">
+                  If this score is submitted, {(parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name)} will be rank #{projectedWinnerRank}.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <MatchPredictionCard match={currentMatch} prediction={currentMatchPrediction} />
+          </div>
+
+          {upsetAlert && (
+            <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3">
+              <p className="text-sm font-semibold text-red-700">⚠️ {upsetAlert.title}</p>
+              <p className="text-xs sm:text-sm text-red-700 mt-1">{upsetAlert.message}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -238,11 +353,17 @@ const LiveMatchView = ({
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <Users size={16} className="text-gray-600 sm:w-5 sm:h-5" />
-            <h3 className="font-bold text-base sm:text-lg text-gray-800">Coming Up Next</h3>
+            <h3 className="font-bold text-base sm:text-lg text-gray-800">Coming Up Next ({nextMatches.length})</h3>
           </div>
-          <div className="space-y-2 sm:space-y-3">
-            {nextMatches.slice(0, 3).map((match, index) => (
-              <div key={match.id} className="bg-gray-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-3">Click a match to make it LIVE NOW.</p>
+          <div className="space-y-2 sm:space-y-3 max-h-80 overflow-y-auto pr-1">
+            {nextMatches.map((match, index) => (
+              <button
+                key={match.id}
+                type="button"
+                onClick={() => onSelectUpcomingMatch?.(match.id)}
+                className="w-full text-left bg-gray-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                     <span className="text-xs font-bold text-gray-500">#{index + 1}</span>
@@ -259,7 +380,18 @@ const LiveMatchView = ({
                     <span className="text-base sm:text-lg">{match.team2?.emoji}</span>
                   </div>
                 </div>
-              </div>
+                <div className="mt-2 text-xs text-blue-600 font-semibold">
+                  Round {match.round} • Match {match.id}
+                </div>
+                <div className="mt-2">
+                  <MatchPredictionCard
+                    match={match}
+                    prediction={upcomingPredictions[match.id]}
+                    title="Prediction"
+                    compact
+                  />
+                </div>
+              </button>
             ))}
           </div>
         </div>
