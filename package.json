@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist -b badminton-v3 -f"
+    "deploy": "gh-pages -d dist -b badminton-v5 -f"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.83.0",

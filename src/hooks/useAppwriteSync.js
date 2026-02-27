@@ -47,6 +47,7 @@ export const useAppwriteSync = (showToast) => {
             playerDatabase: playerDb?.players || [],
             playerRatings: ratings?.ratings || {},
             members: meta?.members || [],
+            memberAccountLinks: meta?.memberAccountLinks || {},
             templates: meta?.templates || [],
             playerPhotos: meta?.playerPhotos || {},
           };
@@ -175,8 +176,15 @@ export const useAppwriteSync = (showToast) => {
     }
   };
 
-  const saveMembersToAppwrite = async (members) => {
-    await saveMetaMutation.mutateAsync({ members });
+  const saveMembersToAppwrite = async (payload) => {
+    const members = Array.isArray(payload) ? payload : (payload?.members || []);
+    const memberAccountLinks = Array.isArray(payload)
+      ? undefined
+      : payload?.memberAccountLinks;
+    await saveMetaMutation.mutateAsync({
+      members,
+      ...(memberAccountLinks ? { memberAccountLinks } : {}),
+    });
     return members;
   };
 

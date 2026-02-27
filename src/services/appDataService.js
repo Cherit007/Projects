@@ -11,6 +11,11 @@ const parseJson = (value, fallback) => {
 };
 
 const isMetaEnabled = () => Boolean(COLLECTIONS.APP_META);
+
+const shouldRetryWithoutMemberAccountLinks = (error) => {
+  const message = String(error?.message || '');
+  return error?.code === 400 && message.includes('Unknown attribute') && message.includes('memberAccountLinks');
+};
 export const appDataService = {
   isMetaEnabled,
 
@@ -35,6 +40,7 @@ export const appDataService = {
 
       return {
         members: parseJson(doc.members, []),
+        memberAccountLinks: parseJson(doc.memberAccountLinks, {}),
         templates: parseJson(doc.templates, []),
         playerPhotos: parseJson(doc.playerPhotos, {}),
         groups: parseJson(doc.groups, []),
@@ -57,6 +63,7 @@ export const appDataService = {
     const existing = await this.getAppMeta();
     const merged = {
       members: updates.members ?? existing?.members ?? [],
+      memberAccountLinks: updates.memberAccountLinks ?? existing?.memberAccountLinks ?? {},
       templates: updates.templates ?? existing?.templates ?? [],
       playerPhotos: updates.playerPhotos ?? existing?.playerPhotos ?? {},
       groups: updates.groups ?? existing?.groups ?? [],
@@ -68,6 +75,7 @@ export const appDataService = {
 
     const payload = {
       members: JSON.stringify(merged.members),
+      memberAccountLinks: JSON.stringify(merged.memberAccountLinks),
       templates: JSON.stringify(merged.templates),
       playerPhotos: JSON.stringify(merged.playerPhotos),
       groups: JSON.stringify(merged.groups),
@@ -79,20 +87,34 @@ export const appDataService = {
       updatedAt: merged.updatedAt,
     };
 
-    if (existing) {
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTIONS.APP_META,
-        APP_META_DOC_ID,
-        payload
-      );
-    } else {
+    const saveWithPayload = async (body) => {
+      if (existing) {
+        await databases.updateDocument(
+          DATABASE_ID,
+          COLLECTIONS.APP_META,
+          APP_META_DOC_ID,
+          body
+        );
+        return;
+      }
       await databases.createDocument(
         DATABASE_ID,
         COLLECTIONS.APP_META,
         ID.custom(APP_META_DOC_ID),
-        payload
+        body
       );
+    };
+
+    try {
+      await saveWithPayload(payload);
+    } catch (error) {
+      if (!shouldRetryWithoutMemberAccountLinks(error)) {
+        throw error;
+      }
+
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.memberAccountLinks;
+      await saveWithPayload(fallbackPayload);
     }
 
     return merged;

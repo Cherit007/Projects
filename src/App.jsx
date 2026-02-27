@@ -186,6 +186,41 @@ const App = () => {
       };
     });
   };
+
+  const buildMemberAccountLinks = (membersList = []) => {
+    const links = { byId: {}, byName: {} };
+    (Array.isArray(membersList) ? membersList : []).forEach((member) => {
+      const linkedAccountId = member?.linkedAccountId;
+      const linkedEmail = member?.linkedEmail;
+      if (!linkedAccountId && !linkedEmail) return;
+
+      const linkValue = {
+        linkedAccountId: linkedAccountId || '',
+        linkedEmail: linkedEmail || '',
+      };
+      if (member?.id) links.byId[member.id] = linkValue;
+      const normalizedName = (member?.name || '').trim().toLowerCase();
+      if (normalizedName) links.byName[normalizedName] = linkValue;
+    });
+    return links;
+  };
+
+  const applyMemberAccountLinks = (membersList = [], memberAccountLinks = {}) => {
+    const byId = memberAccountLinks?.byId || {};
+    const byName = memberAccountLinks?.byName || {};
+    return (Array.isArray(membersList) ? membersList : []).map((member) => {
+      const normalizedName = (member?.name || '').trim().toLowerCase();
+      const linkFromId = member?.id ? byId[member.id] : null;
+      const linkFromName = normalizedName ? byName[normalizedName] : null;
+      const source = linkFromId || linkFromName || {};
+      return {
+        ...member,
+        linkedAccountId: member?.linkedAccountId || source.linkedAccountId,
+        linkedEmail: member?.linkedEmail || source.linkedEmail,
+      };
+    });
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -455,7 +490,11 @@ const App = () => {
           setPlayerDatabase(appwriteData.playerDatabase || []);
           setPlayerRatings(appwriteData.playerRatings || {});
           const loadedMembers = appwriteData.members?.length ? appwriteData.members : localMembers;
-          setMembers(mergeMemberLinks(loadedMembers, localMembers));
+          const restoredMembers = applyMemberAccountLinks(
+            mergeMemberLinks(loadedMembers, localMembers),
+            appwriteData.memberAccountLinks
+          );
+          setMembers(restoredMembers);
           const sourcePhotos = Object.keys(appwriteData.playerPhotos || {}).length ? appwriteData.playerPhotos : localPhotos;
           const { urls, refs } = hydratePlayerPhotos(sourcePhotos);
           setPlayerPhotos(urls);
@@ -832,8 +871,12 @@ const App = () => {
 
   const saveMembersToLocal = (updatedMembers, baselineMembers = members) => {
     const safeMembers = mergeMemberLinks(updatedMembers, baselineMembers);
+    const memberAccountLinks = buildMemberAccountLinks(safeMembers);
     if (isAppwriteEnabled) {
-      saveMembersMutation.mutateAsync(safeMembers).catch((error) => {
+      saveMembersMutation.mutateAsync({
+        members: safeMembers,
+        memberAccountLinks,
+      }).catch((error) => {
         console.error('Failed to save members to Appwrite:', error);
       }).finally(() => {
         queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
