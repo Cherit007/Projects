@@ -61,12 +61,14 @@ const LiveMatchView = ({
     loser.played += 1;
     winner.won += 1;
     loser.lost += 1;
-    winner.points += 2;
+    winner.points += margin;
+    loser.points -= margin;
     winner.scoreDiff += margin;
     loser.scoreDiff -= margin;
 
     return table.sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
+      if (b.won !== a.won) return b.won - a.won;
       return b.scoreDiff - a.scoreDiff;
     });
   };

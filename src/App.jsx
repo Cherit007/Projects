@@ -97,6 +97,8 @@ const App = () => {
   const casualMatches = useAppStore((s) => s.casualMatches);
   const setCasualMatches = useAppStore((s) => s.setCasualMatches);
   const [showCasualMatch, setShowCasualMatch] = useState(false);
+  const [oddPlayerEnabled, setOddPlayerEnabled] = useState(false);
+  const [oddPlayerName, setOddPlayerName] = useState('');
   const lastTournamentConfig = useAppStore((s) => s.lastTournamentConfig);
   const setLastTournamentConfig = useAppStore((s) => s.setLastTournamentConfig);
   const [showHistory, setShowHistory] = useState(false);
@@ -1331,6 +1333,8 @@ const App = () => {
     setBracket,
     champion,
     setChampion,
+    setPlayerDatabase,
+    members,
     playerRatings,
     setPlayerRatings,
     tournamentHistory,
@@ -1346,6 +1350,7 @@ const App = () => {
     syncCurrentTournament,
     saveTournamentMutation,
     deleteTournamentMutation,
+    savePlayerDatabaseMutation,
     saveRatingsMutation,
     createCasualMatchMutation,
     deleteCasualMatchMutation,
@@ -1491,6 +1496,10 @@ const App = () => {
     teamNameDatabase,
     onGenerate: generateFixtures,
     loading,
+    oddPlayerEnabled,
+    setOddPlayerEnabled,
+    oddPlayerName,
+    setOddPlayerName,
     onBack: () => setStep('setup'),
   };
 
@@ -1508,8 +1517,11 @@ const App = () => {
     playerRatings,
     gameMode,
     tournamentHistory,
+    currentTournamentId,
     casualMatches,
     aiMatchSummaries,
+    oddPlayerEnabled,
+    oddPlayerName,
     playerPhotos,
     onUpdatePlayerPhoto: updatePlayerPhoto,
     canEditPlayerPhoto: canEditOwnProfile,

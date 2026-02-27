@@ -24,13 +24,15 @@ export const calculatePointsTable = (teams, fixtures) => {
         table[team2Index].scoreFor += match.score2;
         table[team2Index].scoreAgainst += match.score1;
 
-        if (match.score1 > match.score2) {
+        const margin = match.score1 - match.score2;
+        table[team1Index].points += margin;
+        table[team2Index].points -= margin;
+
+        if (margin > 0) {
           table[team1Index].won++;
-          table[team1Index].points += 2;
           table[team2Index].lost++;
         } else {
           table[team2Index].won++;
-          table[team2Index].points += 2;
           table[team1Index].lost++;
         }
       }
@@ -43,6 +45,7 @@ export const calculatePointsTable = (teams, fixtures) => {
 
   return table.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
+    if (b.won !== a.won) return b.won - a.won;
     return b.scoreDiff - a.scoreDiff;
   });
 };
@@ -50,29 +53,39 @@ export const calculatePointsTable = (teams, fixtures) => {
 // Calculate Player Statistics
 export const calculatePlayerStats = (teams, fixtures) => {
   const playerStats = {};
+  const ensurePlayer = (player, fallbackTeamName = 'Rotating Player', fallbackEmoji = '🏸') => {
+    if (!player) return;
+    if (!playerStats[player]) {
+      playerStats[player] = {
+        name: player,
+        team: fallbackTeamName,
+        teamEmoji: fallbackEmoji,
+        matchesPlayed: 0,
+        matchesWon: 0,
+        totalScored: 0,
+        totalConceded: 0,
+        winPercentage: 0,
+      };
+    }
+  };
 
   teams.forEach(team => {
     [team.player1, team.player2].forEach(player => {
-      if (player && !playerStats[player]) {
-        playerStats[player] = {
-          name: player,
-          team: team.name,
-          teamEmoji: team.emoji,
-          matchesPlayed: 0,
-          matchesWon: 0,
-          totalScored: 0,
-          totalConceded: 0,
-          winPercentage: 0,
-        };
-      }
+      ensurePlayer(player, team.name, team.emoji);
     });
   });
 
   fixtures.forEach(match => {
     if (match.completed) {
       const team1Won = match.score1 > match.score2;
+      [match.team1.player || match.team1.player1, match.team1.player2].forEach(player => {
+        ensurePlayer(player, match.team1.name, match.team1.emoji);
+      });
+      [match.team2.player || match.team2.player1, match.team2.player2].forEach(player => {
+        ensurePlayer(player, match.team2.name, match.team2.emoji);
+      });
       
-      [match.team1.player1, match.team1.player2].forEach(player => {
+      [match.team1.player || match.team1.player1, match.team1.player2].forEach(player => {
         if (player && playerStats[player]) {
           playerStats[player].matchesPlayed++;
           playerStats[player].totalScored += match.score1;
@@ -81,7 +94,7 @@ export const calculatePlayerStats = (teams, fixtures) => {
         }
       });
 
-      [match.team2.player1, match.team2.player2].forEach(player => {
+      [match.team2.player || match.team2.player1, match.team2.player2].forEach(player => {
         if (player && playerStats[player]) {
           playerStats[player].matchesPlayed++;
           playerStats[player].totalScored += match.score2;

@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import Toast from './Toast';
+import BadmintonLoader from './BadmintonLoader';
 
 const SetupScreen = lazy(() => import('./SetupScreen'));
 const TeamEntry = lazy(() => import('./Teamentry'));
@@ -12,9 +13,7 @@ const ViewerDashboard = lazy(() => import('./ViewerDashboard'));
 const GroupRequestsCenter = lazy(() => import('./GroupRequestsCenter'));
 
 const ScreenFallback = () => (
-  <div className="min-h-screen bg-gray-100 flex items-center justify-center text-gray-600">
-    Loading...
-  </div>
+  <BadmintonLoader label="Preparing your court..." />
 );
 
 const AppViewRouter = ({

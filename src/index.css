@@ -77,3 +77,186 @@ body {
   background: linear-gradient(110deg, #0f766e, #0ea5a4, #2563eb);
   color: #fff;
 }
+
+.badminton-loader-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(700px 300px at 15% 15%, rgba(37, 99, 235, 0.12) 0%, transparent 70%),
+    radial-gradient(700px 300px at 85% 10%, rgba(15, 118, 110, 0.13) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.88));
+}
+
+.badminton-loader-card {
+  width: min(320px, 92vw);
+  border-radius: 1rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 24px 50px -28px rgba(15, 23, 42, 0.4);
+}
+
+.court-loader {
+  position: relative;
+  width: 100%;
+  height: 112px;
+  margin: 0 auto 0.75rem;
+}
+
+.court-loader-inner {
+  position: relative;
+  width: 180px;
+  height: 104px;
+  margin: 0 auto;
+}
+
+.court-line {
+  position: absolute;
+  border-color: rgba(37, 99, 235, 0.78);
+  border-style: solid;
+  opacity: 0;
+}
+
+.court-outline {
+  inset: 0;
+  border-width: 2px;
+  border-radius: 0.45rem;
+  transform: scale(0.88);
+  animation: court-outline-reveal 0.6s ease forwards;
+  animation-delay: 0.1s;
+}
+
+.court-center-line {
+  left: 50%;
+  top: 0;
+  width: 0;
+  height: 100%;
+  border-left-width: 2px;
+  transform: translateX(-50%) scaleY(0.08);
+  transform-origin: center top;
+  animation: court-vline-reveal 0.55s ease forwards;
+  animation-delay: 0.35s;
+}
+
+.court-service-left {
+  left: 0;
+  top: 50%;
+  width: 50%;
+  height: 0;
+  border-top-width: 2px;
+  transform: translateY(-50%) scaleX(0.05);
+  transform-origin: left center;
+  animation: court-hline-left-reveal 0.5s ease forwards;
+  animation-delay: 0.5s;
+}
+
+.court-service-right {
+  right: 0;
+  top: 50%;
+  width: 50%;
+  height: 0;
+  border-top-width: 2px;
+  transform: translateY(-50%) scaleX(0.05);
+  transform-origin: right center;
+  animation: court-hline-right-reveal 0.5s ease forwards;
+  animation-delay: 0.6s;
+}
+
+.court-net {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  border-top: 2px dashed rgba(15, 118, 110, 0.75);
+  transform: translateY(-50%) scaleX(0.08);
+  transform-origin: center center;
+  opacity: 0;
+  animation: court-net-reveal 0.5s ease forwards;
+  animation-delay: 0.72s;
+}
+
+.court-shuttle {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  transform: translate(-50%, -50%) scale(0.7) rotate(-20deg);
+  font-size: 1.9rem;
+  opacity: 0;
+  animation: shuttle-drop 1.05s ease forwards, shuttle-idle 1.1s ease-in-out 1.2s infinite alternate;
+}
+
+.badminton-loader-text {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: 0.01em;
+}
+
+@keyframes court-outline-reveal {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes court-vline-reveal {
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scaleY(1);
+  }
+}
+
+@keyframes court-hline-left-reveal {
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+@keyframes court-hline-right-reveal {
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+@keyframes court-net-reveal {
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+@keyframes shuttle-drop {
+  0% {
+    top: 8%;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7) rotate(-20deg);
+  }
+  65% {
+    opacity: 1;
+  }
+  78% {
+    top: 63%;
+    transform: translate(-50%, -50%) scale(1.05) rotate(8deg);
+  }
+  100% {
+    top: 56%;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes shuttle-idle {
+  from {
+    transform: translate(-50%, -50%) scale(1) rotate(-3deg);
+  }
+  to {
+    transform: translate(-50%, -54%) scale(1.02) rotate(3deg);
+  }
+}

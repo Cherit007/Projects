@@ -7,6 +7,7 @@ import BracketView from './BracketView';
 import BracketMatchModal from './Bracketmatchmodal';
 import PlayerProfileModal from './PlayerProfileModal';
 import MatchSummaryFeed from './MatchSummaryFeed';
+import TournamentAwards from './TournamentAwards';
 import { buildPlayerAdvancedProfile } from '../utils/playerProfileAnalytics';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildPlayerGamification } from '../utils/playerGamification';
@@ -25,8 +26,11 @@ const TournamentView = ({
   playerRatings,
   gameMode,
   tournamentHistory = [],
+  currentTournamentId = null,
   casualMatches = [],
   aiMatchSummaries = [],
+  oddPlayerEnabled = false,
+  oddPlayerName = '',
   playerPhotos = {},
   onUpdatePlayerPhoto,
   canEditPlayerPhoto = () => false,
@@ -71,6 +75,11 @@ const TournamentView = ({
     if (team.player) currentTournamentPlayers.add(team.player);
     if (team.player1) currentTournamentPlayers.add(team.player1);
     if (team.player2) currentTournamentPlayers.add(team.player2);
+  });
+  fixtures.forEach((match) => {
+    [match?.team1?.player || match?.team1?.player1, match?.team1?.player2, match?.team2?.player || match?.team2?.player1, match?.team2?.player2]
+      .filter(Boolean)
+      .forEach((name) => currentTournamentPlayers.add(name));
   });
   
   const allEloLeaderboard = getPlayerLeaderboard(playerRatings);
@@ -126,16 +135,111 @@ const TournamentView = ({
       }),
     ])
   ), [eloLeaderboard, tournamentHistory, casualMatches]);
+  const completedTournamentRecord = useMemo(() => {
+    if (!champion || !Array.isArray(tournamentHistory) || tournamentHistory.length === 0) return null;
+    return tournamentHistory.find((entry) => {
+      if (!entry?.champion) return false;
+      const entryId = entry.appwriteId || entry.id;
+      if (entryId && currentTournamentId) return entryId === currentTournamentId;
+      return (
+        (entry.name || '') === (tournamentName || '') &&
+        (entry.champion?.name || '') === (champion?.name || '')
+      );
+    }) || null;
+  }, [champion, tournamentHistory, currentTournamentId, tournamentName]);
 
   const allLeagueMatchesComplete = () => {
     return fixtures.length > 0 && fixtures.every(match => match.completed);
   };
 
-  const getFinalists = () => {
-    if (!allLeagueMatchesComplete()) return null;
+  const finalSelection = useMemo(() => {
+    if (!allLeagueMatchesComplete()) {
+      return {
+        finalists: null,
+        oddPlayerIncluded: false,
+        oddPlayerReason: '',
+      };
+    }
+
     const table = calculatePointsTable(teams, fixtures);
-    return [table[0], table[1]];
-  };
+    const finalists = [table[0], table[1]];
+
+    if (!oddPlayerEnabled || !oddPlayerName.trim()) {
+      return {
+        finalists,
+        oddPlayerIncluded: false,
+        oddPlayerReason: '',
+      };
+    }
+
+    const oddName = oddPlayerName.trim();
+    const individualPoints = {};
+    const bump = (name, delta) => {
+      if (!name) return;
+      individualPoints[name] = (individualPoints[name] || 0) + delta;
+    };
+    const allPlayers = new Set();
+    fixtures.forEach((match) => {
+      const players = [
+        match.team1.player || match.team1.player1,
+        match.team1.player2,
+        match.team2.player || match.team2.player1,
+        match.team2.player2,
+      ].filter(Boolean);
+      players.forEach((name) => allPlayers.add(name));
+      if (!match.completed) return;
+      const margin = Number(match.score1) - Number(match.score2);
+      bump(match.team1.player || match.team1.player1, margin);
+      bump(match.team1.player2, margin);
+      bump(match.team2.player || match.team2.player1, -margin);
+      bump(match.team2.player2, -margin);
+    });
+
+    const oddPoints = individualPoints[oddName] || 0;
+    const maxPoints = Math.max(0, ...Array.from(allPlayers).map((name) => individualPoints[name] || 0));
+    if (oddPoints < maxPoints) {
+      return {
+        finalists,
+        oddPlayerIncluded: false,
+        oddPlayerReason: '',
+      };
+    }
+
+    const countOddInTeam = (team) => fixtures.filter((match) => {
+      if (!match.completed) return false;
+      const onTeam1 = match.team1.id === team.id
+        && [match.team1.player || match.team1.player1, match.team1.player2].includes(oddName);
+      const onTeam2 = match.team2.id === team.id
+        && [match.team2.player || match.team2.player1, match.team2.player2].includes(oddName);
+      return onTeam1 || onTeam2;
+    }).length;
+
+    const team1OddMatches = countOddInTeam(finalists[0]);
+    const team2OddMatches = countOddInTeam(finalists[1]);
+    const targetIndex = team2OddMatches > team1OddMatches ? 1 : 0;
+    const targetTeam = finalists[targetIndex];
+    const p1 = targetTeam.player || targetTeam.player1;
+    const p2 = targetTeam.player2;
+    const p1Points = individualPoints[p1] || 0;
+    const p2Points = individualPoints[p2] || 0;
+    const replacePlayer2 = p2 && p2Points <= p1Points;
+
+    const updatedTargetTeam = {
+      ...targetTeam,
+      ...(replacePlayer2
+        ? { player2: oddName }
+        : { player1: oddName, player: oddName }),
+    };
+    const updatedFinalists = targetIndex === 0
+      ? [updatedTargetTeam, finalists[1]]
+      : [finalists[0], updatedTargetTeam];
+
+    return {
+      finalists: updatedFinalists,
+      oddPlayerIncluded: true,
+      oddPlayerReason: `${oddName} qualified with top individual points (${oddPoints}).`,
+    };
+  }, [fixtures, teams, oddPlayerEnabled, oddPlayerName, calculatePointsTable]);
 
   const handleCopyInvite = async (invite) => {
     try {
@@ -392,7 +496,7 @@ const TournamentView = ({
               </table>
             </div>
             <div className="p-3 sm:p-4 bg-gray-50 text-xs text-gray-600">
-              <p>Top 2 teams qualify for the final • Win = 2 points</p>
+              <p>Top 2 teams qualify for the final • Points = score margin</p>
             </div>
           </div>
         )}
@@ -552,27 +656,45 @@ const TournamentView = ({
             {tournamentFormat === 'league' ? (
               <>
                 {champion ? (
-                  <div className="bg-white rounded-2xl p-8 sm:p-12 text-center">
-                    <div className="text-5xl sm:text-6xl mb-4">🏆</div>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4">Tournament Complete!</h2>
-                    <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto">
-                      <div className="text-4xl sm:text-5xl mb-3">{champion.emoji}</div>
-                      <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{champion.name}</h3>
-                      <p className="text-sm sm:text-base text-gray-600">
-                        {champion.player || champion.player1}
-                        {champion.player2 && ` & ${champion.player2}`}
-                      </p>
-                      <div className="mt-4 bg-yellow-100 rounded-lg py-2">
-                        <p className="text-base sm:text-lg font-bold text-gray-800">🥇 CHAMPIONS!</p>
+                  <div className="space-y-4 sm:space-y-6">
+                    <div className="bg-white rounded-2xl p-8 sm:p-12 text-center">
+                      <div className="text-5xl sm:text-6xl mb-4">🏆</div>
+                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4">Tournament Complete!</h2>
+                      <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto">
+                        <div className="text-4xl sm:text-5xl mb-3">{champion.emoji}</div>
+                        <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{champion.name}</h3>
+                        <p className="text-sm sm:text-base text-gray-600">
+                          {champion.player || champion.player1}
+                          {champion.player2 && ` & ${champion.player2}`}
+                        </p>
+                        <div className="mt-4 bg-yellow-100 rounded-lg py-2">
+                          <p className="text-base sm:text-lg font-bold text-gray-800">🥇 CHAMPIONS!</p>
+                        </div>
                       </div>
                     </div>
+                    <TournamentAwards
+                      teams={teams}
+                      fixtures={fixtures}
+                      bracket={[]}
+                      finalMatch={completedTournamentRecord?.finalMatch || null}
+                      champion={champion}
+                      onSelectPlayer={(name) => setSelectedPlayerName(name)}
+                    />
                   </div>
                 ) : allLeagueMatchesComplete() ? (
-                  <FinalMatchCard
-                    finalists={getFinalists()}
-                    onSave={onSaveFinalResult}
-                    playerRatings={playerRatings}
-                  />
+                  <>
+                    {finalSelection.oddPlayerIncluded && (
+                      <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-800">
+                        <p className="text-sm font-semibold">Odd Player Eligible for Final</p>
+                        <p className="text-xs mt-1">{finalSelection.oddPlayerReason}</p>
+                      </div>
+                    )}
+                    <FinalMatchCard
+                      finalists={finalSelection.finalists}
+                      onSave={onSaveFinalResult}
+                      playerRatings={playerRatings}
+                    />
+                  </>
                 ) : (
                   <div className="bg-white rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center">
                     <Trophy size={48} className="mx-auto text-yellow-500 mb-4 sm:w-16 sm:h-16" />
@@ -587,20 +709,30 @@ const TournamentView = ({
               <div className="bg-white rounded-2xl p-8 sm:p-12 text-center">
                 <Trophy size={48} className="mx-auto text-yellow-500 mb-4 sm:w-16 sm:h-16" />
                 {champion ? (
-                  <div>
-                    <div className="text-5xl sm:text-6xl mb-4">🏆</div>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4">Tournament Complete!</h2>
-                    <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto">
-                      <div className="text-4xl sm:text-5xl mb-3">{champion.emoji}</div>
-                      <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{champion.name}</h3>
-                      <p className="text-sm sm:text-base text-gray-600">
-                        {champion.player || champion.player1}
-                        {champion.player2 && ` & ${champion.player2}`}
-                      </p>
-                      <div className="mt-4 bg-yellow-100 rounded-lg py-2">
-                        <p className="text-base sm:text-lg font-bold text-gray-800">🥇 CHAMPIONS!</p>
+                  <div className="space-y-4 sm:space-y-6">
+                    <div>
+                      <div className="text-5xl sm:text-6xl mb-4">🏆</div>
+                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4">Tournament Complete!</h2>
+                      <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto">
+                        <div className="text-4xl sm:text-5xl mb-3">{champion.emoji}</div>
+                        <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{champion.name}</h3>
+                        <p className="text-sm sm:text-base text-gray-600">
+                          {champion.player || champion.player1}
+                          {champion.player2 && ` & ${champion.player2}`}
+                        </p>
+                        <div className="mt-4 bg-yellow-100 rounded-lg py-2">
+                          <p className="text-base sm:text-lg font-bold text-gray-800">🥇 CHAMPIONS!</p>
+                        </div>
                       </div>
                     </div>
+                    <TournamentAwards
+                      teams={teams}
+                      fixtures={fixtures}
+                      bracket={bracket}
+                      finalMatch={completedTournamentRecord?.finalMatch || null}
+                      champion={champion}
+                      onSelectPlayer={(name) => setSelectedPlayerName(name)}
+                    />
                   </div>
                 ) : (
                   <div>

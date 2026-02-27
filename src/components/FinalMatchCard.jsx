@@ -34,7 +34,7 @@ const FinalMatchCard = ({ finalists, onSave, playerRatings = {} }) => {
     
     setIsSubmitting(true);
     setTimeout(() => {
-      onSave(parseInt(score1), parseInt(score2));
+      onSave(parseInt(score1), parseInt(score2), finalists);
       setIsSubmitting(false);
     }, 1500);
   };

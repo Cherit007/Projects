@@ -850,7 +850,7 @@ const renderTournament = () => {
               {pointsTable.length > 0 && (
                 <div className="p-4 bg-gray-50 text-xs text-gray-600">
                   <p className="mb-1"><strong>Note:</strong> Top 2 teams qualify for the final</p>
-                  <p>Win = 2 points | Tiebreaker: Score difference</p>
+                  <p>Points = score margin | Tiebreaker: score difference</p>
                 </div>
               )}
             </div>

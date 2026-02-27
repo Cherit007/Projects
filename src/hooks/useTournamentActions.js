@@ -37,6 +37,8 @@ export const useTournamentActions = ({
   setBracket,
   champion,
   setChampion,
+  setPlayerDatabase,
+  members,
   playerRatings,
   setPlayerRatings,
   tournamentHistory,
@@ -52,10 +54,220 @@ export const useTournamentActions = ({
   syncCurrentTournament,
   saveTournamentMutation,
   deleteTournamentMutation,
+  savePlayerDatabaseMutation,
   saveRatingsMutation,
   createCasualMatchMutation,
   deleteCasualMatchMutation,
 }) => {
+  const collectPlayersFromTeam = (team) => (
+    [team?.player || team?.player1, team?.player2].filter(Boolean)
+  );
+
+  const collectPlayersFromMatch = (match) => (
+    [
+      match?.team1?.player || match?.team1?.player1,
+      match?.team1?.player2,
+      match?.team2?.player || match?.team2?.player1,
+      match?.team2?.player2,
+    ].filter(Boolean)
+  );
+
+  const rebuildPlayerDatabase = async ({
+    history = tournamentHistory,
+    casual = casualMatches,
+    liveTeams = teams,
+    liveFixtures = fixtures,
+    liveBracket = bracket,
+    liveChampion = champion,
+  } = {}) => {
+    const normalized = new Map();
+    const addPlayer = (name) => {
+      const value = String(name || '').trim();
+      if (!value) return;
+      const key = value.toLowerCase();
+      if (!normalized.has(key)) normalized.set(key, value);
+    };
+
+    (Array.isArray(history) ? history : []).forEach((tournament) => {
+      (Array.isArray(tournament?.teams) ? tournament.teams : []).forEach((team) => {
+        collectPlayersFromTeam(team).forEach(addPlayer);
+      });
+      (Array.isArray(tournament?.fixtures) ? tournament.fixtures : []).forEach((match) => {
+        collectPlayersFromMatch(match).forEach(addPlayer);
+      });
+      if (Array.isArray(tournament?.bracket)) {
+        tournament.bracket.forEach((round) => {
+          (Array.isArray(round) ? round : []).forEach((match) => {
+            collectPlayersFromMatch(match).forEach(addPlayer);
+          });
+        });
+      }
+      if (tournament?.finalMatch) {
+        collectPlayersFromMatch(tournament.finalMatch).forEach(addPlayer);
+      }
+      if (tournament?.champion) {
+        collectPlayersFromTeam(tournament.champion).forEach(addPlayer);
+      }
+    });
+
+    (Array.isArray(casual) ? casual : []).forEach((match) => {
+      collectPlayersFromMatch(match).forEach(addPlayer);
+    });
+
+    (Array.isArray(liveTeams) ? liveTeams : []).forEach((team) => {
+      collectPlayersFromTeam(team).forEach(addPlayer);
+    });
+    (Array.isArray(liveFixtures) ? liveFixtures : []).forEach((match) => {
+      collectPlayersFromMatch(match).forEach(addPlayer);
+    });
+    if (Array.isArray(liveBracket)) {
+      liveBracket.forEach((round) => {
+        (Array.isArray(round) ? round : []).forEach((match) => {
+          collectPlayersFromMatch(match).forEach(addPlayer);
+        });
+      });
+    }
+    if (liveChampion) {
+      collectPlayersFromTeam(liveChampion).forEach(addPlayer);
+    }
+    (Array.isArray(members) ? members : []).forEach((member) => addPlayer(member?.name));
+
+    const rebuilt = Array.from(normalized.values()).sort((a, b) => a.localeCompare(b));
+    setPlayerDatabase(rebuilt);
+
+    if (isAppwriteEnabled) {
+      await savePlayerDatabaseMutation.mutateAsync(rebuilt);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
+    } else {
+      localStorage.setItem('badminton_players', JSON.stringify(rebuilt));
+    }
+  };
+
+  const injectRotatingOddPlayer = ({ fixtures: baseFixtures = [], oddPlayerName = '' }) => {
+    const oddName = (oddPlayerName || '').trim();
+    if (!oddName) return baseFixtures;
+
+    const playCount = {};
+    const allPlayers = new Set([oddName]);
+    const bump = (name) => {
+      if (!name) return;
+      playCount[name] = (playCount[name] || 0) + 1;
+    };
+    const getCount = (name) => playCount[name] || 0;
+
+    baseFixtures.forEach((fixture) => {
+      [
+        fixture?.team1?.player || fixture?.team1?.player1,
+        fixture?.team1?.player2,
+        fixture?.team2?.player || fixture?.team2?.player1,
+        fixture?.team2?.player2,
+      ].filter(Boolean).forEach((name) => allPlayers.add(name));
+    });
+
+    const evaluateOption = (players) => {
+      const next = {};
+      allPlayers.forEach((name) => {
+        next[name] = getCount(name);
+      });
+      players.forEach((name) => {
+        if (!name) return;
+        next[name] = (next[name] || 0) + 1;
+      });
+      const values = Object.values(next);
+      const max = Math.max(...values);
+      const min = Math.min(...values);
+      return {
+        imbalance: max - min,
+        oddAppearances: next[oddName] || 0,
+      };
+    };
+
+    const totalPlayerSlots = baseFixtures.length * 4;
+    const minOddAppearances = Math.max(1, Math.floor(totalPlayerSlots / Math.max(1, allPlayers.size)));
+    const updatedFixtures = [];
+
+    baseFixtures.forEach((fixture, index) => {
+      const team1P1 = fixture?.team1?.player1 || fixture?.team1?.player;
+      const team1P2 = fixture?.team1?.player2;
+      const team2P1 = fixture?.team2?.player1 || fixture?.team2?.player;
+      const team2P2 = fixture?.team2?.player2;
+      const candidates = [
+        { team: 'team1', slot: 'player1', name: team1P1 },
+        { team: 'team1', slot: 'player2', name: team1P2 },
+        { team: 'team2', slot: 'player1', name: team2P1 },
+        { team: 'team2', slot: 'player2', name: team2P2 },
+      ].filter((item) => item.name);
+
+      if (candidates.length < 4) {
+        updatedFixtures.push(fixture);
+        return;
+      }
+
+      const makeFixture = (benchTarget = null) => {
+        const updatedFixture = {
+          ...fixture,
+          team1: { ...fixture.team1 },
+          team2: { ...fixture.team2 },
+        };
+        if (!benchTarget) return updatedFixture;
+        if (benchTarget.team === 'team1') {
+          updatedFixture.team1[benchTarget.slot] = oddName;
+          if (benchTarget.slot === 'player1') {
+            updatedFixture.team1.player = oddName;
+          }
+        } else {
+          updatedFixture.team2[benchTarget.slot] = oddName;
+          if (benchTarget.slot === 'player1') {
+            updatedFixture.team2.player = oddName;
+          }
+        }
+        return updatedFixture;
+      };
+
+      const oddPlayedSoFar = getCount(oddName);
+      const remainingFixturesAfterThis = baseFixtures.length - index - 1;
+      const oddStillNeeded = Math.max(0, minOddAppearances - oddPlayedSoFar);
+      const mustUseOddNow = oddStillNeeded > remainingFixturesAfterThis;
+
+      const optionFixtures = [
+        ...(!mustUseOddNow ? [makeFixture(null)] : []),
+        ...candidates.map((candidate) => makeFixture(candidate)),
+      ];
+
+      const scoredOptions = optionFixtures.map((candidateFixture) => {
+        const playersInMatch = [
+          candidateFixture.team1.player || candidateFixture.team1.player1,
+          candidateFixture.team1.player2,
+          candidateFixture.team2.player || candidateFixture.team2.player1,
+          candidateFixture.team2.player2,
+        ].filter(Boolean);
+        const score = evaluateOption(playersInMatch);
+        return { candidateFixture, playersInMatch, score };
+      });
+
+      scoredOptions.sort((a, b) => {
+        if (a.score.imbalance !== b.score.imbalance) {
+          return a.score.imbalance - b.score.imbalance;
+        }
+        if (!mustUseOddNow && a.score.oddAppearances !== b.score.oddAppearances) {
+          return a.score.oddAppearances - b.score.oddAppearances;
+        }
+        return 0;
+      });
+
+      const best = scoredOptions.filter((option) => (
+        option.score.imbalance === scoredOptions[0].score.imbalance
+        && option.score.oddAppearances === scoredOptions[0].score.oddAppearances
+      ));
+      const selected = best[Math.floor(Math.random() * best.length)];
+
+      selected.playersInMatch.forEach(bump);
+      updatedFixtures.push(selected.candidateFixture);
+    });
+
+    return updatedFixtures;
+  };
+
   const upsertTournamentHistory = (history, tournament) => {
     const tournamentKey = tournament.appwriteId || tournament.id;
     const existingIndex = history.findIndex((t) => (t.appwriteId || t.id) === tournamentKey);
@@ -158,6 +370,9 @@ export const useTournamentActions = ({
     formatOverride,
     gameModeOverride,
     tournamentNameOverride,
+    oddPlayerConfig,
+    oddPlayerEnabled,
+    oddPlayerName,
   } = {}) => {
     if (!assertCanOperate()) return;
     const selectedTeams = teamsOverride || teams;
@@ -165,6 +380,12 @@ export const useTournamentActions = ({
     const selectedFormat = formatOverride || format;
     const selectedGameMode = gameModeOverride || gameMode;
     const selectedTournamentName = tournamentNameOverride || tournamentName;
+    const selectedOddPlayerEnabled = Boolean(
+      oddPlayerConfig?.oddPlayerEnabled ?? oddPlayerEnabled
+    );
+    const selectedOddPlayerName = (
+      oddPlayerConfig?.oddPlayerName ?? oddPlayerName ?? ''
+    ).trim();
 
     setLoading(true);
     setLastTournamentConfig({
@@ -191,6 +412,10 @@ export const useTournamentActions = ({
         updatedRatings[player2] = { rating: 1000, matchesPlayed: 0, history: [] };
       }
     });
+    if (selectedOddPlayerEnabled && selectedOddPlayerName && !updatedRatings[selectedOddPlayerName]) {
+      updatePlayerDatabase(selectedOddPlayerName);
+      updatedRatings[selectedOddPlayerName] = { rating: 1000, matchesPlayed: 0, history: [] };
+    }
     setPlayerRatings(updatedRatings);
 
     setTimeout(async () => {
@@ -199,6 +424,12 @@ export const useTournamentActions = ({
 
       if (selectedTournamentFormat === 'league') {
         newFixtures = createFixtures(selectedTeams, selectedFormat);
+        if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
+          newFixtures = injectRotatingOddPlayer({
+            fixtures: newFixtures,
+            oddPlayerName: selectedOddPlayerName,
+          });
+        }
         setFixtures(newFixtures);
       } else {
         newBracket = generateKnockoutBracket(selectedTeams, selectedTournamentFormat);
@@ -228,6 +459,10 @@ export const useTournamentActions = ({
 
       setStep('tournament');
       setLoading(false);
+      if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
+        showToast(`Tournament generated with rotating odd player: ${selectedOddPlayerName} 🏸`);
+        return;
+      }
       showToast('Tournament generated! 🏸');
     }, 800);
   };
@@ -459,7 +694,7 @@ export const useTournamentActions = ({
     showToast('Result saved! ✓');
   };
 
-  const saveFinalResult = async (score1, score2) => {
+  const saveFinalResult = async (score1, score2, finalistsOverride = null) => {
     if (!assertCanOperate()) return;
     if (score1 === '' || score2 === '' || score1 === score2) {
       showToast('Invalid scores', 'error');
@@ -468,7 +703,9 @@ export const useTournamentActions = ({
     captureUndoSnapshot();
 
     const pointsTable = calculatePointsTable(teams, fixtures);
-    const finalists = [pointsTable[0], pointsTable[1]];
+    const finalists = Array.isArray(finalistsOverride) && finalistsOverride.length >= 2
+      ? finalistsOverride
+      : [pointsTable[0], pointsTable[1]];
     const prediction = predictMatchOutcome({
       match: { team1: finalists[0], team2: finalists[1] },
       playerRatings,
@@ -743,6 +980,14 @@ export const useTournamentActions = ({
       setChampion(null);
       setAiMatchSummaries([]);
       setCurrentTournamentId(null);
+      await rebuildPlayerDatabase({
+        history: updatedHistory,
+        casual: casualMatches,
+        liveTeams: [],
+        liveFixtures: [],
+        liveBracket: [],
+        liveChampion: null,
+      });
       showToast('Tournament deleted. ELO/stats recalculated.');
     } catch (error) {
       console.error('Error deleting current tournament:', error);
@@ -804,6 +1049,11 @@ export const useTournamentActions = ({
       localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
     }
 
+    await rebuildPlayerDatabase({
+      history: updatedHistory,
+      casual: casualMatches,
+    });
+
     showToast('Tournament deleted - ratings recalculated');
   };
 
@@ -832,6 +1082,10 @@ export const useTournamentActions = ({
       if (isAppwriteEnabled) {
         await saveRatingsMutation.mutateAsync(recalculatedRatings);
       }
+      await rebuildPlayerDatabase({
+        history: tournamentHistory,
+        casual: updatedCasualMatches,
+      });
 
       showToast('Casual match deleted - ratings recalculated');
     } catch (error) {
