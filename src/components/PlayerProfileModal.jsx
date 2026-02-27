@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, TrendingUp, Trophy, Activity, Clock, Image } from 'lucide-react';
+import { X, TrendingUp, Trophy, Activity, Clock, Image, CheckCircle2 } from 'lucide-react';
 import AdvancedProfileInsights from './profile/AdvancedProfileInsights';
 import AchievementsPanel from './profile/AchievementsPanel';
 import GamificationPanel from './profile/GamificationPanel';
@@ -13,7 +13,19 @@ const formatDate = (dateString) => {
   return date.toLocaleString();
 };
 
-const PlayerProfileModal = ({ playerName, profile, team, advancedStats, achievements, gamification, photoUrl = '', onUpdatePhoto, onClose }) => {
+const PlayerProfileModal = ({
+  playerName,
+  profile,
+  team,
+  advancedStats,
+  achievements,
+  gamification,
+  photoUrl = '',
+  isLinked = false,
+  canEditPhoto = true,
+  onUpdatePhoto,
+  onClose
+}) => {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
 
@@ -34,7 +46,7 @@ const PlayerProfileModal = ({ playerName, profile, team, advancedStats, achievem
   const visibleMatches = showAllHistory ? orderedMatches : orderedMatches.slice(0, 8);
 
   const handleEditPhoto = () => {
-    if (!onUpdatePhoto || !playerName) return;
+    if (!canEditPhoto || !onUpdatePhoto || !playerName) return;
     setShowPhotoEditor(true);
   };
 
@@ -46,7 +58,19 @@ const PlayerProfileModal = ({ playerName, profile, team, advancedStats, achievem
             <div className="flex items-start gap-3 mb-2">
               <PlayerAvatar name={playerName} photoUrl={photoUrl} size="xl" className="ring-2 ring-white/70" />
               <div className="min-w-0 flex-1">
-                <h3 className="text-lg sm:text-xl font-bold text-white truncate">{playerName}</h3>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-white truncate">{playerName}</h3>
+                  {isLinked ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 shrink-0">
+                      <CheckCircle2 size={12} />
+                      Linked
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border border-white/40 bg-white/20 text-white/90 shrink-0">
+                      Not linked
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs sm:text-sm text-blue-100 truncate">
                   {team ? `${team.emoji || '🏸'} ${team.name}` : 'No current team'}
                 </p>
@@ -87,14 +111,16 @@ const PlayerProfileModal = ({ playerName, profile, team, advancedStats, achievem
                 </div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleEditPhoto}
-              className="text-[11px] sm:text-xs bg-white/20 text-white px-2.5 py-1 rounded-full font-semibold hover:bg-white/30 transition-all flex items-center gap-1"
-            >
-              <Image size={12} />
-              Edit Photo
-            </button>
+            {canEditPhoto && (
+              <button
+                type="button"
+                onClick={handleEditPhoto}
+                className="text-[11px] sm:text-xs bg-white/20 text-white px-2.5 py-1 rounded-full font-semibold hover:bg-white/30 transition-all flex items-center gap-1"
+              >
+                <Image size={12} />
+                Edit Photo
+              </button>
+            )}
           </div>
           <button
             onClick={onClose}

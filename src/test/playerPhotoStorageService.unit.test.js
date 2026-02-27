@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const storageMock = {
-  getFileView: vi.fn(),
-  createFile: vi.fn(),
-  deleteFile: vi.fn(),
-};
+const { storageMock } = vi.hoisted(() => ({
+  storageMock: {
+    getFileView: vi.fn(),
+    createFile: vi.fn(),
+    deleteFile: vi.fn(),
+  },
+}));
 
 vi.mock('../appwrite.config', () => ({
   storage: storageMock,

@@ -1,23 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAppwriteConfigured } from '../appwrite.config';
 import { tournamentService } from '../services/tournamentService';
 import { playerService } from '../services/playerService';
 import { appDataService } from '../services/appDataService';
 
+const APPWRITE_BOOTSTRAP_KEY = ['appwrite', 'bootstrap'];
+
 /**
- * Custom hook to manage Appwrite sync with session state
+ * Custom hook to manage Appwrite sync via React Query.
  */
 export const useAppwriteSync = (showToast) => {
+  const queryClient = useQueryClient();
   const [isAppwriteEnabled, setIsAppwriteEnabled] = useState(false);
   const [isConfigChecked, setIsConfigChecked] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [currentTournamentId, setCurrentTournamentId] = useState(null);
 
-  // Check if Appwrite is configured on mount
   useEffect(() => {
     const enabled = isAppwriteConfigured();
     setIsAppwriteEnabled(enabled);
-    
     if (enabled) {
       console.log('✅ Appwrite integration enabled');
     } else {
@@ -26,177 +27,109 @@ export const useAppwriteSync = (showToast) => {
     setIsConfigChecked(true);
   }, []);
 
-  /**
-   * Load session state from sessionStorage (for page refresh)
-   */
-  const loadSessionState = useCallback(async () => {
-    try {
-      if (isAppwriteEnabled) {
-        const cloudState = await appDataService.getSessionState();
-        if (cloudState) return cloudState;
-      }
+  const invalidateBootstrap = () => queryClient.invalidateQueries({ queryKey: APPWRITE_BOOTSTRAP_KEY });
 
-      const localState = sessionStorage.getItem('badminton_session_state');
-      if (localState) {
-        return JSON.parse(localState);
-      }
-    } catch (error) {
-      console.error('Error loading session state:', error);
-    }
-    return null;
-  }, [isAppwriteEnabled]);
-
-  /**
-   * Save session state to sessionStorage
-   */
-  const saveSessionState = useCallback((state) => {
-    try {
-      if (isAppwriteEnabled) {
-        appDataService.saveSessionState(state).catch((error) => {
-          console.error('Error saving cloud session state:', error);
-          sessionStorage.setItem('badminton_session_state', JSON.stringify(state));
-        });
-      } else {
-        sessionStorage.setItem('badminton_session_state', JSON.stringify(state));
-      }
-    } catch (error) {
-      console.error('Error saving session state:', error);
-    }
-  }, [isAppwriteEnabled]);
-
-  /**
-   * Clear session state
-   */
-  const clearSessionState = useCallback(() => {
-    try {
-      sessionStorage.removeItem('badminton_session_state');
-      if (isAppwriteEnabled) {
-        appDataService.clearSessionState().catch((error) => {
-          console.error('Error clearing cloud session state:', error);
-        });
-      }
-    } catch (error) {
-      console.error('Error clearing session state:', error);
-    }
-  }, [isAppwriteEnabled]);
-
-  /**
-   * Load all data from Appwrite
-   */
   const loadFromAppwrite = async () => {
     if (!isAppwriteEnabled) return null;
-
     try {
-      setIsSyncing(true);
+      return await queryClient.fetchQuery({
+        queryKey: APPWRITE_BOOTSTRAP_KEY,
+        queryFn: async () => {
+          const [tournaments, playerDb, ratings, meta] = await Promise.all([
+            tournamentService.getAllTournaments(),
+            playerService.getPlayerDatabase(),
+            playerService.getPlayerRatings(),
+            appDataService.getAppMeta().catch(() => null),
+          ]);
 
-      const [tournaments, playerDb, ratings, meta] = await Promise.all([
-        tournamentService.getAllTournaments(),
-        playerService.getPlayerDatabase(),
-        playerService.getPlayerRatings(),
-        appDataService.getAppMeta().catch(() => null),
-      ]);
-
-      return {
-        tournaments: tournaments || [],
-        playerDatabase: playerDb?.players || [],
-        playerRatings: ratings?.ratings || {},
-        members: meta?.members || [],
-        templates: meta?.templates || [],
-        playerPhotos: meta?.playerPhotos || {},
-      };
+          return {
+            tournaments: tournaments || [],
+            playerDatabase: playerDb?.players || [],
+            playerRatings: ratings?.ratings || {},
+            members: meta?.members || [],
+            templates: meta?.templates || [],
+            playerPhotos: meta?.playerPhotos || {},
+          };
+        },
+        staleTime: 15 * 1000,
+      });
     } catch (error) {
       console.error('Error loading from Appwrite:', error);
       showToast?.('Failed to load from cloud', 'error');
       return null;
-    } finally {
-      setIsSyncing(false);
     }
   };
 
-  /**
-   * Save tournament to Appwrite
-   */
-  const saveTournamentToAppwrite = async (tournament) => {
-    if (!isAppwriteEnabled) return tournament;
-
-    try {
-      let savedTournament;
-
+  const saveTournamentMutation = useMutation({
+    mutationFn: async (tournament) => {
+      if (!isAppwriteEnabled) return tournament;
       if (tournament.appwriteId) {
-        // Update existing tournament
-        savedTournament = await tournamentService.updateTournament(
-          tournament.appwriteId,
-          tournament
-        );
-      } else {
-        // Create new tournament
-        savedTournament = await tournamentService.createTournament(tournament);
-        setCurrentTournamentId(savedTournament.id);
+        return tournamentService.updateTournament(tournament.appwriteId, tournament);
       }
-
-      return savedTournament;
-    } catch (error) {
+      return tournamentService.createTournament(tournament);
+    },
+    onSuccess: async (savedTournament) => {
+      if (savedTournament?.id) setCurrentTournamentId(savedTournament.id);
+      await invalidateBootstrap();
+    },
+    onError: (error) => {
       console.error('Error saving tournament to Appwrite:', error);
       showToast?.('Failed to sync to cloud', 'error');
-      return tournament; // Return original if save fails
-    }
-  };
+    },
+  });
 
-  /**
-   * Delete tournament from Appwrite
-   */
-  const deleteTournamentFromAppwrite = async (tournamentId) => {
-    if (!isAppwriteEnabled) return true;
-
-    try {
+  const deleteTournamentMutation = useMutation({
+    mutationFn: async (tournamentId) => {
+      if (!isAppwriteEnabled) return true;
       await tournamentService.deleteTournament(tournamentId);
       return true;
-    } catch (error) {
+    },
+    onSuccess: invalidateBootstrap,
+    onError: (error) => {
       console.error('Error deleting tournament from Appwrite:', error);
       showToast?.('Failed to delete from cloud', 'error');
-      return false;
-    }
-  };
+    },
+  });
 
-  /**
-   * Save player ratings to Appwrite
-   */
-  const saveRatingsToAppwrite = async (ratings) => {
-    if (!isAppwriteEnabled) return ratings;
-
-    try {
+  const saveRatingsMutation = useMutation({
+    mutationFn: async (ratings) => {
+      if (!isAppwriteEnabled) return ratings;
       await playerService.savePlayerRatings(ratings);
       return ratings;
-    } catch (error) {
+    },
+    onSuccess: invalidateBootstrap,
+    onError: (error) => {
       console.error('Error saving ratings to Appwrite:', error);
-      // Don't show toast for ratings - silent fail
-      return ratings;
-    }
-  };
+    },
+  });
 
-  /**
-   * Save player database to Appwrite
-   */
-  const savePlayerDatabaseToAppwrite = async (players) => {
-    if (!isAppwriteEnabled) return players;
-
-    try {
+  const savePlayerDatabaseMutation = useMutation({
+    mutationFn: async (players) => {
+      if (!isAppwriteEnabled) return players;
       await playerService.savePlayerDatabase(players);
       return players;
-    } catch (error) {
+    },
+    onSuccess: invalidateBootstrap,
+    onError: (error) => {
       console.error('Error saving player database to Appwrite:', error);
-      return players;
-    }
-  };
+    },
+  });
 
-  /**
-   * Sync current tournament state to Appwrite
-   */
-  const syncCurrentTournament = async (tournamentData) => {
-    if (!isAppwriteEnabled || !currentTournamentId) return;
+  const saveMetaMutation = useMutation({
+    mutationFn: async (updates) => {
+      if (!isAppwriteEnabled) return updates;
+      return appDataService.saveAppMeta(updates);
+    },
+    onSuccess: invalidateBootstrap,
+    onError: (error) => {
+      console.error('Error saving app meta to Appwrite:', error);
+    },
+  });
 
-    try {
-      await tournamentService.updateTournament(currentTournamentId, {
+  const syncTournamentMutation = useMutation({
+    mutationFn: async ({ tournamentId, tournamentData }) => {
+      if (!isAppwriteEnabled || !tournamentId) return null;
+      return tournamentService.updateTournament(tournamentId, {
         fixtures: tournamentData.fixtures,
         bracket: tournamentData.bracket,
         champion: tournamentData.champion,
@@ -204,10 +137,73 @@ export const useAppwriteSync = (showToast) => {
         aiSummaries: tournamentData.aiSummaries,
         status: tournamentData.champion ? 'completed' : 'active',
       });
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Error syncing tournament:', error);
+    },
+  });
+
+  const saveTournamentToAppwrite = async (tournament) => {
+    try {
+      return await saveTournamentMutation.mutateAsync(tournament);
+    } catch (_error) {
+      return tournament;
     }
   };
+
+  const deleteTournamentFromAppwrite = async (tournamentId) => {
+    try {
+      return await deleteTournamentMutation.mutateAsync(tournamentId);
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const saveRatingsToAppwrite = async (ratings) => {
+    try {
+      return await saveRatingsMutation.mutateAsync(ratings);
+    } catch (_error) {
+      return ratings;
+    }
+  };
+
+  const savePlayerDatabaseToAppwrite = async (players) => {
+    try {
+      return await savePlayerDatabaseMutation.mutateAsync(players);
+    } catch (_error) {
+      return players;
+    }
+  };
+
+  const saveMembersToAppwrite = async (members) => {
+    await saveMetaMutation.mutateAsync({ members });
+    return members;
+  };
+
+  const saveTemplatesToAppwrite = async (templates) => {
+    await saveMetaMutation.mutateAsync({ templates });
+    return templates;
+  };
+
+  const savePlayerPhotosToAppwrite = async (playerPhotos) => {
+    await saveMetaMutation.mutateAsync({ playerPhotos });
+    return playerPhotos;
+  };
+
+  const syncCurrentTournament = async (tournamentData) => {
+    if (!currentTournamentId) return null;
+    return syncTournamentMutation.mutateAsync({
+      tournamentId: currentTournamentId,
+      tournamentData,
+    });
+  };
+
+  const isSyncing = saveTournamentMutation.isPending
+    || deleteTournamentMutation.isPending
+    || saveRatingsMutation.isPending
+    || savePlayerDatabaseMutation.isPending
+    || saveMetaMutation.isPending
+    || syncTournamentMutation.isPending;
 
   return {
     isAppwriteEnabled,
@@ -215,17 +211,14 @@ export const useAppwriteSync = (showToast) => {
     isSyncing,
     currentTournamentId,
     setCurrentTournamentId,
-    loadSessionState,
-    saveSessionState,
-    clearSessionState,
     loadFromAppwrite,
     saveTournamentToAppwrite,
     deleteTournamentFromAppwrite,
     saveRatingsToAppwrite,
     savePlayerDatabaseToAppwrite,
-    saveMembersToAppwrite: (members) => appDataService.saveAppMeta({ members }),
-    saveTemplatesToAppwrite: (templates) => appDataService.saveAppMeta({ templates }),
-    savePlayerPhotosToAppwrite: (playerPhotos) => appDataService.saveAppMeta({ playerPhotos }),
+    saveMembersToAppwrite,
+    saveTemplatesToAppwrite,
+    savePlayerPhotosToAppwrite,
     syncCurrentTournament,
   };
 };

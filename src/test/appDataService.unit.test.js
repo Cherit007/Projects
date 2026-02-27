@@ -1,18 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const databasesMock = {
-  getDocument: vi.fn(),
-  updateDocument: vi.fn(),
-  createDocument: vi.fn(),
-  deleteDocument: vi.fn(),
-};
+const { databasesMock } = vi.hoisted(() => ({
+  databasesMock: {
+    getDocument: vi.fn(),
+    updateDocument: vi.fn(),
+    createDocument: vi.fn(),
+    deleteDocument: vi.fn(),
+  },
+}));
 
 vi.mock('../appwrite.config', () => ({
   databases: databasesMock,
   DATABASE_ID: 'db1',
   COLLECTIONS: {
     APP_META: 'meta',
-    SESSION_STATE: 'session',
   },
   ID: {
     custom: vi.fn((value) => `custom-${value}`),
@@ -41,20 +42,17 @@ describe('appDataService', () => {
     expect(result.playerPhotos.Alex.fileId).toBe('f1');
   });
 
-  it('creates session document when update gets 404', async () => {
-    databasesMock.updateDocument.mockRejectedValueOnce({ code: 404 });
+  it('saves additional group metadata', async () => {
+    databasesMock.getDocument.mockRejectedValueOnce({ code: 404 });
     databasesMock.createDocument.mockResolvedValueOnce({});
 
-    const state = { step: 'tournament', tournamentName: 'Summer Cup' };
-    const result = await appDataService.saveSessionState(state);
+    const result = await appDataService.saveAppMeta({
+      groups: [{ id: 'g1', name: 'Club Group' }],
+      groupMembers: [{ id: 'm1', groupId: 'g1', userId: 'u1', role: 'admin' }],
+      groupInvites: [{ id: 'i1', code: 'ABC123', groupId: 'g1' }],
+    });
 
-    expect(result).toEqual(state);
-    expect(databasesMock.updateDocument).toHaveBeenCalledTimes(1);
+    expect(result.groups).toHaveLength(1);
     expect(databasesMock.createDocument).toHaveBeenCalledTimes(1);
-  });
-
-  it('clearSessionState returns true for missing doc', async () => {
-    databasesMock.deleteDocument.mockRejectedValueOnce({ code: 404 });
-    await expect(appDataService.clearSessionState()).resolves.toBe(true);
   });
 });
