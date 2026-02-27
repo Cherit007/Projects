@@ -467,6 +467,77 @@ export const useTournamentActions = ({
     }, 800);
   };
 
+  const scheduleTournament = async ({
+    teamsOverride,
+    tournamentFormatOverride,
+    formatOverride,
+    gameModeOverride,
+    tournamentNameOverride,
+    oddPlayerConfig,
+    oddPlayerEnabled,
+    oddPlayerName,
+    scheduledAt,
+  } = {}) => {
+    if (!assertCanOperate()) return;
+    const selectedTeams = teamsOverride || teams;
+    const selectedTournamentFormat = tournamentFormatOverride || tournamentFormat;
+    const selectedFormat = formatOverride || format;
+    const selectedGameMode = gameModeOverride || gameMode;
+    const selectedTournamentName = (tournamentNameOverride || tournamentName || '').trim();
+    const selectedOddPlayerEnabled = Boolean(
+      oddPlayerConfig?.oddPlayerEnabled ?? oddPlayerEnabled
+    );
+    const selectedOddPlayerName = (
+      oddPlayerConfig?.oddPlayerName ?? oddPlayerName ?? ''
+    ).trim();
+
+    if (!selectedTournamentName) {
+      showToast('Please enter tournament name', 'error');
+      return;
+    }
+
+    const scheduleLabel = scheduledAt
+      ? new Date(scheduledAt).toLocaleString()
+      : new Date().toLocaleString();
+
+    const payload = {
+      name: selectedTournamentName,
+      date: scheduleLabel,
+      teams: selectedTeams,
+      fixtures: [],
+      bracket: null,
+      format: selectedFormat,
+      gameMode: selectedGameMode,
+      tournamentFormat: selectedTournamentFormat,
+      aiSummaries: [],
+      status: 'scheduled',
+      oddPlayerEnabled: selectedOddPlayerEnabled,
+      oddPlayerName: selectedOddPlayerName,
+    };
+
+    if (isAppwriteEnabled) {
+      const saved = await saveTournamentMutation.mutateAsync(payload);
+      if (saved) {
+        setTournamentHistory((prev) => upsertTournamentHistory(prev, saved));
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
+    } else {
+      const scheduled = {
+        ...payload,
+        id: Date.now(),
+        appwriteId: null,
+      };
+      setTournamentHistory((prev) => {
+        const next = [scheduled, ...prev];
+        localStorage.setItem('badminton_history', JSON.stringify(next));
+        return next;
+      });
+    }
+
+    showToast(`Tournament scheduled for ${scheduleLabel}`);
+    setStep('setup');
+  };
+
   const saveMatchResult = (matchId, score1, score2) => {
     if (!assertCanOperate()) return;
     if (score1 === '' || score2 === '' || score1 === score2) {
@@ -1097,6 +1168,7 @@ export const useTournamentActions = ({
   return {
     handleStartTournament,
     generateFixtures,
+    scheduleTournament,
     saveMatchResult,
     prioritizeMatch,
     saveBracketMatchResult,

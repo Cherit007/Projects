@@ -152,6 +152,7 @@ const App = () => {
   const adminAccounts = useAppStore((s) => s.adminAccounts);
   const setAdminAccounts = useAppStore((s) => s.setAdminAccounts);
   const linkPromptedRef = useRef(new Set());
+  const previousStepRef = useRef(step);
 
   const hydratePlayerPhotos = (rawPhotos = {}) => {
     const urls = {};
@@ -828,8 +829,13 @@ const App = () => {
 
   // Initialize teams
   useEffect(() => {
-    if (step === 'teams') {
-      const newTeams = Array.isArray(pendingPrefilledTeams) && pendingPrefilledTeams.length === numTeams
+    const enteringTeams = previousStepRef.current !== 'teams' && step === 'teams';
+    const hasPrefilledTeams = Array.isArray(pendingPrefilledTeams) && pendingPrefilledTeams.length > 0;
+    const hasExistingTeams = Array.isArray(teams) && teams.length > 0;
+
+    if (step === 'teams' && (hasPrefilledTeams || (enteringTeams && !hasExistingTeams))) {
+      const hasPrefilledTeams = Array.isArray(pendingPrefilledTeams) && pendingPrefilledTeams.length > 0;
+      const newTeams = hasPrefilledTeams
         ? pendingPrefilledTeams.map((team, i) => ({
             id: i + 1,
             emoji: team.emoji || '🏸',
@@ -845,10 +851,14 @@ const App = () => {
             player1: '',
             player2: '',
           }));
+      if (hasPrefilledTeams && pendingPrefilledTeams.length !== numTeams) {
+        setNumTeams(pendingPrefilledTeams.length);
+      }
       setTeams(newTeams);
       setPendingPrefilledTeams(null);
     }
-  }, [step, numTeams, gameMode, pendingPrefilledTeams]);
+    previousStepRef.current = step;
+  }, [step, numTeams, gameMode, pendingPrefilledTeams, teams]);
 
   const updatePlayerDatabase = (playerName) => {
     if (!assertCanOperate()) return;
@@ -1295,6 +1305,7 @@ const App = () => {
   const {
     handleStartTournament,
     generateFixtures,
+    scheduleTournament,
     saveMatchResult,
     prioritizeMatch,
     saveBracketMatchResult,
@@ -1423,6 +1434,80 @@ const App = () => {
     eloLeaderboard: getPlayerLeaderboard(playerRatings),
   };
 
+  const scheduledTournaments = useMemo(
+    () => (tournamentHistory || []).filter((item) => item?.status === 'scheduled'),
+    [tournamentHistory]
+  );
+
+  const handleEditScheduledTournament = (tournamentId) => {
+    const scheduled = (tournamentHistory || []).find(
+      (item) => (item.id || item.appwriteId) === tournamentId
+    );
+    if (!scheduled) return;
+
+    const scheduledGameMode = scheduled.gameMode || 'doubles';
+    const normalizedTeams = (scheduled.teams || []).map((team, index) => {
+      const player1 = team.player1 || team.player || '';
+      return {
+        ...team,
+        id: index + 1,
+        player1,
+        player: player1,
+        player2: scheduledGameMode === 'singles' ? '' : (team.player2 || ''),
+      };
+    });
+
+    setTournamentName(scheduled.name || '');
+    setFormat(scheduled.format || '1');
+    setGameMode(scheduledGameMode);
+    setTournamentFormat(normalizeTournamentFormat(scheduled.tournamentFormat || 'league'));
+    setNumTeams(normalizedTeams.length || 3);
+    setOddPlayerEnabled(Boolean(scheduled.oddPlayerEnabled));
+    setOddPlayerName((scheduled.oddPlayerName || '').trim());
+    setTeams(normalizedTeams);
+    setPendingPrefilledTeams(normalizedTeams);
+    setStep('teams');
+    showToast('Scheduled tournament loaded. You can edit teams now.');
+  };
+
+  const handleStartScheduledTournament = (tournamentId) => {
+    const scheduled = (tournamentHistory || []).find(
+      (item) => (item.id || item.appwriteId) === tournamentId
+    );
+    if (!scheduled) return;
+
+    const scheduledGameMode = scheduled.gameMode || 'doubles';
+    const normalizedTeams = (scheduled.teams || []).map((team, index) => {
+      const player1 = team.player1 || team.player || '';
+      return {
+        ...team,
+        id: index + 1,
+        player1,
+        player: player1,
+        player2: scheduledGameMode === 'singles' ? '' : (team.player2 || ''),
+      };
+    });
+
+    setTournamentName(scheduled.name || '');
+    setFormat(scheduled.format || '1');
+    setGameMode(scheduledGameMode);
+    setTournamentFormat(normalizeTournamentFormat(scheduled.tournamentFormat || 'league'));
+    setNumTeams(normalizedTeams.length || 3);
+    setOddPlayerEnabled(Boolean(scheduled.oddPlayerEnabled));
+    setOddPlayerName((scheduled.oddPlayerName || '').trim());
+    generateFixtures({
+      teamsOverride: normalizedTeams,
+      tournamentFormatOverride: normalizeTournamentFormat(scheduled.tournamentFormat || 'league'),
+      formatOverride: scheduled.format || '1',
+      gameModeOverride: scheduledGameMode,
+      tournamentNameOverride: scheduled.name || '',
+      oddPlayerConfig: {
+        oddPlayerEnabled: Boolean(scheduled.oddPlayerEnabled),
+        oddPlayerName: (scheduled.oddPlayerName || '').trim(),
+      },
+    });
+  };
+
   const setupScreenProps = {
     step,
     tournamentName,
@@ -1453,6 +1538,9 @@ const App = () => {
       showToast('Tournament loaded!');
     },
     tournamentHistory,
+    scheduledTournaments,
+    onEditScheduledTournament: handleEditScheduledTournament,
+    onStartScheduledTournament: handleStartScheduledTournament,
     casualMatches,
     playerDatabase,
     teamNameDatabase,
@@ -1501,6 +1589,7 @@ const App = () => {
     oddPlayerName,
     setOddPlayerName,
     onBack: () => setStep('setup'),
+    onSchedule: scheduleTournament,
   };
 
   const tournamentViewProps = {

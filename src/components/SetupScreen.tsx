@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, Calendar, History, TrendingUp, Trophy, RefreshCw, X, Undo2, Sparkles, BarChart3, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { Users, Calendar, History, TrendingUp, Trophy, RefreshCw, X, Undo2, Sparkles, BarChart3, ChevronDown, ChevronUp, CheckCircle2, Clock3, Play, PencilLine } from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
 import TemplateManager from './TemplateManager';
 import PlayerProfileModal from './PlayerProfileModal';
@@ -51,6 +51,9 @@ const SetupScreen = ({
   lastTournamentConfig,
   onReuseTournament,
   tournamentHistory,
+  scheduledTournaments = [],
+  onEditScheduledTournament,
+  onStartScheduledTournament,
   casualMatches,
   playerDatabase,
   teamNameDatabase,
@@ -170,6 +173,54 @@ const SetupScreen = ({
         </div>
 
         <div className="theme-card rounded-2xl p-6 md:p-8 mb-6">
+          {scheduledTournaments.length > 0 && (
+            <div className="mb-6 rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-4">
+              <p className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                <Clock3 size={16} /> Scheduled Tournaments ({scheduledTournaments.length})
+              </p>
+              <div className="space-y-2">
+                {scheduledTournaments.slice(0, 4).map((tournament) => {
+                  const tournamentId = tournament.id || tournament.appwriteId;
+                  return (
+                    <div key={tournamentId} className="rounded-lg border border-indigo-200 bg-white px-3 py-2">
+                      <div className="flex flex-col gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{tournament.name}</p>
+                          <p className="text-[11px] text-slate-500 break-words">
+                            {tournament.date} • {tournament.teams?.length || 0} teams
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => onEditScheduledTournament?.(tournamentId)}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1"
+                          >
+                            <PencilLine size={11} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onStartScheduledTournament?.(tournamentId)}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 flex items-center gap-1"
+                          >
+                            <Play size={11} /> Start
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteTournament?.(tournamentId)}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {lastTournamentConfig && (
             <div className="mb-6 bg-gradient-to-r from-emerald-50 to-cyan-50 border-2 border-emerald-200 rounded-xl p-4">
               <div className="flex items-center justify-between gap-4">
@@ -274,6 +325,7 @@ const SetupScreen = ({
                 </div>
               </div>
             )}
+
           </div>
 
           <div className="space-y-6">

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
 import AutocompleteInput from './AutocompleteInput';
+import { parsePlayerPool, runSnakeDraft } from '../utils/draft';
 
 const TeamEntry = ({
   teams,
@@ -9,6 +10,7 @@ const TeamEntry = ({
   playerDatabase,
   teamNameDatabase = [],
   onGenerate,
+  onSchedule = () => {},
   loading,
   onBack,
   oddPlayerEnabled = false,
@@ -16,6 +18,35 @@ const TeamEntry = ({
   oddPlayerName = '',
   setOddPlayerName = () => {},
 }) => {
+  const [snakeDraftEnabled, setSnakeDraftEnabled] = useState(false);
+  const [draftPoolInput, setDraftPoolInput] = useState('');
+  const [draftError, setDraftError] = useState('');
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('');
+
+  const defaultDraftPool = useMemo(
+    () => [...new Set((playerDatabase || []).map((name) => String(name || '').trim()).filter(Boolean))].join(', '),
+    [playerDatabase]
+  );
+  const slotsPerTeam = gameMode === 'singles' ? 1 : 2;
+  const requiredPlayersForDraft = teams.length * slotsPerTeam;
+
+  const applySnakeDraft = () => {
+    const pool = parsePlayerPool(draftPoolInput || defaultDraftPool);
+    const result = runSnakeDraft({
+      teams,
+      gameMode,
+      playerPool: pool,
+      captains: [],
+    });
+    if (!result.ok) {
+      setDraftError(result.reason || 'Unable to run draft');
+      return;
+    }
+    setTeams(result.teams);
+    setDraftError('');
+  };
+
   const canGenerate = !loading
     && !teams.some(t => !t.name || (!t.player && !t.player1) || (gameMode !== 'singles' && !t.player2))
     && (!(gameMode !== 'singles' && oddPlayerEnabled) || oddPlayerName.trim());
@@ -132,6 +163,48 @@ const TeamEntry = ({
             </div>
           )}
 
+          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <label className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+              <input
+                type="checkbox"
+                checked={snakeDraftEnabled}
+                onChange={(event) => setSnakeDraftEnabled(event.target.checked)}
+              />
+              Enable Snake Draft
+            </label>
+            {snakeDraftEnabled && (
+              <>
+                <p className="mt-1 text-xs text-blue-800">
+                  Auto-fill teams from a player pool, then edit manually if needed.
+                </p>
+                <div className="mt-3 space-y-2">
+                  <textarea
+                    value={draftPoolInput}
+                    onChange={(event) => setDraftPoolInput(event.target.value)}
+                    placeholder={defaultDraftPool || 'Enter players separated by comma/new line'}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:border-blue-500 outline-none bg-white"
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] text-blue-800">
+                      Required players: {requiredPlayersForDraft} ({teams.length} teams x {slotsPerTeam})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={applySnakeDraft}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-all"
+                    >
+                      Run Snake Draft
+                    </button>
+                  </div>
+                  {draftError && (
+                    <p className="text-xs text-red-600">{draftError}</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           {gameMode !== 'singles' && (
             <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -159,22 +232,77 @@ const TeamEntry = ({
             </div>
           )}
 
-          <button
-            onClick={() => onGenerate({
-              oddPlayerEnabled,
-              oddPlayerName: oddPlayerName.trim(),
-              oddPlayerConfig: {
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              onClick={() => onGenerate({
                 oddPlayerEnabled,
                 oddPlayerName: oddPlayerName.trim(),
-              },
-            })}
-            disabled={!canGenerate}
-            className="btn-brand w-full mt-6 py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-            <Calendar size={20} />
-            {loading ? 'Generating...' : 'Generate Tournament'}
-          </button>
+                oddPlayerConfig: {
+                  oddPlayerEnabled,
+                  oddPlayerName: oddPlayerName.trim(),
+                },
+              })}
+              disabled={!canGenerate}
+              className="btn-brand w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <Calendar size={20} />
+              {loading ? 'Generating...' : 'Generate Tournament'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowScheduleModal(true)}
+              disabled={!canGenerate}
+              className="w-full py-4 rounded-xl bg-slate-800 text-white font-semibold text-lg hover:bg-slate-900 hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Schedule Match
+            </button>
+          </div>
         </div>
       </div>
+
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Schedule Tournament</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Teams and players from this page will be saved as scheduled.
+            </p>
+            <input
+              type="datetime-local"
+              value={scheduleAt}
+              onChange={(event) => setScheduleAt(event.target.value)}
+              className="w-full px-3 py-2 mb-4 border border-slate-300 rounded-lg text-sm outline-none focus:border-slate-500"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowScheduleModal(false)}
+                className="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSchedule({
+                    oddPlayerEnabled,
+                    oddPlayerName: oddPlayerName.trim(),
+                    oddPlayerConfig: {
+                      oddPlayerEnabled,
+                      oddPlayerName: oddPlayerName.trim(),
+                    },
+                    scheduledAt: scheduleAt || null,
+                  });
+                  setShowScheduleModal(false);
+                }}
+                className="px-3 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900"
+              >
+                Save Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -13,7 +13,7 @@ const ViewerDashboard = lazy(() => import('./ViewerDashboard'));
 const GroupRequestsCenter = lazy(() => import('./GroupRequestsCenter'));
 
 const ScreenFallback = () => (
-  <BadmintonLoader label="Preparing your court..." />
+  <BadmintonLoader label="Loading... Preparing your court..." />
 );
 
 const AppViewRouter = ({
