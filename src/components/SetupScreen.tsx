@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, Calendar, History, TrendingUp, Trophy, RefreshCw, X, Undo2, Sparkles, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, Calendar, History, TrendingUp, Trophy, RefreshCw, X, Undo2, Sparkles, BarChart3, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
 import TemplateManager from './TemplateManager';
 import PlayerProfileModal from './PlayerProfileModal';
@@ -76,6 +76,7 @@ const SetupScreen = ({
   allTimeStats,
   eloLeaderboard,
   playerRatings,
+  canEditPlayerPhoto = () => false,
   pairingAnalytics,
   formPowerRankings,
   playerPhotos = {},
@@ -103,6 +104,11 @@ const SetupScreen = ({
   };
 
   const selectedPlayerProfile = selectedPlayerName ? playerRatings?.[selectedPlayerName] : null;
+  const selectedPlayerMember = selectedPlayerName
+    ? (members || []).find(member => (member?.name || '').trim().toLowerCase() === selectedPlayerName.trim().toLowerCase())
+    : null;
+  const selectedPlayerIsLinked = Boolean(selectedPlayerMember?.linkedAccountId || selectedPlayerMember?.linkedEmail);
+  const selectedPlayerCanEditPhoto = Boolean(selectedPlayerName && canEditPlayerPhoto(selectedPlayerName));
   const selectedPlayerTeam = selectedPlayerName
     ? [...(tournamentHistory || [])]
         .reverse()
@@ -417,7 +423,20 @@ const SetupScreen = ({
                     {members.map(member => (
                       <div key={member.id} className="flex items-center justify-between border border-gray-200 rounded-xl p-3">
                         <div className="min-w-0">
-                          <p className="font-semibold text-gray-800 truncate">{member.name}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-semibold text-gray-800 truncate">{member.name}</p>
+                            {Boolean(member.linkedAccountId || member.linkedEmail) && (
+                              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 shrink-0">
+                                <CheckCircle2 size={12} />
+                                Linked
+                              </span>
+                            )}
+                            {!Boolean(member.linkedAccountId || member.linkedEmail) && (
+                              <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 shrink-0">
+                                Not linked
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-500 truncate">{member.phone}</p>
                         </div>
                         <button
@@ -745,6 +764,8 @@ const SetupScreen = ({
         achievements={selectedPlayerAchievements}
         gamification={selectedPlayerGamification}
         photoUrl={selectedPlayerName ? playerPhotos[selectedPlayerName] : ''}
+        isLinked={selectedPlayerIsLinked}
+        canEditPhoto={selectedPlayerCanEditPhoto}
         onUpdatePhoto={onUpdatePlayerPhoto}
         onClose={() => setSelectedPlayerName(null)}
       />

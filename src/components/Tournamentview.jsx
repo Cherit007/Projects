@@ -29,6 +29,7 @@ const TournamentView = ({
   aiMatchSummaries = [],
   playerPhotos = {},
   onUpdatePlayerPhoto,
+  canEditPlayerPhoto = () => false,
   inviteList = [],
   onSaveMatchResult,
   onPrioritizeMatch,
@@ -75,6 +76,11 @@ const TournamentView = ({
   const allEloLeaderboard = getPlayerLeaderboard(playerRatings);
   const eloLeaderboard = allEloLeaderboard.filter(player => currentTournamentPlayers.has(player.name));
   const selectedPlayerProfile = selectedPlayerName ? playerRatings[selectedPlayerName] : null;
+  const selectedPlayerMember = selectedPlayerName
+    ? (members || []).find(member => (member?.name || '').trim().toLowerCase() === selectedPlayerName.trim().toLowerCase())
+    : null;
+  const selectedPlayerIsLinked = Boolean(selectedPlayerMember?.linkedAccountId || selectedPlayerMember?.linkedEmail);
+  const selectedPlayerCanEditPhoto = Boolean(selectedPlayerName && canEditPlayerPhoto(selectedPlayerName));
   const selectedPlayerTeam = selectedPlayerName
     ? teams.find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(selectedPlayerName))
     : null;
@@ -689,6 +695,8 @@ const TournamentView = ({
         achievements={selectedPlayerAchievements}
         gamification={selectedPlayerGamification}
         photoUrl={selectedPlayerName ? playerPhotos[selectedPlayerName] : ''}
+        isLinked={selectedPlayerIsLinked}
+        canEditPhoto={selectedPlayerCanEditPhoto}
         onUpdatePhoto={onUpdatePlayerPhoto}
         onClose={() => setSelectedPlayerName(null)}
       />

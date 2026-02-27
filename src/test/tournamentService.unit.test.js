@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const databasesMock = {
-  updateDocument: vi.fn(),
-};
+const { databasesMock } = vi.hoisted(() => ({
+  databasesMock: {
+    updateDocument: vi.fn(),
+  },
+}));
 
 vi.mock('../appwrite.config', () => ({
   databases: databasesMock,
