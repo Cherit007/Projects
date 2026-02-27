@@ -4,7 +4,7 @@ import LiveMatchView from './LiveMatchView';
 import MatchCard from './MatchCard';
 import FinalMatchCard from './FinalMatchCard';
 import BracketView from './BracketView';
-import BracketMatchModal from './BracketMatchModal';
+import BracketMatchModal from './Bracketmatchmodal';
 import PlayerProfileModal from './PlayerProfileModal';
 import MatchSummaryFeed from './MatchSummaryFeed';
 import { buildPlayerAdvancedProfile } from '../utils/playerProfileAnalytics';
