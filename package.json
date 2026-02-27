@@ -18,7 +18,6 @@
     "deploy": "gh-pages -d dist -b badminton-v3 -f"
   },
   "dependencies": {
-    "@rollup/rollup-darwin-arm64": "^4.57.1",
     "@tanstack/react-query": "^5.83.0",
     "appwrite": "^22.3.0",
     "dotenv": "^17.3.1",
