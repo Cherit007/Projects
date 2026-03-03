@@ -64,8 +64,8 @@ const UserProfileModal = ({
   }, [adminAccounts, memberProfiles]);
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-[260] bg-black/50 flex items-center justify-center p-4 user-profile-overlay app-overlay">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden user-profile-shell app-modal-shell">
         <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-4 flex items-center justify-between">
           <h3 className="text-white text-lg font-bold">My Profile</h3>
           <button onClick={onClose} className="text-white hover:bg-white/20 rounded-lg p-2" aria-label="Close profile">
@@ -101,7 +101,7 @@ const UserProfileModal = ({
               type="button"
               onClick={() => onSaveName?.(name)}
               disabled={saving || !name.trim()}
-              className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+              className="user-profile-primary-btn flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Save size={16} /> Save Name
             </button>
@@ -109,7 +109,7 @@ const UserProfileModal = ({
               type="button"
               onClick={() => setShowPhotoEditor(true)}
               disabled={!canEditPhoto || saving}
-              className="flex-1 px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+              className="user-profile-secondary-btn flex-1 px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Image size={16} /> Edit Photo
             </button>
@@ -118,7 +118,7 @@ const UserProfileModal = ({
             type="button"
             onClick={() => setShowFullStats(true)}
             disabled={!linkedPlayerName}
-            className="w-full px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+            className="user-profile-stats-btn w-full px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <BarChart3 size={16} /> View Full Stats Profile
           </button>
@@ -129,7 +129,7 @@ const UserProfileModal = ({
                 Photo editing is enabled after your account is linked to a player profile.
               </p>
               {canManualLink && (
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2 user-profile-link-card">
                   <p className="text-xs font-semibold text-slate-700">Manual Link</p>
                   {canLinkOthers && (
                     <>
@@ -172,7 +172,7 @@ const UserProfileModal = ({
           )}
 
           {canLinkOthers && (
-            <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 space-y-2">
+            <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 space-y-2 user-profile-admin-card">
               <p className="text-xs font-semibold text-sky-800">Admin Link Center</p>
               <select
                 value={selectedAdminAccountId}

@@ -55,9 +55,9 @@ const GroupAccessScreen = ({
   }, [publicGroups, membershipByGroupId, requestedGroupIds, searchQuery, filterMode]);
 
   return (
-    <div className="theme-page min-h-screen p-4 sm:p-6">
+    <div className="theme-page group-hub-page min-h-screen p-4 sm:p-6">
       <div className="max-w-6xl mx-auto grid gap-4 sm:gap-5">
-        <div className="theme-card rounded-3xl p-6 sm:p-8">
+        <div className="theme-card group-hub-hero rounded-3xl p-6 sm:p-8">
           <div className="flex flex-wrap gap-3 items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-widest text-slate-500">Access</p>
@@ -66,21 +66,21 @@ const GroupAccessScreen = ({
             </div>
             <button
               onClick={onLogout}
-              className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 bg-white/70"
+              className="group-hub-logout-btn px-4 py-2 rounded-xl border border-slate-300 text-slate-700 bg-white/70"
             >
               Logout
             </button>
           </div>
           <div className="mt-5 grid sm:grid-cols-3 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3">
+            <div className="group-hub-metric rounded-xl border border-slate-200 bg-white/70 px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-slate-500">Groups You Are In</p>
               <p className="text-xl font-semibold text-slate-900 mt-1">{groups.length}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3">
+            <div className="group-hub-metric rounded-xl border border-slate-200 bg-white/70 px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-slate-500">Available Groups</p>
               <p className="text-xl font-semibold text-slate-900 mt-1">{publicGroups.length}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3">
+            <div className="group-hub-metric rounded-xl border border-slate-200 bg-white/70 px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-slate-500">Requests Pending</p>
               <p className="text-xl font-semibold text-slate-900 mt-1">{requestedGroupIds.length}</p>
             </div>
@@ -88,14 +88,14 @@ const GroupAccessScreen = ({
         </div>
 
         {!isGuest && hasGroups && (
-          <div className="theme-card rounded-2xl p-5 sm:p-6">
+          <div className="theme-card group-hub-joined rounded-2xl p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-slate-900">Your Groups</h2>
             <div className="mt-3 grid gap-2">
               {groups.map(group => (
                 <button
                   key={group.id}
                   onClick={() => onSelectGroup(group)}
-                  className="text-left p-3 border border-slate-200 rounded-xl bg-white/70 hover:border-slate-400 transition-colors"
+                  className="group-hub-group-btn text-left p-3 border border-slate-200 rounded-xl bg-white/70 hover:border-slate-400 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -119,7 +119,7 @@ const GroupAccessScreen = ({
 
         <div className={`grid gap-4 ${isGuest ? '' : 'md:grid-cols-2'}`}>
           {!isGuest && (
-            <div className="theme-card rounded-2xl p-5 sm:p-6">
+            <div className="theme-card group-hub-create rounded-2xl p-5 sm:p-6">
               <h2 className="text-lg font-semibold text-slate-900">Create Group</h2>
               <p className="text-sm text-slate-600 mt-1">Create a workspace and become its admin.</p>
               <input
@@ -139,7 +139,7 @@ const GroupAccessScreen = ({
             </div>
           )}
 
-          <div className="theme-card rounded-2xl p-5 sm:p-6">
+          <div className="theme-card group-hub-available rounded-2xl p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-slate-900">Available Groups</h2>
             <p className="text-sm text-slate-600 mt-1">Watch instantly. Logged-in users can request membership.</p>
             <div className="mt-3 grid sm:grid-cols-[1fr_auto] gap-2">
@@ -163,7 +163,7 @@ const GroupAccessScreen = ({
             </div>
             <div className="mt-3 grid gap-2 max-h-[420px] overflow-auto pr-1">
               {filteredPublicGroups.length === 0 && (
-                <div className="text-sm text-slate-500 border border-slate-200 rounded-xl p-3 bg-white/70">No groups available yet</div>
+                <div className="group-hub-empty text-sm text-slate-500 border border-slate-200 rounded-xl p-3 bg-white/70">No groups available yet</div>
               )}
               {filteredPublicGroups.map((group) => {
                 const membershipRole = membershipByGroupId.get(group.id);
@@ -171,7 +171,7 @@ const GroupAccessScreen = ({
                 const isViewerMember = membershipRole === 'viewer';
                 const isRequested = requestedGroupIds.includes(group.id);
                 return (
-                  <div key={group.id} className="border border-slate-200 rounded-xl p-3 bg-white/70">
+                  <div key={group.id} className="group-hub-public-item border border-slate-200 rounded-xl p-3 bg-white/70">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="h-9 w-9 rounded-full bg-slate-800 text-white text-xs font-semibold grid place-items-center">
@@ -194,7 +194,7 @@ const GroupAccessScreen = ({
                       <button
                         onClick={() => onWatchGroup(group)}
                         disabled={loading}
-                        className="px-3 py-1.5 rounded-md border border-slate-300 text-sm bg-white"
+                        className="group-hub-watch-btn px-3 py-1.5 rounded-md border border-slate-300 text-sm bg-white"
                       >
                         Watch
                       </button>

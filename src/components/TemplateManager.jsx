@@ -136,12 +136,12 @@ const TemplateManager = ({
   };
 
   return (
-    <div className="mb-6 bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-200 rounded-xl p-4">
+    <div className="mb-6 rounded-xl p-4 template-manager-card">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <p className="text-sm font-semibold text-gray-700">📌 Tournament Templates</p>
+        <p className="text-sm font-semibold text-gray-700 template-manager-title">📌 Tournament Templates</p>
         <button
           onClick={openCreate}
-          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-semibold"
+          className="px-3 py-1.5 rounded-lg transition-all text-xs font-semibold template-manager-create-btn"
         >
           New Template
         </button>
@@ -150,7 +150,7 @@ const TemplateManager = ({
       {templates.length > 0 ? (
         <div className="max-h-36 overflow-y-auto space-y-2 pr-1">
           {templates.map(template => (
-            <div key={template.id} className="bg-white border border-indigo-100 rounded-lg p-2 flex items-center justify-between gap-2">
+            <div key={template.id} className="template-manager-row rounded-lg p-2 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-800 truncate">{template.name}</p>
                 <p className="text-xs text-gray-500 truncate">
@@ -160,19 +160,19 @@ const TemplateManager = ({
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => onApply(template.id)}
-                  className="text-xs px-2 py-1 rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-semibold"
+                  className="text-xs px-2 py-1 rounded-lg font-semibold template-manager-apply-btn"
                 >
                   Apply
                 </button>
                 <button
                   onClick={() => openEdit(template)}
-                  className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 font-semibold"
+                  className="text-xs px-2 py-1 rounded-lg font-semibold template-manager-edit-btn"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => onDelete(template.id)}
-                  className="text-xs px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold"
+                  className="text-xs px-2 py-1 rounded-lg font-semibold template-manager-delete-btn"
                 >
                   Delete
                 </button>
@@ -185,7 +185,7 @@ const TemplateManager = ({
       )}
 
       {showEditor && (
-        <div className="mt-4 bg-white border-2 border-indigo-200 rounded-xl p-3 space-y-3">
+        <div className="mt-4 rounded-xl p-3 space-y-3 template-manager-editor">
           <input
             type="text"
             value={draft.name}

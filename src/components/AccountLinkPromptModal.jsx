@@ -8,8 +8,8 @@ const AccountLinkPromptModal = ({ prompt, onConfirm, onSkip }) => {
   const isMemberPrompt = prompt.type === 'member';
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-[280] bg-black/50 flex items-center justify-center p-4 app-overlay">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden app-modal-shell account-link-shell">
         <div className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white px-5 py-4">
           <div className="flex items-center gap-2">
             <Link2 size={18} />

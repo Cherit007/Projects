@@ -28,8 +28,60 @@ const TeamEntry = ({
     () => [...new Set((playerDatabase || []).map((name) => String(name || '').trim()).filter(Boolean))].join(', '),
     [playerDatabase]
   );
+
+  const normalizeValue = (value) => String(value || '').trim().toLowerCase();
+  const selectedTeamNames = useMemo(() => (
+    teams
+      .map((team, index) => ({ index, value: normalizeValue(team?.name) }))
+      .filter(item => item.value)
+  ), [teams]);
+  const selectedPlayerSlots = useMemo(() => (
+    teams.flatMap((team, index) => {
+      if (gameMode === 'singles') {
+        const playerName = team?.player || team?.player1;
+        return [{ key: `${index}:player1`, value: normalizeValue(playerName) }];
+      }
+      return [
+        { key: `${index}:player1`, value: normalizeValue(team?.player1) },
+        { key: `${index}:player2`, value: normalizeValue(team?.player2) },
+      ];
+    }).filter(item => item.value)
+  ), [teams, gameMode]);
+
+  const getTeamNameSuggestions = (teamIndex) => {
+    const currentValue = normalizeValue(teams[teamIndex]?.name);
+    const usedByOthers = new Set(
+      selectedTeamNames
+        .filter(item => item.index !== teamIndex && item.value !== currentValue)
+        .map(item => item.value)
+    );
+    return (teamNameDatabase || []).filter((name) => {
+      const normalized = normalizeValue(name);
+      return !normalized || !usedByOthers.has(normalized) || normalized === currentValue;
+    });
+  };
+
+  const getPlayerSuggestions = (teamIndex, slot) => {
+    const key = `${teamIndex}:${slot}`;
+    const currentEntry = selectedPlayerSlots.find(item => item.key === key);
+    const currentValue = currentEntry?.value || '';
+    const usedByOthers = new Set(
+      selectedPlayerSlots
+        .filter(item => item.key !== key && item.value !== currentValue)
+        .map(item => item.value)
+    );
+    return (playerDatabase || []).filter((name) => {
+      const normalized = normalizeValue(name);
+      return !normalized || !usedByOthers.has(normalized) || normalized === currentValue;
+    });
+  };
+
   const slotsPerTeam = gameMode === 'singles' ? 1 : 2;
   const requiredPlayersForDraft = teams.length * slotsPerTeam;
+  const oddPlayerDraftEnabled = gameMode !== 'singles' && oddPlayerEnabled;
+  const requiredPlayersLabel = oddPlayerDraftEnabled
+    ? `${requiredPlayersForDraft} + 1 odd player`
+    : `${requiredPlayersForDraft}`;
 
   const applySnakeDraft = () => {
     const pool = parsePlayerPool(draftPoolInput || defaultDraftPool);
@@ -44,6 +96,21 @@ const TeamEntry = ({
       return;
     }
     setTeams(result.teams);
+
+    if (oddPlayerDraftEnabled) {
+      const draftedPlayers = new Set(
+        result.teams.flatMap((team) => [
+          team?.player || team?.player1,
+          team?.player2,
+        ].map((name) => normalizeValue(name)).filter(Boolean))
+      );
+      const leftoverPlayers = pool.filter((name) => !draftedPlayers.has(normalizeValue(name)));
+
+      if (!oddPlayerName.trim() && leftoverPlayers.length > 0) {
+        setOddPlayerName(leftoverPlayers[0]);
+      }
+    }
+
     setDraftError('');
   };
 
@@ -98,7 +165,7 @@ const TeamEntry = ({
                           setTeams(newTeams);
                         }}
                         placeholder="Team Name"
-                        playerDatabase={teamNameDatabase}
+                        playerDatabase={getTeamNameSuggestions(index)}
                         className="font-semibold"
                       />
                     </div>
@@ -119,7 +186,7 @@ const TeamEntry = ({
                           setTeams(newTeams);
                         }}
                         placeholder="Player Name"
-                        playerDatabase={playerDatabase}
+                        playerDatabase={getPlayerSuggestions(index, 'player1')}
                       />
                     </div>
                   ) : (
@@ -137,7 +204,7 @@ const TeamEntry = ({
                             setTeams(newTeams);
                           }}
                           placeholder="Player 1 Name"
-                          playerDatabase={playerDatabase}
+                          playerDatabase={getPlayerSuggestions(index, 'player1')}
                         />
                       </div>
                       <div>
@@ -153,7 +220,7 @@ const TeamEntry = ({
                             setTeams(newTeams);
                           }}
                           placeholder="Player 2 Name"
-                          playerDatabase={playerDatabase}
+                          playerDatabase={getPlayerSuggestions(index, 'player2')}
                         />
                       </div>
                     </div>
@@ -187,7 +254,7 @@ const TeamEntry = ({
                   />
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[11px] text-blue-800">
-                      Required players: {requiredPlayersForDraft} ({teams.length} teams x {slotsPerTeam})
+                      Required players: {requiredPlayersLabel} ({teams.length} teams x {slotsPerTeam})
                     </p>
                     <button
                       type="button"
@@ -261,8 +328,8 @@ const TeamEntry = ({
       </div>
 
       {showScheduleModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 app-modal-shell schedule-modal-shell">
             <h3 className="text-lg font-bold text-gray-800 mb-2">Schedule Tournament</h3>
             <p className="text-sm text-gray-600 mb-4">
               Teams and players from this page will be saved as scheduled.

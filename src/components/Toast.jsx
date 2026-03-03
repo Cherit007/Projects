@@ -16,7 +16,7 @@ const Toast = ({ message, type = 'success' }) => {
         {type === 'success' && <Check size={20} />}
         <span className="font-semibold">{message}</span>
       </div>
-      <style jsx>{`
+      <style>{`
         @keyframes slide-up {
           from {
             transform: translateY(100px);

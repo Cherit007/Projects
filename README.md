@@ -1,16 +1,174 @@
-# React + Vite
+# Badminton Fixture Maker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite app for badminton tournament management, casual match tracking, ELO ratings, and Appwrite sync.
 
-Currently, two official plugins are available:
+## Migration Docs
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Appwrite migration runbook: [`docs/appwrite-migration.md`](docs/appwrite-migration.md)
+- Backfill script source of truth: [`scripts/migration/backfill-normalized.mjs`](scripts/migration/backfill-normalized.mjs)
 
-## React Compiler
+## New V2 Appwrite Collections and Columns
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The migration writes to these normalized V2 collections.
 
-## Expanding the ESLint configuration
+### 1) `APPWRITE_COLLECTION_V2_PLAYERS`
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Columns:
+
+- `groupId`
+- `displayName`
+- `normalizedName`
+- `source`
+- `migratedAt`
+
+### 2) `APPWRITE_COLLECTION_V2_TOURNAMENTS`
+
+Columns:
+
+- `groupId`
+- `legacyTournamentId`
+- `name`
+- `dateLabel`
+- `status`
+- `gameMode`
+- `tournamentFormat`
+- `format`
+- `oddPlayerEnabled`
+- `oddPlayerName`
+- `oddPlayerId`
+- `sourceCreatedAt`
+- `sourceUpdatedAt`
+- `migratedAt`
+
+### 3) `APPWRITE_COLLECTION_V2_TOURNAMENT_TEAMS`
+
+Columns:
+
+- `groupId`
+- `tournamentId`
+- `legacyTournamentId`
+- `legacyTeamId`
+- `teamNo`
+- `teamName`
+- `emoji`
+- `player1Name`
+- `player1Id`
+- `player2Name`
+- `player2Id`
+- `migratedAt`
+
+### 4) `APPWRITE_COLLECTION_V2_MATCHES`
+
+Columns:
+
+- `groupId`
+- `tournamentId`
+- `legacyTournamentId`
+- `legacyMatchId`
+- `matchKind`
+- `roundLabel`
+- `roundNo`
+- `sequenceNo`
+- `bracketRoundIndex`
+- `bracketMatchIndex`
+- `nextLegacyMatchId`
+- `team1Id`
+- `team2Id`
+- `team1Name`
+- `team2Name`
+- `score1`
+- `score2`
+- `completed`
+- `winnerSide`
+- `sourceCreatedAt`
+- `migratedAt`
+
+### 5) `APPWRITE_COLLECTION_V2_MATCH_PLAYERS`
+
+Columns:
+
+- `groupId`
+- `matchId`
+- `sideNo`
+- `slotNo`
+- `playerName`
+- `playerId`
+- `sourceCreatedAt`
+- `migratedAt`
+
+### 6) `APPWRITE_COLLECTION_V2_RATINGS_CURRENT`
+
+Columns:
+
+- `groupId`
+- `playerId`
+- `playerName`
+- `rating`
+- `matchesPlayed`
+- `lastResult`
+- `lastChange`
+- `sourceUpdatedAt`
+- `migratedAt`
+
+## Notes
+
+- Keep legacy collections unchanged until migration validation passes.
+- Use backup and validation steps from `docs/appwrite-migration.md` before cutover.
+
+## Appwrite Function: Heavy Ops
+
+Use one server-side function for multi-write flows:
+
+- `submit_score`
+- `delete_tournament`
+- `recalculate_ratings`
+
+Function source in this repo:
+
+- `appwrite/functions/heavy-ops/src/main.mjs`
+
+No Appwrite Function is required now. All reads/writes use direct Appwrite database APIs from the client.
+
+## Required V2 Indexes
+
+Create these indexes in Appwrite to avoid query fallback scans and keep heavy actions fast.
+
+### `APPWRITE_COLLECTION_V2_PLAYERS`
+
+- Key index: `groupId`
+- Key index: `normalizedName`
+- Composite unique index: `groupId + normalizedName`
+
+### `APPWRITE_COLLECTION_V2_RATINGS_CURRENT`
+
+- Key index: `groupId`
+- Key index: `playerId`
+- Key index: `playerName`
+- Composite unique index: `groupId + playerId`
+- Composite key index: `groupId + playerName`
+
+### `APPWRITE_COLLECTION_V2_TOURNAMENTS`
+
+- Key index: `groupId`
+- Key index: `status`
+- Composite key index: `groupId + status`
+
+### `APPWRITE_COLLECTION_V2_TOURNAMENT_TEAMS`
+
+- Key index: `groupId`
+- Key index: `tournamentId`
+- Composite unique index: `groupId + tournamentId + legacyTeamId`
+
+### `APPWRITE_COLLECTION_V2_MATCHES`
+
+- Key index: `groupId`
+- Key index: `tournamentId`
+- Composite key index: `groupId + tournamentId`
+- Composite unique index: `groupId + tournamentId + matchKind + legacyMatchId + bracketRoundIndex + bracketMatchIndex`
+
+### `APPWRITE_COLLECTION_V2_MATCH_PLAYERS`
+
+- Key index: `groupId`
+- Key index: `matchId`
+- Composite key index: `groupId + matchId`
+- Composite unique index: `groupId + matchId + sideNo + slotNo`

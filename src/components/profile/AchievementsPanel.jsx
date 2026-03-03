@@ -1,7 +1,7 @@
 import React from 'react';
 
 const BadgeItem = ({ badge }) => (
-  <div className={`rounded-xl border p-3 ${badge.earned ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+  <div className={`rounded-xl border p-3 profile-badge-item ${badge.earned ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
     <div className="flex items-center justify-between gap-2 mb-1">
       <p className={`text-sm font-semibold ${badge.earned ? 'text-emerald-800' : 'text-gray-800'}`}>
         <span className="mr-1">{badge.icon || '🏅'}</span>{badge.title}
@@ -21,7 +21,7 @@ const AchievementsPanel = ({ achievements }) => {
   const unlocked = achievements.badges.filter(badge => badge.earned).length;
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4 mt-4">
+    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4 mt-4 profile-achievements-panel">
       <p className="text-sm font-semibold text-gray-800 mb-3">
         Achievements & Milestones ({unlocked}/{achievements.badges.length})
       </p>

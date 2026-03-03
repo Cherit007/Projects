@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserCircle2, Bell, LogOut, ArrowLeftCircle } from 'lucide-react';
+import { UserCircle2, Bell, LogOut, ArrowLeftCircle, House } from 'lucide-react';
 
 const GroupHeader = ({
   group,
@@ -11,6 +11,7 @@ const GroupHeader = ({
   unreadRequestCount = 0,
   onOpenRequestCenter,
   onOpenProfile,
+  onGoHome,
 }) => {
   const displayIdentity = user?.name
     ? `${user.name} (${user.email || ''})`
@@ -21,6 +22,8 @@ const GroupHeader = ({
     : role === 'member'
       ? 'bg-blue-50 text-blue-700 border-blue-200'
       : 'bg-slate-100 text-slate-600 border-slate-200';
+  const showRequestButton = role === 'admin' && onOpenRequestCenter;
+  const topActionGridClass = showRequestButton ? 'grid-cols-3' : 'grid-cols-2';
 
   return (
     <div className="theme-topbar px-3 sm:px-4 py-3">
@@ -39,7 +42,7 @@ const GroupHeader = ({
             </div>
 
             <div className="w-full lg:w-auto flex flex-col gap-2">
-              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
+              <div className={`grid ${topActionGridClass} sm:flex sm:items-center gap-2`}>
                 {user && onOpenProfile && (
                   <button
                     onClick={onOpenProfile}
@@ -50,7 +53,17 @@ const GroupHeader = ({
                     <span className="text-sm font-semibold">Profile</span>
                   </button>
                 )}
-                {role === 'admin' && onOpenRequestCenter && (
+                {onGoHome && (
+                  <button
+                    onClick={onGoHome}
+                    className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
+                    title="Go home"
+                  >
+                    <House size={18} />
+                    <span className="text-sm font-semibold">Home</span>
+                  </button>
+                )}
+                {showRequestButton && (
                   <button
                     onClick={onOpenRequestCenter}
                     className="relative w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"

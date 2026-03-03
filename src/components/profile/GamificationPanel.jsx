@@ -1,7 +1,7 @@
 import React from 'react';
 
 const StatCard = ({ label, value, tone = 'text-slate-800' }) => (
-  <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+  <div className="rounded-lg border border-slate-200 bg-white p-2.5 profile-gamification-stat">
     <p className="text-[11px] text-slate-500">{label}</p>
     <p className={`text-sm font-bold ${tone}`}>{value}</p>
   </div>
@@ -14,7 +14,7 @@ const GamificationPanel = ({ gamification }) => {
   const remainingXp = nextLevel ? Math.max(0, nextLevel.minXp - gamification.totalXp) : 0;
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 mt-4">
+    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 mt-4 profile-gamification-panel">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-slate-800">XP & Level</p>
         <span className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-900 text-white">

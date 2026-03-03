@@ -51,8 +51,8 @@ const PlayerProfileModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden">
+    <div className="fixed inset-0 z-[270] bg-black bg-opacity-50 flex items-center justify-center p-4 player-profile-overlay app-overlay">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden player-profile-shell app-modal-shell">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-5 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3 mb-2">
@@ -131,44 +131,44 @@ const PlayerProfileModal = ({
           </button>
         </div>
 
-        <div className="p-4 sm:p-5 overflow-y-auto max-h-[calc(85vh-84px)]">
+        <div className="p-4 sm:p-5 overflow-y-auto max-h-[calc(85vh-84px)] player-profile-content">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 player-profile-kpi">
               <p className="text-xs text-gray-600 mb-1 flex items-center gap-1"><TrendingUp size={12} /> Rating</p>
               <p className="text-lg font-bold text-blue-700">{profile?.rating || 1000}</p>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 player-profile-kpi">
               <p className="text-xs text-gray-600 mb-1 flex items-center gap-1"><Activity size={12} /> Played</p>
               <p className="text-lg font-bold text-green-700">{matchesPlayed}</p>
             </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 player-profile-kpi">
               <p className="text-xs text-gray-600 mb-1 flex items-center gap-1"><Trophy size={12} /> Wins</p>
               <p className="text-lg font-bold text-emerald-700">{wins}</p>
             </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 player-profile-kpi">
               <p className="text-xs text-gray-600 mb-1">Win Rate</p>
               <p className="text-lg font-bold text-purple-700">{winRate}%</p>
             </div>
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4">
-            <p className="text-sm font-semibold text-gray-800 mb-3">Recent Match History</p>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4 player-profile-history">
+            <p className="text-sm font-semibold text-gray-800 mb-3 player-profile-history-title">Recent Match History</p>
             {orderedMatches.length === 0 ? (
-              <p className="text-sm text-gray-500">No match history available yet.</p>
+              <p className="text-sm text-gray-500 player-profile-history-empty">No match history available yet.</p>
             ) : (
               <>
                 <div className="space-y-2">
                   {visibleMatches.map((match, index) => (
-                    <div key={`${match.matchId}-${index}`} className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3">
+                    <div key={`${match.matchId}-${index}`} className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 player-profile-history-item">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
+                        <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate player-profile-history-opponent">
                           vs {match.opponent || 'Unknown opponent'}
                         </p>
                         <span className={`text-xs font-bold ${match.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {match.change >= 0 ? '+' : ''}{match.change}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between mt-1 text-[11px] sm:text-xs text-gray-500">
+                      <div className="flex items-center justify-between mt-1 text-[11px] sm:text-xs text-gray-500 player-profile-history-meta">
                         <span className={match.result === 'win' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
                           {match.result === 'win' ? 'Win' : 'Loss'}
                         </span>

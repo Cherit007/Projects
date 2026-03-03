@@ -20,8 +20,8 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
 
   if (!match.team1 || !match.team2) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 app-modal-shell bracket-modal-shell">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold">Match Not Ready</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -38,8 +38,8 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 app-modal-shell bracket-modal-shell">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold">Match {match.id}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -49,7 +49,7 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative mb-6">
           {/* Team 1 */}
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-5 border-2 border-blue-200">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-5 border-2 border-blue-200 bracket-team-card bracket-team-card-one">
             <div className="flex items-center gap-3 mb-3">
               <div className="text-3xl bg-white w-12 h-12 rounded-xl flex items-center justify-center shadow-md">
                 {match.team1.emoji}
@@ -83,7 +83,7 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
           </div>
 
           {/* Team 2 */}
-          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-5 border-2 border-purple-200">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-5 border-2 border-purple-200 bracket-team-card bracket-team-card-two">
             <div className="flex items-center gap-3 mb-3">
               <div className="text-3xl bg-white w-12 h-12 rounded-xl flex items-center justify-center shadow-md">
                 {match.team2.emoji}

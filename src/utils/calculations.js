@@ -9,6 +9,7 @@ export const calculatePointsTable = (teams, fixtures) => {
     scoreFor: 0,
     scoreAgainst: 0,
     scoreDiff: 0,
+    netMatchRate: 0,
   }));
 
   fixtures.forEach(match => {
@@ -25,15 +26,15 @@ export const calculatePointsTable = (teams, fixtures) => {
         table[team2Index].scoreAgainst += match.score1;
 
         const margin = match.score1 - match.score2;
-        table[team1Index].points += margin;
-        table[team2Index].points -= margin;
 
         if (margin > 0) {
           table[team1Index].won++;
           table[team2Index].lost++;
+          table[team1Index].points += 2;
         } else {
           table[team2Index].won++;
           table[team1Index].lost++;
+          table[team2Index].points += 2;
         }
       }
     }
@@ -41,11 +42,12 @@ export const calculatePointsTable = (teams, fixtures) => {
 
   table.forEach(team => {
     team.scoreDiff = team.scoreFor - team.scoreAgainst;
+    team.netMatchRate = team.played > 0 ? team.scoreDiff / team.played : 0;
   });
 
   return table.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
-    if (b.won !== a.won) return b.won - a.won;
+    if (b.netMatchRate !== a.netMatchRate) return b.netMatchRate - a.netMatchRate;
     return b.scoreDiff - a.scoreDiff;
   });
 };

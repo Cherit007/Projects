@@ -37,10 +37,6 @@ vi.mock('../components/GroupRequestsCenter', () => ({
   default: () => <div data-testid="group-requests-center">requests</div>,
 }));
 
-vi.mock('../components/Toast', () => ({
-  default: ({ message }) => <div data-testid="toast">{message || 'toast-empty'}</div>,
-}));
-
 const baseProps = {
   isConfigChecked: true,
   authResolved: true,
@@ -81,7 +77,6 @@ const baseProps = {
   casualMatchProps: {},
   showCasualMatch: false,
   appModals: <div data-testid="app-modals">modals</div>,
-  toast: { message: 'hello', type: 'success' },
 };
 
 describe('AppViewRouter integration workflows', () => {
@@ -93,7 +88,6 @@ describe('AppViewRouter integration workflows', () => {
   it('routes unauthenticated user to auth screen when auth is required', async () => {
     render(<AppViewRouter {...baseProps} requiresAuth currentUser={null} isGuestViewer={false} />);
     expect(await screen.findByTestId('auth-screen')).toBeInTheDocument();
-    expect(screen.getByTestId('toast')).toHaveTextContent('hello');
   });
 
   it('routes user without selected group to group access screen', async () => {

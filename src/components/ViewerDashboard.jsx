@@ -105,20 +105,20 @@ const ViewerDashboard = ({
   }, [allTimeStats, eloLeaderboard]);
 
   return (
-    <div className="theme-page min-h-screen p-4 sm:p-6">
+    <div className="theme-page viewer-dashboard-page min-h-screen p-4 sm:p-6">
       <div className="max-w-6xl mx-auto grid gap-4 sm:gap-5">
-        <section className="theme-card rounded-3xl p-6 sm:p-8">
+        <section className="theme-card viewer-dashboard-hero rounded-3xl p-6 sm:p-8">
           <p className="text-xs uppercase tracking-widest text-slate-500">Read Only</p>
           <h1 className="theme-title text-2xl sm:text-4xl font-bold mt-1">{group?.name || 'Group'} Viewer</h1>
           <p className="text-sm sm:text-base text-slate-600 mt-2">Live status, history, rankings, and performance stats.</p>
         </section>
 
         <div className="grid lg:grid-cols-2 gap-4 sm:gap-5">
-          <section className="theme-card rounded-2xl p-5 sm:p-6">
+          <section className="theme-card viewer-dashboard-card rounded-2xl p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-slate-900">Current Live Match</h2>
             {liveState?.match ? (
               <div className="mt-3 space-y-2">
-                <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 viewer-live-badge">
                   LIVE • {liveState.sourceTournament?.name || 'Tournament'}
                 </p>
                 <p className="text-slate-900 font-semibold">{formatTeam(liveState.match.team1)} vs {formatTeam(liveState.match.team2)}</p>
@@ -128,12 +128,12 @@ const ViewerDashboard = ({
             )}
           </section>
 
-          <section className="theme-card rounded-2xl p-5 sm:p-6">
+          <section className="theme-card viewer-dashboard-card rounded-2xl p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-slate-900">Top Rankings</h2>
             {eloLeaderboard?.length ? (
               <div className="mt-3 grid gap-2">
                 {eloLeaderboard.slice(0, 8).map((player, index) => (
-                  <div key={player.name} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-3 py-2">
+                  <div key={player.name} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-3 py-2 viewer-dashboard-row">
                     <p className="text-sm text-slate-800">#{index + 1} {player.name}</p>
                     <p className="text-sm font-semibold text-slate-900">{player.rating}</p>
                   </div>
@@ -146,12 +146,12 @@ const ViewerDashboard = ({
         </div>
 
         <div className="grid lg:grid-cols-2 gap-4 sm:gap-5">
-          <section className="theme-card rounded-2xl p-5 sm:p-6">
+          <section className="theme-card viewer-dashboard-card rounded-2xl p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-slate-900">Tournament History</h2>
             {tournamentHistory?.length ? (
               <div className="mt-3 grid gap-2 max-h-[340px] overflow-auto pr-1">
                 {tournamentHistory.slice(0, 12).map((tournament) => (
-                  <div key={tournament.id || tournament.appwriteId} className="rounded-xl border border-slate-200 bg-white/70 px-3 py-2">
+                  <div key={tournament.id || tournament.appwriteId} className="rounded-xl border border-slate-200 bg-white/70 px-3 py-2 viewer-dashboard-row">
                     <p className="font-semibold text-slate-900">{tournament.name}</p>
                     <p className="text-xs text-slate-600">{tournament.date} • {tournament.teams?.length || 0} teams</p>
                   </div>
@@ -162,12 +162,12 @@ const ViewerDashboard = ({
             )}
           </section>
 
-          <section className="theme-card rounded-2xl p-5 sm:p-6">
+          <section className="theme-card viewer-dashboard-card rounded-2xl p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-slate-900">Player Stats</h2>
             {statsRows.length ? (
               <div className="mt-3 grid gap-2 max-h-[340px] overflow-auto pr-1">
                 {statsRows.map((row) => (
-                  <div key={row.key} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-3 py-2">
+                  <div key={row.key} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-3 py-2 viewer-dashboard-row">
                     <p className="text-sm font-medium text-slate-900">{row.name}</p>
                     <p className="text-xs text-slate-600">{row.subtitle}</p>
                   </div>

@@ -1,5 +1,4 @@
 import React, { Suspense, lazy } from 'react';
-import Toast from './Toast';
 import BadmintonLoader from './BadmintonLoader';
 
 const SetupScreen = lazy(() => import('./SetupScreen'));
@@ -43,6 +42,7 @@ const AppViewRouter = ({
   onWatchGroup,
   onSelectGroup,
   onOpenProfile,
+  onGoHome,
   onBackToGroups,
   onOpenRequestCenter,
   onLogout,
@@ -56,7 +56,6 @@ const AppViewRouter = ({
   casualMatchProps,
   showCasualMatch,
   appModals,
-  toast,
 }) => {
   if (!isConfigChecked || !authResolved || !groupResolved) {
     return <ScreenFallback />;
@@ -73,7 +72,6 @@ const AppViewRouter = ({
             loading={authLoading}
           />
         </Suspense>
-        <Toast message={toast?.message} type={toast?.type} />
       </>
     );
   }
@@ -96,7 +94,6 @@ const AppViewRouter = ({
             isGuest={isGuestViewer}
           />
         </Suspense>
-        <Toast message={toast?.message} type={toast?.type} />
       </>
     );
   }
@@ -119,7 +116,6 @@ const AppViewRouter = ({
             isGuest={isGuestViewer}
           />
         </Suspense>
-        <Toast message={toast?.message} type={toast?.type} />
       </>
     );
   }
@@ -133,6 +129,7 @@ const AppViewRouter = ({
             role={groupRole}
             user={currentUser}
             onOpenProfile={onOpenProfile}
+            onGoHome={onGoHome}
             onBackToGroups={onBackToGroups}
             pendingRequests={pendingJoinRequests}
             unreadRequestCount={unreadRequestCount}
@@ -150,7 +147,6 @@ const AppViewRouter = ({
           />
         </Suspense>
         {appModals}
-        <Toast message={toast?.message} type={toast?.type} />
       </>
     );
   }
@@ -164,6 +160,7 @@ const AppViewRouter = ({
             role={groupRole}
             user={currentUser}
             onOpenProfile={onOpenProfile}
+            onGoHome={onGoHome}
             onBackToGroups={onBackToGroups}
             pendingRequests={pendingJoinRequests}
             unreadRequestCount={unreadRequestCount}
@@ -173,7 +170,6 @@ const AppViewRouter = ({
           <ViewerDashboard {...viewerDashboardProps} />
         </Suspense>
         {appModals}
-        <Toast message={toast?.message} type={toast?.type} />
       </>
     );
   }
@@ -187,6 +183,7 @@ const AppViewRouter = ({
             role={groupRole}
             user={currentUser}
             onOpenProfile={onOpenProfile}
+            onGoHome={onGoHome}
             onBackToGroups={onBackToGroups}
             pendingRequests={pendingJoinRequests}
             unreadRequestCount={unreadRequestCount}
@@ -200,9 +197,8 @@ const AppViewRouter = ({
         {showCasualMatch && <CasualMatch {...casualMatchProps} />}
       </Suspense>
       {appModals}
-      <Toast message={toast?.message} type={toast?.type} />
     </>
   );
 };
 
-export default AppViewRouter;
+export default React.memo(AppViewRouter);

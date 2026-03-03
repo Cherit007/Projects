@@ -92,9 +92,9 @@ const FormPowerRankingsModal = ({ rankings, onClose }) => {
   if (!rankings) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-600 to-blue-700 p-4 sm:p-5 flex items-center justify-between">
+    <div className="fixed inset-0 z-[240] bg-black bg-opacity-50 flex items-center justify-center p-4 app-overlay">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden setup-power-modal-shell app-modal-shell">
+        <div className="bg-gradient-to-r from-indigo-600 to-blue-700 p-4 sm:p-5 flex items-center justify-between setup-modal-header setup-modal-header-power">
           <div className="min-w-0">
             <h3 className="text-lg sm:text-xl font-bold text-white truncate flex items-center gap-2">
               <BarChart3 size={18} /> Form & Power Rankings

@@ -21,8 +21,8 @@ const MatchCard = ({ match, onSave }) => {
   };
 
   return (
-    <div className={`bg-white rounded-2xl shadow-lg p-4 sm:p-6 transition-all relative ${
-      match.completed ? 'border-2 border-green-400 bg-green-50/30' : 'border-2 border-gray-200 hover:border-blue-400 hover:shadow-xl'
+    <div className={`match-card bg-white rounded-2xl shadow-lg p-4 sm:p-6 transition-all relative ${
+      match.completed ? 'border-2 border-green-400 bg-green-50/30 match-card-completed' : 'border-2 border-gray-200 hover:border-blue-400 hover:shadow-xl'
     }`}>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
@@ -60,7 +60,7 @@ const MatchCard = ({ match, onSave }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
         {/* Team 1 */}
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-4 sm:p-5 border-2 border-blue-200">
+        <div className="match-card-team team-one bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-4 sm:p-5 border-2 border-blue-200">
           <div className="flex items-center gap-3 mb-3">
             <div className="text-2xl sm:text-3xl bg-white w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
               {match.team1.emoji}
@@ -98,7 +98,7 @@ const MatchCard = ({ match, onSave }) => {
         </div>
 
         {/* Team 2 */}
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-4 sm:p-5 border-2 border-purple-200">
+        <div className="match-card-team team-two bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-4 sm:p-5 border-2 border-purple-200">
           <div className="flex items-center gap-3 mb-3">
             <div className="text-2xl sm:text-3xl bg-white w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
               {match.team2.emoji}

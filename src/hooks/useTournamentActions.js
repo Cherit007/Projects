@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import {
   calculatePointsTable,
   generateFixtures as createFixtures,
@@ -5,6 +6,8 @@ import {
   updateBracket,
   updatePlayerRatingsAfterMatch,
 } from '../utils/calculations';
+import { appDataService } from '../services/appDataService';
+import { tournamentService } from '../services/tournamentService';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
@@ -15,16 +18,11 @@ export const useTournamentActions = ({
   showToast,
   isAppwriteEnabled,
   activeGroup,
-  queryClient,
-  queryKeys,
-  captureUndoSnapshot,
   updatePlayerDatabase,
   tournamentName,
   setTournamentName,
-  numTeams,
   setNumTeams,
   format,
-  setFormat,
   gameMode,
   tournamentFormat,
   setStep,
@@ -48,17 +46,96 @@ export const useTournamentActions = ({
   setShowCasualMatch,
   aiMatchSummaries,
   setAiMatchSummaries,
-  setLastTournamentConfig,
+  swapHistory,
+  setSwapHistory,
   currentTournamentId,
   setCurrentTournamentId,
+  setActiveTournamentLock,
   syncCurrentTournament,
+  patchTournamentMatches,
+  markRatingsPersisted,
+  buildRatingsDelta,
   saveTournamentMutation,
   deleteTournamentMutation,
-  savePlayerDatabaseMutation,
   saveRatingsMutation,
+  savePlayerDatabaseMutation,
   createCasualMatchMutation,
   deleteCasualMatchMutation,
 }) => {
+  const activeLockTimerRef = useRef(null);
+  const pendingActiveLockRef = useRef(undefined);
+  const lastActiveLockSignatureRef = useRef('');
+  const cloudIdWarningShownRef = useRef(false);
+  const cloudIdRecoveryInFlightRef = useRef(false);
+  const tournamentSyncTimerRef = useRef(null);
+  const pendingTournamentSyncRef = useRef(null);
+  const tournamentSyncInFlightRef = useRef(false);
+  const remoteActiveCacheRef = useRef({
+    hasValue: false,
+    value: null,
+    cachedAt: 0,
+  });
+
+  const yieldToUi = () => new Promise((resolve) => {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => resolve());
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
+
+  useEffect(() => () => {
+    if (activeLockTimerRef.current) {
+      clearTimeout(activeLockTimerRef.current);
+      activeLockTimerRef.current = null;
+    }
+    if (tournamentSyncTimerRef.current) {
+      clearTimeout(tournamentSyncTimerRef.current);
+      tournamentSyncTimerRef.current = null;
+    }
+  }, []);
+
+  const getOrdinalSuffix = (value) => {
+    const num = Number(value);
+    const mod100 = num % 100;
+    if (mod100 >= 11 && mod100 <= 13) return 'th';
+    const mod10 = num % 10;
+    if (mod10 === 1) return 'st';
+    if (mod10 === 2) return 'nd';
+    if (mod10 === 3) return 'rd';
+    return 'th';
+  };
+
+  const getSuggestedNextTournamentName = (name) => {
+    const source = String(name || '').trim();
+    if (!source) return 'Next Tournament';
+
+    const ordinalMatches = Array.from(source.matchAll(/(\d+)(st|nd|rd|th)\b/gi));
+    const lastOrdinal = ordinalMatches[ordinalMatches.length - 1];
+    if (lastOrdinal && Number.isFinite(Number(lastOrdinal[1]))) {
+      const nextNumber = Number(lastOrdinal[1]) + 1;
+      const replacement = `${nextNumber}${getOrdinalSuffix(nextNumber)}`;
+      const matchText = lastOrdinal[0];
+      const start = lastOrdinal.index ?? source.lastIndexOf(matchText);
+      return `${source.slice(0, start)}${replacement}${source.slice(start + matchText.length)}`;
+    }
+
+    const numberMatches = Array.from(source.matchAll(/\d+/g));
+    const lastNumber = numberMatches[numberMatches.length - 1];
+    if (lastNumber && Number.isFinite(Number(lastNumber[0]))) {
+      const nextNumber = Number(lastNumber[0]) + 1;
+      const matchText = lastNumber[0];
+      const start = lastNumber.index ?? source.lastIndexOf(matchText);
+      return `${source.slice(0, start)}${nextNumber}${source.slice(start + matchText.length)}`;
+    }
+
+    if (/tournament/i.test(source)) {
+      return source.replace(/tournament/i, '2nd Tournament');
+    }
+
+    return `${source} 2nd Tournament`;
+  };
+
   const collectPlayersFromTeam = (team) => (
     [team?.player || team?.player1, team?.player2].filter(Boolean)
   );
@@ -79,6 +156,8 @@ export const useTournamentActions = ({
     liveFixtures = fixtures,
     liveBracket = bracket,
     liveChampion = champion,
+    persistCloud = true,
+    pruneMissing = false,
   } = {}) => {
     const normalized = new Map();
     const addPlayer = (name) => {
@@ -135,12 +214,15 @@ export const useTournamentActions = ({
     const rebuilt = Array.from(normalized.values()).sort((a, b) => a.localeCompare(b));
     setPlayerDatabase(rebuilt);
 
-    if (isAppwriteEnabled) {
-      await savePlayerDatabaseMutation.mutateAsync(rebuilt);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
-    } else {
+    if (isAppwriteEnabled && persistCloud) {
+      await savePlayerDatabaseMutation.mutateAsync({
+        players: rebuilt,
+        pruneMissing,
+      });
+    } else if (!isAppwriteEnabled) {
       localStorage.setItem('badminton_players', JSON.stringify(rebuilt));
     }
+    return rebuilt;
   };
 
   const injectRotatingOddPlayer = ({ fixtures: baseFixtures = [], oddPlayerName = '' }) => {
@@ -269,8 +351,22 @@ export const useTournamentActions = ({
   };
 
   const upsertTournamentHistory = (history, tournament) => {
-    const tournamentKey = tournament.appwriteId || tournament.id;
-    const existingIndex = history.findIndex((t) => (t.appwriteId || t.id) === tournamentKey);
+    const incomingIds = Array.from(new Set(
+      [tournament?.appwriteId, tournament?.id]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    ));
+    const matchesId = (item, targetId) => {
+      const normalizedTarget = String(targetId || '').trim();
+      if (!normalizedTarget) return false;
+      const ids = [item?.appwriteId, item?.id]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+      return ids.includes(normalizedTarget);
+    };
+    const existingIndex = history.findIndex((t) => (
+      incomingIds.some((candidateId) => matchesId(t, candidateId))
+    ));
     return existingIndex >= 0
       ? history.map((t, index) => (index === existingIndex ? tournament : t))
       : [tournament, ...history];
@@ -322,8 +418,510 @@ export const useTournamentActions = ({
     return updated;
   };
 
-  const handleStartTournament = (rawNumTeamsInput) => {
+  const normalizePlayerName = (value) => String(value || '').trim().toLowerCase();
+
+  const getTeamSlotValue = (team, slot) => {
+    if (slot === 'player1') return team?.player1 || team?.player || '';
+    if (slot === 'player2') return team?.player2 || '';
+    return '';
+  };
+
+  const setTeamSlotValue = (team, slot, playerName) => {
+    const value = String(playerName || '').trim();
+    if (slot === 'player1') {
+      team.player1 = value;
+      if ('player' in team || !team.player) {
+        team.player = value;
+      }
+      return;
+    }
+    if (slot === 'player2') {
+      team.player2 = value;
+    }
+  };
+
+  const findPlayerSlotInTeam = (team, playerName) => {
+    const needle = normalizePlayerName(playerName);
+    if (!needle) return null;
+    const slots = ['player1', 'player2'];
+    for (const slot of slots) {
+      const value = getTeamSlotValue(team, slot);
+      if (normalizePlayerName(value) === needle) return slot;
+    }
+    return null;
+  };
+
+  const getActiveLiveTournament = () => (
+    (Array.isArray(tournamentHistory) ? tournamentHistory : []).find((item) => (
+      item?.status === 'active'
+      && !item?.champion
+    )) || null
+  );
+
+  const setRemoteActiveCache = (value) => {
+    remoteActiveCacheRef.current = {
+      hasValue: true,
+      value: value || null,
+      cachedAt: Date.now(),
+    };
+  };
+
+  const fetchRemoteActiveLiveTournament = async ({ force = false } = {}) => {
+    if (!isAppwriteEnabled) return null;
+    const cache = remoteActiveCacheRef.current;
+    if (
+      !force
+      && cache?.hasValue
+      && Date.now() - Number(cache.cachedAt || 0) < 15 * 1000
+    ) {
+      return cache.value || null;
+    }
+
+    try {
+      const meta = await appDataService.getAppMeta();
+      const lock = meta?.activeTournament;
+      if (lock && lock.status === 'active') {
+        setRemoteActiveCache(lock);
+        return lock;
+      }
+    } catch (_error) {
+      // Ignore meta read errors and fallback to tournament collection scan.
+    }
+
+    try {
+      const tournaments = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
+      const active = (Array.isArray(tournaments) ? tournaments : []).find((item) => (
+        item?.status === 'active' && !item?.champion
+      )) || null;
+      setRemoteActiveCache(active);
+      return active;
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const persistActiveTournamentLock = async (payload) => {
+    if (!isAppwriteEnabled) return;
+    setRemoteActiveCache(payload || null);
+    try {
+      await appDataService.saveAppMeta({
+        activeTournament: payload || null,
+      });
+    } catch (_error) {
+      // Non-blocking: tournament flow should continue even if meta update fails.
+    }
+  };
+
+  const updateActiveTournamentLock = async (payload, { immediate = false } = {}) => {
+    if (!isAppwriteEnabled) return;
+    const nextPayload = payload || null;
+    const signature = JSON.stringify(nextPayload);
+    pendingActiveLockRef.current = nextPayload;
+    setRemoteActiveCache(nextPayload);
+
+    if (immediate) {
+      if (activeLockTimerRef.current) {
+        clearTimeout(activeLockTimerRef.current);
+        activeLockTimerRef.current = null;
+      }
+      if (lastActiveLockSignatureRef.current === signature) return;
+      lastActiveLockSignatureRef.current = signature;
+      await persistActiveTournamentLock(nextPayload);
+      return;
+    }
+
+    if (activeLockTimerRef.current) {
+      clearTimeout(activeLockTimerRef.current);
+    }
+    activeLockTimerRef.current = setTimeout(async () => {
+      const queued = pendingActiveLockRef.current || null;
+      const queuedSignature = JSON.stringify(queued);
+      if (lastActiveLockSignatureRef.current === queuedSignature) return;
+      lastActiveLockSignatureRef.current = queuedSignature;
+      await persistActiveTournamentLock(queued);
+    }, 1200);
+  };
+
+  const buildActiveTournamentSnapshot = ({
+    id,
+    name = tournamentName,
+    teamsSnapshot = teams,
+    fixturesSnapshot = fixtures,
+    bracketSnapshot = bracket,
+    championSnapshot = champion,
+    aiSummariesSnapshot = aiMatchSummaries,
+    swapHistorySnapshot = swapHistory,
+    formatSnapshot = format,
+    gameModeSnapshot = gameMode,
+    tournamentFormatSnapshot = tournamentFormat,
+  } = {}) => ({
+    id: id || currentTournamentId || null,
+    appwriteId: id || currentTournamentId || null,
+    name: name || 'Live tournament',
+    status: championSnapshot ? 'completed' : 'active',
+    updatedAt: new Date().toISOString(),
+    teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
+    fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
+    bracket: Array.isArray(bracketSnapshot) ? bracketSnapshot : [],
+    champion: championSnapshot || null,
+    aiSummaries: Array.isArray(aiSummariesSnapshot) ? aiSummariesSnapshot : [],
+    swapHistory: Array.isArray(swapHistorySnapshot) ? swapHistorySnapshot : [],
+    format: formatSnapshot || '1',
+    gameMode: gameModeSnapshot || 'doubles',
+    tournamentFormat: tournamentFormatSnapshot || 'league',
+    date: new Date().toLocaleDateString(),
+  });
+
+  const buildCloudTournamentPayload = ({
+    teamsSnapshot = teams,
+    fixturesSnapshot = fixtures,
+    bracketSnapshot = bracket,
+    championSnapshot = champion,
+    aiSummariesSnapshot = aiMatchSummaries,
+    swapHistorySnapshot = swapHistory,
+  } = {}) => ({
+    name: tournamentName,
+    date: new Date().toLocaleDateString(),
+    teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
+    fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
+    bracket: Array.isArray(bracketSnapshot) && bracketSnapshot.length > 0 ? bracketSnapshot : null,
+    champion: championSnapshot || null,
+    finalMatch: null,
+    format,
+    gameMode,
+    tournamentFormat,
+    aiSummaries: Array.isArray(aiSummariesSnapshot) ? aiSummariesSnapshot : [],
+    swapHistory: Array.isArray(swapHistorySnapshot) ? swapHistorySnapshot : [],
+    status: championSnapshot ? 'completed' : 'active',
+  });
+
+  const resolveSyncTournamentId = () => {
+    if (currentTournamentId) {
+      if (!isAppwriteEnabled) return currentTournamentId;
+      if (typeof currentTournamentId === 'string' && currentTournamentId.trim()) return currentTournamentId;
+    }
+    const activeByName = (Array.isArray(tournamentHistory) ? tournamentHistory : []).find((item) => (
+      item?.status === 'active'
+      && !item?.champion
+      && (item?.name || '').trim().toLowerCase() === (tournamentName || '').trim().toLowerCase()
+    ));
+    if (!activeByName) return null;
+    if (!isAppwriteEnabled) return activeByName?.appwriteId || activeByName?.id || null;
+    if (typeof activeByName?.appwriteId === 'string' && activeByName.appwriteId.trim()) {
+      return activeByName.appwriteId;
+    }
+    if (typeof activeByName?.id === 'string' && activeByName.id.trim()) {
+      return activeByName.id;
+    }
+    return null;
+  };
+
+  const flushQueuedTournamentSync = async () => {
+    if (!isAppwriteEnabled || tournamentSyncInFlightRef.current) return;
+    const queued = pendingTournamentSyncRef.current;
+    if (!queued?.tournamentId || !queued?.tournamentData) return;
+
+    pendingTournamentSyncRef.current = null;
+    tournamentSyncInFlightRef.current = true;
+    try {
+      await syncCurrentTournament(queued.tournamentData, queued.tournamentId);
+    } catch (error) {
+      console.error('Deferred tournament sync failed:', error);
+    } finally {
+      tournamentSyncInFlightRef.current = false;
+      if (pendingTournamentSyncRef.current) {
+        void flushQueuedTournamentSync();
+      }
+    }
+  };
+
+  const queueTournamentSync = ({
+    tournamentId = null,
+    tournamentData = null,
+    delayMs = 1000,
+    immediate = false,
+  } = {}) => {
+    if (!isAppwriteEnabled || !tournamentData) return;
+    const targetId = tournamentId || resolveSyncTournamentId();
+    if (!targetId) return;
+    pendingTournamentSyncRef.current = { tournamentId: targetId, tournamentData };
+
+    if (immediate) {
+      if (tournamentSyncTimerRef.current) {
+        clearTimeout(tournamentSyncTimerRef.current);
+        tournamentSyncTimerRef.current = null;
+      }
+      void flushQueuedTournamentSync();
+      return;
+    }
+
+    if (tournamentSyncTimerRef.current) {
+      clearTimeout(tournamentSyncTimerRef.current);
+    }
+    tournamentSyncTimerRef.current = setTimeout(() => {
+      tournamentSyncTimerRef.current = null;
+      void flushQueuedTournamentSync();
+    }, delayMs);
+  };
+
+  const toComparableMatchState = (match) => ({
+    id: String(match?.id ?? '').trim(),
+    round: String(match?.round ?? '').trim(),
+    nextMatchId: String(match?.nextMatchId ?? '').trim(),
+    score1: match?.score1 ?? '',
+    score2: match?.score2 ?? '',
+    completed: Boolean(match?.completed),
+    team1: {
+      id: String(match?.team1?.id ?? '').trim(),
+      name: String(match?.team1?.name ?? '').trim(),
+      player1: String(match?.team1?.player || match?.team1?.player1 || '').trim(),
+      player2: String(match?.team1?.player2 || '').trim(),
+    },
+    team2: {
+      id: String(match?.team2?.id ?? '').trim(),
+      name: String(match?.team2?.name ?? '').trim(),
+      player1: String(match?.team2?.player || match?.team2?.player1 || '').trim(),
+      player2: String(match?.team2?.player2 || '').trim(),
+    },
+  });
+
+  const areMatchStatesEqual = (before, after) => (
+    JSON.stringify(toComparableMatchState(before)) === JSON.stringify(toComparableMatchState(after))
+  );
+
+  const buildLeagueMatchPatch = (match) => ({
+    matchKind: 'league',
+    id: String(match?.id ?? '').trim(),
+    legacyMatchId: String(match?.id ?? '').trim(),
+    team1: match?.team1 || null,
+    team2: match?.team2 || null,
+    score1: match?.score1 ?? '',
+    score2: match?.score2 ?? '',
+    completed: Boolean(match?.completed),
+    roundLabel: match?.round ?? '',
+    roundNo: match?.round ?? '',
+    nextLegacyMatchId: match?.nextMatchId ?? '',
+  });
+
+  const buildBracketMatchPatch = (match, roundIndex, matchIndex) => {
+    const roundLabel = String(match?.round || '').trim();
+    const normalizedRound = roundLabel.toLowerCase();
+    return {
+      matchKind: normalizedRound === 'final' ? 'final' : 'knockout',
+      id: String(match?.id ?? '').trim(),
+      legacyMatchId: String(match?.id ?? '').trim(),
+      bracketRoundIndex: roundIndex + 1,
+      bracketMatchIndex: matchIndex + 1,
+      team1: match?.team1 || null,
+      team2: match?.team2 || null,
+      score1: match?.score1 ?? '',
+      score2: match?.score2 ?? '',
+      completed: Boolean(match?.completed),
+      roundLabel,
+      roundNo: match?.round ?? '',
+      nextLegacyMatchId: match?.nextMatchId ?? '',
+    };
+  };
+
+  const getChangedLeagueMatchPatches = ({ previousFixtures = [], nextFixtures = [] } = {}) => {
+    const beforeById = new Map(
+      (Array.isArray(previousFixtures) ? previousFixtures : []).map((match) => [String(match?.id ?? '').trim(), match])
+    );
+    return (Array.isArray(nextFixtures) ? nextFixtures : [])
+      .filter((match) => {
+        const key = String(match?.id ?? '').trim();
+        if (!key) return false;
+        return !areMatchStatesEqual(beforeById.get(key), match);
+      })
+      .map(buildLeagueMatchPatch);
+  };
+
+  const getChangedBracketMatchPatches = ({ previousBracket = [], nextBracket = [] } = {}) => {
+    const patches = [];
+    (Array.isArray(nextBracket) ? nextBracket : []).forEach((round, roundIndex) => {
+      (Array.isArray(round) ? round : []).forEach((match, matchIndex) => {
+        const previousMatch = Array.isArray(previousBracket?.[roundIndex])
+          ? previousBracket[roundIndex][matchIndex]
+          : null;
+        if (areMatchStatesEqual(previousMatch, match)) return;
+        const patch = buildBracketMatchPatch(match, roundIndex, matchIndex);
+        if (!patch.legacyMatchId) return;
+        patches.push(patch);
+      });
+    });
+    return patches;
+  };
+
+  const patchTournamentMatchesWithFallback = async ({
+    tournamentId,
+    matchPatches = [],
+    fallbackTournamentData = null,
+    fallbackDelayMs = 900,
+    fallbackImmediate = false,
+  } = {}) => {
+    if (!isAppwriteEnabled || !tournamentId || !Array.isArray(matchPatches) || matchPatches.length === 0) {
+      return true;
+    }
+
+    if (typeof patchTournamentMatches !== 'function') {
+      if (fallbackTournamentData) {
+        queueTournamentSync({
+          tournamentId,
+          tournamentData: fallbackTournamentData,
+          delayMs: fallbackDelayMs,
+          immediate: fallbackImmediate,
+        });
+      }
+      return false;
+    }
+
+    try {
+      const summary = await patchTournamentMatches(matchPatches, tournamentId);
+      if (Number(summary?.missingMatches || 0) > 0) {
+        if (fallbackTournamentData) {
+          queueTournamentSync({
+            tournamentId,
+            tournamentData: fallbackTournamentData,
+            delayMs: fallbackDelayMs,
+            immediate: fallbackImmediate,
+          });
+        }
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Match patch sync failed; falling back to full tournament sync:', error);
+      if (fallbackTournamentData) {
+        queueTournamentSync({
+          tournamentId,
+          tournamentData: fallbackTournamentData,
+          delayMs: fallbackDelayMs,
+          immediate: fallbackImmediate,
+        });
+      }
+      return false;
+    }
+  };
+
+  const resolveSyncTournamentIdForWrite = async () => {
+    const localResolved = resolveSyncTournamentId();
+    if (localResolved) return localResolved;
+    if (!isAppwriteEnabled) return null;
+
+    const remoteActive = await fetchRemoteActiveLiveTournament();
+    const remoteId = remoteActive?.appwriteId || remoteActive?.id || null;
+    if (typeof remoteId === 'string' && remoteId.trim()) return remoteId;
+    return null;
+  };
+
+  const recoverCloudTournamentIdInBackground = async ({
+    teamsSnapshot = teams,
+    fixturesSnapshot = fixtures,
+    bracketSnapshot = bracket,
+    championSnapshot = champion,
+    aiSummariesSnapshot = aiMatchSummaries,
+    swapHistorySnapshot = swapHistory,
+  } = {}) => {
+    if (!isAppwriteEnabled || cloudIdRecoveryInFlightRef.current) return null;
+    cloudIdRecoveryInFlightRef.current = true;
+
+    try {
+      let recoveredId = await resolveSyncTournamentIdForWrite();
+
+      if (!recoveredId) {
+        const payload = buildCloudTournamentPayload({
+          teamsSnapshot,
+          fixturesSnapshot,
+          bracketSnapshot,
+          championSnapshot,
+          aiSummariesSnapshot,
+          swapHistorySnapshot,
+        });
+        const saved = await saveTournamentMutation.mutateAsync(payload);
+        recoveredId = saved?.appwriteId || saved?.id || null;
+
+        if (typeof recoveredId === 'string' && recoveredId.trim()) {
+          setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+            ...payload,
+            id: recoveredId,
+            appwriteId: recoveredId,
+          }));
+        }
+      }
+
+      if (typeof recoveredId === 'string' && recoveredId.trim()) {
+        setCurrentTournamentId(recoveredId);
+        cloudIdWarningShownRef.current = false;
+        return recoveredId;
+      }
+    } catch (error) {
+      console.error('Background tournament id recovery failed:', error);
+    } finally {
+      cloudIdRecoveryInFlightRef.current = false;
+    }
+
+    return null;
+  };
+
+  const clearActiveTournamentLockIfMatches = async ({ tournamentId, tournamentName } = {}) => {
+    if (!isAppwriteEnabled) return;
+    const targetId = String(tournamentId || '').trim();
+    const targetName = String(tournamentName || '').trim().toLowerCase();
+    const lockMatchesTarget = (lock) => {
+      if (!lock) return false;
+      const lockId = String(lock.id || '').trim();
+      const lockName = String(lock.name || '').trim().toLowerCase();
+      const idMatch = Boolean(lockId && targetId && lockId === targetId);
+      const nameMatch = Boolean(lockName && targetName && lockName === targetName);
+      return idMatch || nameMatch;
+    };
+
+    try {
+      if (remoteActiveCacheRef.current?.hasValue) {
+        const cachedLock = remoteActiveCacheRef.current.value || null;
+        if (!lockMatchesTarget(cachedLock)) return;
+        await updateActiveTournamentLock(null, { immediate: true });
+        setActiveTournamentLock?.(null);
+        return;
+      }
+
+      const meta = await appDataService.getAppMeta();
+      const lock = meta?.activeTournament;
+      if (lockMatchesTarget(lock)) {
+        await updateActiveTournamentLock(null, { immediate: true });
+        setActiveTournamentLock?.(null);
+      }
+    } catch {
+      // Ignore lock clear failures.
+    }
+  };
+
+  const blockWhenLiveTournamentExists = async () => {
+    const activeLive = getActiveLiveTournament();
+    if (activeLive) {
+      showToast(`"${activeLive.name || 'Live tournament'}" is already in progress. Complete it before starting another.`, 'error');
+      return true;
+    }
+
+    const remoteActive = await fetchRemoteActiveLiveTournament();
+    if (remoteActive) {
+      if (Array.isArray(remoteActive.teams) || Array.isArray(remoteActive.fixtures)) {
+        setTournamentHistory((prev) => upsertTournamentHistory(prev, remoteActive));
+      }
+      showToast(`"${remoteActive.name || 'Live tournament'}" is already in progress. Complete it before starting another.`, 'error');
+      return true;
+    }
+    return false;
+  };
+
+
+  const handleStartTournament = async (rawNumTeamsInput) => {
     if (!assertCanOperate()) return;
+    const activeLive = getActiveLiveTournament();
+    if (activeLive) {
+      showToast(`"${activeLive.name || 'Live tournament'}" is already in progress. Complete it before starting another.`, 'error');
+      return;
+    }
     if (!tournamentName.trim()) {
       showToast('Please enter tournament name', 'error');
       return;
@@ -364,7 +962,7 @@ export const useTournamentActions = ({
     setStep('teams');
   };
 
-  const generateFixtures = ({
+  const generateFixtures = async ({
     teamsOverride,
     tournamentFormatOverride,
     formatOverride,
@@ -375,6 +973,7 @@ export const useTournamentActions = ({
     oddPlayerName,
   } = {}) => {
     if (!assertCanOperate()) return;
+    if (await blockWhenLiveTournamentExists()) return;
     const selectedTeams = teamsOverride || teams;
     const selectedTournamentFormat = tournamentFormatOverride || tournamentFormat;
     const selectedFormat = formatOverride || format;
@@ -388,15 +987,6 @@ export const useTournamentActions = ({
     ).trim();
 
     setLoading(true);
-    setLastTournamentConfig({
-      name: selectedTournamentName,
-      numTeams: selectedTeams.length || numTeams,
-      format: selectedFormat,
-      teams: selectedTeams,
-      gameMode: selectedGameMode,
-      tournamentFormat: selectedTournamentFormat,
-    });
-
     const updatedRatings = { ...playerRatings };
     selectedTeams.forEach((team) => {
       const player1 = team.player || team.player1;
@@ -418,53 +1008,94 @@ export const useTournamentActions = ({
     }
     setPlayerRatings(updatedRatings);
 
-    setTimeout(async () => {
-      let newFixtures = [];
-      let newBracket = [];
+    let newFixtures = [];
+    let newBracket = [];
 
-      if (selectedTournamentFormat === 'league') {
-        newFixtures = createFixtures(selectedTeams, selectedFormat);
-        if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
-          newFixtures = injectRotatingOddPlayer({
-            fixtures: newFixtures,
-            oddPlayerName: selectedOddPlayerName,
-          });
-        }
-        setFixtures(newFixtures);
-      } else {
-        newBracket = generateKnockoutBracket(selectedTeams, selectedTournamentFormat);
-        setBracket(newBracket);
-      }
-      setAiMatchSummaries([]);
-
-      if (isAppwriteEnabled) {
-        const tournamentData = {
-          name: selectedTournamentName,
-          date: new Date().toLocaleDateString(),
-          teams: selectedTeams,
-          fixtures: newFixtures,
-          bracket: newBracket.length > 0 ? newBracket : null,
-          format: selectedFormat,
-          gameMode: selectedGameMode,
-          tournamentFormat: selectedTournamentFormat,
-          aiSummaries: [],
-          status: 'active',
-        };
-
-        const saved = await saveTournamentMutation.mutateAsync(tournamentData);
-        if (saved) {
-          setCurrentTournamentId(saved.id);
-        }
-      }
-
-      setStep('tournament');
-      setLoading(false);
+    if (selectedTournamentFormat === 'league') {
+      newFixtures = createFixtures(selectedTeams, selectedFormat);
       if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
-        showToast(`Tournament generated with rotating odd player: ${selectedOddPlayerName} 🏸`);
-        return;
+        newFixtures = injectRotatingOddPlayer({
+          fixtures: newFixtures,
+          oddPlayerName: selectedOddPlayerName,
+        });
       }
-      showToast('Tournament generated! 🏸');
-    }, 800);
+      setFixtures(newFixtures);
+    } else {
+      newBracket = generateKnockoutBracket(selectedTeams, selectedTournamentFormat);
+      setBracket(newBracket);
+    }
+    setAiMatchSummaries([]);
+    setSwapHistory([]);
+    cloudIdWarningShownRef.current = false;
+    cloudIdRecoveryInFlightRef.current = false;
+
+    if (isAppwriteEnabled) {
+      const tournamentData = {
+        name: selectedTournamentName,
+        date: new Date().toLocaleDateString(),
+        teams: selectedTeams,
+        fixtures: newFixtures,
+        bracket: newBracket.length > 0 ? newBracket : null,
+        format: selectedFormat,
+        gameMode: selectedGameMode,
+        tournamentFormat: selectedTournamentFormat,
+        aiSummaries: [],
+        swapHistory: [],
+        status: 'active',
+        oddPlayerEnabled: selectedOddPlayerEnabled,
+        oddPlayerName: selectedOddPlayerName,
+      };
+
+      void (async () => {
+        try {
+          const saved = await saveTournamentMutation.mutateAsync(tournamentData);
+          if (!saved) return;
+          const savedId = saved.appwriteId || saved.id || await resolveSyncTournamentIdForWrite();
+          if (savedId) setCurrentTournamentId(savedId);
+          setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+            ...saved,
+            id: savedId || saved.id || Date.now(),
+            appwriteId: savedId || saved.appwriteId || null,
+            status: 'active',
+            teams: selectedTeams,
+            fixtures: newFixtures,
+            bracket: newBracket,
+            champion: null,
+            aiSummaries: [],
+            swapHistory: [],
+            format: selectedFormat,
+            gameMode: selectedGameMode,
+            tournamentFormat: selectedTournamentFormat,
+            oddPlayerEnabled: selectedOddPlayerEnabled,
+            oddPlayerName: selectedOddPlayerName,
+          }));
+          await updateActiveTournamentLock(buildActiveTournamentSnapshot({
+            id: savedId || null,
+            name: selectedTournamentName,
+            teamsSnapshot: selectedTeams,
+            fixturesSnapshot: newFixtures,
+            bracketSnapshot: newBracket,
+            championSnapshot: null,
+            aiSummariesSnapshot: [],
+            swapHistorySnapshot: [],
+            formatSnapshot: selectedFormat,
+            gameModeSnapshot: selectedGameMode,
+            tournamentFormatSnapshot: selectedTournamentFormat,
+          }), { immediate: true });
+        } catch (error) {
+          console.error('Failed to sync new tournament to cloud:', error);
+          showToast('Tournament started locally; cloud sync failed.', 'error');
+        }
+      })();
+    }
+
+    setStep('tournament');
+    setLoading(false);
+    if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
+      showToast(`Tournament generated with rotating odd player: ${selectedOddPlayerName} 🏸`);
+      return;
+    }
+    showToast('Tournament generated! 🏸');
   };
 
   const scheduleTournament = async ({
@@ -479,6 +1110,7 @@ export const useTournamentActions = ({
     scheduledAt,
   } = {}) => {
     if (!assertCanOperate()) return;
+    if (await blockWhenLiveTournamentExists()) return;
     const selectedTeams = teamsOverride || teams;
     const selectedTournamentFormat = tournamentFormatOverride || tournamentFormat;
     const selectedFormat = formatOverride || format;
@@ -510,6 +1142,7 @@ export const useTournamentActions = ({
       gameMode: selectedGameMode,
       tournamentFormat: selectedTournamentFormat,
       aiSummaries: [],
+      swapHistory: [],
       status: 'scheduled',
       oddPlayerEnabled: selectedOddPlayerEnabled,
       oddPlayerName: selectedOddPlayerName,
@@ -520,7 +1153,6 @@ export const useTournamentActions = ({
       if (saved) {
         setTournamentHistory((prev) => upsertTournamentHistory(prev, saved));
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
     } else {
       const scheduled = {
         ...payload,
@@ -538,15 +1170,20 @@ export const useTournamentActions = ({
     setStep('setup');
   };
 
-  const saveMatchResult = (matchId, score1, score2) => {
+  const saveMatchResult = async (matchId, score1, score2) => {
     if (!assertCanOperate()) return;
     if (score1 === '' || score2 === '' || score1 === score2) {
       showToast('Invalid scores', 'error');
       return;
     }
-    captureUndoSnapshot();
+    const syncTournamentId = resolveSyncTournamentId();
+    const missingCloudId = Boolean(isAppwriteEnabled && !syncTournamentId);
 
     const match = fixtures.find((m) => m.id === matchId);
+    if (!match) {
+      showToast('Live match not found. Please refresh and resume.', 'error');
+      return;
+    }
     const prediction = predictMatchOutcome({
       match,
       playerRatings,
@@ -572,6 +1209,10 @@ export const useTournamentActions = ({
     const ratingsBefore = playerRatings;
     const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, completedMatch);
     const updatedFixtures = fixtures.map((m) => (m.id === matchId ? completedMatch : m));
+    const changedLeagueMatchPatches = getChangedLeagueMatchPatches({
+      previousFixtures: fixtures,
+      nextFixtures: updatedFixtures,
+    });
     const updatedPointsTable = calculatePointsTable(teams, updatedFixtures);
     const badgeUnlocks = getBadgeUnlocksForMatch({
       match: completedMatch,
@@ -592,14 +1233,142 @@ export const useTournamentActions = ({
       isFinal: false,
     }));
 
-    if (isAppwriteEnabled && currentTournamentId) {
-      syncCurrentTournament({
+    setTournamentHistory((prev) => {
+      const updatedHistory = upsertTournamentHistory(prev, {
+        id: syncTournamentId || currentTournamentId || Date.now(),
+        appwriteId: isAppwriteEnabled
+          ? (syncTournamentId || currentTournamentId || null)
+          : null,
+        name: tournamentName,
+        date: new Date().toLocaleDateString(),
+        teams,
         fixtures: updatedFixtures,
         bracket,
         champion,
-        finalMatch: null,
+        format,
+        gameMode,
+        tournamentFormat,
         aiSummaries: nextSummaries,
+        swapHistory,
+        status: champion ? 'completed' : 'active',
       });
+      if (!isAppwriteEnabled) {
+        localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
+      }
+      return updatedHistory;
+    });
+
+    if (isAppwriteEnabled) {
+      void (async () => {
+        if (syncTournamentId) {
+          if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
+          cloudIdWarningShownRef.current = false;
+          try {
+            const activeLockSnapshot = buildActiveTournamentSnapshot({
+              id: syncTournamentId,
+              fixturesSnapshot: updatedFixtures,
+              bracketSnapshot: bracket,
+              championSnapshot: champion,
+              aiSummariesSnapshot: nextSummaries,
+              swapHistorySnapshot: swapHistory,
+            });
+            await patchTournamentMatchesWithFallback({
+              tournamentId: syncTournamentId,
+              matchPatches: changedLeagueMatchPatches,
+              fallbackDelayMs: 450,
+              fallbackTournamentData: {
+                teams,
+                fixtures: updatedFixtures,
+                bracket,
+                champion,
+                finalMatch: null,
+                aiSummaries: nextSummaries,
+                swapHistory,
+              },
+            });
+            updateActiveTournamentLock(activeLockSnapshot);
+          } catch (error) {
+            console.error('Failed to sync match result to cloud:', error);
+            showToast('Result saved locally; cloud sync failed. Avoid refresh and try again.', 'error');
+          }
+          return;
+        }
+
+        try {
+          updateActiveTournamentLock(buildActiveTournamentSnapshot({
+            id: null,
+            fixturesSnapshot: updatedFixtures,
+            bracketSnapshot: bracket,
+            championSnapshot: champion,
+            aiSummariesSnapshot: nextSummaries,
+            swapHistorySnapshot: swapHistory,
+          }));
+        } catch (_error) {
+          // Keep running even if lock update fails.
+        }
+
+        if (missingCloudId) {
+          if (!cloudIdWarningShownRef.current) {
+            showToast('Result saved. Cloud tournament id is still resolving; keep internet on and continue.');
+            cloudIdWarningShownRef.current = true;
+          }
+          const recoveredId = await recoverCloudTournamentIdInBackground({
+            teamsSnapshot: teams,
+            fixturesSnapshot: updatedFixtures,
+            bracketSnapshot: bracket,
+            championSnapshot: champion,
+            aiSummariesSnapshot: nextSummaries,
+            swapHistorySnapshot: swapHistory,
+          });
+          if (!recoveredId) return;
+
+          try {
+            const recoveredLockSnapshot = buildActiveTournamentSnapshot({
+              id: recoveredId,
+              fixturesSnapshot: updatedFixtures,
+              bracketSnapshot: bracket,
+              championSnapshot: champion,
+              aiSummariesSnapshot: nextSummaries,
+              swapHistorySnapshot: swapHistory,
+            });
+            await patchTournamentMatchesWithFallback({
+              tournamentId: recoveredId,
+              matchPatches: changedLeagueMatchPatches,
+              fallbackImmediate: true,
+              fallbackTournamentData: {
+                teams,
+                fixtures: updatedFixtures,
+                bracket,
+                champion,
+                finalMatch: null,
+                aiSummaries: nextSummaries,
+                swapHistory,
+              },
+            });
+            updateActiveTournamentLock(recoveredLockSnapshot);
+            setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+              id: recoveredId,
+              appwriteId: recoveredId,
+              name: tournamentName,
+              date: new Date().toLocaleDateString(),
+              teams,
+              fixtures: updatedFixtures,
+              bracket,
+              champion,
+              format,
+              gameMode,
+              tournamentFormat,
+              aiSummaries: nextSummaries,
+              swapHistory,
+              status: champion ? 'completed' : 'active',
+            }));
+            cloudIdWarningShownRef.current = false;
+            showToast('Cloud sync restored for live tournament.');
+          } catch (error) {
+            console.error('Deferred cloud sync failed after id recovery:', error);
+          }
+        }
+      })();
     }
 
     showToast('Result saved! ✓');
@@ -614,20 +1383,179 @@ export const useTournamentActions = ({
       return;
     }
 
-    captureUndoSnapshot();
     const reordered = [...fixtures];
     [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
     setFixtures(reordered);
-    if (isAppwriteEnabled && currentTournamentId) {
-      syncCurrentTournament({
+    const syncTournamentId = resolveSyncTournamentId();
+    if (isAppwriteEnabled && syncTournamentId) {
+      if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
+      queueTournamentSync({
+        tournamentId: syncTournamentId,
+        delayMs: 900,
+        tournamentData: {
         fixtures: reordered,
         bracket,
         champion,
         finalMatch: null,
         aiSummaries: aiMatchSummaries,
+        swapHistory,
+        },
       });
+      updateActiveTournamentLock(buildActiveTournamentSnapshot({
+        id: syncTournamentId,
+        fixturesSnapshot: reordered,
+        bracketSnapshot: bracket,
+        championSnapshot: champion,
+        aiSummariesSnapshot: aiMatchSummaries,
+        swapHistorySnapshot: swapHistory,
+      }));
     }
     showToast('Match moved to LIVE NOW');
+  };
+
+  const swapTeamMember = ({ teamId, currentPlayerName, replacementPlayerName }) => {
+    if (!assertCanOperate()) return false;
+    const leagueCompleted = fixtures.length > 0 && fixtures.every((match) => match.completed);
+    const flatBracket = (Array.isArray(bracket) ? bracket : []).flatMap((round) => (Array.isArray(round) ? round : []));
+    const knockoutCompleted = flatBracket.length > 0 && flatBracket.every((match) => match?.completed);
+    if (champion || leagueCompleted || knockoutCompleted) {
+      showToast('Swap is blocked. Tournament or match flow is already completed.', 'error');
+      return false;
+    }
+
+    const replacement = String(replacementPlayerName || '').trim();
+    const currentPlayer = String(currentPlayerName || '').trim();
+    const normalizedReplacement = normalizePlayerName(replacement);
+    if (!replacement || !currentPlayer) {
+      showToast('Please select both players', 'error');
+      return false;
+    }
+    if (normalizedReplacement === normalizePlayerName(currentPlayer)) {
+      showToast('Replacement must be different from current player', 'error');
+      return false;
+    }
+
+    const targetTeamIndex = teams.findIndex(team => String(team.id) === String(teamId));
+    if (targetTeamIndex === -1) {
+      showToast('Team not found', 'error');
+      return false;
+    }
+
+    const updatedTeams = teams.map(team => ({ ...team }));
+    const targetTeam = updatedTeams[targetTeamIndex];
+    const targetSlot = findPlayerSlotInTeam(targetTeam, currentPlayer);
+    if (!targetSlot) {
+      showToast('Player not found in selected team', 'error');
+      return false;
+    }
+    const otherSlot = targetSlot === 'player1' ? 'player2' : 'player1';
+    const otherPlayer = getTeamSlotValue(targetTeam, otherSlot);
+    if (normalizedReplacement === normalizePlayerName(otherPlayer)) {
+      showToast('Replacement player already exists in selected team', 'error');
+      return false;
+    }
+
+    const currentLiveMatch = (Array.isArray(fixtures) ? fixtures : []).find((match) => !match?.completed) || null;
+    if (currentLiveMatch) {
+      const selectedTeamId = String(teamId || '');
+      const team1Id = String(currentLiveMatch.team1?.id || '');
+      const team2Id = String(currentLiveMatch.team2?.id || '');
+      if (selectedTeamId === team1Id || selectedTeamId === team2Id) {
+        const opponentTeam = selectedTeamId === team1Id ? currentLiveMatch.team2 : currentLiveMatch.team1;
+        const opponentPlayers = [
+          opponentTeam?.player || opponentTeam?.player1,
+          opponentTeam?.player2,
+        ]
+          .map((name) => normalizePlayerName(name))
+          .filter(Boolean);
+        if (opponentPlayers.includes(normalizedReplacement)) {
+          showToast('Cannot pick a player from the current live opposite team. Choose another player.', 'error');
+          return false;
+        }
+      }
+    }
+
+    const outgoingPlayer = getTeamSlotValue(targetTeam, targetSlot);
+    setTeamSlotValue(targetTeam, targetSlot, replacement);
+
+    const teamMap = new Map(updatedTeams.map(team => [String(team.id), team]));
+    const updatedFixtures = fixtures.map((match) => {
+      if (!match || match.completed) return match;
+      const next = { ...match };
+      if (match.team1?.id && teamMap.has(String(match.team1.id))) {
+        next.team1 = { ...teamMap.get(String(match.team1.id)) };
+      }
+      if (match.team2?.id && teamMap.has(String(match.team2.id))) {
+        next.team2 = { ...teamMap.get(String(match.team2.id)) };
+      }
+      return next;
+    });
+    const updatedBracket = bracket.map((round) => (
+      (Array.isArray(round) ? round : []).map((match) => {
+        if (!match || match.completed) return match;
+        const next = { ...match };
+        if (match.team1?.id && teamMap.has(String(match.team1.id))) {
+          next.team1 = { ...teamMap.get(String(match.team1.id)) };
+        }
+        if (match.team2?.id && teamMap.has(String(match.team2.id))) {
+          next.team2 = { ...teamMap.get(String(match.team2.id)) };
+        }
+        return next;
+      })
+    ));
+
+    setTeams(updatedTeams);
+    setFixtures(updatedFixtures);
+    setBracket(updatedBracket);
+    updatePlayerDatabase(replacement);
+
+    if (!playerRatings[replacement]) {
+      setPlayerRatings({
+        ...playerRatings,
+        [replacement]: { rating: 1000, matchesPlayed: 0, history: [] },
+      });
+    }
+
+    const swapEntry = {
+      id: `swap-${Date.now()}`,
+      at: new Date().toISOString(),
+      teamId: targetTeam.id,
+      teamName: targetTeam.name,
+      fromPlayer: outgoingPlayer,
+      toPlayer: replacement,
+    };
+    const updatedSwapHistory = [...swapHistory, swapEntry];
+    setSwapHistory(updatedSwapHistory);
+
+    const syncTournamentId = resolveSyncTournamentId();
+    if (isAppwriteEnabled && syncTournamentId) {
+      if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
+      queueTournamentSync({
+        tournamentId: syncTournamentId,
+        delayMs: 900,
+        tournamentData: {
+        teams: updatedTeams,
+        fixtures: updatedFixtures,
+        bracket: updatedBracket,
+        champion,
+        finalMatch: null,
+        aiSummaries: aiMatchSummaries,
+        swapHistory: updatedSwapHistory,
+        },
+      });
+      updateActiveTournamentLock(buildActiveTournamentSnapshot({
+        id: syncTournamentId,
+        teamsSnapshot: updatedTeams,
+        fixturesSnapshot: updatedFixtures,
+        bracketSnapshot: updatedBracket,
+        championSnapshot: champion,
+        aiSummariesSnapshot: aiMatchSummaries,
+        swapHistorySnapshot: updatedSwapHistory,
+      }));
+    }
+
+    showToast(`Updated ${targetTeam.name}: ${outgoingPlayer} → ${replacement}`);
+    return true;
   };
 
   const saveTournamentHistory = async (tournament) => {
@@ -639,6 +1567,10 @@ export const useTournamentActions = ({
         ...tournament,
         status: 'completed',
       });
+      await clearActiveTournamentLockIfMatches({
+        tournamentId: tournament.appwriteId || tournament.id,
+        tournamentName: tournament.name,
+      });
     } else {
       localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
     }
@@ -647,7 +1579,6 @@ export const useTournamentActions = ({
 
   const saveBracketMatchResult = async (matchId, score1, score2) => {
     if (!assertCanOperate()) return;
-    captureUndoSnapshot();
     const sourceMatch = bracket.flat().find((m) => m.id === matchId);
     const prediction = predictMatchOutcome({
       match: sourceMatch,
@@ -669,6 +1600,10 @@ export const useTournamentActions = ({
         ? { ...match, upsetAlert, preMatchPrediction: prediction }
         : match
     )));
+    const changedBracketMatchPatches = getChangedBracketMatchPatches({
+      previousBracket: bracket,
+      nextBracket: updatedBracket,
+    });
     setBracket(updatedBracket);
     let nextSummaries = aiMatchSummaries;
 
@@ -723,6 +1658,7 @@ export const useTournamentActions = ({
           champion: winner,
           format: tournamentFormat,
           gameMode,
+          swapHistory,
         };
         const historyAfter = upsertTournamentHistory(tournamentHistory, tournament);
         const finalBadgeUnlocks = getBadgeUnlocksForMatch({
@@ -750,14 +1686,31 @@ export const useTournamentActions = ({
         await saveTournamentHistory(tournament);
       } else {
         setAiMatchSummaries(nextSummaries);
-        if (isAppwriteEnabled && currentTournamentId) {
-          syncCurrentTournament({
-            fixtures,
-            bracket: updatedBracket,
-            champion: null,
-            finalMatch: null,
-            aiSummaries: nextSummaries,
+        const syncTournamentId = resolveSyncTournamentId();
+        if (isAppwriteEnabled && syncTournamentId) {
+          if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
+          const activeLockSnapshot = buildActiveTournamentSnapshot({
+            id: syncTournamentId,
+            fixturesSnapshot: fixtures,
+            bracketSnapshot: updatedBracket,
+            championSnapshot: null,
+            aiSummariesSnapshot: nextSummaries,
+            swapHistorySnapshot: swapHistory,
           });
+          await patchTournamentMatchesWithFallback({
+            tournamentId: syncTournamentId,
+            matchPatches: changedBracketMatchPatches,
+            fallbackDelayMs: 900,
+            fallbackTournamentData: {
+              fixtures,
+              bracket: updatedBracket,
+              champion: null,
+              finalMatch: null,
+              aiSummaries: nextSummaries,
+              swapHistory,
+            },
+          });
+          updateActiveTournamentLock(activeLockSnapshot);
         }
       }
     }
@@ -771,7 +1724,6 @@ export const useTournamentActions = ({
       showToast('Invalid scores', 'error');
       return;
     }
-    captureUndoSnapshot();
 
     const pointsTable = calculatePointsTable(teams, fixtures);
     const finalists = Array.isArray(finalistsOverride) && finalistsOverride.length >= 2
@@ -821,6 +1773,7 @@ export const useTournamentActions = ({
       champion: winner,
       format,
       gameMode,
+      swapHistory,
     };
     const historyAfter = upsertTournamentHistory(tournamentHistory, tournament);
     const badgeUnlocks = getBadgeUnlocksForMatch({
@@ -848,7 +1801,6 @@ export const useTournamentActions = ({
   const saveCasualMatch = async (matchData) => {
     if (!assertCanOperate()) return;
     try {
-      captureUndoSnapshot();
       const winner = matchData.score1 > matchData.score2 ? 'team1' : 'team2';
       const matchWithWinner = { ...matchData, winner };
 
@@ -865,14 +1817,8 @@ export const useTournamentActions = ({
       setPlayerRatings(updatedRatings);
 
       if (isAppwriteEnabled) {
-        await saveRatingsMutation.mutateAsync(updatedRatings);
-      }
-
-      if (isAppwriteEnabled) {
         const savedMatch = await createCasualMatchMutation.mutateAsync(matchWithWinner);
         setCasualMatches((prev) => [savedMatch, ...prev]);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.casualMatches(activeGroup?.id) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
       } else {
         const localMatch = {
           ...matchWithWinner,
@@ -1020,27 +1966,48 @@ export const useTournamentActions = ({
     if (!window.confirm('Delete this tournament and start new? This will remove its impact from ELO/stats.')) return;
 
     try {
-      captureUndoSnapshot();
-      const updatedHistory = tournamentHistory.filter((t) => {
-        if (!currentTournamentId) return true;
-        return t.id !== currentTournamentId && t.appwriteId !== currentTournamentId;
+      const pushUniqueId = (list, value) => {
+        const normalized = typeof value === 'string' ? value.trim() : '';
+        if (!normalized) return;
+        if (!list.includes(normalized)) list.push(normalized);
+      };
+      const normalizedTournamentName = (tournamentName || '').trim().toLowerCase();
+      const deleteCandidateIds = [];
+      pushUniqueId(deleteCandidateIds, currentTournamentId);
+
+      (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((item) => {
+        const itemId = item?.id;
+        const itemAppwriteId = item?.appwriteId;
+        const isSameCurrent = String(itemId || '') === String(currentTournamentId || '')
+          || String(itemAppwriteId || '') === String(currentTournamentId || '');
+        const isActive = item?.status === 'active' && !item?.champion;
+        const isSameName = normalizedTournamentName
+          && (item?.name || '').trim().toLowerCase() === normalizedTournamentName;
+        if (isSameCurrent || isActive || isSameName) {
+          pushUniqueId(deleteCandidateIds, itemAppwriteId);
+          pushUniqueId(deleteCandidateIds, itemId);
+        }
       });
 
-      if (isAppwriteEnabled && currentTournamentId) {
-        await deleteTournamentMutation.mutateAsync(currentTournamentId);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
-      }
+      const updatedHistory = tournamentHistory.filter((t) => {
+        const tId = typeof t?.id === 'string' ? t.id.trim() : '';
+        const tAppwriteId = typeof t?.appwriteId === 'string' ? t.appwriteId.trim() : '';
+        if (deleteCandidateIds.includes(tId) || deleteCandidateIds.includes(tAppwriteId)) return false;
+        if (!deleteCandidateIds.length && normalizedTournamentName) {
+          const isActive = t?.status === 'active' && !t?.champion;
+          const sameName = (t?.name || '').trim().toLowerCase() === normalizedTournamentName;
+          if (isActive && sameName) return false;
+        }
+        return true;
+      });
 
       setTournamentHistory(updatedHistory);
-
+      const hasActiveRemaining = updatedHistory.some((item) => item?.status === 'active' && !item?.champion);
       const recalculatedRatings = recalculateEloFromHistory(updatedHistory, casualMatches);
+      const recalculatedRatingsDelta = typeof buildRatingsDelta === 'function'
+        ? buildRatingsDelta(playerRatings || {}, recalculatedRatings || {})
+        : { changedRatings: {}, deletedPlayerNames: [] };
       setPlayerRatings(recalculatedRatings);
-
-      if (isAppwriteEnabled) {
-        await saveRatingsMutation.mutateAsync(recalculatedRatings);
-      } else {
-        localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
-      }
 
       setStep('setup');
       setTournamentName('');
@@ -1050,16 +2017,75 @@ export const useTournamentActions = ({
       setBracket([]);
       setChampion(null);
       setAiMatchSummaries([]);
+      setSwapHistory([]);
       setCurrentTournamentId(null);
-      await rebuildPlayerDatabase({
-        history: updatedHistory,
-        casual: casualMatches,
-        liveTeams: [],
-        liveFixtures: [],
-        liveBracket: [],
-        liveChampion: null,
-      });
-      showToast('Tournament deleted. ELO/stats recalculated.');
+      setActiveTournamentLock?.(null);
+
+      const persistDeletion = async () => {
+        const cloudDeleteIds = [...deleteCandidateIds];
+        if (isAppwriteEnabled) {
+          const remoteActive = await fetchRemoteActiveLiveTournament();
+          pushUniqueId(cloudDeleteIds, remoteActive?.appwriteId);
+          pushUniqueId(cloudDeleteIds, remoteActive?.id);
+          let deletedFromCloud = cloudDeleteIds.length === 0;
+          for (const deleteId of cloudDeleteIds) {
+            // Keep calls sequential so we stop at first successful delete.
+            // eslint-disable-next-line no-await-in-loop
+            const result = await deleteTournamentMutation.mutateAsync(deleteId);
+            if (result !== false) {
+              deletedFromCloud = true;
+              // eslint-disable-next-line no-await-in-loop
+              await clearActiveTournamentLockIfMatches({
+                tournamentId: deleteId,
+                tournamentName: tournamentName,
+              });
+              break;
+            }
+          }
+          if (!deletedFromCloud) {
+            showToast('Failed to delete tournament from cloud. Cleared local state only.', 'error');
+          }
+
+          if (cloudDeleteIds.length === 0) {
+            await clearActiveTournamentLockIfMatches({ tournamentName: tournamentName });
+          }
+
+          if (!hasActiveRemaining) {
+            await updateActiveTournamentLock(null, { immediate: true });
+          }
+
+          await saveRatingsMutation.mutateAsync(recalculatedRatingsDelta);
+          if (typeof markRatingsPersisted === 'function') {
+            markRatingsPersisted(recalculatedRatings || {});
+          }
+        } else {
+          localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
+        }
+
+        await rebuildPlayerDatabase({
+          history: updatedHistory,
+          casual: casualMatches,
+          liveTeams: [],
+          liveFixtures: [],
+          liveBracket: [],
+          liveChampion: null,
+          persistCloud: false,
+          pruneMissing: false,
+        });
+      };
+
+      if (isAppwriteEnabled) {
+        showToast('Tournament deleted locally. Cloud sync in progress.');
+        void persistDeletion().then(() => {
+          showToast('Tournament deleted. ELO/stats recalculated.');
+        }).catch((error) => {
+          console.error('Error syncing deleted tournament to cloud:', error);
+          showToast('Tournament deleted locally, but cloud sync failed.', 'error');
+        });
+      } else {
+        await persistDeletion();
+        showToast('Tournament deleted. ELO/stats recalculated.');
+      }
     } catch (error) {
       console.error('Error deleting current tournament:', error);
       showToast('Failed to delete current tournament', 'error');
@@ -1072,18 +2098,17 @@ export const useTournamentActions = ({
     setBracket([]);
     setChampion(null);
     setAiMatchSummaries([]);
+    setSwapHistory([]);
     setCurrentTournamentId(null);
 
-    setTimeout(() => {
-      if (tournamentFormat === 'league') {
-        const newFixtures = createFixtures(teams, format);
-        setFixtures(newFixtures);
-      } else {
-        const newBracket = generateKnockoutBracket(teams, tournamentFormat);
-        setBracket(newBracket);
-      }
-      showToast('Rematch started! 🏸');
-    }, 500);
+    if (tournamentFormat === 'league') {
+      const newFixtures = createFixtures(teams, format);
+      setFixtures(newFixtures);
+    } else {
+      const newBracket = generateKnockoutBracket(teams, tournamentFormat);
+      setBracket(newBracket);
+    }
+    showToast('Rematch started! 🏸');
   };
 
   const goHome = () => {
@@ -1095,52 +2120,204 @@ export const useTournamentActions = ({
     setBracket([]);
     setChampion(null);
     setAiMatchSummaries([]);
+    setSwapHistory([]);
     setCurrentTournamentId(null);
   };
 
-  const handleDeleteTournamentFromSetup = async (id) => {
-    if (!assertCanDelete()) return;
-    if (!window.confirm('Delete this tournament?')) return;
-
-    captureUndoSnapshot();
-    const tournament = tournamentHistory.find((t) => t.id === id);
-    if (isAppwriteEnabled && tournament?.appwriteId) {
-      await deleteTournamentMutation.mutateAsync(tournament.appwriteId);
+  const startNextTournament = ({ editTeams = false, tournamentNameOverride = '' } = {}) => {
+    if (!assertCanOperate()) return;
+    if (!Array.isArray(teams) || teams.length === 0) {
+      showToast('No teams available to continue. Please create teams first.', 'error');
+      return;
     }
 
-    const updatedHistory = tournamentHistory.filter((t) => t.id !== id);
-    setTournamentHistory(updatedHistory);
-    const recalculatedRatings = recalculateEloFromHistory(updatedHistory, casualMatches);
-    setPlayerRatings(recalculatedRatings);
+    const customName = String(tournamentNameOverride || '').trim();
+    const nextName = customName || getSuggestedNextTournamentName(tournamentName);
+    setTournamentName(nextName);
+    setChampion(null);
+    setAiMatchSummaries([]);
+    setSwapHistory([]);
+    setCurrentTournamentId(null);
 
-    if (isAppwriteEnabled) {
-      await saveRatingsMutation.mutateAsync(recalculatedRatings);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
+    if (editTeams) {
+      setFixtures([]);
+      setBracket([]);
+      setNumTeams(teams.length);
+      setStep('teams');
+      showToast('Next tournament loaded. Edit teams and generate fixtures.');
+      return;
+    }
+
+    setFixtures([]);
+    setBracket([]);
+    if (tournamentFormat === 'league') {
+      const newFixtures = createFixtures(teams, format);
+      setFixtures(newFixtures);
     } else {
+      const newBracket = generateKnockoutBracket(teams, tournamentFormat);
+      setBracket(newBracket);
+    }
+    setStep('tournament');
+    showToast('Next tournament started with same teams.');
+  };
+
+  const handleDeleteTournamentFromSetup = async (id, options = {}) => {
+    const { skipConfirm = false, skipProgressToast = false } = options || {};
+    if (!assertCanDelete()) return false;
+    if (!id) {
+      showToast('Tournament id not found for delete', 'error');
+      return false;
+    }
+    if (!skipConfirm && !window.confirm('Delete this tournament?')) return false;
+    if (!skipProgressToast) {
+      showToast('Deleting tournament...');
+      await yieldToUi();
+    }
+
+    const tournament = tournamentHistory.find((t) => (
+      String(t.id || '') === String(id)
+      || String(t.appwriteId || '') === String(id)
+    ));
+    const deleteId = tournament?.appwriteId || tournament?.id || id;
+    if (!deleteId) {
+      showToast('Tournament id not found for delete', 'error');
+      return false;
+    }
+
+    const pushUniqueId = (list, value) => {
+      const normalized = typeof value === 'string' ? value.trim() : '';
+      if (!normalized) return;
+      if (!list.includes(normalized)) list.push(normalized);
+    };
+
+    const normalizedTargetName = (tournament?.name || '').trim().toLowerCase();
+    const targetIsActive = tournament?.status === 'active' && !tournament?.champion;
+    const deleteCandidateIds = [];
+    pushUniqueId(deleteCandidateIds, String(deleteId));
+    pushUniqueId(deleteCandidateIds, String(id));
+    pushUniqueId(deleteCandidateIds, tournament?.id);
+    pushUniqueId(deleteCandidateIds, tournament?.appwriteId);
+
+    if (targetIsActive) {
+      (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((item) => {
+        const itemId = String(item?.id || '').trim();
+        const itemAppwriteId = String(item?.appwriteId || '').trim();
+        const isSameCurrent = deleteCandidateIds.includes(itemId) || deleteCandidateIds.includes(itemAppwriteId);
+        const isSameActiveByName = normalizedTargetName
+          && item?.status === 'active'
+          && !item?.champion
+          && (item?.name || '').trim().toLowerCase() === normalizedTargetName;
+        if (isSameCurrent || isSameActiveByName) {
+          pushUniqueId(deleteCandidateIds, itemId);
+          pushUniqueId(deleteCandidateIds, itemAppwriteId);
+        }
+      });
+    }
+
+    const updatedHistory = tournamentHistory.filter((item) => {
+      const itemId = String(item?.id || '').trim();
+      const itemAppwriteId = String(item?.appwriteId || '').trim();
+      if (deleteCandidateIds.includes(itemId) || deleteCandidateIds.includes(itemAppwriteId)) return false;
+      if (
+        targetIsActive
+        && normalizedTargetName
+        && item?.status === 'active'
+        && !item?.champion
+        && (item?.name || '').trim().toLowerCase() === normalizedTargetName
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const hasActiveRemaining = updatedHistory.some((item) => item?.status === 'active' && !item?.champion);
+    const recalculatedRatings = recalculateEloFromHistory(updatedHistory, casualMatches);
+    const recalculatedRatingsDelta = typeof buildRatingsDelta === 'function'
+      ? buildRatingsDelta(playerRatings || {}, recalculatedRatings || {})
+      : { changedRatings: {}, deletedPlayerNames: [] };
+
+    setTournamentHistory(updatedHistory);
+    setPlayerRatings(recalculatedRatings);
+    if (targetIsActive || !hasActiveRemaining) {
+      setActiveTournamentLock?.(null);
+    }
+
+    if (!isAppwriteEnabled) {
       localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
     }
 
-    await rebuildPlayerDatabase({
-      history: updatedHistory,
-      casual: casualMatches,
-    });
-
-    showToast('Tournament deleted - ratings recalculated');
-  };
-
-  const handleDeleteCasualMatchFromSetup = async (id) => {
-    if (!assertCanDelete()) return;
-    if (!window.confirm('Delete this casual match?')) return;
-
-    try {
-      captureUndoSnapshot();
-      if (isAppwriteEnabled) {
-        await deleteCasualMatchMutation.mutateAsync(id);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.casualMatches(activeGroup?.id) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
+    const persistDeletion = async () => {
+      if (isAppwriteEnabled && deleteId) {
+        let deletedFromCloud = false;
+        for (const candidateId of (deleteCandidateIds.length > 0 ? deleteCandidateIds : [deleteId])) {
+          // Keep calls sequential so we stop at first successful delete.
+          // eslint-disable-next-line no-await-in-loop
+          const result = await deleteTournamentMutation.mutateAsync(candidateId);
+          if (result !== false) {
+            deletedFromCloud = true;
+            // eslint-disable-next-line no-await-in-loop
+            await clearActiveTournamentLockIfMatches({
+              tournamentId: candidateId,
+              tournamentName: tournament?.name,
+            });
+            break;
+          }
+        }
+        if (!deletedFromCloud) {
+          throw new Error('Failed to delete tournament from cloud');
+        }
+        if (targetIsActive || !hasActiveRemaining) {
+          await updateActiveTournamentLock(null, { immediate: true });
+        }
+        await saveRatingsMutation.mutateAsync(recalculatedRatingsDelta);
+        if (typeof markRatingsPersisted === 'function') {
+          markRatingsPersisted(recalculatedRatings || {});
+        }
       }
 
-      const updatedCasualMatches = casualMatches.filter((match) => (match.id || match.appwriteId) !== id);
+      if (isAppwriteEnabled) {
+        await rebuildPlayerDatabase({
+          history: updatedHistory,
+          casual: casualMatches,
+          persistCloud: false,
+          pruneMissing: false,
+        });
+        return;
+      }
+
+      await rebuildPlayerDatabase({
+        history: updatedHistory,
+        casual: casualMatches,
+      });
+    };
+
+    if (isAppwriteEnabled) {
+      showToast('Tournament deleted');
+      void persistDeletion().catch((error) => {
+        console.error('Tournament delete cloud sync failed:', error);
+        showToast('Tournament deleted locally, but cloud sync failed.', 'error');
+      });
+      return true;
+    }
+
+    await persistDeletion();
+    showToast('Tournament deleted');
+    return true;
+  };
+
+  const handleDeleteCasualMatchFromSetup = async (id, options = {}) => {
+    const { skipConfirm = false, skipProgressToast = false } = options || {};
+    if (!assertCanDelete()) return false;
+    if (!skipConfirm && !window.confirm('Delete this casual match?')) return false;
+    if (!skipProgressToast) {
+      showToast('Deleting casual match...');
+      await yieldToUi();
+    }
+
+    try {
+      const updatedCasualMatches = casualMatches.filter((match) => (
+        String(match?.id || '').trim() !== String(id || '').trim()
+        && String(match?.appwriteId || '').trim() !== String(id || '').trim()
+      ));
       setCasualMatches(updatedCasualMatches);
 
       if (!isAppwriteEnabled) {
@@ -1150,18 +2327,40 @@ export const useTournamentActions = ({
       const recalculatedRatings = recalculateEloFromHistory(tournamentHistory, updatedCasualMatches);
       setPlayerRatings(recalculatedRatings);
 
-      if (isAppwriteEnabled) {
-        await saveRatingsMutation.mutateAsync(recalculatedRatings);
-      }
-      await rebuildPlayerDatabase({
-        history: tournamentHistory,
-        casual: updatedCasualMatches,
-      });
+      const persistDeletion = async () => {
+        if (isAppwriteEnabled) {
+          await deleteCasualMatchMutation.mutateAsync(id);
+          await rebuildPlayerDatabase({
+            history: tournamentHistory,
+            casual: updatedCasualMatches,
+            persistCloud: false,
+            pruneMissing: false,
+          });
+          return;
+        }
 
-      showToast('Casual match deleted - ratings recalculated');
+        await rebuildPlayerDatabase({
+          history: tournamentHistory,
+          casual: updatedCasualMatches,
+        });
+      };
+
+      if (isAppwriteEnabled) {
+        showToast('Casual match deleted');
+        void persistDeletion().catch((rebuildError) => {
+          console.error('Casual match delete cloud sync failed:', rebuildError);
+          showToast('Casual match deleted locally, but cloud sync failed.', 'error');
+        });
+        return true;
+      }
+
+      await persistDeletion();
+      showToast('Casual match deleted');
+      return true;
     } catch (error) {
       console.error('Error deleting casual match:', error);
       showToast('Failed to delete casual match', 'error');
+      return false;
     }
   };
 
@@ -1175,8 +2374,10 @@ export const useTournamentActions = ({
     saveFinalResult,
     saveTournamentHistory,
     saveCasualMatch,
+    swapTeamMember,
     resetTournament,
     rerunTournament,
+    startNextTournament,
     goHome,
     handleDeleteTournamentFromSetup,
     handleDeleteCasualMatchFromSetup,

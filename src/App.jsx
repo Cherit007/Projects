@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AppModals from './components/AppModals';
+import { Moon, Sun } from 'lucide-react';
 import AppViewRouter from './components/AppViewRouter';
+import Toast from './components/Toast';
 import { useAppwriteSync } from './hooks/useAppwriteSync';
 import { usePlayerDerivedData } from './hooks/usePlayerDerivedData';
 import { useAuthGroupActions } from './hooks/useAuthGroupActions';
@@ -10,18 +11,39 @@ import { useAppStore } from './store/appStore';
 import { casualMatchService } from './services/casualmatchservice';
 import { authService } from './services/authService';
 import { groupService } from './services/groupService';
-import { getInvitablePlayers } from './utils/invitations';
+import { tournamentService } from './services/tournamentService';
 import {
   calculatePointsTable, 
   calculatePlayerStats, 
   calculateCumulativePlayerStats,
   getPlayerLeaderboard,
+  updatePlayerRatingsAfterMatch,
 } from './utils/calculations';
 import { normalizePhotoInput } from './utils/playerPhotos';
 import { playerPhotoStorageService } from './services/playerPhotoStorageService';
 
+const AppModals = lazy(() => import('./components/AppModals'));
+
 const App = () => {
   const queryClient = useQueryClient();
+  const [themeMode, setThemeMode] = useState(() => {
+    try {
+      const savedTheme = localStorage.getItem('badminton_theme_mode');
+      return savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark';
+    } catch (_error) {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', themeMode);
+    try {
+      localStorage.setItem('badminton_theme_mode', themeMode);
+    } catch (_error) {
+      // Ignore storage errors (private mode / quota issues).
+    }
+  }, [themeMode]);
+
   const normalizeTournamentFormat = (value) =>
     value === 'playInFinal' ? 'knockoutByes' : value;
   const findActiveTournament = (history = []) => {
@@ -41,6 +63,7 @@ const App = () => {
     setBracket(activeTournament.bracket || []);
     setChampion(activeTournament.champion || null);
     setAiMatchSummaries(activeTournament.aiSummaries || []);
+    setSwapHistory(activeTournament.swapHistory || []);
     setCurrentTournamentId(activeTournament.appwriteId || activeTournament.id || null);
     setStep('tournament');
     return true;
@@ -99,8 +122,6 @@ const App = () => {
   const [showCasualMatch, setShowCasualMatch] = useState(false);
   const [oddPlayerEnabled, setOddPlayerEnabled] = useState(false);
   const [oddPlayerName, setOddPlayerName] = useState('');
-  const lastTournamentConfig = useAppStore((s) => s.lastTournamentConfig);
-  const setLastTournamentConfig = useAppStore((s) => s.setLastTournamentConfig);
   const [showHistory, setShowHistory] = useState(false);
   const [showCasualHistory, setShowCasualHistory] = useState(false);
   const [showAllTimeStats, setShowAllTimeStats] = useState(false);
@@ -113,10 +134,10 @@ const App = () => {
   const setPlayerPhotoRefs = useAppStore((s) => s.setPlayerPhotoRefs);
   const pendingPrefilledTeams = useAppStore((s) => s.pendingPrefilledTeams);
   const setPendingPrefilledTeams = useAppStore((s) => s.setPendingPrefilledTeams);
-  const undoStack = useAppStore((s) => s.undoStack);
-  const setUndoStack = useAppStore((s) => s.setUndoStack);
   const aiMatchSummaries = useAppStore((s) => s.aiMatchSummaries);
   const setAiMatchSummaries = useAppStore((s) => s.setAiMatchSummaries);
+  const swapHistory = useAppStore((s) => s.swapHistory);
+  const setSwapHistory = useAppStore((s) => s.setSwapHistory);
   const authLoading = useAppStore((s) => s.authLoading);
   const setAuthLoading = useAppStore((s) => s.setAuthLoading);
   const authResolved = useAppStore((s) => s.authResolved);
@@ -149,10 +170,24 @@ const App = () => {
   const setIsGuestViewer = useAppStore((s) => s.setIsGuestViewer);
   const [pendingLinkPrompt, setPendingLinkPrompt] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [activeTournamentLock, setActiveTournamentLock] = useState(null);
   const adminAccounts = useAppStore((s) => s.adminAccounts);
   const setAdminAccounts = useAppStore((s) => s.setAdminAccounts);
   const linkPromptedRef = useRef(new Set());
   const previousStepRef = useRef(step);
+  const toastTimerRef = useRef(null);
+  const ratingsAutosaveTimerRef = useRef(null);
+  const lastRatingsPersistedSignatureRef = useRef('{}');
+  const lastPersistedRatingsRef = useRef({});
+  const playerDbAutosaveTimerRef = useRef(null);
+  const pendingPlayerDbSaveRef = useRef(null);
+  const playerDbSaveInFlightRef = useRef(false);
+  const [historyHydrated, setHistoryHydrated] = useState(false);
+  const [casualHydrated, setCasualHydrated] = useState(false);
+  const [historyHydrationPending, setHistoryHydrationPending] = useState(false);
+  const [casualHydrationPending, setCasualHydrationPending] = useState(false);
+  const historyHydrationPromiseRef = useRef(null);
+  const casualHydrationPromiseRef = useRef(null);
 
   const hydratePlayerPhotos = (rawPhotos = {}) => {
     const urls = {};
@@ -190,6 +225,80 @@ const App = () => {
     });
   };
 
+  const normalizeMemberName = (value) => String(value || '').trim().toLowerCase();
+
+  const getMemberIdentityKey = (member) => {
+    const id = String(member?.id || '').trim();
+    if (id) return `id:${id}`;
+    const name = normalizeMemberName(member?.name);
+    return name ? `name:${name}` : '';
+  };
+
+  const membersMatchIdentity = (left, right) => {
+    const leftId = String(left?.id || '').trim();
+    const rightId = String(right?.id || '').trim();
+    if (leftId && rightId) return leftId === rightId;
+    const leftName = normalizeMemberName(left?.name);
+    const rightName = normalizeMemberName(right?.name);
+    return Boolean(leftName && rightName && leftName === rightName);
+  };
+
+  const hasMemberLink = (member) => Boolean(
+    String(member?.linkedAccountId || '').trim()
+    || String(member?.linkedEmail || '').trim()
+  );
+
+  const areMemberLinksEqual = (left, right) => (
+    String(left?.linkedAccountId || '').trim() === String(right?.linkedAccountId || '').trim()
+    && String(left?.linkedEmail || '').trim().toLowerCase() === String(right?.linkedEmail || '').trim().toLowerCase()
+  );
+
+  const mergeMembersForCloudSave = ({
+    nextMembers = [],
+    baselineMembers = [],
+    remoteMembers = [],
+  } = {}) => {
+    const next = Array.isArray(nextMembers) ? nextMembers : [];
+    const baseline = Array.isArray(baselineMembers) ? baselineMembers : [];
+    const remote = Array.isArray(remoteMembers) ? remoteMembers : [];
+
+    const removedKeys = new Set(
+      baseline
+        .filter((member) => !next.some((candidate) => membersMatchIdentity(candidate, member)))
+        .map(getMemberIdentityKey)
+        .filter(Boolean)
+    );
+
+    const merged = next.map((member) => ({ ...member }));
+
+    remote.forEach((remoteMember) => {
+      const remoteKey = getMemberIdentityKey(remoteMember);
+      if (!remoteKey) return;
+
+      const index = merged.findIndex((member) => membersMatchIdentity(member, remoteMember));
+      if (index === -1) {
+        if (removedKeys.has(remoteKey)) return;
+        merged.push({ ...remoteMember });
+        return;
+      }
+
+      const candidate = merged[index];
+      if (hasMemberLink(candidate) || !hasMemberLink(remoteMember)) return;
+
+      const baselineMember = baseline.find((member) => membersMatchIdentity(member, candidate)) || null;
+      const linkChangedLocally = baselineMember ? !areMemberLinksEqual(candidate, baselineMember) : false;
+      if (linkChangedLocally) return;
+
+      merged[index] = {
+        ...candidate,
+        linkedAccountId: candidate.linkedAccountId || remoteMember.linkedAccountId,
+        linkedEmail: candidate.linkedEmail || remoteMember.linkedEmail,
+      };
+    });
+
+    return merged;
+  };
+
   const buildMemberAccountLinks = (membersList = []) => {
     const links = { byId: {}, byName: {} };
     (Array.isArray(membersList) ? membersList : []).forEach((member) => {
@@ -224,9 +333,127 @@ const App = () => {
     });
   };
 
+  const deriveRatingsFromHistory = ({ history = [], casual = [] } = {}) => {
+    const toTimestamp = (value) => {
+      const parsed = Date.parse(String(value || ''));
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const normalizeCompletedMatch = (match) => {
+      if (!match?.team1 || !match?.team2 || !match?.completed) return null;
+      const score1 = Number(match?.score1);
+      const score2 = Number(match?.score2);
+      if (!Number.isFinite(score1) || !Number.isFinite(score2) || score1 === score2) return null;
+      return {
+        ...match,
+        score1,
+        score2,
+        completed: true,
+      };
+    };
+
+    const sortByTimeAscending = (list = []) => [...list].sort((a, b) => {
+      const aTime = Math.max(
+        toTimestamp(a?.createdAt),
+        toTimestamp(a?.updatedAt),
+        toTimestamp(a?.date),
+      );
+      const bTime = Math.max(
+        toTimestamp(b?.createdAt),
+        toTimestamp(b?.updatedAt),
+        toTimestamp(b?.date),
+      );
+      if (aTime !== bTime) return aTime - bTime;
+      return String(a?.id || a?.appwriteId || '').localeCompare(String(b?.id || b?.appwriteId || ''));
+    });
+
+    let rebuilt = {};
+
+    sortByTimeAscending(Array.isArray(history) ? history : []).forEach((tournament) => {
+      (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
+        .map(normalizeCompletedMatch)
+        .filter(Boolean)
+        .forEach((match) => {
+          rebuilt = updatePlayerRatingsAfterMatch(rebuilt, match);
+        });
+
+      (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+        .flatMap((round) => (Array.isArray(round) ? round : []))
+        .map(normalizeCompletedMatch)
+        .filter(Boolean)
+        .forEach((match) => {
+          rebuilt = updatePlayerRatingsAfterMatch(rebuilt, match);
+        });
+
+      const finalMatch = normalizeCompletedMatch(tournament?.finalMatch);
+      if (finalMatch) {
+        rebuilt = updatePlayerRatingsAfterMatch(rebuilt, finalMatch);
+      }
+    });
+
+    sortByTimeAscending(Array.isArray(casual) ? casual : [])
+      .map(normalizeCompletedMatch)
+      .filter(Boolean)
+      .forEach((match) => {
+        rebuilt = updatePlayerRatingsAfterMatch(rebuilt, match);
+      });
+
+    return rebuilt;
+  };
+
+  const recoverRatingsIfMissing = ({ history = tournamentHistory, casual = casualMatches } = {}) => {
+    const current = playerRatings && typeof playerRatings === 'object' ? playerRatings : {};
+    if (Object.keys(current).length > 0) return current;
+    const rebuilt = deriveRatingsFromHistory({ history, casual });
+    if (Object.keys(rebuilt).length === 0) return current;
+    setPlayerRatings(rebuilt);
+    return rebuilt;
+  };
+
+  const cloneRatingsSnapshot = (ratings = {}) => (
+    JSON.parse(JSON.stringify(ratings && typeof ratings === 'object' ? ratings : {}))
+  );
+
+  const buildRatingsDelta = (previousRatings = {}, nextRatings = {}) => {
+    const previous = previousRatings && typeof previousRatings === 'object' ? previousRatings : {};
+    const next = nextRatings && typeof nextRatings === 'object' ? nextRatings : {};
+    const changedRatings = {};
+    const deletedPlayerNames = [];
+
+    Object.entries(next).forEach(([playerName, snapshot]) => {
+      const before = previous[playerName];
+      if (JSON.stringify(before || null) === JSON.stringify(snapshot || null)) return;
+      changedRatings[playerName] = snapshot;
+    });
+
+    Object.keys(previous).forEach((playerName) => {
+      if (Object.prototype.hasOwnProperty.call(next, playerName)) return;
+      deletedPlayerNames.push(playerName);
+    });
+
+    return { changedRatings, deletedPlayerNames };
+  };
+
+  const markRatingsPersisted = (ratings = {}) => {
+    const snapshot = ratings && typeof ratings === 'object' ? ratings : {};
+    if (ratingsAutosaveTimerRef.current) {
+      clearTimeout(ratingsAutosaveTimerRef.current);
+      ratingsAutosaveTimerRef.current = null;
+    }
+    lastRatingsPersistedSignatureRef.current = JSON.stringify(snapshot);
+    lastPersistedRatingsRef.current = cloneRatingsSnapshot(snapshot);
+  };
+
   const showToast = (message, type = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 3000);
   };
   // Appwrite Integration
   const {
@@ -244,7 +471,8 @@ const App = () => {
     saveTemplatesToAppwrite,
     savePlayerPhotosToAppwrite,
     syncCurrentTournament,
-  } = useAppwriteSync(showToast);
+    patchTournamentMatches,
+  } = useAppwriteSync(showToast, activeGroup?.id);
   const requiresAuth = isAppwriteEnabled;
   const canOperate = !requiresAuth || groupRole === 'admin' || groupRole === 'member';
   const canDelete = !requiresAuth || groupRole === 'admin';
@@ -282,6 +510,9 @@ const App = () => {
     adminRecentReviews: (groupId, userId) => ['groups', 'admin', groupId, 'recent', userId],
     adminGroupMembers: (groupId, userId) => ['groups', 'admin', groupId, 'members', userId],
     appwriteData: (groupId) => ['appwrite', 'bootstrap', groupId || 'nogroup'],
+    tournamentSummaries: (groupId) => ['tournaments', 'summaries', groupId || 'nogroup'],
+    tournamentHistory: (groupId) => ['tournaments', 'history', groupId || 'nogroup'],
+    tournamentDetail: (groupId, tournamentId) => ['tournaments', 'detail', groupId || 'nogroup', String(tournamentId || '')],
     casualMatches: (groupId) => ['casual-matches', groupId || 'nogroup'],
   };
 
@@ -310,10 +541,10 @@ const App = () => {
     mutationFn: ({ requestId, adminUserId }) => groupService.rejectJoinRequest({ requestId, adminUserId }),
   });
   const createCasualMatchMutation = useMutation({
-    mutationFn: (payload) => casualMatchService.createCasualMatch(payload),
+    mutationFn: (payload) => casualMatchService.createCasualMatch(payload, activeGroup?.id),
   });
   const deleteCasualMatchMutation = useMutation({
-    mutationFn: (id) => casualMatchService.deleteCasualMatch(id),
+    mutationFn: (id) => casualMatchService.deleteCasualMatch(id, activeGroup?.id),
   });
   const saveTournamentMutation = useMutation({
     mutationFn: (payload) => saveTournamentToAppwrite(payload),
@@ -336,6 +567,36 @@ const App = () => {
   const savePlayerPhotosMutation = useMutation({
     mutationFn: (payload) => savePlayerPhotosToAppwrite(payload),
   });
+
+  const flushPlayerDatabaseToCloud = async () => {
+    if (!isAppwriteEnabled || playerDbSaveInFlightRef.current) return;
+    const payload = pendingPlayerDbSaveRef.current;
+    if (!Array.isArray(payload)) return;
+
+    pendingPlayerDbSaveRef.current = null;
+    playerDbSaveInFlightRef.current = true;
+    try {
+      await savePlayerDatabaseMutation.mutateAsync(payload);
+    } catch (error) {
+      console.error('Failed to save player database to Appwrite:', error);
+    } finally {
+      playerDbSaveInFlightRef.current = false;
+      if (pendingPlayerDbSaveRef.current) {
+        void flushPlayerDatabaseToCloud();
+      }
+    }
+  };
+
+  const queuePlayerDatabaseSave = (players) => {
+    pendingPlayerDbSaveRef.current = players;
+    if (playerDbAutosaveTimerRef.current) {
+      clearTimeout(playerDbAutosaveTimerRef.current);
+    }
+    playerDbAutosaveTimerRef.current = setTimeout(() => {
+      playerDbAutosaveTimerRef.current = null;
+      void flushPlayerDatabaseToCloud();
+    }, 700);
+  };
 
   const fetchCurrentUser = async () => queryClient.fetchQuery({
     queryKey: queryKeys.authCurrentUser,
@@ -366,6 +627,212 @@ const App = () => {
     setPublicGroups(groups);
     return groups;
   };
+
+  useEffect(() => {
+    historyHydrationPromiseRef.current = null;
+    casualHydrationPromiseRef.current = null;
+    if (!isAppwriteEnabled) {
+      setHistoryHydrated(true);
+      setCasualHydrated(true);
+    }
+  }, [activeGroup?.id, isAppwriteEnabled]);
+
+  const getTournamentIdCandidates = (tournament) => Array.from(new Set(
+    [tournament?.appwriteId, tournament?.id]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+
+  const matchesTournamentId = (tournament, targetId) => {
+    const normalizedTarget = String(targetId || '').trim();
+    if (!normalizedTarget) return false;
+    return getTournamentIdCandidates(tournament).includes(normalizedTarget);
+  };
+
+  const upsertTournamentInHistory = (history = [], tournament = null) => {
+    if (!tournament) return history;
+    const incomingIds = getTournamentIdCandidates(tournament);
+    if (incomingIds.length === 0) return [tournament, ...(Array.isArray(history) ? history : [])];
+    const list = Array.isArray(history) ? history : [];
+    const index = list.findIndex((item) => (
+      incomingIds.some((candidateId) => matchesTournamentId(item, candidateId))
+    ));
+    if (index < 0) return [tournament, ...list];
+    return list.map((item, idx) => (idx === index ? tournament : item));
+  };
+
+  const normalizeTournamentName = (value) => String(value || '').trim().toLowerCase();
+
+  const removeTournamentFromList = (
+    source = [],
+    { targetIds = [], targetName = '', removeActiveByName = false } = {}
+  ) => {
+    const list = Array.isArray(source) ? source : [];
+    const idSet = new Set(
+      (Array.isArray(targetIds) ? targetIds : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    );
+    const normalizedName = normalizeTournamentName(targetName);
+
+    return list.filter((item) => {
+      const itemIds = getTournamentIdCandidates(item);
+      if (itemIds.some((candidateId) => idSet.has(candidateId))) return false;
+      if (
+        removeActiveByName
+        && normalizedName
+        && item?.status === 'active'
+        && !item?.champion
+        && normalizeTournamentName(item?.name) === normalizedName
+      ) {
+        return false;
+      }
+      return true;
+    });
+  };
+
+  const pruneTournamentQueryCacheAfterDelete = ({
+    targetIds = [],
+    targetName = '',
+    removeActiveByName = false,
+  } = {}) => {
+    const normalizedIds = Array.from(new Set(
+      (Array.isArray(targetIds) ? targetIds : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    ));
+
+    queryClient.setQueryData(
+      queryKeys.tournamentSummaries(activeGroup?.id),
+      (cached) => removeTournamentFromList(cached, {
+        targetIds: normalizedIds,
+        targetName,
+        removeActiveByName,
+      })
+    );
+    queryClient.setQueryData(
+      queryKeys.tournamentHistory(activeGroup?.id),
+      (cached) => removeTournamentFromList(cached, {
+        targetIds: normalizedIds,
+        targetName,
+        removeActiveByName,
+      })
+    );
+
+    normalizedIds.forEach((id) => {
+      queryClient.removeQueries({
+        queryKey: queryKeys.tournamentDetail(activeGroup?.id, id),
+        exact: true,
+      });
+    });
+  };
+
+  const ensureTournamentHistoryHydrated = async ({ force = false } = {}) => {
+    if (!isAppwriteEnabled) {
+      setHistoryHydrated(true);
+      return tournamentHistory || [];
+    }
+    if (!force && historyHydrated) {
+      return tournamentHistory || [];
+    }
+    if (!force && historyHydrationPromiseRef.current) {
+      return historyHydrationPromiseRef.current;
+    }
+
+    setHistoryHydrationPending(true);
+    const promise = (async () => {
+      try {
+        const history = await queryClient.fetchQuery({
+          queryKey: queryKeys.tournamentHistory(activeGroup?.id),
+          queryFn: () => tournamentService.getAllTournaments(100, activeGroup?.id),
+          staleTime: 5 * 60 * 1000,
+        });
+        setTournamentHistory(history || []);
+        recoverRatingsIfMissing({
+          history: history || [],
+          casual: casualMatches || [],
+        });
+        setHistoryHydrated(true);
+        return history || [];
+      } catch (error) {
+        console.error('Failed to load tournament history:', error);
+        showToast('Failed to load tournament history', 'error');
+        return tournamentHistory || [];
+      } finally {
+        setHistoryHydrationPending(false);
+        historyHydrationPromiseRef.current = null;
+      }
+    })();
+
+    historyHydrationPromiseRef.current = promise;
+    return promise;
+  };
+
+  const ensureCasualMatchesHydrated = async ({ force = false } = {}) => {
+    if (!isAppwriteEnabled) {
+      setCasualHydrated(true);
+      return casualMatches || [];
+    }
+    if (!force && casualHydrated) {
+      return casualMatches || [];
+    }
+    if (!force && casualHydrationPromiseRef.current) {
+      return casualHydrationPromiseRef.current;
+    }
+
+    setCasualHydrationPending(true);
+    const promise = (async () => {
+      try {
+        const matches = await queryClient.fetchQuery({
+          queryKey: queryKeys.casualMatches(activeGroup?.id),
+          queryFn: () => casualMatchService.getAllCasualMatches(100, activeGroup?.id),
+          staleTime: 5 * 60 * 1000,
+        });
+        setCasualMatches(matches || []);
+        recoverRatingsIfMissing({
+          history: tournamentHistory || [],
+          casual: matches || [],
+        });
+        setCasualHydrated(true);
+        return matches || [];
+      } catch (error) {
+        console.error('Failed to load casual match history:', error);
+        showToast('Failed to load casual match history', 'error');
+        return casualMatches || [];
+      } finally {
+        setCasualHydrationPending(false);
+        casualHydrationPromiseRef.current = null;
+      }
+    })();
+
+    casualHydrationPromiseRef.current = promise;
+    return promise;
+  };
+
+  const prefetchHomeSetupData = async () => {
+    if (!isAppwriteEnabled) return;
+    const [history, casual] = await Promise.all([
+      ensureTournamentHistoryHydrated(),
+      ensureCasualMatchesHydrated(),
+    ]);
+    recoverRatingsIfMissing({ history, casual });
+  };
+
+  useEffect(() => {
+    if (!isAppwriteEnabled) return;
+    if (step !== 'setup') return;
+    if (historyHydrated && casualHydrated) return;
+    if (historyHydrationPending || casualHydrationPending) return;
+    void prefetchHomeSetupData();
+  }, [
+    isAppwriteEnabled,
+    step,
+    historyHydrated,
+    casualHydrated,
+    historyHydrationPending,
+    casualHydrationPending,
+    activeGroup?.id,
+  ]);
 
   useEffect(() => {
     if (!isConfigChecked) return;
@@ -471,8 +938,11 @@ const App = () => {
             );
             setPlayerDatabase(localPlayers);
             setPlayerRatings(localRatings);
+            markRatingsPersisted(localRatings || {});
             setTournamentHistory(localHistory);
             setCasualMatches(localCasualMatches);
+            setHistoryHydrated(true);
+            setCasualHydrated(true);
             const localActive = findActiveTournament(localHistory);
             resumeActiveTournament(localActive);
           }
@@ -481,17 +951,33 @@ const App = () => {
         }
     
         // 2️⃣ APPWRITE MODE
+        setHistoryHydrated(false);
+        setCasualHydrated(false);
+        setTournamentHistory([]);
+        setCasualMatches([]);
+
         const appwriteData = await queryClient.fetchQuery({
           queryKey: queryKeys.appwriteData(activeGroup?.id),
-          queryFn: () => loadFromAppwrite(),
-          staleTime: 15 * 1000,
+          queryFn: () => loadFromAppwrite({
+            includeTournaments: false,
+            includePlayerDatabase: true,
+            includeRatings: true,
+            includeMeta: true,
+          }),
+          staleTime: 5 * 60 * 1000,
+        });
+        const tournamentSummaries = await queryClient.fetchQuery({
+          queryKey: queryKeys.tournamentSummaries(activeGroup?.id),
+          queryFn: () => tournamentService.getTournamentSummaries(40, activeGroup?.id, ['active', 'scheduled']),
+          staleTime: 5 * 60 * 1000,
         });
     
         if (mounted && appwriteData) {
-          const appwriteTournaments = appwriteData.tournaments || [];
+          const appwriteTournaments = tournamentSummaries || [];
           setTournamentHistory(appwriteTournaments);
           setPlayerDatabase(appwriteData.playerDatabase || []);
           setPlayerRatings(appwriteData.playerRatings || {});
+          markRatingsPersisted(appwriteData.playerRatings || {});
           const loadedMembers = appwriteData.members?.length ? appwriteData.members : localMembers;
           const restoredMembers = applyMemberAccountLinks(
             mergeMemberLinks(loadedMembers, localMembers),
@@ -514,16 +1000,50 @@ const App = () => {
               ),
             }))
           );
+          setHistoryHydrated(false);
+          setActiveTournamentLock(appwriteData.activeTournament || null);
           const activeFromCloud = findActiveTournament(appwriteTournaments);
-          resumeActiveTournament(activeFromCloud);
+          const lock = appwriteData.activeTournament;
+          const lockCandidate = (lock && lock.status === 'active') ? {
+            id: lock.id || null,
+            appwriteId: lock.id || null,
+            name: lock.name || 'Live tournament',
+            date: lock.updatedAt ? new Date(lock.updatedAt).toLocaleDateString() : '',
+            teams: Array.isArray(lock.teams) ? lock.teams : [],
+            fixtures: Array.isArray(lock.fixtures) ? lock.fixtures : [],
+            bracket: Array.isArray(lock.bracket) ? lock.bracket : [],
+            champion: lock.champion || null,
+            aiSummaries: Array.isArray(lock.aiSummaries) ? lock.aiSummaries : [],
+            swapHistory: Array.isArray(lock.swapHistory) ? lock.swapHistory : [],
+            format: lock.format || '1',
+            gameMode: lock.gameMode || 'doubles',
+            tournamentFormat: normalizeTournamentFormat(lock.tournamentFormat || 'league'),
+            status: 'active',
+          } : null;
+          const scoreTournament = (tournament) => {
+            const completedFixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
+              .filter((match) => match?.completed).length;
+            const completedBracket = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+              .flatMap((round) => (Array.isArray(round) ? round : []))
+              .filter((match) => match?.completed).length;
+            return completedFixtures + completedBracket + (tournament?.champion ? 10000 : 0);
+          };
+          const preferredActive = activeFromCloud && lockCandidate
+            ? (scoreTournament(lockCandidate) > scoreTournament(activeFromCloud) ? lockCandidate : activeFromCloud)
+            : (activeFromCloud || lockCandidate);
+          const hasDetailedCloudState = Boolean(
+            preferredActive
+            && (
+              (Array.isArray(preferredActive.fixtures) && preferredActive.fixtures.length > 0)
+              || (Array.isArray(preferredActive.bracket) && preferredActive.bracket.length > 0)
+              || (Array.isArray(preferredActive.teams) && preferredActive.teams.length > 0 && !preferredActive.isSummary)
+            )
+          );
+          if (preferredActive && hasDetailedCloudState) {
+            resumeActiveTournament(preferredActive);
+          }
+          void prefetchHomeSetupData();
         }
-    
-        const matches = await queryClient.fetchQuery({
-          queryKey: queryKeys.casualMatches(activeGroup?.id),
-          queryFn: () => casualMatchService.getAllCasualMatches(),
-          staleTime: 10 * 1000,
-        });
-        if (mounted) setCasualMatches(matches || []);
     
       } catch (error) {
         console.error("Error loading:", error);
@@ -537,19 +1057,59 @@ const App = () => {
     return () => {
       mounted = false;
     };
-  }, [isAppwriteEnabled, isConfigChecked, requiresAuth, authResolved, groupResolved, activeGroup, queryClient]); // Load after access is resolved
+  }, [isAppwriteEnabled, isConfigChecked, requiresAuth, authResolved, groupResolved, activeGroup?.id, queryClient]); // Load after access is resolved
   
   // Auto-save player ratings to Appwrite
   useEffect(() => {
-    if (Object.keys(playerRatings).length > 0) {
-      if (isAppwriteEnabled) {
-        saveRatingsMutation.mutate(playerRatings);
-      } else {
-        localStorage.setItem("badminton_ratings", JSON.stringify(playerRatings));
+    if (loading) return;
+    const nextRatings = playerRatings && typeof playerRatings === 'object' ? playerRatings : {};
+    const signature = JSON.stringify(nextRatings);
+    if (signature === lastRatingsPersistedSignatureRef.current) return;
+
+    if (isAppwriteEnabled) {
+      if (ratingsAutosaveTimerRef.current) {
+        clearTimeout(ratingsAutosaveTimerRef.current);
       }
+      ratingsAutosaveTimerRef.current = setTimeout(() => {
+        ratingsAutosaveTimerRef.current = null;
+        if (signature === lastRatingsPersistedSignatureRef.current) return;
+        const previousRatings = lastPersistedRatingsRef.current || {};
+        const delta = buildRatingsDelta(previousRatings, nextRatings);
+        if (
+          Object.keys(delta.changedRatings).length === 0
+          && delta.deletedPlayerNames.length === 0
+        ) {
+          markRatingsPersisted(nextRatings);
+          return;
+        }
+
+        void saveRatingsMutation.mutateAsync(delta).then(() => {
+          markRatingsPersisted(nextRatings);
+        }).catch((error) => {
+          console.error('Failed to save ratings to Appwrite:', error);
+        });
+      }, 700);
+      return;
     }
-    
-  }, [playerRatings, isAppwriteEnabled]);
+
+    localStorage.setItem("badminton_ratings", JSON.stringify(nextRatings));
+    markRatingsPersisted(nextRatings);
+  }, [playerRatings, isAppwriteEnabled, loading]);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    if (ratingsAutosaveTimerRef.current) {
+      clearTimeout(ratingsAutosaveTimerRef.current);
+      ratingsAutosaveTimerRef.current = null;
+    }
+    if (playerDbAutosaveTimerRef.current) {
+      clearTimeout(playerDbAutosaveTimerRef.current);
+      playerDbAutosaveTimerRef.current = null;
+    }
+  }, []);
 
   const {
     teamNameDatabase,
@@ -769,64 +1329,6 @@ const App = () => {
     setSeenPendingRequestIds([]);
   }, [activeGroup?.id]);
 
-  const captureUndoSnapshot = () => {
-    const snapshot = {
-      step,
-      tournamentName,
-      numTeams,
-      format,
-      gameMode,
-      tournamentFormat,
-      teams: JSON.parse(JSON.stringify(teams)),
-      fixtures: JSON.parse(JSON.stringify(fixtures)),
-      bracket: JSON.parse(JSON.stringify(bracket)),
-      champion: champion ? JSON.parse(JSON.stringify(champion)) : null,
-      aiMatchSummaries: JSON.parse(JSON.stringify(aiMatchSummaries)),
-      playerRatings: JSON.parse(JSON.stringify(playerRatings)),
-      tournamentHistory: JSON.parse(JSON.stringify(tournamentHistory)),
-      casualMatches: JSON.parse(JSON.stringify(casualMatches)),
-      currentTournamentId,
-    };
-
-    setUndoStack(prev => [...prev.slice(-19), snapshot]);
-  };
-
-  const undoLastAction = async () => {
-    if (!assertCanOperate()) return;
-    const lastSnapshot = undoStack[undoStack.length - 1];
-    if (!lastSnapshot) {
-      showToast('Nothing to undo', 'error');
-      return;
-    }
-
-    setUndoStack(prev => prev.slice(0, -1));
-    setStep(lastSnapshot.step);
-    setTournamentName(lastSnapshot.tournamentName);
-    setNumTeams(lastSnapshot.numTeams);
-    setFormat(lastSnapshot.format);
-    setGameMode(lastSnapshot.gameMode);
-    setTournamentFormat(lastSnapshot.tournamentFormat);
-    setTeams(lastSnapshot.teams);
-    setFixtures(lastSnapshot.fixtures);
-    setBracket(lastSnapshot.bracket);
-    setChampion(lastSnapshot.champion);
-    setAiMatchSummaries(lastSnapshot.aiMatchSummaries || []);
-    setPlayerRatings(lastSnapshot.playerRatings);
-    setTournamentHistory(lastSnapshot.tournamentHistory);
-    setCasualMatches(lastSnapshot.casualMatches);
-    setCurrentTournamentId(lastSnapshot.currentTournamentId);
-
-    if (isAppwriteEnabled) {
-      await saveRatingsMutation.mutateAsync(lastSnapshot.playerRatings);
-    } else {
-      localStorage.setItem("badminton_ratings", JSON.stringify(lastSnapshot.playerRatings));
-      localStorage.setItem("badminton_history", JSON.stringify(lastSnapshot.tournamentHistory));
-      localStorage.setItem("badminton_casual_matches", JSON.stringify(lastSnapshot.casualMatches));
-    }
-
-    showToast('Undid last action');
-  };
-
   // Initialize teams
   useEffect(() => {
     const enteringTeams = previousStepRef.current !== 'teams' && step === 'teams';
@@ -870,9 +1372,7 @@ const App = () => {
       const updated = [...prev, playerName.trim()];
   
       if (isAppwriteEnabled) {
-        savePlayerDatabaseMutation.mutateAsync(updated)
-          .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) }))
-          .catch(() => {});
+        queuePlayerDatabaseSave(updated);
       } else {
         localStorage.setItem("badminton_players", JSON.stringify(updated));
       }
@@ -882,17 +1382,39 @@ const App = () => {
   };
 
   const saveMembersToLocal = (updatedMembers, baselineMembers = members) => {
-    const safeMembers = mergeMemberLinks(updatedMembers, baselineMembers);
-    const memberAccountLinks = buildMemberAccountLinks(safeMembers);
+    const baseline = Array.isArray(baselineMembers) ? baselineMembers : [];
+    const safeMembers = mergeMemberLinks(updatedMembers, baseline);
     if (isAppwriteEnabled) {
-      saveMembersMutation.mutateAsync({
-        members: safeMembers,
-        memberAccountLinks,
-      }).catch((error) => {
-        console.error('Failed to save members to Appwrite:', error);
-      }).finally(() => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
-      });
+      void (async () => {
+        let mergedForCloud = safeMembers;
+        try {
+          const remoteMeta = await appDataService.getAppMeta({ force: true });
+          const remoteMembersRaw = Array.isArray(remoteMeta?.members) ? remoteMeta.members : [];
+          const remoteLinks = remoteMeta?.memberAccountLinks && typeof remoteMeta.memberAccountLinks === 'object'
+            ? remoteMeta.memberAccountLinks
+            : {};
+          const remoteMembers = applyMemberAccountLinks(
+            mergeMemberLinks(remoteMembersRaw, safeMembers),
+            remoteLinks
+          );
+          mergedForCloud = mergeMembersForCloudSave({
+            nextMembers: safeMembers,
+            baselineMembers: baseline,
+            remoteMembers,
+          });
+        } catch (error) {
+          console.error('Failed to merge latest member links before save:', error);
+        }
+
+        try {
+          await saveMembersMutation.mutateAsync({
+            members: mergedForCloud,
+            memberAccountLinks: buildMemberAccountLinks(mergedForCloud),
+          });
+        } catch (error) {
+          console.error('Failed to save members to Appwrite:', error);
+        }
+      })();
       return;
     }
     localStorage.setItem("badminton_members", JSON.stringify(safeMembers));
@@ -902,8 +1424,6 @@ const App = () => {
     if (isAppwriteEnabled) {
       saveTemplatesMutation.mutateAsync(updatedTemplates).catch((error) => {
         console.error('Failed to save templates to Appwrite:', error);
-      }).finally(() => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
       });
       return;
     }
@@ -924,7 +1444,7 @@ const App = () => {
           : member
       ));
       setMembers(updated);
-      saveMembersToLocal(updated, prev);
+      saveMembersToLocal(updated, members);
       showToast(`Linked to member "${prompt.memberName}"`);
       return;
     }
@@ -1131,7 +1651,6 @@ const App = () => {
           setPlayerPhotoRefs(updatedRefs);
           setPlayerPhotos(updatedUrls);
           await savePlayerPhotosMutation.mutateAsync(updatedRefs);
-          await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
           return { success: true };
         }
 
@@ -1160,7 +1679,6 @@ const App = () => {
           setPlayerPhotoRefs(updatedRefs);
           setPlayerPhotos(updatedUrls);
           await savePlayerPhotosMutation.mutateAsync(updatedRefs);
-          await queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
           return { success: true };
         }
       }
@@ -1173,8 +1691,6 @@ const App = () => {
           savePlayerPhotosMutation.mutateAsync(updated).catch((saveError) => {
             console.error('Failed to save player photos to Appwrite:', saveError);
             localStorage.setItem('badminton_player_photos', JSON.stringify(updated));
-          }).finally(() => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.appwriteData(activeGroup?.id) });
           });
         } else {
           localStorage.setItem('badminton_player_photos', JSON.stringify(updated));
@@ -1311,8 +1827,10 @@ const App = () => {
     saveBracketMatchResult,
     saveFinalResult,
     saveCasualMatch,
+    swapTeamMember,
     resetTournament,
     rerunTournament,
+    startNextTournament,
     goHome,
     handleDeleteTournamentFromSetup,
     handleDeleteCasualMatchFromSetup,
@@ -1322,9 +1840,6 @@ const App = () => {
     showToast,
     isAppwriteEnabled,
     activeGroup,
-    queryClient,
-    queryKeys,
-    captureUndoSnapshot,
     updatePlayerDatabase,
     tournamentName,
     setTournamentName,
@@ -1355,14 +1870,19 @@ const App = () => {
     setShowCasualMatch,
     aiMatchSummaries,
     setAiMatchSummaries,
-    setLastTournamentConfig,
+    swapHistory,
+    setSwapHistory,
     currentTournamentId,
     setCurrentTournamentId,
+    setActiveTournamentLock,
     syncCurrentTournament,
+    patchTournamentMatches,
+    markRatingsPersisted,
+    buildRatingsDelta,
     saveTournamentMutation,
     deleteTournamentMutation,
-    savePlayerDatabaseMutation,
     saveRatingsMutation,
+    savePlayerDatabaseMutation,
     createCasualMatchMutation,
     deleteCasualMatchMutation,
   });
@@ -1421,6 +1941,16 @@ const App = () => {
     setStep,
   });
 
+  const cumulativeAllTimeStats = useMemo(
+    () => calculateCumulativePlayerStats(tournamentHistory),
+    [tournamentHistory]
+  );
+
+  const eloLeaderboard = useMemo(
+    () => getPlayerLeaderboard(playerRatings),
+    [playerRatings]
+  );
+
   const viewerDashboardProps = {
     group: activeGroup,
     tournamentName,
@@ -1430,8 +1960,8 @@ const App = () => {
     fixtures,
     bracket,
     tournamentHistory,
-    allTimeStats: calculateCumulativePlayerStats(tournamentHistory),
-    eloLeaderboard: getPlayerLeaderboard(playerRatings),
+    allTimeStats: cumulativeAllTimeStats,
+    eloLeaderboard,
   };
 
   const scheduledTournaments = useMemo(
@@ -1439,10 +1969,265 @@ const App = () => {
     [tournamentHistory]
   );
 
-  const handleEditScheduledTournament = (tournamentId) => {
-    const scheduled = (tournamentHistory || []).find(
-      (item) => (item.id || item.appwriteId) === tournamentId
+  const buildTournamentFromLock = (lock) => {
+    if (!lock || lock.status !== 'active') return null;
+    return {
+      id: lock.id || null,
+      appwriteId: lock.id || null,
+      name: lock.name || 'Live tournament',
+      date: lock.updatedAt
+        ? new Date(lock.updatedAt).toLocaleDateString()
+        : '',
+      teams: Array.isArray(lock.teams) ? lock.teams : [],
+      fixtures: Array.isArray(lock.fixtures) ? lock.fixtures : [],
+      bracket: Array.isArray(lock.bracket) ? lock.bracket : [],
+      champion: lock.champion || null,
+      aiSummaries: Array.isArray(lock.aiSummaries) ? lock.aiSummaries : [],
+      swapHistory: Array.isArray(lock.swapHistory) ? lock.swapHistory : [],
+      format: lock.format || '1',
+      gameMode: lock.gameMode || 'doubles',
+      tournamentFormat: normalizeTournamentFormat(lock.tournamentFormat || 'league'),
+      status: 'active',
+      _fromLock: true,
+    };
+  };
+
+  const getTournamentProgressScore = (tournament) => {
+    const completedFixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
+      .filter((match) => match?.completed).length;
+    const completedBracket = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+      .flatMap((round) => (Array.isArray(round) ? round : []))
+      .filter((match) => match?.completed).length;
+    const championBonus = tournament?.champion ? 10000 : 0;
+    return championBonus + completedFixtures + completedBracket;
+  };
+
+  const pickPreferredTournament = (primary, secondary) => {
+    if (!primary) return secondary || null;
+    if (!secondary) return primary;
+    return getTournamentProgressScore(secondary) > getTournamentProgressScore(primary)
+      ? secondary
+      : primary;
+  };
+
+  const activeLiveTournaments = useMemo(
+    () => {
+      const fromHistoryRaw = (tournamentHistory || []).filter((item) => item?.status === 'active' && !item?.champion);
+      const byName = new Map();
+      fromHistoryRaw.forEach((item) => {
+        const fallbackId = getTournamentIdCandidates(item)[0] || '';
+        const key = (item?.name || '').trim().toLowerCase()
+          || fallbackId;
+        if (!key) return;
+        const existing = byName.get(key);
+        byName.set(key, existing ? pickPreferredTournament(existing, item) : item);
+      });
+      const fromHistory = Array.from(byName.values());
+      const lockTournament = buildTournamentFromLock(activeTournamentLock);
+      if (!lockTournament) return fromHistory;
+
+      const lockId = lockTournament.id || lockTournament.appwriteId;
+      const lockName = (lockTournament.name || '').trim().toLowerCase();
+      const matchIndex = fromHistory.findIndex((item) => {
+        if (lockId && matchesTournamentId(item, lockId)) return true;
+        return lockName && (item?.name || '').trim().toLowerCase() === lockName;
+      });
+      if (matchIndex === -1) {
+        return [...fromHistory, lockTournament];
+      }
+      const merged = [...fromHistory];
+      merged[matchIndex] = pickPreferredTournament(fromHistory[matchIndex], lockTournament);
+      return merged;
+    },
+    [tournamentHistory, activeTournamentLock]
+  );
+
+  const handleResumeActiveTournament = async (tournamentId) => {
+    const normalizedTargetId = tournamentId ? String(tournamentId) : '';
+    const normalizedLockName = (activeTournamentLock?.name || '').trim().toLowerCase();
+    const findLocalActive = () => {
+      if (normalizedTargetId) {
+        const byId = (tournamentHistory || []).find((item) => (
+          matchesTournamentId(item, normalizedTargetId)
+          && item?.status === 'active'
+          && !item?.champion
+        ));
+        if (byId) return byId;
+      }
+      if (normalizedLockName) {
+        const byName = (tournamentHistory || []).find((item) => (
+          item?.status === 'active'
+          && !item?.champion
+          && (item?.name || '').trim().toLowerCase() === normalizedLockName
+        ));
+        if (byName) return byName;
+      }
+      return findActiveTournament(tournamentHistory);
+    };
+
+    let active = null;
+    if (normalizedTargetId) {
+      const detailedTarget = await ensureTournamentDetailsForId(normalizedTargetId);
+      if (detailedTarget?.status === 'active' && !detailedTarget?.champion) {
+        active = detailedTarget;
+      }
+    }
+
+    if (!active) {
+      const local = findLocalActive();
+      if (local) {
+        if (local.isSummary && isAppwriteEnabled && (local.appwriteId || local.id)) {
+          const detailed = await ensureTournamentDetailsForId(local.appwriteId || local.id);
+          active = pickPreferredTournament(local, detailed);
+        } else {
+          active = local;
+        }
+      }
+    }
+
+    if (!active) {
+      const lockTournament = buildTournamentFromLock(activeTournamentLock);
+      if (lockTournament?.id && isAppwriteEnabled) {
+        const detailedLock = await ensureTournamentDetailsForId(lockTournament.id);
+        active = pickPreferredTournament(lockTournament, detailedLock);
+      } else if (lockTournament) {
+        active = lockTournament;
+      }
+    }
+
+    if (!active && isAppwriteEnabled) {
+      try {
+        const activeSummaries = await queryClient.fetchQuery({
+          queryKey: queryKeys.tournamentSummaries(activeGroup?.id),
+          queryFn: () => tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']),
+          staleTime: 30 * 1000,
+        });
+        const candidate = normalizedTargetId
+          ? (activeSummaries || []).find((item) => matchesTournamentId(item, normalizedTargetId))
+          : findActiveTournament(activeSummaries);
+        if (candidate) {
+          setTournamentHistory((prev) => upsertTournamentInHistory(prev, candidate));
+          const detailed = await ensureTournamentDetailsForId(candidate.appwriteId || candidate.id);
+          active = pickPreferredTournament(candidate, detailed);
+        }
+      } catch (_error) {
+        // Ignore network issues and fallback to the existing local state.
+      }
+    }
+
+    if (!active || active.status !== 'active' || active.champion) {
+      showToast('Live tournament exists but could not be loaded yet. Please refresh once.', 'error');
+      return;
+    }
+
+    const resumed = resumeActiveTournament(active);
+    if (!resumed) {
+      showToast('Unable to resume active tournament', 'error');
+      return;
+    }
+    showToast(`Resumed "${active.name || 'Live tournament'}"`);
+  };
+
+  const handleDeleteActiveTournament = async (tournamentId) => {
+    const normalizedTargetId = tournamentId ? String(tournamentId) : '';
+    const normalizedLockName = (activeTournamentLock?.name || '').trim().toLowerCase();
+    const findLocalTarget = () => {
+      if (normalizedTargetId) return normalizedTargetId;
+      const fromHistory = normalizedLockName
+        ? (tournamentHistory || []).find((item) => (
+            item?.status === 'active'
+            && !item?.champion
+            && (item?.name || '').trim().toLowerCase() === normalizedLockName
+          ))
+        : findActiveTournament(tournamentHistory);
+      return fromHistory ? (getTournamentIdCandidates(fromHistory)[0] || '') : '';
+    };
+
+    let targetId = findLocalTarget();
+    if (!targetId) {
+      const lockId = String(activeTournamentLock?.id || '').trim();
+      if (lockId) targetId = lockId;
+    }
+
+    if (!targetId) {
+      showToast('Unable to resolve live tournament to delete', 'error');
+      return;
+    }
+
+    if (!window.confirm('Delete this tournament?')) return;
+
+    const targetTournament = (tournamentHistory || []).find((item) => matchesTournamentId(item, targetId));
+    const normalizedTargetName = normalizeTournamentName(targetTournament?.name || activeTournamentLock?.name);
+    const deleteIds = Array.from(new Set(
+      [targetId, targetTournament?.id, targetTournament?.appwriteId, activeTournamentLock?.id]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    ));
+
+    const needsHydration = isAppwriteEnabled && (!historyHydrated || !casualHydrated);
+    if (needsHydration) {
+      showToast('Preparing delete...');
+      await Promise.all([
+        ensureTournamentHistoryHydrated(),
+        ensureCasualMatchesHydrated(),
+      ]);
+    }
+
+    const deleted = await handleDeleteTournamentFromSetup(targetId, {
+      skipConfirm: true,
+      skipProgressToast: needsHydration,
+    });
+    if (!deleted) return;
+    setTournamentHistory((prev) => removeTournamentFromList(prev, {
+      targetIds: deleteIds,
+      targetName: normalizedTargetName,
+      removeActiveByName: true,
+    }));
+    setActiveTournamentLock(null);
+    if (deleteIds.some((id) => String(currentTournamentId || '').trim() === id)) {
+      setCurrentTournamentId(null);
+    }
+    pruneTournamentQueryCacheAfterDelete({
+      targetIds: deleteIds,
+      targetName: normalizedTargetName,
+      removeActiveByName: true,
+    });
+  };
+
+  const TOURNAMENT_DETAIL_STALE_TIME_MS = 2 * 60 * 1000;
+
+  const ensureTournamentDetailsForId = async (tournamentId) => {
+    const targetId = String(tournamentId || '').trim();
+    if (!targetId) return null;
+    const existing = (tournamentHistory || []).find(
+      (item) => matchesTournamentId(item, targetId)
     );
+    if (!isAppwriteEnabled) return existing || null;
+
+    try {
+      if (existing && !existing?.isSummary) {
+        queryClient.setQueryData(
+          queryKeys.tournamentDetail(activeGroup?.id, targetId),
+          existing
+        );
+      }
+      const full = await queryClient.fetchQuery({
+        queryKey: queryKeys.tournamentDetail(activeGroup?.id, targetId),
+        queryFn: () => tournamentService.getTournamentById(targetId, activeGroup?.id),
+        staleTime: TOURNAMENT_DETAIL_STALE_TIME_MS,
+      });
+      if (!full) return existing || null;
+      setTournamentHistory((prev) => upsertTournamentInHistory(prev, full));
+      return full;
+    } catch (error) {
+      console.error('Failed to load tournament details:', error);
+      showToast('Failed to load tournament details', 'error');
+      return existing || null;
+    }
+  };
+
+  const handleEditScheduledTournament = async (tournamentId) => {
+    const scheduled = await ensureTournamentDetailsForId(tournamentId);
     if (!scheduled) return;
 
     const scheduledGameMode = scheduled.gameMode || 'doubles';
@@ -1470,10 +2255,8 @@ const App = () => {
     showToast('Scheduled tournament loaded. You can edit teams now.');
   };
 
-  const handleStartScheduledTournament = (tournamentId) => {
-    const scheduled = (tournamentHistory || []).find(
-      (item) => (item.id || item.appwriteId) === tournamentId
-    );
+  const handleStartScheduledTournament = async (tournamentId) => {
+    const scheduled = await ensureTournamentDetailsForId(tournamentId);
     if (!scheduled) return;
 
     const scheduledGameMode = scheduled.gameMode || 'doubles';
@@ -1508,6 +2291,111 @@ const App = () => {
     });
   };
 
+  const handleOpenHistoryModal = () => {
+    setShowHistory(true);
+  };
+
+  const handleOpenCasualHistoryModal = () => {
+    setShowCasualHistory(true);
+  };
+
+  const handleOpenAllTimeStatsModal = () => {
+    setShowAllTimeStats(true);
+  };
+
+  const handleOpenEloModal = () => {
+    setShowEloLeaderboard(true);
+  };
+
+  const shouldHydrateForTournamentDelete = (id) => {
+    const target = (tournamentHistory || []).find((item) => (
+      matchesTournamentId(item, id)
+    ));
+    if (!target) return false;
+    return target.status !== 'scheduled';
+  };
+
+  const handleDeleteTournamentWithHydration = async (id) => {
+    const normalizedId = String(id || '').trim();
+    const target = (tournamentHistory || []).find((item) => matchesTournamentId(item, normalizedId));
+    if (!window.confirm('Delete this tournament?')) return;
+    const needsHydration = (
+      isAppwriteEnabled
+      && shouldHydrateForTournamentDelete(normalizedId)
+      && (!historyHydrated || !casualHydrated)
+    );
+    if (needsHydration) {
+      showToast('Preparing delete...');
+      await Promise.all([
+        ensureTournamentHistoryHydrated(),
+        ensureCasualMatchesHydrated(),
+      ]);
+    }
+    const deleted = await handleDeleteTournamentFromSetup(normalizedId, {
+      skipConfirm: true,
+      skipProgressToast: needsHydration,
+    });
+    if (!deleted || !isAppwriteEnabled) return;
+
+    const deleteIds = Array.from(new Set(
+      [normalizedId, target?.id, target?.appwriteId]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    ));
+    const normalizedTargetName = normalizeTournamentName(target?.name);
+    const removeActiveByName = Boolean(target?.status === 'active' && !target?.champion && normalizedTargetName);
+    pruneTournamentQueryCacheAfterDelete({
+      targetIds: deleteIds,
+      targetName: normalizedTargetName,
+      removeActiveByName,
+    });
+  };
+
+  const handleDeleteCasualWithHydration = async (id) => {
+    if (!window.confirm('Delete this casual match?')) return;
+    const needsHydration = isAppwriteEnabled && (!historyHydrated || !casualHydrated);
+    if (needsHydration) {
+      showToast('Preparing delete...');
+      await Promise.all([
+        ensureTournamentHistoryHydrated(),
+        ensureCasualMatchesHydrated(),
+      ]);
+    }
+    const deleted = await handleDeleteCasualMatchFromSetup(id, {
+      skipConfirm: true,
+      skipProgressToast: needsHydration,
+    });
+    if (!deleted || !isAppwriteEnabled) return;
+    const normalizedId = String(id || '').trim();
+    queryClient.setQueryData(
+      queryKeys.casualMatches(activeGroup?.id),
+      (cached) => (Array.isArray(cached) ? cached : []).filter((item) => {
+        const itemId = String(item?.id || '').trim();
+        const itemAppwriteId = String(item?.appwriteId || '').trim();
+        return itemId !== normalizedId && itemAppwriteId !== normalizedId;
+      })
+    );
+  };
+
+  const handleResetTournamentWithHydration = async () => {
+    if (isAppwriteEnabled && (!historyHydrated || !casualHydrated)) {
+      await Promise.all([
+        ensureTournamentHistoryHydrated(),
+        ensureCasualMatchesHydrated(),
+      ]);
+    }
+    await resetTournament();
+  };
+
+  const handleHeaderGoHome = () => {
+    setShowRequestCenter(false);
+    setShowCasualMatch(false);
+    goHome();
+    if (isAppwriteEnabled) {
+      void prefetchHomeSetupData();
+    }
+  };
+
   const setupScreenProps = {
     step,
     tournamentName,
@@ -1525,46 +2413,61 @@ const App = () => {
       if (!assertCanOperate()) return;
       setShowCasualMatch(true);
     },
-    lastTournamentConfig,
-    onReuseTournament: () => {
-      if (!lastTournamentConfig) return;
-      setTournamentName(lastTournamentConfig.name + ' (Rematch)');
-      setNumTeams(lastTournamentConfig.numTeams);
-      setFormat(lastTournamentConfig.format);
-      setGameMode(lastTournamentConfig.gameMode || 'doubles');
-      setTournamentFormat(normalizeTournamentFormat(lastTournamentConfig.tournamentFormat || 'league'));
-      setPendingPrefilledTeams(lastTournamentConfig.teams.map((team, i) => ({ ...team, id: i + 1 })));
-      setStep('teams');
-      showToast('Tournament loaded!');
-    },
     tournamentHistory,
     scheduledTournaments,
+    activeLiveTournaments,
     onEditScheduledTournament: handleEditScheduledTournament,
     onStartScheduledTournament: handleStartScheduledTournament,
+    onResumeActiveTournament: handleResumeActiveTournament,
+    onDeleteActiveTournament: handleDeleteActiveTournament,
+    canDeleteLiveTournament: canDelete,
+    canDeleteActions: canDelete,
     casualMatches,
     playerDatabase,
     teamNameDatabase,
     showHistory,
-    setShowHistory,
+    setShowHistory: (value) => {
+      if (!value) {
+        setShowHistory(false);
+        return;
+      }
+      void handleOpenHistoryModal();
+    },
     members,
     onAddMember: addMember,
     onDeleteMember: deleteMember,
     showCasualHistory,
-    setShowCasualHistory,
+    setShowCasualHistory: (value) => {
+      if (!value) {
+        setShowCasualHistory(false);
+        return;
+      }
+      void handleOpenCasualHistoryModal();
+    },
     showAllTimeStats,
-    setShowAllTimeStats,
+    setShowAllTimeStats: (value) => {
+      if (!value) {
+        setShowAllTimeStats(false);
+        return;
+      }
+      void handleOpenAllTimeStatsModal();
+    },
     showEloLeaderboard,
-    setShowEloLeaderboard,
+    setShowEloLeaderboard: (value) => {
+      if (!value) {
+        setShowEloLeaderboard(false);
+        return;
+      }
+      void handleOpenEloModal();
+    },
     tournamentTemplates,
     onSaveTemplate: saveTournamentTemplate,
     onApplyTemplate: applyTournamentTemplate,
     onDeleteTemplate: deleteTournamentTemplate,
-    canUndo: undoStack.length > 0,
-    onUndoLastAction: undoLastAction,
-    onDeleteTournament: handleDeleteTournamentFromSetup,
-    onDeleteCasualMatch: handleDeleteCasualMatchFromSetup,
-    allTimeStats: calculateCumulativePlayerStats(tournamentHistory),
-    eloLeaderboard: getPlayerLeaderboard(playerRatings),
+    onDeleteTournament: handleDeleteTournamentWithHydration,
+    onDeleteCasualMatch: handleDeleteCasualWithHydration,
+    allTimeStats: cumulativeAllTimeStats,
+    eloLeaderboard,
     playerRatings,
     pairingAnalytics,
     formPowerRankings,
@@ -1573,6 +2476,10 @@ const App = () => {
     canEditPlayerPhoto: canEditOwnProfile,
     isAppwriteEnabled,
     isSyncing,
+    historyHydrated,
+    casualHydrated,
+    historyHydrationPending,
+    casualHydrationPending,
   };
 
   const teamEntryProps = {
@@ -1603,6 +2510,7 @@ const App = () => {
     teams,
     champion,
     members,
+    playerDatabase,
     playerRatings,
     gameMode,
     tournamentHistory,
@@ -1614,24 +2522,16 @@ const App = () => {
     playerPhotos,
     onUpdatePlayerPhoto: updatePlayerPhoto,
     canEditPlayerPhoto: canEditOwnProfile,
-    inviteList: getInvitablePlayers({
-      teams,
-      members,
-      fixtures,
-      bracket,
-      format,
-      tournamentFormat,
-      tournamentName
-    }),
     onSaveMatchResult: saveMatchResult,
     onPrioritizeMatch: prioritizeMatch,
     onSaveBracketResult: saveBracketMatchResult,
     onSaveFinalResult: saveFinalResult,
-    canUndo: undoStack.length > 0,
-    onUndoLastAction: undoLastAction,
-    onGoHome: goHome,
-    onResetTournament: resetTournament,
+    onSwapTeamMember: swapTeamMember,
+    swapHistory,
+    onGoHome: handleHeaderGoHome,
+    onResetTournament: handleResetTournamentWithHydration,
     onRerunTournament: rerunTournament,
+    onStartNextTournament: startNextTournament,
     calculatePointsTable,
     calculatePlayerStats,
     getPlayerLeaderboard,
@@ -1645,84 +2545,105 @@ const App = () => {
     onClose: () => setShowCasualMatch(false),
   };
 
-  const appModals = (
-    <AppModals
-      requiresAuth={requiresAuth}
-      currentUser={currentUser}
-      showProfileModal={showProfileModal}
-      groupRole={groupRole}
-      currentUserMember={currentUserMember}
-      playerPhotos={playerPhotos}
-      members={members}
-      unlinkedPlayerNames={unlinkedPlayerNames}
-      adminAccounts={adminAccounts}
-      currentUserPlayerProfile={currentUserPlayerProfile}
-      currentUserPlayerTeam={currentUserPlayerTeam}
-      currentUserAdvancedStats={currentUserAdvancedStats}
-      currentUserAchievements={currentUserAchievements}
-      currentUserGamification={currentUserGamification}
-      authLoading={authLoading}
-      onSaveProfileName={handleSaveProfileName}
-      onUpdatePlayerPhoto={(playerName, dataUrl) => updatePlayerPhoto(playerName, dataUrl)}
-      onManualLink={handleManualLinkToMember}
-      onAdminLinkAccountToMember={handleAdminLinkAccountToMember}
-      onCreateAndLinkOwnMember={handleCreateAndLinkOwnMember}
-      onCloseProfile={() => setShowProfileModal(false)}
-      pendingLinkPrompt={pendingLinkPrompt}
-      onConfirmLinkPrompt={() => {
-        applyAccountLink(pendingLinkPrompt);
-        setPendingLinkPrompt(null);
-      }}
-      onSkipLinkPrompt={() => {
-        setPendingLinkPrompt(null);
-        showToast('Account link skipped for now', 'error');
-      }}
-    />
+  const shouldRenderAppModals = Boolean(
+    requiresAuth
+    && (showProfileModal || pendingLinkPrompt)
   );
 
+  const appModals = shouldRenderAppModals ? (
+    <Suspense fallback={null}>
+      <AppModals
+        requiresAuth={requiresAuth}
+        currentUser={currentUser}
+        showProfileModal={showProfileModal}
+        groupRole={groupRole}
+        currentUserMember={currentUserMember}
+        playerPhotos={playerPhotos}
+        members={members}
+        unlinkedPlayerNames={unlinkedPlayerNames}
+        adminAccounts={adminAccounts}
+        currentUserPlayerProfile={currentUserPlayerProfile}
+        currentUserPlayerTeam={currentUserPlayerTeam}
+        currentUserAdvancedStats={currentUserAdvancedStats}
+        currentUserAchievements={currentUserAchievements}
+        currentUserGamification={currentUserGamification}
+        authLoading={authLoading}
+        onSaveProfileName={handleSaveProfileName}
+        onUpdatePlayerPhoto={(playerName, dataUrl) => updatePlayerPhoto(playerName, dataUrl)}
+        onManualLink={handleManualLinkToMember}
+        onAdminLinkAccountToMember={handleAdminLinkAccountToMember}
+        onCreateAndLinkOwnMember={handleCreateAndLinkOwnMember}
+        onCloseProfile={() => setShowProfileModal(false)}
+        pendingLinkPrompt={pendingLinkPrompt}
+        onConfirmLinkPrompt={() => {
+          applyAccountLink(pendingLinkPrompt);
+          setPendingLinkPrompt(null);
+        }}
+        onSkipLinkPrompt={() => {
+          setPendingLinkPrompt(null);
+          showToast('Account link skipped for now', 'error');
+        }}
+      />
+    </Suspense>
+  ) : null;
+
   return (
-    <AppViewRouter
-      isConfigChecked={isConfigChecked}
-      authResolved={authResolved}
-      groupResolved={groupResolved}
-      requiresAuth={requiresAuth}
-      currentUser={currentUser}
-      isGuestViewer={isGuestViewer}
-      activeGroup={activeGroup}
-      groupRole={groupRole}
-      showRequestCenter={showRequestCenter}
-      isViewerMode={isViewerMode}
-      authLoading={authLoading}
-      availableGroups={availableGroups}
-      publicGroups={publicGroups}
-      requestedGroupIds={requestedGroupIds}
-      unreadRequestCount={unreadRequestCount}
-      pendingJoinRequests={pendingJoinRequests}
-      recentJoinReviews={recentJoinReviews}
-      inviteLoading={inviteLoading}
-      onLogin={handleLogin}
-      onRegister={handleRegister}
-      onContinueAsViewer={handleContinueAsViewer}
-      onCreateGroup={handleCreateGroup}
-      onRequestAccess={handleRequestAccess}
-      onWatchGroup={handleWatchGroup}
-      onSelectGroup={handleSelectGroup}
-      onOpenProfile={() => setShowProfileModal(true)}
-      onBackToGroups={handleBackToGroups}
-      onOpenRequestCenter={handleOpenRequestCenter}
-      onLogout={handleLogout}
-      onCloseRequestCenter={() => setShowRequestCenter(false)}
-      onApproveRequest={handleApproveRequest}
-      onRejectRequest={handleRejectRequest}
-      viewerDashboardProps={viewerDashboardProps}
-      setupScreenProps={setupScreenProps}
-      teamEntryProps={teamEntryProps}
-      tournamentViewProps={tournamentViewProps}
-      casualMatchProps={casualMatchProps}
-      showCasualMatch={showCasualMatch}
-      appModals={appModals}
-      toast={toast}
-    />
+    <>
+      <AppViewRouter
+        isConfigChecked={isConfigChecked}
+        authResolved={authResolved}
+        groupResolved={groupResolved}
+        requiresAuth={requiresAuth}
+        currentUser={currentUser}
+        isGuestViewer={isGuestViewer}
+        activeGroup={activeGroup}
+        groupRole={groupRole}
+        showRequestCenter={showRequestCenter}
+        isViewerMode={isViewerMode}
+        authLoading={authLoading}
+        availableGroups={availableGroups}
+        publicGroups={publicGroups}
+        requestedGroupIds={requestedGroupIds}
+        unreadRequestCount={unreadRequestCount}
+        pendingJoinRequests={pendingJoinRequests}
+        recentJoinReviews={recentJoinReviews}
+        inviteLoading={inviteLoading}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onContinueAsViewer={handleContinueAsViewer}
+        onCreateGroup={handleCreateGroup}
+        onRequestAccess={handleRequestAccess}
+        onWatchGroup={handleWatchGroup}
+        onSelectGroup={handleSelectGroup}
+        onOpenProfile={() => setShowProfileModal(true)}
+        onGoHome={handleHeaderGoHome}
+        onBackToGroups={handleBackToGroups}
+        onOpenRequestCenter={handleOpenRequestCenter}
+        onLogout={handleLogout}
+        onCloseRequestCenter={() => setShowRequestCenter(false)}
+        onApproveRequest={handleApproveRequest}
+        onRejectRequest={handleRejectRequest}
+        viewerDashboardProps={viewerDashboardProps}
+        setupScreenProps={setupScreenProps}
+        teamEntryProps={teamEntryProps}
+        tournamentViewProps={tournamentViewProps}
+        casualMatchProps={casualMatchProps}
+        showCasualMatch={showCasualMatch}
+        appModals={appModals}
+      />
+      <Toast message={toast?.message} type={toast?.type} />
+
+      <button
+        type="button"
+        onClick={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        className="theme-toggle-btn"
+        aria-label={themeMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+        title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        <span className="hidden sm:inline">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
+      </button>
+    </>
   );
 };
 

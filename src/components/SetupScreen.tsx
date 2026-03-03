@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, Calendar, History, TrendingUp, Trophy, RefreshCw, X, Undo2, Sparkles, BarChart3, ChevronDown, ChevronUp, CheckCircle2, Clock3, Play, PencilLine } from 'lucide-react';
+import { Users, Calendar, History, TrendingUp, Trophy, X, Sparkles, BarChart3, ChevronDown, ChevronUp, Clock3, Play, PencilLine } from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
 import TemplateManager from './TemplateManager';
 import PlayerProfileModal from './PlayerProfileModal';
@@ -21,7 +21,7 @@ const ActionButton = ({
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`w-full text-left rounded-xl px-3 py-2.5 transition-all border ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    className={`setup-quick-access-btn w-full text-left rounded-xl px-3 py-2.5 transition-all border ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
   >
     <div className="flex items-start gap-2.5">
       <span className="mt-0.5">
@@ -48,18 +48,19 @@ const SetupScreen = ({
   setTournamentFormat,
   onNext,
   onRecordCasualMatch,
-  lastTournamentConfig,
-  onReuseTournament,
   tournamentHistory,
   scheduledTournaments = [],
+  activeLiveTournaments = [],
   onEditScheduledTournament,
   onStartScheduledTournament,
+  onResumeActiveTournament,
+  onDeleteActiveTournament,
+  canDeleteLiveTournament = false,
+  canDeleteActions = false,
   casualMatches,
   playerDatabase,
   teamNameDatabase,
   members,
-  onAddMember,
-  onDeleteMember,
   showHistory,
   setShowHistory,
   showCasualHistory,
@@ -72,8 +73,6 @@ const SetupScreen = ({
   onSaveTemplate,
   onApplyTemplate,
   onDeleteTemplate,
-  canUndo,
-  onUndoLastAction,
   onDeleteTournament,
   onDeleteCasualMatch,
   allTimeStats,
@@ -83,13 +82,14 @@ const SetupScreen = ({
   pairingAnalytics,
   formPowerRankings,
   playerPhotos = {},
-  onUpdatePlayerPhoto
+  onUpdatePlayerPhoto,
+  isAppwriteEnabled = false,
+  historyHydrated = true,
+  casualHydrated = true,
+  historyHydrationPending = false,
+  casualHydrationPending = false,
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [memberName, setMemberName] = useState('');
-  const [memberPhone, setMemberPhone] = useState('');
-  const [memberError, setMemberError] = useState('');
   const [numTeamsInput, setNumTeamsInput] = useState(String(numTeams));
   const [selectedPlayerName, setSelectedPlayerName] = useState(null);
   const [showPairingAnalytics, setShowPairingAnalytics] = useState(false);
@@ -145,21 +145,12 @@ const SetupScreen = ({
     ])
   ), [eloLeaderboard, tournamentHistory, casualMatches]);
 
-  const handleAddMember = () => {
-    const result = onAddMember({
-      name: memberName,
-      phone: memberPhone,
-    });
-
-    if (!result?.success) {
-      setMemberError(result?.reason || 'Unable to save member');
-      return;
-    }
-
-    setMemberName('');
-    setMemberPhone('');
-    setMemberError('');
-  };
+  const historyCountLabel = isAppwriteEnabled && !historyHydrated
+    ? '...'
+    : String((tournamentHistory || []).length);
+  const casualCountLabel = isAppwriteEnabled && !casualHydrated
+    ? '...'
+    : String((casualMatches || []).length);
 
   return (
     <div className="theme-page py-8 px-4">
@@ -174,7 +165,7 @@ const SetupScreen = ({
 
         <div className="theme-card rounded-2xl p-6 md:p-8 mb-6">
           {scheduledTournaments.length > 0 && (
-            <div className="mb-6 rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-4">
+            <div className="mb-6 rounded-xl p-4 setup-highlight-card setup-scheduled-card">
               <p className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
                 <Clock3 size={16} /> Scheduled Tournaments ({scheduledTournaments.length})
               </p>
@@ -187,7 +178,11 @@ const SetupScreen = ({
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{tournament.name}</p>
                           <p className="text-[11px] text-slate-500 break-words">
-                            {tournament.date} • {tournament.teams?.length || 0} teams
+                            {tournament.date} • {(
+                              Array.isArray(tournament.teams)
+                                ? tournament.teams.length
+                                : (typeof tournament.teamsCount === 'number' ? tournament.teamsCount : 0)
+                            )} teams
                           </p>
                         </div>
                         <div className="flex items-center gap-1 flex-wrap">
@@ -205,13 +200,15 @@ const SetupScreen = ({
                           >
                             <Play size={11} /> Start
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteTournament?.(tournamentId)}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200"
-                          >
-                            Delete
-                          </button>
+                          {canDeleteActions && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteTournament?.(tournamentId)}
+                              className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -221,16 +218,48 @@ const SetupScreen = ({
             </div>
           )}
 
-          {lastTournamentConfig && (
-            <div className="mb-6 bg-gradient-to-r from-emerald-50 to-cyan-50 border-2 border-emerald-200 rounded-xl p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-700 mb-1">🔄 Previous Tournament Available</p>
-                  <p className="text-xs text-gray-600">"{lastTournamentConfig.name}" - {lastTournamentConfig.numTeams} teams</p>
-                </div>
-                <button onClick={onReuseTournament} className="btn-brand-alt flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-semibold text-sm whitespace-nowrap">
-                  <RefreshCw size={16} /> Reuse
-                </button>
+          {activeLiveTournaments.length > 0 && (
+            <div className="mb-6 rounded-xl p-4 setup-highlight-card setup-live-card">
+              <p className="text-sm font-semibold text-emerald-900 mb-3 flex items-center gap-2 setup-live-title">
+                <Play size={16} /> Live Tournament ({activeLiveTournaments.length})
+              </p>
+              <div className="space-y-2">
+                {activeLiveTournaments.slice(0, 3).map((tournament, index) => {
+                  const tournamentId = tournament.id || tournament.appwriteId;
+                  const rowKey = tournamentId || `${tournament.name || 'live'}-${index}`;
+                  return (
+                    <div key={rowKey} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 setup-live-row">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{tournament.name || 'Live tournament'}</p>
+                          <p className="text-[11px] text-slate-500 break-words">
+                            {tournament.date || 'Today'} • {(
+                              Array.isArray(tournament.teams)
+                                ? tournament.teams.length
+                                : (typeof tournament.teamsCount === 'number' ? tournament.teamsCount : 0)
+                            )} teams
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onResumeActiveTournament?.(tournamentId)}
+                          className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 flex items-center gap-1 whitespace-nowrap setup-live-resume-btn"
+                        >
+                          <Play size={11} /> Resume
+                        </button>
+                        {canDeleteLiveTournament && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteActiveTournament?.(tournamentId)}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 whitespace-nowrap setup-live-delete-btn"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -243,15 +272,16 @@ const SetupScreen = ({
             onSave={onSaveTemplate}
             onApply={onApplyTemplate}
             onDelete={onDeleteTemplate}
+            canDelete={canDeleteActions}
           />
 
           <div className="mb-6 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-gray-700">Quick Access</p>
+              <p className="text-sm font-semibold text-gray-700 setup-quick-access-title">Quick Access</p>
               <button
                 type="button"
                 onClick={() => setShowAdvancedActions(prev => !prev)}
-                className="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1"
+                className="setup-advanced-toggle text-xs font-semibold flex items-center gap-1"
               >
                 {showAdvancedActions ? 'Hide advanced' : 'Show advanced'}
                 {showAdvancedActions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -260,25 +290,20 @@ const SetupScreen = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <ActionButton
-                icon={Users}
-                title={`Members (${members.length})`}
-                subtitle="Add/update player contacts"
-                className="bg-cyan-50 text-cyan-800 border-cyan-200 hover:bg-cyan-100"
-                onClick={() => setShowMembersModal(true)}
-              />
-              <ActionButton
                 icon={History}
-                title={`Tournament History (${tournamentHistory.length})`}
-                subtitle="View/delete past tournaments"
+                title={`Tournament History (${historyCountLabel})`}
+                subtitle={canDeleteActions ? 'View/delete past tournaments' : 'View past tournaments'}
                 className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
                 onClick={() => setShowHistory(true)}
+                disabled={historyHydrationPending}
               />
               <ActionButton
                 icon={Calendar}
-                title={`Casual Matches (${casualMatches.length})`}
+                title={`Casual Matches (${casualCountLabel})`}
                 subtitle="Open casual match records"
                 className="bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
                 onClick={() => setShowCasualHistory(true)}
+                disabled={casualHydrationPending}
               />
               <ActionButton
                 icon={Trophy}
@@ -286,6 +311,7 @@ const SetupScreen = ({
                 subtitle="Current rating rankings"
                 className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100"
                 onClick={() => setShowEloLeaderboard(true)}
+                disabled={historyHydrationPending || casualHydrationPending}
               />
             </div>
 
@@ -299,6 +325,7 @@ const SetupScreen = ({
                     subtitle="Career summary across tournaments"
                     className="bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"
                     onClick={() => setShowAllTimeStats(true)}
+                    disabled={historyHydrationPending || casualHydrationPending}
                   />
                   <ActionButton
                     icon={Sparkles}
@@ -313,14 +340,6 @@ const SetupScreen = ({
                     subtitle="Form and momentum leaders"
                     className="bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100"
                     onClick={() => setShowPowerRankings(true)}
-                  />
-                  <ActionButton
-                    icon={Undo2}
-                    title="Undo Last Action"
-                    subtitle="Rollback your latest change"
-                    className="bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-                    onClick={onUndoLastAction}
-                    disabled={!canUndo}
                   />
                 </div>
               </div>
@@ -399,20 +418,20 @@ const SetupScreen = ({
               </p>
             </div>
 
-            {/* Record Casual Match Button */}
-            <button 
-              onClick={onRecordCasualMatch}
-              className="btn-brand-alt w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mb-3"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Trophy size={20} /> Record Casual Match
-              </div>
-            </button>
-
             <button onClick={() => onNext(numTeamsInput)} disabled={!tournamentName.trim()}
               className="btn-brand w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50">
               <div className="flex items-center justify-center gap-2">
                 <Users size={20} /> Start Tournament
+              </div>
+            </button>
+
+            {/* Record Casual Match Button */}
+            <button 
+              onClick={onRecordCasualMatch}
+              className="btn-brand-alt w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mt-3"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Trophy size={20} /> Record Casual Match
               </div>
             </button>
 
@@ -423,94 +442,10 @@ const SetupScreen = ({
         </div>
       </div>
 
-      {/* History Modal */}
-      {showMembersModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[80vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-6 flex items-center justify-between">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Users size={24} /> Tournament Members
-              </h3>
-              <button
-                onClick={() => setShowMembersModal(false)}
-                aria-label="Close members modal"
-                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                <input
-                  type="text"
-                  value={memberName}
-                  onChange={(e) => setMemberName(e.target.value)}
-                  placeholder="Member name"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-cyan-500 outline-none transition-all"
-                />
-                <input
-                  type="text"
-                  inputMode="tel"
-                  value={memberPhone}
-                  onChange={(e) => setMemberPhone(e.target.value)}
-                  placeholder="WhatsApp number (+countrycode)"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-cyan-500 outline-none transition-all"
-                />
-              </div>
-              <button
-                onClick={handleAddMember}
-                className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
-              >
-                Add / Update Member
-              </button>
-              {memberError && (
-                <p className="text-sm text-red-600 mt-2">{memberError}</p>
-              )}
-
-              <div className="mt-5">
-                {members.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">No members added yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {members.map(member => (
-                      <div key={member.id} className="flex items-center justify-between border border-gray-200 rounded-xl p-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <p className="font-semibold text-gray-800 truncate">{member.name}</p>
-                            {Boolean(member.linkedAccountId || member.linkedEmail) && (
-                              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 shrink-0">
-                                <CheckCircle2 size={12} />
-                                Linked
-                              </span>
-                            )}
-                            {!Boolean(member.linkedAccountId || member.linkedEmail) && (
-                              <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 shrink-0">
-                                Not linked
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500 truncate">{member.phone}</p>
-                        </div>
-                        <button
-                          onClick={() => onDeleteMember(member.id)}
-                          className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showHistory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden history-modal-shell app-modal-shell">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-history">
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <History size={24} /> Tournament History
               </h3>
@@ -531,7 +466,7 @@ const SetupScreen = ({
               ) : (
                 <div className="space-y-4">
                   {tournamentHistory.map(tournament => (
-                    <div key={tournament.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all bg-gradient-to-r from-white to-gray-50">
+                    <div key={tournament.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all bg-gradient-to-r from-white to-gray-50 history-entry-card">
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
@@ -543,14 +478,16 @@ const SetupScreen = ({
                             className="text-blue-600 hover:text-blue-700 text-xs px-3 py-1 rounded-lg hover:bg-blue-50 transition-all font-semibold whitespace-nowrap">
                             View
                           </button>
-                          <button onClick={() => onDeleteTournament(tournament.id)}
-                            className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap">
-                            Delete
-                          </button>
+                          {canDeleteActions && (
+                            <button onClick={() => onDeleteTournament?.(tournament.id)}
+                              className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap">
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
                       {tournament.champion && (
-                        <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-50 to-orange-50 p-3 rounded-lg border-2 border-yellow-200">
+                        <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-50 to-orange-50 p-3 rounded-lg border-2 border-yellow-200 history-champion-card">
                           <span className="text-3xl">{tournament.champion.emoji}</span>
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-gray-800 flex items-center gap-2">
@@ -575,9 +512,9 @@ const SetupScreen = ({
 
       {/* Casual Match History Modal */}
       {showCasualHistory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden casual-history-shell app-modal-shell">
+            <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-casual">
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <Calendar size={24} /> Casual Match History
               </h3>
@@ -605,24 +542,26 @@ const SetupScreen = ({
                     const isTeam1Winner = score1 > score2;
                     const matchId = match.id || match.appwriteId;
                     return (
-                      <div key={matchId || index} className="border-2 border-gray-200 rounded-xl p-4 bg-gradient-to-r from-white to-gray-50">
+                      <div key={matchId || index} className="border-2 border-gray-200 rounded-xl p-4 bg-gradient-to-r from-white to-gray-50 casual-history-card">
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="min-w-0">
-                            <p className="text-xs text-gray-500 mb-1">
+                            <p className="text-xs text-gray-500 mb-1 casual-history-meta">
                               {match.matchType === 'doubles' ? '👥 Doubles' : '🎯 Singles'} • {new Date(match.date || match.createdAt || Date.now()).toLocaleString()}
                             </p>
                             <p className="font-semibold text-gray-800 truncate">
                               <span className={isTeam1Winner ? 'text-green-700' : ''}>{team1Name}</span> vs <span className={!isTeam1Winner ? 'text-green-700' : ''}>{team2Name}</span>
                             </p>
-                            <p className="text-sm text-gray-700 mt-1">Score: {score1} - {score2}</p>
+                            <p className="text-sm text-gray-700 mt-1 casual-history-score">Score: {score1} - {score2}</p>
                           </div>
-                          <button
-                            onClick={() => onDeleteCasualMatch(matchId)}
-                            disabled={!matchId}
-                            className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Delete
-                          </button>
+                          {canDeleteActions && (
+                            <button
+                              onClick={() => onDeleteCasualMatch?.(matchId)}
+                              disabled={!matchId}
+                              className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed casual-history-delete-btn"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -636,9 +575,9 @@ const SetupScreen = ({
 
       {/* All-Time Stats Modal */}
       {showAllTimeStats && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-orange-600 to-red-600 p-6 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden setup-stats-modal-shell app-modal-shell">
+            <div className="bg-gradient-to-r from-orange-600 to-red-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-stats">
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <TrendingUp size={24} /> All-Time Player Statistics
               </h3>
@@ -697,7 +636,7 @@ const SetupScreen = ({
                           <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
                           <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
                           <td className="px-4 py-4 text-center">
-                            <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm">
+                            <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm stats-win-badge">
                               {player.winPercentage}%
                             </span>
                           </td>
@@ -714,9 +653,9 @@ const SetupScreen = ({
 
       {/* ELO Leaderboard Modal */}
       {showEloLeaderboard && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-yellow-600 to-orange-600 p-6 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden setup-elo-modal-shell app-modal-shell">
+            <div className="bg-gradient-to-r from-yellow-600 to-orange-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-elo">
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <Trophy size={24} /> ELO Rating Leaderboard
               </h3>
@@ -736,7 +675,7 @@ const SetupScreen = ({
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full min-w-[620px] elo-table-polished">
                     <thead className="bg-gray-100 sticky top-0">
                       <tr>
                         <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
@@ -755,27 +694,27 @@ const SetupScreen = ({
                               {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                             </td>
                             <td className="px-4 py-4">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0 elo-player-cell">
                                 <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
                                 <button
                                   type="button"
                                   onClick={() => setSelectedPlayerName(player.name)}
-                                  className="font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                                  className="font-bold text-blue-700 hover:text-blue-900 hover:underline truncate min-w-0 elo-player-name"
                                 >
                                   {player.name}
                                 </button>
                                 {eloGamificationMap[player.name]?.level && (
-                                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full">
+                                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full elo-level-badge elo-level-inline max-w-[140px] truncate">
                                     {eloGamificationMap[player.name].level.icon} {eloGamificationMap[player.name].level.name}
                                   </span>
                                 )}
                               </div>
                             </td>
                             <td className="px-4 py-4 text-center">
-                              <span className={`px-3 py-1 rounded-full font-bold text-sm ${
-                                player.rating >= 1200 ? 'bg-yellow-100 text-yellow-700' :
-                                player.rating >= 1000 ? 'bg-green-100 text-green-700' :
-                                'bg-gray-100 text-gray-700'
+                              <span className={`px-3 py-1 rounded-full font-bold text-sm elo-rating-chip ${
+                                player.rating >= 1200 ? 'elo-rating-gold' :
+                                player.rating >= 1000 ? 'elo-rating-green' :
+                                'elo-rating-neutral'
                               }`}>
                                 {player.rating}
                               </span>

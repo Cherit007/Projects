@@ -7,11 +7,20 @@ const APPWRITE_DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
 
 // Collection IDs
 export const COLLECTIONS = {
+  // Legacy collections (kept for fallback / non-migrated features only)
   TOURNAMENTS: import.meta.env.VITE_APPWRITE_COLLECTION_TOURNAMENTS,
   PLAYERS: import.meta.env.VITE_APPWRITE_COLLECTION_PLAYERS,
   RATINGS: import.meta.env.VITE_APPWRITE_COLLECTION_RATINGS,
   CASUAL_MATCHES: import.meta.env.VITE_APPWRITE_COLLECTION_CASUAL_MATCHES,
   APP_META: import.meta.env.VITE_APPWRITE_COLLECTION_APP_META || '',
+
+  // Normalized V2 collections (source of truth after migration)
+  TOURNAMENTS_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_TOURNAMENTS || '',
+  TOURNAMENT_TEAMS_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_TOURNAMENT_TEAMS || '',
+  MATCHES_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_MATCHES || '',
+  MATCH_PLAYERS_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_MATCH_PLAYERS || '',
+  PLAYERS_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_PLAYERS || '',
+  RATINGS_CURRENT_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_RATINGS_CURRENT || '',
 };
 
 export const BUCKETS = {
@@ -33,9 +42,16 @@ export { client, ID, Query };
 
 // Helper function to check if Appwrite is configured
 export const isAppwriteConfigured = () => {
-  return !!(APPWRITE_PROJECT_ID && APPWRITE_DATABASE_ID && 
-           COLLECTIONS.TOURNAMENTS && COLLECTIONS.PLAYERS && 
-           COLLECTIONS.RATINGS && COLLECTIONS.CASUAL_MATCHES);
+  return !!(
+    APPWRITE_PROJECT_ID
+    && APPWRITE_DATABASE_ID
+    && COLLECTIONS.TOURNAMENTS_V2
+    && COLLECTIONS.TOURNAMENT_TEAMS_V2
+    && COLLECTIONS.MATCHES_V2
+    && COLLECTIONS.MATCH_PLAYERS_V2
+    && COLLECTIONS.PLAYERS_V2
+    && COLLECTIONS.RATINGS_CURRENT_V2
+  );
 };
 
 // Database ID export

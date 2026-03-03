@@ -126,8 +126,8 @@ const PlayerPhotoEditorModal = ({ playerName, onSave, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
+    <div className="fixed inset-0 z-[280] bg-black/60 flex items-center justify-center p-4 app-overlay">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden app-modal-shell photo-editor-shell">
         <div className="bg-gradient-to-r from-indigo-600 to-blue-700 p-4 flex items-center justify-between">
           <h4 className="text-white font-semibold text-lg">Edit Photo: {playerName}</h4>
           <button onClick={onClose} className="text-white hover:bg-white/20 rounded-lg p-2">

@@ -80,10 +80,10 @@ if (matchType === 'doubles') {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto app-modal-shell casual-modal-shell">
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between sticky top-0">
+        <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between sticky top-0 casual-modal-header">
           <div>
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
               <Users size={24} /> Record Casual Match
@@ -133,7 +133,7 @@ if (matchType === 'doubles') {
           {/* Teams Input */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Team 1 */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border-2 border-blue-300">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border-2 border-blue-300 casual-team-card casual-team-card-one">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold">
                   1
@@ -197,7 +197,7 @@ if (matchType === 'doubles') {
             </div>
 
             {/* Team 2 */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border-2 border-purple-300">
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border-2 border-purple-300 casual-team-card casual-team-card-two">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold">
                   2
@@ -263,7 +263,7 @@ if (matchType === 'doubles') {
 
           {/* Validation Messages */}
           {score1 && score2 && score1 === score2 && (
-            <div className="mb-4 bg-red-50 border-2 border-red-300 rounded-xl p-3 text-center">
+            <div className="mb-4 bg-red-50 border-2 border-red-300 rounded-xl p-3 text-center casual-validation-box">
               <p className="text-red-700 font-semibold text-sm">
                 ⚠️ Scores must be different
               </p>
@@ -290,7 +290,7 @@ if (matchType === 'doubles') {
           </button>
 
           {/* Info */}
-          <div className="mt-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
+          <div className="mt-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-3 casual-info-box">
             <p className="text-xs text-blue-700">
               💡 <strong>Note:</strong> This match will be recorded in history and will update player ELO ratings automatically.
             </p>

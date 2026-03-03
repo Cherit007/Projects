@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Trophy, Clock, TrendingUp, Users } from 'lucide-react';
 import MatchPredictionCard from './predictions/MatchPredictionCard';
+import PlayerAvatar from './PlayerAvatar';
 import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
 
 const LiveMatchView = ({ 
@@ -10,6 +11,7 @@ const LiveMatchView = ({
   onSelectUpcomingMatch,
   tournamentName,
   playerRatings = {},
+  playerPhotos = {},
   pointsTable = [],
   tournamentHistory = [],
   casualMatches = []
@@ -24,19 +26,26 @@ const LiveMatchView = ({
     
     setIsSubmitting(true);
     setCelebrationActive(true);
-    
-    // Celebration effect
-    setTimeout(() => {
-      onSaveScore(currentMatch.id, parseInt(score1), parseInt(score2));
+
+    try {
+      await Promise.resolve(onSaveScore(currentMatch.id, parseInt(score1, 10), parseInt(score2, 10)));
       setScore1('');
       setScore2('');
+    } catch (_error) {
+      // Parent handles user-facing errors via toasts.
+    } finally {
       setIsSubmitting(false);
       setCelebrationActive(false);
-    }, 1500);
+    }
   };
 
   const getPlayerRating = (playerName) => {
     return playerRatings[playerName]?.rating || 1000;
+  };
+
+  const getTeamPlayers = (team = {}) => {
+    const primary = team.player || team.player1;
+    return [primary, team.player2].filter(Boolean);
   };
 
   const team1Rating = currentMatch.team1 ? 
@@ -61,14 +70,15 @@ const LiveMatchView = ({
     loser.played += 1;
     winner.won += 1;
     loser.lost += 1;
-    winner.points += margin;
-    loser.points -= margin;
+    winner.points += 2;
     winner.scoreDiff += margin;
     loser.scoreDiff -= margin;
+    winner.netMatchRate = winner.played > 0 ? winner.scoreDiff / winner.played : 0;
+    loser.netMatchRate = loser.played > 0 ? loser.scoreDiff / loser.played : 0;
 
     return table.sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
-      if (b.won !== a.won) return b.won - a.won;
+      if (b.netMatchRate !== a.netMatchRate) return b.netMatchRate - a.netMatchRate;
       return b.scoreDiff - a.scoreDiff;
     });
   };
@@ -127,211 +137,191 @@ const LiveMatchView = ({
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Live Match Header */}
-      <div className="bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 text-white rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-2 h-2 sm:w-3 sm:h-3 bg-red-600 rounded-full animate-pulse"></div>
-            <span className="font-bold text-base sm:text-lg">LIVE NOW</span>
-          </div>
-          <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-            <Clock size={14} className="sm:w-4 sm:h-4" />
-            <span>Match {currentMatch.id}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Match Card */}
-      <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 ${
-        celebrationActive ? 'scale-105 ring-4 ring-yellow-400' : ''
-      }`}>
-        {/* Celebration Confetti Effect */}
+      <div className={`live-board transition-all duration-500 ${celebrationActive ? 'scale-[1.01]' : ''}`}>
         {celebrationActive && (
-          <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
-            {[...Array(20)].map((_, i) => (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+            {[...Array(16)].map((_, i) => (
               <div
                 key={i}
-                className="absolute w-2 h-2 bg-yellow-400 rounded-full animate-ping"
+                className="absolute w-2 h-2 bg-cyan-300 rounded-full animate-ping"
                 style={{
                   left: `${Math.random() * 100}%`,
                   top: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 0.5}s`
+                  animationDelay: `${Math.random() * 0.45}s`
                 }}
               />
             ))}
           </div>
         )}
 
-        {/* Tournament Name */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 sm:px-6 py-3 sm:py-4 text-center">
-          <h2 className="text-lg sm:text-2xl font-bold">{tournamentName}</h2>
-          <p className="text-xs sm:text-sm opacity-90">Current Match</p>
-        </div>
-
-        <div className="p-4 sm:p-8">
-          {/* Teams Display */}
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 mb-6 sm:mb-8">
-            {/* Team 1 */}
-            <div className="relative">
-              <div className="absolute -top-2 -left-2 bg-blue-500 text-white text-xs font-bold px-2 sm:px-3 py-1 rounded-full">
-                Team 1
-              </div>
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 sm:border-4 border-blue-300">
-                <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                  <div className="text-3xl sm:text-5xl bg-white w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
-                    {currentMatch.team1.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-lg sm:text-2xl text-gray-800 mb-1 truncate">{currentMatch.team1.name}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 truncate">
-                      {currentMatch.team1.player || currentMatch.team1.player1}
-                      {currentMatch.team1.player2 && <> & {currentMatch.team1.player2}</>}
-                    </p>
-                  </div>
-                </div>
-                
-                {/* ELO Rating */}
-                <div className="bg-white rounded-lg p-2 sm:p-3 mb-3 sm:mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-600">ELO Rating</span>
-                    <div className="flex items-center gap-1">
-                      <TrendingUp size={12} className="text-blue-600 sm:w-3.5 sm:h-3.5" />
-                      <span className="font-bold text-blue-600 text-sm sm:text-base">{team1Rating}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Score Input */}
-                <div>
-                  <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">Score</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={score1}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || /^\d+$/.test(value)) {
-                        setScore1(value);
-                      }
-                    }}
-                    placeholder="0"
-                    className="w-full px-4 sm:px-6 py-3 sm:py-4 border-2 sm:border-4 border-blue-400 rounded-xl sm:rounded-2xl focus:border-blue-600 focus:ring-2 sm:focus:ring-4 focus:ring-blue-200 outline-none text-center text-3xl sm:text-4xl font-bold bg-white transition-all"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
+        <div className="relative z-10 p-4 sm:p-6 lg:p-8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="live-pill inline-flex items-center gap-2 sm:gap-3 rounded-2xl px-4 sm:px-5 py-2 sm:py-3">
+              <span className="h-2.5 w-2.5 rounded-full bg-rose-100 animate-pulse" />
+              <span className="font-extrabold tracking-wide text-white text-sm sm:text-base">LIVE NOW</span>
             </div>
-
-            {/* VS Badge - Hidden on mobile, shown on larger screens */}
-            <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-orange-500 to-red-500 text-white w-16 h-16 sm:w-20 sm:h-20 rounded-full items-center justify-center font-bold text-xl sm:text-2xl shadow-2xl z-10 animate-pulse">
-              VS
-            </div>
-
-            {/* Mobile VS separator */}
-            <div className="md:hidden flex items-center justify-center -my-2">
-              <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-2 rounded-full font-bold text-lg shadow-lg">
-                VS
-              </div>
-            </div>
-
-            {/* Team 2 */}
-            <div className="relative">
-              <div className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs font-bold px-2 sm:px-3 py-1 rounded-full">
-                Team 2
-              </div>
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 sm:border-4 border-purple-300">
-                <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                  <div className="text-3xl sm:text-5xl bg-white w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
-                    {currentMatch.team2.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-lg sm:text-2xl text-gray-800 mb-1 truncate">{currentMatch.team2.name}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 truncate">
-                      {currentMatch.team2.player || currentMatch.team2.player1}
-                      {currentMatch.team2.player2 && <> & {currentMatch.team2.player2}</>}
-                    </p>
-                  </div>
-                </div>
-
-                {/* ELO Rating */}
-                <div className="bg-white rounded-lg p-2 sm:p-3 mb-3 sm:mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-600">ELO Rating</span>
-                    <div className="flex items-center gap-1">
-                      <TrendingUp size={12} className="text-purple-600 sm:w-3.5 sm:h-3.5" />
-                      <span className="font-bold text-purple-600 text-sm sm:text-base">{team2Rating}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Score Input */}
-                <div>
-                  <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">Score</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={score2}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || /^\d+$/.test(value)) {
-                        setScore2(value);
-                      }
-                    }}
-                    placeholder="0"
-                    className="w-full px-4 sm:px-6 py-3 sm:py-4 border-2 sm:border-4 border-purple-400 rounded-xl sm:rounded-2xl focus:border-purple-600 focus:ring-2 sm:focus:ring-4 focus:ring-purple-200 outline-none text-center text-3xl sm:text-4xl font-bold bg-white transition-all"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-900/50 px-3 py-1.5 text-slate-200 text-xs sm:text-sm">
+              <Clock size={14} />
+              <span>Match {currentMatch.id}</span>
             </div>
           </div>
 
-          {/* Submit Button */}
+          <div className="mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/40 px-3 py-2 text-center">
+            <h2 className="text-sm sm:text-base font-semibold text-sky-100">{tournamentName}</h2>
+          </div>
+
+          <section className="mt-6">
+            <p className="text-sky-300 text-sm sm:text-base font-semibold">Team 1</p>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <h3 className="text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
+                {currentMatch.team1.name}
+              </h3>
+              <div className="elo-pill inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sky-300">
+                <TrendingUp size={14} />
+                <span className="font-bold">{team1Rating}</span>
+              </div>
+            </div>
+            <div className="team-glass team-one mt-4 rounded-3xl p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-4 sm:gap-6">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  {getTeamPlayers(currentMatch.team1).map((playerName, index) => (
+                    <div key={`${currentMatch.team1.id}-${playerName}-${index}`} className="player-orb player-orb-one">
+                      <PlayerAvatar
+                        name={playerName}
+                        photoUrl={playerPhotos[playerName]}
+                        size="xl"
+                        className="w-16 h-16 sm:w-20 sm:h-20 border-0"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={score1}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setScore1(value);
+                    }
+                  }}
+                  placeholder="0"
+                  className="score-input w-24 sm:w-28 rounded-2xl px-2 py-2 text-center text-5xl sm:text-6xl font-black leading-none outline-none"
+                  disabled={isSubmitting}
+                  aria-label={`${currentMatch.team1.name} score`}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
+                {getTeamPlayers(currentMatch.team1).map((playerName, index) => (
+                  <p key={`${currentMatch.team1.name}-name-${playerName}-${index}`} className="truncate font-medium">
+                    {playerName}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <div className="my-6 sm:my-8 flex items-center gap-3 sm:gap-4">
+            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-400/60 to-transparent" />
+            <span className="vs-halo text-4xl sm:text-6xl font-black text-slate-200">VS</span>
+            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-400/60 to-transparent" />
+          </div>
+
+          <section>
+            <p className="text-violet-300 text-sm sm:text-base font-semibold">Team 2</p>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <h3 className="text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
+                {currentMatch.team2.name}
+              </h3>
+              <div className="elo-pill inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-violet-300">
+                <TrendingUp size={14} />
+                <span className="font-bold">{team2Rating}</span>
+              </div>
+            </div>
+            <div className="team-glass team-two mt-4 rounded-3xl p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-4 sm:gap-6">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  {getTeamPlayers(currentMatch.team2).map((playerName, index) => (
+                    <div key={`${currentMatch.team2.id}-${playerName}-${index}`} className="player-orb player-orb-two">
+                      <PlayerAvatar
+                        name={playerName}
+                        photoUrl={playerPhotos[playerName]}
+                        size="xl"
+                        className="w-16 h-16 sm:w-20 sm:h-20 border-0"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={score2}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setScore2(value);
+                    }
+                  }}
+                  placeholder="0"
+                  className="score-input w-24 sm:w-28 rounded-2xl px-2 py-2 text-center text-5xl sm:text-6xl font-black leading-none outline-none"
+                  disabled={isSubmitting}
+                  aria-label={`${currentMatch.team2.name} score`}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
+                {getTeamPlayers(currentMatch.team2).map((playerName, index) => (
+                  <p key={`${currentMatch.team2.name}-name-${playerName}-${index}`} className="truncate font-medium">
+                    {playerName}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <button
             onClick={handleSubmit}
             disabled={!score1 || !score2 || score1 === score2 || isSubmitting}
-            className="w-full bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 text-white py-4 sm:py-6 rounded-xl sm:rounded-2xl font-bold text-base sm:text-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3 relative overflow-hidden"
+            className="submit-slab mt-6 sm:mt-8 w-full rounded-2xl py-4 sm:py-5 text-base sm:text-2xl font-extrabold tracking-wide text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3"
           >
             {isSubmitting ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white"></div>
-                <span className="text-sm sm:text-base">Saving Result...</span>
+                <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white" />
+                <span>Saving Result...</span>
               </>
             ) : (
               <>
                 <Trophy size={20} className="sm:w-6 sm:h-6" />
-                <span className="text-sm sm:text-base">Submit & Continue</span>
+                <span>SUBMIT &amp; CONTINUE</span>
               </>
             )}
           </button>
 
           {score1 === score2 && score1 !== '' && (
-            <p className="text-center text-red-600 text-xs sm:text-sm mt-2 sm:mt-3 font-semibold animate-bounce">
-              ⚠️ Scores must be different
+            <p className="text-center text-rose-300 text-xs sm:text-sm mt-3 font-semibold">
+              Scores must be different.
             </p>
           )}
 
-          {/* Qualification Watch */}
-          <div className="mt-4 sm:mt-5 bg-amber-50 border border-amber-200 rounded-xl p-3 sm:p-4">
-            <h4 className="font-bold text-amber-800 text-sm sm:text-base mb-2">Top 2 Qualification Watch</h4>
-            <div className="space-y-1.5 text-xs sm:text-sm text-amber-900">
+          <div className="mt-4 rounded-2xl border border-slate-500/35 bg-slate-950/45 p-3 sm:p-4">
+            <h4 className="font-bold text-slate-100 text-sm sm:text-base mb-2">Top 2 Qualification Watch</h4>
+            <div className="space-y-1.5 text-xs sm:text-sm text-slate-300">
               <p>
-                <span className="font-semibold">{currentMatch.team1.name}:</span>{' '}
+                <span className="font-semibold text-slate-100">{currentMatch.team1.name}:</span>{' '}
                 {team1MinMargin
-                  ? `Win by ${team1MinMargin}+ to be Top 2 after this match.`
-                  : 'Cannot reach Top 2 from this match alone.'}
+                  ? `win by ${team1MinMargin}+ to enter Top 2 after this match.`
+                  : 'cannot reach Top 2 from this match alone.'}
               </p>
               <p>
-                <span className="font-semibold">{currentMatch.team2.name}:</span>{' '}
+                <span className="font-semibold text-slate-100">{currentMatch.team2.name}:</span>{' '}
                 {team2MinMargin
-                  ? `Win by ${team2MinMargin}+ to be Top 2 after this match.`
-                  : 'Cannot reach Top 2 from this match alone.'}
+                  ? `win by ${team2MinMargin}+ to enter Top 2 after this match.`
+                  : 'cannot reach Top 2 from this match alone.'}
               </p>
               {hasValidProjection && (
-                <p className="pt-1 font-semibold text-blue-700">
-                  If this score is submitted, {(parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name)} will be rank #{projectedWinnerRank}.
+                <p className="pt-1 font-semibold text-cyan-300">
+                  If this score is submitted, {(parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name)} will move to rank #{projectedWinnerRank}.
                 </p>
               )}
             </div>
@@ -342,9 +332,9 @@ const LiveMatchView = ({
           </div>
 
           {upsetAlert && (
-            <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3">
-              <p className="text-sm font-semibold text-red-700">⚠️ {upsetAlert.title}</p>
-              <p className="text-xs sm:text-sm text-red-700 mt-1">{upsetAlert.message}</p>
+            <div className="mt-3 rounded-xl border border-rose-400/35 bg-rose-950/40 p-3">
+              <p className="text-sm font-semibold text-rose-200">⚠️ {upsetAlert.title}</p>
+              <p className="text-xs sm:text-sm text-rose-100 mt-1">{upsetAlert.message}</p>
             </div>
           )}
         </div>
@@ -352,37 +342,37 @@ const LiveMatchView = ({
 
       {/* Next Matches Preview */}
       {nextMatches.length > 0 && (
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6">
+        <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <Users size={16} className="text-gray-600 sm:w-5 sm:h-5" />
-            <h3 className="font-bold text-base sm:text-lg text-gray-800">Coming Up Next ({nextMatches.length})</h3>
+            <Users size={16} className="text-slate-300 sm:w-5 sm:h-5" />
+            <h3 className="font-bold text-base sm:text-lg text-slate-100">Coming Up Next ({nextMatches.length})</h3>
           </div>
-          <p className="text-xs text-gray-500 mb-3">Click a match to make it LIVE NOW.</p>
+          <p className="text-xs text-slate-400 mb-3">Click a match to make it LIVE NOW.</p>
           <div className="space-y-2 sm:space-y-3 max-h-80 overflow-y-auto pr-1">
             {nextMatches.map((match, index) => (
               <button
                 key={match.id}
                 type="button"
                 onClick={() => onSelectUpcomingMatch?.(match.id)}
-                className="w-full text-left bg-gray-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all"
+                className="w-full text-left rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-500/35 bg-slate-900/55 hover:border-cyan-400/60 hover:bg-slate-900 transition-all"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                    <span className="text-xs font-bold text-gray-500">#{index + 1}</span>
+                    <span className="text-xs font-bold text-slate-400">#{index + 1}</span>
                     <span className="text-base sm:text-lg">{match.team1?.emoji}</span>
-                    <span className="text-xs sm:text-sm font-semibold text-gray-700 truncate">
+                    <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
                       {match.team1?.name}
                     </span>
                   </div>
-                  <span className="text-xs text-gray-500 mx-1 sm:mx-2">vs</span>
+                  <span className="text-xs text-slate-400 mx-1 sm:mx-2">vs</span>
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 justify-end">
-                    <span className="text-xs sm:text-sm font-semibold text-gray-700 truncate">
+                    <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
                       {match.team2?.name}
                     </span>
                     <span className="text-base sm:text-lg">{match.team2?.emoji}</span>
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-blue-600 font-semibold">
+                <div className="mt-2 text-xs text-cyan-300 font-semibold">
                   Round {match.round} • Match {match.id}
                 </div>
                 <div className="mt-2">

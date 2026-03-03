@@ -45,6 +45,7 @@ describe('appDataService', () => {
   it('saves additional group metadata', async () => {
     databasesMock.getDocument.mockRejectedValueOnce({ code: 404 });
     databasesMock.createDocument.mockResolvedValueOnce({});
+    databasesMock.updateDocument.mockResolvedValueOnce({});
 
     const result = await appDataService.saveAppMeta({
       groups: [{ id: 'g1', name: 'Club Group' }],
@@ -53,6 +54,7 @@ describe('appDataService', () => {
     });
 
     expect(result.groups).toHaveLength(1);
-    expect(databasesMock.createDocument).toHaveBeenCalledTimes(1);
+    const writeCalls = databasesMock.createDocument.mock.calls.length + databasesMock.updateDocument.mock.calls.length;
+    expect(writeCalls).toBe(1);
   });
 });

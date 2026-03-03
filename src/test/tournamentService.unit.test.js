@@ -2,16 +2,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { databasesMock } = vi.hoisted(() => ({
   databasesMock: {
-    updateDocument: vi.fn(),
+    listDocuments: vi.fn(),
+    getDocument: vi.fn(),
+    upsertDocument: vi.fn(),
+    deleteDocument: vi.fn(),
   },
 }));
 
 vi.mock('../appwrite.config', () => ({
   databases: databasesMock,
   DATABASE_ID: 'db1',
-  COLLECTIONS: { TOURNAMENTS: 'tournaments' },
+  COLLECTIONS: {
+    TOURNAMENTS: 'legacy_tournaments',
+    TOURNAMENTS_V2: 'v2_tournaments',
+    TOURNAMENT_TEAMS_V2: 'v2_tournament_teams',
+    MATCHES_V2: 'v2_matches',
+    MATCH_PLAYERS_V2: 'v2_match_players',
+    PLAYERS_V2: 'v2_players',
+  },
   ID: { unique: vi.fn(() => 'id-1') },
-  Query: { orderDesc: vi.fn(), limit: vi.fn() },
+  Query: {
+    equal: vi.fn((...args) => ({ op: 'equal', args })),
+    orderDesc: vi.fn((...args) => ({ op: 'orderDesc', args })),
+    orderAsc: vi.fn((...args) => ({ op: 'orderAsc', args })),
+    limit: vi.fn((...args) => ({ op: 'limit', args })),
+    cursorAfter: vi.fn((...args) => ({ op: 'cursorAfter', args })),
+  },
 }));
 
 import { tournamentService } from '../services/tournamentService';
@@ -21,63 +37,44 @@ describe('tournamentService', () => {
     vi.clearAllMocks();
   });
 
-  it('builds update payload with nullable fields and tournamentFormat', async () => {
-    databasesMock.updateDocument.mockResolvedValueOnce({
-      $id: 't1',
-      name: 'Cup',
-      date: '2026-02-25',
-      teams: '[]',
-      fixtures: '[]',
-      bracket: null,
-      finalMatch: null,
-      champion: null,
-      aiSummaries: '[]',
-      format: '1',
-      gameMode: 'doubles',
-      tournamentFormat: 'league',
+  it('maps v2 tournament summaries', async () => {
+    databasesMock.listDocuments.mockResolvedValueOnce({
+      documents: [{
+        $id: 't1',
+        groupId: 'default-group',
+        legacyTournamentId: 'legacy-1',
+        name: 'Club Open',
+        dateLabel: '2026-03-03',
+        status: 'active',
+        gameMode: 'doubles',
+        tournamentFormat: 'league',
+        format: '1',
+        oddPlayerEnabled: 'false',
+        oddPlayerName: '',
+        sourceCreatedAt: '2026-03-03T10:00:00.000Z',
+        sourceUpdatedAt: '2026-03-03T10:05:00.000Z',
+        $createdAt: '2026-03-03T10:00:00.000Z',
+        $updatedAt: '2026-03-03T10:05:00.000Z',
+      }],
+    });
+
+    const result = await tournamentService.getTournamentSummaries(20, null, ['active']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 't1',
+      appwriteId: 't1',
+      name: 'Club Open',
       status: 'active',
-      createdAt: '2026-02-25T10:00:00.000Z',
+      isSummary: true,
     });
-
-    await tournamentService.updateTournament('t1', {
-      bracket: null,
-      finalMatch: null,
-      champion: null,
-      aiSummaries: [],
-      tournamentFormat: 'fullKnockout',
-      status: 'completed',
-    });
-
-    const payload = databasesMock.updateDocument.mock.calls[0][3];
-    expect(payload.bracket).toBeNull();
-    expect(payload.finalMatch).toBeNull();
-    expect(payload.champion).toBeNull();
-    expect(payload.aiSummaries).toBe('[]');
-    expect(payload.tournamentFormat).toBe('fullKnockout');
-    expect(payload.status).toBe('completed');
   });
 
-  it('parses tournament document including ai summaries', () => {
-    const result = tournamentService.parseTournament({
-      $id: 't2',
-      name: 'Open',
-      date: '2026-02-25',
-      teams: '[{"id":1}]',
-      fixtures: '[{"id":"m1"}]',
-      bracket: null,
-      finalMatch: null,
-      champion: null,
-      aiSummaries: '[{"id":"s1","title":"Summary"}]',
-      format: '2',
-      gameMode: 'singles',
-      tournamentFormat: 'league',
-      status: 'completed',
-      createdAt: '2026-02-25T10:00:00.000Z',
-    });
+  it('returns false when deleting a missing tournament', async () => {
+    databasesMock.getDocument.mockRejectedValueOnce({ code: 404 });
 
-    expect(result.id).toBe('t2');
-    expect(result.teams).toHaveLength(1);
-    expect(result.aiSummaries[0].id).toBe('s1');
-    expect(result.appwriteId).toBe('t2');
+    const result = await tournamentService.deleteTournament('missing-id', null);
+
+    expect(result).toBe(false);
   });
 });

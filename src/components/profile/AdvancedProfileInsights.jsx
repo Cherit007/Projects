@@ -1,7 +1,7 @@
 import React from 'react';
 
 const StatTable = ({ title, rows, emptyText, nameLabel = 'Name' }) => (
-  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4">
+  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4 profile-insight-table">
     <p className="text-sm font-semibold text-gray-800 mb-2">{title}</p>
     {rows.length === 0 ? (
       <p className="text-xs text-gray-500">{emptyText}</p>
@@ -38,8 +38,8 @@ const AdvancedProfileInsights = ({ advancedStats }) => {
   if (!advancedStats) return null;
 
   return (
-    <div className="space-y-3 mt-4">
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+    <div className="space-y-3 mt-4 profile-insights-panel">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 profile-insight-summary">
         <p className="text-xs text-blue-700 font-semibold">
           Tracked matches for advanced insights: {advancedStats.totalTrackedMatches}
         </p>
