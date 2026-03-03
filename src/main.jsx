@@ -8,8 +8,35 @@ import { queryClient } from './queryClient'
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const swUrl = `${import.meta.env.BASE_URL}sw.js`;
-    navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL }).catch((error) => {
-      console.error('Service worker registration failed:', error);
+    const emitUpdateAvailable = (registration) => {
+      window.dispatchEvent(new CustomEvent('pwa:update-available', {
+        detail: { registration },
+      }));
+    };
+
+    navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL })
+      .then((registration) => {
+        if (registration.waiting) {
+          emitUpdateAvailable(registration);
+        }
+
+        registration.addEventListener('updatefound', () => {
+          const nextWorker = registration.installing;
+          if (!nextWorker) return;
+          nextWorker.addEventListener('statechange', () => {
+            if (nextWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              emitUpdateAvailable(registration);
+            }
+          });
+        });
+      })
+      .catch((error) => {
+        console.error('Service worker registration failed:', error);
+      });
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.dispatchEvent(new CustomEvent('pwa:sw-updated'));
+      window.location.reload();
     });
   });
 }

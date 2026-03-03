@@ -1,7 +1,7 @@
-/* eslint-disable no-restricted-globals */
-const SW_VERSION = 'v1';
+const SW_VERSION = 'v3';
 const STATIC_CACHE = `bfm-static-${SW_VERSION}`;
 const RUNTIME_CACHE = `bfm-runtime-${SW_VERSION}`;
+const OUTBOX_SYNC_TAG = 'bfm-outbox-sync';
 
 const SW_PATH = self.location.pathname;
 const BASE_URL = SW_PATH.endsWith('/sw.js')
@@ -14,7 +14,6 @@ const PRECACHE_URLS = [
   BASE_URL,
   `${BASE_URL}index.html`,
   `${BASE_URL}manifest.webmanifest`,
-  `${BASE_URL}vite.svg`,
   `${BASE_URL}apple-touch-icon.png`,
   `${BASE_URL}pwa-192x192.png`,
   `${BASE_URL}pwa-512x512.png`,
@@ -26,7 +25,6 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
   );
 });
 
@@ -43,7 +41,32 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
   }
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const title = String(event.data.title || 'Badminton App').trim() || 'Badminton App';
+    const options = event.data.options && typeof event.data.options === 'object'
+      ? event.data.options
+      : {};
+    event.waitUntil(self.registration.showNotification(title, options));
+  }
+});
+
+const broadcastMessage = async (message) => {
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  clients.forEach((client) => {
+    client.postMessage(message);
+  });
+};
+
+self.addEventListener('sync', (event) => {
+  if (event.tag !== OUTBOX_SYNC_TAG) return;
+  event.waitUntil(broadcastMessage({ type: 'OUTBOX_SYNC', tag: OUTBOX_SYNC_TAG }));
+});
+
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag !== OUTBOX_SYNC_TAG) return;
+  event.waitUntil(broadcastMessage({ type: 'OUTBOX_SYNC', tag: OUTBOX_SYNC_TAG }));
 });
 
 const putInCache = async (cacheName, request, response) => {
@@ -58,7 +81,7 @@ const serveNavigation = async (event) => {
     const networkResponse = await fetch(event.request);
     await putInCache(STATIC_CACHE, indexUrl, networkResponse);
     return networkResponse;
-  } catch (_error) {
+  } catch {
     const cachedIndex = await caches.match(indexUrl);
     if (cachedIndex) return cachedIndex;
     return new Response('Offline', {

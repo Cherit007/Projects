@@ -10,12 +10,19 @@ This app is now configured as a Progressive Web App (PWA):
 - Service worker (`public/sw.js`) for app-shell/offline caching
 - Install icons in `public/` (`192x192`, `512x512`, maskable, apple touch icon)
 - Standalone mode support on mobile/desktop after "Add to Home Screen"
+- In-app install button when browser exposes `beforeinstallprompt`
+- In-app update banner when a new service worker is available
+- Offline indicator badge when network is unavailable
+- iOS startup splash images (`public/startup/*.png`) via `apple-touch-startup-image` links
+- Offline write outbox (queued cloud writes auto-sync when internet returns)
+- Optional local notifications for outbox sync completion (when user grants permission)
 
 Notes:
 
 - Offline mode covers app shell and static assets after first successful load.
 - Live Appwrite reads/writes still need internet.
 - Service worker is registered only in production builds.
+- iOS does not support Background Sync API, so queue flush falls back to `online` and app foreground events.
 
 ## Migration Docs
 

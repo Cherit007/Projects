@@ -1,28 +1,49 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { isAppwriteConfigured } from '../appwrite.config';
 import { tournamentService } from '../services/tournamentService';
 import { playerService } from '../services/playerService';
 import { appDataService } from '../services/appDataService';
+import { casualMatchService } from '../services/casualmatchservice';
+import {
+  isLikelyOfflineError,
+  offlineOutboxService,
+} from '../services/offlineOutboxService';
 
 /**
  * Custom hook to manage Appwrite sync via React Query.
  */
 export const useAppwriteSync = (showToast, activeGroupId = null) => {
-  const [isAppwriteEnabled, setIsAppwriteEnabled] = useState(false);
-  const [isConfigChecked, setIsConfigChecked] = useState(false);
+  const [isAppwriteEnabled] = useState(() => isAppwriteConfigured());
+  const [isConfigChecked] = useState(true);
   const [currentTournamentId, setCurrentTournamentId] = useState(null);
+  const [queuedWritesCount, setQueuedWritesCount] = useState(() => offlineOutboxService.getCount());
   const resolvedGroupId = activeGroupId || null;
 
   useEffect(() => {
-    const enabled = isAppwriteConfigured();
-    setIsAppwriteEnabled(enabled);
-    if (enabled) {
+    if (isAppwriteEnabled) {
       console.log('✅ Appwrite integration enabled');
     } else {
       console.log('⚠️ Appwrite not configured - check .env file');
     }
-    setIsConfigChecked(true);
+  }, [isAppwriteEnabled]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleOutboxChanged = (event) => {
+      const countFromEvent = Number(event?.detail?.count);
+      if (Number.isFinite(countFromEvent)) {
+        setQueuedWritesCount(countFromEvent);
+        return;
+      }
+      setQueuedWritesCount(offlineOutboxService.getCount());
+    };
+
+    window.addEventListener('bfm:outbox-changed', handleOutboxChanged);
+    return () => {
+      window.removeEventListener('bfm:outbox-changed', handleOutboxChanged);
+    };
   }, []);
 
   const loadFromAppwrite = async (options = {}) => {
@@ -130,6 +151,179 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     }
   };
 
+  const queueOfflineAction = useCallback((action, payload, dedupeKey, message) => {
+    offlineOutboxService.enqueue({ action, payload, dedupeKey });
+    setQueuedWritesCount(offlineOutboxService.getCount());
+    if (message) {
+      showToast?.(message);
+    }
+  }, [showToast]);
+
+  const executeOutboxEntry = useCallback(async (entry) => {
+    const action = String(entry?.action || '').trim();
+    const payload = entry?.payload || {};
+    const entryGroupId = payload?.groupId || resolvedGroupId;
+
+    switch (action) {
+      case 'tournament.save': {
+        const tournament = payload?.tournament;
+        if (!tournament || typeof tournament !== 'object') return;
+        if (tournament.appwriteId) {
+          await tournamentService.updateTournament(tournament.appwriteId, tournament, entryGroupId);
+        } else {
+          await tournamentService.createTournament(tournament, entryGroupId);
+        }
+        return;
+      }
+      case 'tournament.delete': {
+        const tournamentId = String(payload?.tournamentId || '').trim();
+        if (!tournamentId) return;
+        await tournamentService.deleteTournament(tournamentId, entryGroupId);
+        return;
+      }
+      case 'ratings.save': {
+        const ratingsPayload = payload?.ratings;
+        const isDeltaPayload = Boolean(
+          ratingsPayload
+          && typeof ratingsPayload === 'object'
+          && (
+            Object.prototype.hasOwnProperty.call(ratingsPayload, 'changedRatings')
+            || Object.prototype.hasOwnProperty.call(ratingsPayload, 'deletedPlayerNames')
+          )
+        );
+        if (isDeltaPayload) {
+          await playerService.savePlayerRatingsDelta(ratingsPayload, entryGroupId);
+        } else {
+          await playerService.savePlayerRatings(ratingsPayload, entryGroupId);
+        }
+        return;
+      }
+      case 'players.save': {
+        const playersPayload = payload?.players;
+        const players = Array.isArray(playersPayload) ? playersPayload : (playersPayload?.players || []);
+        const pruneMissing = Boolean(!Array.isArray(playersPayload) && playersPayload?.pruneMissing);
+        await playerService.savePlayerDatabase(players, entryGroupId, { pruneMissing });
+        return;
+      }
+      case 'meta.members': {
+        const members = Array.isArray(payload?.members) ? payload.members : [];
+        const memberAccountLinks = payload?.memberAccountLinks;
+        await appDataService.saveAppMeta({
+          members,
+          ...(memberAccountLinks ? { memberAccountLinks } : {}),
+        });
+        return;
+      }
+      case 'meta.templates': {
+        await appDataService.saveAppMeta({ templates: payload?.templates || [] });
+        return;
+      }
+      case 'meta.playerPhotos': {
+        await appDataService.saveAppMeta({ playerPhotos: payload?.playerPhotos || {} });
+        return;
+      }
+      case 'tournament.sync': {
+        const tournamentId = String(payload?.tournamentId || '').trim();
+        const tournamentData = payload?.tournamentData;
+        if (!tournamentId || !tournamentData) return;
+        await tournamentService.updateTournament(tournamentId, {
+          teams: tournamentData.teams,
+          fixtures: tournamentData.fixtures,
+          bracket: tournamentData.bracket,
+          champion: tournamentData.champion,
+          finalMatch: tournamentData.finalMatch,
+          aiSummaries: tournamentData.aiSummaries,
+          swapHistory: tournamentData.swapHistory,
+          status: tournamentData.champion ? 'completed' : 'active',
+        }, entryGroupId, { skipExistingHydration: true });
+        return;
+      }
+      case 'tournament.patchMatches': {
+        const tournamentId = String(payload?.tournamentId || '').trim();
+        const matches = Array.isArray(payload?.matches) ? payload.matches : [];
+        if (!tournamentId || matches.length === 0) return;
+        await tournamentService.patchTournamentMatches(tournamentId, matches, entryGroupId);
+        return;
+      }
+      case 'casual.create': {
+        const matchData = payload?.matchData;
+        if (!matchData) return;
+        await casualMatchService.createCasualMatch(matchData, entryGroupId);
+        return;
+      }
+      case 'casual.delete': {
+        const matchId = String(payload?.matchId || '').trim();
+        if (!matchId) return;
+        await casualMatchService.deleteCasualMatch(matchId, entryGroupId);
+        return;
+      }
+      default:
+        return;
+    }
+  }, [resolvedGroupId]);
+
+  const flushOfflineOutbox = useCallback(async ({ silent = false } = {}) => {
+    if (!isAppwriteEnabled) {
+      return {
+        initialCount: 0,
+        flushedCount: 0,
+        failedCount: 0,
+        remainingCount: offlineOutboxService.getCount(),
+      };
+    }
+
+    const summary = await offlineOutboxService.flush(executeOutboxEntry);
+    setQueuedWritesCount(summary.remainingCount);
+
+    if (summary.flushedCount > 0) {
+      if (!silent) {
+        showToast?.(`Synced ${summary.flushedCount} queued cloud change${summary.flushedCount === 1 ? '' : 's'}`);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('bfm:outbox-flushed', { detail: summary }));
+      }
+    }
+
+    return summary;
+  }, [executeOutboxEntry, isAppwriteEnabled, showToast]);
+
+  useEffect(() => {
+    if (!isAppwriteEnabled || typeof window === 'undefined') return undefined;
+
+    const initialFlushTimer = window.setTimeout(() => {
+      void flushOfflineOutbox({ silent: true });
+    }, 0);
+
+    const handleOnline = () => {
+      void flushOfflineOutbox();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void flushOfflineOutbox({ silent: true });
+      }
+    };
+    const handleServiceWorkerMessage = (event) => {
+      if (event?.data?.type === 'OUTBOX_SYNC') {
+        void flushOfflineOutbox();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibility);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
+    return () => {
+      window.clearTimeout(initialFlushTimer);
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, [flushOfflineOutbox, isAppwriteEnabled]);
+
   const saveTournamentMutation = useMutation({
     mutationFn: async (tournament) => {
       if (!isAppwriteEnabled) return tournament;
@@ -143,7 +337,9 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     },
     onError: (error) => {
       console.error('Error saving tournament to Appwrite:', error);
-      showToast?.('Failed to sync to cloud', 'error');
+      if (!isLikelyOfflineError(error)) {
+        showToast?.('Failed to sync to cloud', 'error');
+      }
     },
   });
 
@@ -156,7 +352,9 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     onSuccess: () => {},
     onError: (error) => {
       console.error('Error deleting tournament from Appwrite:', error);
-      showToast?.('Failed to delete from cloud', 'error');
+      if (!isLikelyOfflineError(error)) {
+        showToast?.('Failed to delete from cloud', 'error');
+      }
     },
   });
 
@@ -257,7 +455,16 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const saveTournamentToAppwrite = async (tournament) => {
     try {
       return await saveTournamentMutation.mutateAsync(tournament);
-    } catch (_error) {
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        const dedupeId = String(tournament?.appwriteId || tournament?.id || tournament?.name || '').trim();
+        queueOfflineAction(
+          'tournament.save',
+          { tournament, groupId: resolvedGroupId },
+          `tournament.save:${resolvedGroupId || 'nogroup'}:${dedupeId || 'new'}`,
+          'Offline: tournament change queued for sync'
+        );
+      }
       return tournament;
     }
   };
@@ -265,7 +472,17 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const deleteTournamentFromAppwrite = async (tournamentId) => {
     try {
       return await deleteTournamentMutation.mutateAsync(tournamentId);
-    } catch (_error) {
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        const normalizedId = String(tournamentId || '').trim();
+        queueOfflineAction(
+          'tournament.delete',
+          { tournamentId: normalizedId, groupId: resolvedGroupId },
+          `tournament.delete:${resolvedGroupId || 'nogroup'}:${normalizedId}`,
+          'Offline: tournament delete queued for sync'
+        );
+        return true;
+      }
       return false;
     }
   };
@@ -273,7 +490,15 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const saveRatingsToAppwrite = async (ratings) => {
     try {
       return await saveRatingsMutation.mutateAsync(ratings);
-    } catch (_error) {
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        queueOfflineAction(
+          'ratings.save',
+          { ratings, groupId: resolvedGroupId },
+          `ratings.save:${resolvedGroupId || 'nogroup'}`,
+          'Offline: ratings changes queued for sync'
+        );
+      }
       return ratings;
     }
   };
@@ -281,7 +506,15 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const savePlayerDatabaseToAppwrite = async (players) => {
     try {
       return await savePlayerDatabaseMutation.mutateAsync(players);
-    } catch (_error) {
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        queueOfflineAction(
+          'players.save',
+          { players, groupId: resolvedGroupId },
+          `players.save:${resolvedGroupId || 'nogroup'}`,
+          'Offline: player updates queued for sync'
+        );
+      }
       return players;
     }
   };
@@ -291,30 +524,82 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     const memberAccountLinks = Array.isArray(payload)
       ? undefined
       : payload?.memberAccountLinks;
-    await saveMetaMutation.mutateAsync({
-      members,
-      ...(memberAccountLinks ? { memberAccountLinks } : {}),
-    });
+    try {
+      await saveMetaMutation.mutateAsync({
+        members,
+        ...(memberAccountLinks ? { memberAccountLinks } : {}),
+      });
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        queueOfflineAction(
+          'meta.members',
+          { members, memberAccountLinks, groupId: resolvedGroupId },
+          `meta.members:${resolvedGroupId || 'nogroup'}`,
+          'Offline: member updates queued for sync'
+        );
+      } else {
+        throw error;
+      }
+    }
     return members;
   };
 
   const saveTemplatesToAppwrite = async (templates) => {
-    await saveMetaMutation.mutateAsync({ templates });
+    try {
+      await saveMetaMutation.mutateAsync({ templates });
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        queueOfflineAction(
+          'meta.templates',
+          { templates, groupId: resolvedGroupId },
+          `meta.templates:${resolvedGroupId || 'nogroup'}`,
+          'Offline: templates queued for sync'
+        );
+      } else {
+        throw error;
+      }
+    }
     return templates;
   };
 
   const savePlayerPhotosToAppwrite = async (playerPhotos) => {
-    await saveMetaMutation.mutateAsync({ playerPhotos });
+    try {
+      await saveMetaMutation.mutateAsync({ playerPhotos });
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        queueOfflineAction(
+          'meta.playerPhotos',
+          { playerPhotos, groupId: resolvedGroupId },
+          `meta.playerPhotos:${resolvedGroupId || 'nogroup'}`,
+          'Offline: photo changes queued for sync'
+        );
+      } else {
+        throw error;
+      }
+    }
     return playerPhotos;
   };
 
   const syncCurrentTournament = async (tournamentData, tournamentIdOverride = null) => {
     const targetTournamentId = tournamentIdOverride || currentTournamentId;
     if (!targetTournamentId) return null;
-    return syncTournamentMutation.mutateAsync({
-      tournamentId: targetTournamentId,
-      tournamentData,
-    });
+    try {
+      return await syncTournamentMutation.mutateAsync({
+        tournamentId: targetTournamentId,
+        tournamentData,
+      });
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        queueOfflineAction(
+          'tournament.sync',
+          { tournamentId: targetTournamentId, tournamentData, groupId: resolvedGroupId },
+          `tournament.sync:${resolvedGroupId || 'nogroup'}:${targetTournamentId}`,
+          'Offline: tournament updates queued for sync'
+        );
+        return null;
+      }
+      throw error;
+    }
   };
 
   const patchTournamentMatches = async (matches = [], tournamentIdOverride = null) => {
@@ -327,10 +612,68 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
         missingMatches: 0,
       };
     }
-    return patchTournamentMatchesMutation.mutateAsync({
-      tournamentId: targetTournamentId,
-      matches,
-    });
+    try {
+      return await patchTournamentMatchesMutation.mutateAsync({
+        tournamentId: targetTournamentId,
+        matches,
+      });
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        queueOfflineAction(
+          'tournament.patchMatches',
+          { tournamentId: targetTournamentId, matches, groupId: resolvedGroupId },
+          `tournament.patchMatches:${resolvedGroupId || 'nogroup'}:${targetTournamentId}`,
+          'Offline: score updates queued for sync'
+        );
+        return {
+          updatedMatches: 0,
+          updatedParticipants: 0,
+          deletedParticipants: 0,
+          missingMatches: 0,
+        };
+      }
+      throw error;
+    }
+  };
+
+  const saveCasualMatchToAppwrite = async (matchData) => {
+    if (!isAppwriteEnabled) return matchData;
+    try {
+      return await casualMatchService.createCasualMatch(matchData, resolvedGroupId);
+    } catch (error) {
+      if (!isLikelyOfflineError(error)) throw error;
+      const tempId = `offline-casual-${Date.now()}`;
+      queueOfflineAction(
+        'casual.create',
+        { matchData, groupId: resolvedGroupId },
+        `casual.create:${resolvedGroupId || 'nogroup'}:${matchData?.id || matchData?.date || tempId}`,
+        'Offline: casual match queued for sync'
+      );
+      return {
+        ...matchData,
+        id: tempId,
+        appwriteId: tempId,
+        createdAt: new Date().toISOString(),
+        pendingSync: true,
+      };
+    }
+  };
+
+  const deleteCasualMatchFromAppwrite = async (matchId) => {
+    if (!isAppwriteEnabled) return true;
+    try {
+      return await casualMatchService.deleteCasualMatch(matchId, resolvedGroupId);
+    } catch (error) {
+      if (!isLikelyOfflineError(error)) throw error;
+      const normalizedId = String(matchId || '').trim();
+      queueOfflineAction(
+        'casual.delete',
+        { matchId: normalizedId, groupId: resolvedGroupId },
+        `casual.delete:${resolvedGroupId || 'nogroup'}:${normalizedId}`,
+        'Offline: casual match delete queued for sync'
+      );
+      return true;
+    }
   };
 
   const isSyncing = saveTournamentMutation.isPending
@@ -345,6 +688,7 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     isAppwriteEnabled,
     isConfigChecked,
     isSyncing,
+    queuedWritesCount,
     currentTournamentId,
     setCurrentTournamentId,
     loadFromAppwrite,
@@ -355,7 +699,10 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     saveMembersToAppwrite,
     saveTemplatesToAppwrite,
     savePlayerPhotosToAppwrite,
+    saveCasualMatchToAppwrite,
+    deleteCasualMatchFromAppwrite,
     syncCurrentTournament,
     patchTournamentMatches,
+    flushOfflineOutbox,
   };
 };
