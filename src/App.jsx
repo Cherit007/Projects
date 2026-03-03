@@ -540,6 +540,21 @@ const App = () => {
   const rejectJoinMutation = useMutation({
     mutationFn: ({ requestId, adminUserId }) => groupService.rejectJoinRequest({ requestId, adminUserId }),
   });
+  const updateGroupMemberRoleMutation = useMutation({
+    mutationFn: ({ groupId, targetUserId, nextRole, adminUserId }) => groupService.updateGroupMemberRole({
+      groupId,
+      targetUserId,
+      nextRole,
+      adminUserId,
+    }),
+  });
+  const removeGroupMemberMutation = useMutation({
+    mutationFn: ({ groupId, targetUserId, adminUserId }) => groupService.removeGroupMember({
+      groupId,
+      targetUserId,
+      adminUserId,
+    }),
+  });
   const createCasualMatchMutation = useMutation({
     mutationFn: (payload) => casualMatchService.createCasualMatch(payload, activeGroup?.id),
   });
@@ -1902,6 +1917,8 @@ const App = () => {
     handleWatchGroup,
     handleApproveRequest,
     handleRejectRequest,
+    handlePromoteMemberToAdmin,
+    handleRemoveMember,
     handleOpenRequestCenter,
     handleContinueAsViewer,
     handleSelectGroup,
@@ -1924,6 +1941,8 @@ const App = () => {
     requestAccessMutation,
     approveJoinMutation,
     rejectJoinMutation,
+    updateGroupMemberRoleMutation,
+    removeGroupMemberMutation,
     setAuthLoading,
     setIsGuestViewer,
     setCurrentUser,
@@ -1938,6 +1957,7 @@ const App = () => {
     setSeenPendingRequestIds,
     setShowRequestCenter,
     setInviteLoading,
+    setAdminAccounts,
     setStep,
   });
 
@@ -2607,6 +2627,8 @@ const App = () => {
         unreadRequestCount={unreadRequestCount}
         pendingJoinRequests={pendingJoinRequests}
         recentJoinReviews={recentJoinReviews}
+        adminGroupMembers={adminAccounts}
+        currentUserId={currentUser?.$id || ''}
         inviteLoading={inviteLoading}
         onLogin={handleLogin}
         onRegister={handleRegister}
@@ -2623,6 +2645,8 @@ const App = () => {
         onCloseRequestCenter={() => setShowRequestCenter(false)}
         onApproveRequest={handleApproveRequest}
         onRejectRequest={handleRejectRequest}
+        onPromoteMemberToAdmin={handlePromoteMemberToAdmin}
+        onRemoveGroupMember={handleRemoveMember}
         viewerDashboardProps={viewerDashboardProps}
         setupScreenProps={setupScreenProps}
         teamEntryProps={teamEntryProps}

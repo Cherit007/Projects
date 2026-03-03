@@ -33,6 +33,8 @@ const AppViewRouter = ({
   unreadRequestCount,
   pendingJoinRequests,
   recentJoinReviews,
+  adminGroupMembers,
+  currentUserId,
   inviteLoading,
   onLogin,
   onRegister,
@@ -49,6 +51,8 @@ const AppViewRouter = ({
   onCloseRequestCenter,
   onApproveRequest,
   onRejectRequest,
+  onPromoteMemberToAdmin,
+  onRemoveGroupMember,
   viewerDashboardProps,
   setupScreenProps,
   teamEntryProps,
@@ -140,8 +144,12 @@ const AppViewRouter = ({
             group={activeGroup}
             pendingRequests={pendingJoinRequests}
             recentReviews={recentJoinReviews}
+            members={adminGroupMembers}
+            currentUserId={currentUserId}
             onApproveRequest={onApproveRequest}
             onRejectRequest={onRejectRequest}
+            onPromoteMemberToAdmin={onPromoteMemberToAdmin}
+            onRemoveMember={onRemoveGroupMember}
             loading={inviteLoading}
             onBack={onCloseRequestCenter}
           />

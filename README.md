@@ -115,19 +115,10 @@ Columns:
 - Keep legacy collections unchanged until migration validation passes.
 - Use backup and validation steps from `docs/appwrite-migration.md` before cutover.
 
-## Appwrite Function: Heavy Ops
+## Appwrite Function
 
-Use one server-side function for multi-write flows:
-
-- `submit_score`
-- `delete_tournament`
-- `recalculate_ratings`
-
-Function source in this repo:
-
-- `appwrite/functions/heavy-ops/src/main.mjs`
-
-No Appwrite Function is required now. All reads/writes use direct Appwrite database APIs from the client.
+No Appwrite Function is used by the current app flow.
+All reads/writes use direct Appwrite database APIs from the client.
 
 ## Required V2 Indexes
 

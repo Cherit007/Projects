@@ -67,10 +67,10 @@ const GroupHeader = ({
                   <button
                     onClick={onOpenRequestCenter}
                     className="relative w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
-                    title="Open request center"
+                    title="Open admin hub"
                   >
                     <Bell size={18} />
-                    <span className="text-sm font-semibold">Requests</span>
+                    <span className="text-sm font-semibold">Admin Hub</span>
                     {pendingRequests.length > 0 && (
                       <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-slate-900 text-white text-[11px]">
                         {pendingRequests.length}

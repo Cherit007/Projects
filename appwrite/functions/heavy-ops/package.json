@@ -1,9 +1,0 @@
-{
-  "name": "heavy-ops-function",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "node-appwrite": "^14.1.0"
-  }
-}

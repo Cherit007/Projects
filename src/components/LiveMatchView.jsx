@@ -160,23 +160,23 @@ const LiveMatchView = ({
               <span className="h-2.5 w-2.5 rounded-full bg-rose-100 animate-pulse" />
               <span className="font-extrabold tracking-wide text-white text-sm sm:text-base">LIVE NOW</span>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-900/50 px-3 py-1.5 text-slate-200 text-xs sm:text-sm">
+            <div className="live-meta-chip inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-900/50 px-3 py-1.5 text-slate-200 text-xs sm:text-sm">
               <Clock size={14} />
               <span>Match {currentMatch.id}</span>
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/40 px-3 py-2 text-center">
-            <h2 className="text-sm sm:text-base font-semibold text-sky-100">{tournamentName}</h2>
+          <div className="live-title-chip mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/40 px-3 py-2 text-center">
+            <h2 className="live-title-text text-sm sm:text-base font-semibold text-sky-100">{tournamentName}</h2>
           </div>
 
           <section className="mt-6">
-            <p className="text-sky-300 text-sm sm:text-base font-semibold">Team 1</p>
+            <p className="live-team-label live-team-label-one text-sky-300 text-sm sm:text-base font-semibold">Team 1</p>
             <div className="mt-2 flex items-start justify-between gap-3">
-              <h3 className="text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
+              <h3 className="live-team-heading text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
                 {currentMatch.team1.name}
               </h3>
-              <div className="elo-pill inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sky-300">
+              <div className="elo-pill live-elo-pill live-elo-pill-one inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sky-300">
                 <TrendingUp size={14} />
                 <span className="font-bold">{team1Rating}</span>
               </div>
@@ -212,7 +212,7 @@ const LiveMatchView = ({
                   aria-label={`${currentMatch.team1.name} score`}
                 />
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
+              <div className="live-team-roster mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
                 {getTeamPlayers(currentMatch.team1).map((playerName, index) => (
                   <p key={`${currentMatch.team1.name}-name-${playerName}-${index}`} className="truncate font-medium">
                     {playerName}
@@ -224,17 +224,17 @@ const LiveMatchView = ({
 
           <div className="my-6 sm:my-8 flex items-center gap-3 sm:gap-4">
             <span className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-400/60 to-transparent" />
-            <span className="vs-halo text-4xl sm:text-6xl font-black text-slate-200">VS</span>
+            <span className="vs-halo live-vs-text text-4xl sm:text-6xl font-black text-slate-200">VS</span>
             <span className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-400/60 to-transparent" />
           </div>
 
           <section>
-            <p className="text-violet-300 text-sm sm:text-base font-semibold">Team 2</p>
+            <p className="live-team-label live-team-label-two text-violet-300 text-sm sm:text-base font-semibold">Team 2</p>
             <div className="mt-2 flex items-start justify-between gap-3">
-              <h3 className="text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
+              <h3 className="live-team-heading text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
                 {currentMatch.team2.name}
               </h3>
-              <div className="elo-pill inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-violet-300">
+              <div className="elo-pill live-elo-pill live-elo-pill-two inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-violet-300">
                 <TrendingUp size={14} />
                 <span className="font-bold">{team2Rating}</span>
               </div>
@@ -270,7 +270,7 @@ const LiveMatchView = ({
                   aria-label={`${currentMatch.team2.name} score`}
                 />
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
+              <div className="live-team-roster mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
                 {getTeamPlayers(currentMatch.team2).map((playerName, index) => (
                   <p key={`${currentMatch.team2.name}-name-${playerName}-${index}`} className="truncate font-medium">
                     {playerName}
@@ -299,14 +299,14 @@ const LiveMatchView = ({
           </button>
 
           {score1 === score2 && score1 !== '' && (
-            <p className="text-center text-rose-300 text-xs sm:text-sm mt-3 font-semibold">
+            <p className="live-tie-warning text-center text-rose-300 text-xs sm:text-sm mt-3 font-semibold">
               Scores must be different.
             </p>
           )}
 
-          <div className="mt-4 rounded-2xl border border-slate-500/35 bg-slate-950/45 p-3 sm:p-4">
-            <h4 className="font-bold text-slate-100 text-sm sm:text-base mb-2">Top 2 Qualification Watch</h4>
-            <div className="space-y-1.5 text-xs sm:text-sm text-slate-300">
+          <div className="live-watch-shell mt-4 rounded-2xl border border-slate-500/35 bg-slate-950/45 p-3 sm:p-4">
+            <h4 className="live-watch-title font-bold text-slate-100 text-sm sm:text-base mb-2">Top 2 Qualification Watch</h4>
+            <div className="live-watch-copy space-y-1.5 text-xs sm:text-sm text-slate-300">
               <p>
                 <span className="font-semibold text-slate-100">{currentMatch.team1.name}:</span>{' '}
                 {team1MinMargin
@@ -320,7 +320,7 @@ const LiveMatchView = ({
                   : 'cannot reach Top 2 from this match alone.'}
               </p>
               {hasValidProjection && (
-                <p className="pt-1 font-semibold text-cyan-300">
+                <p className="live-watch-projection pt-1 font-semibold text-cyan-300">
                   If this score is submitted, {(parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name)} will move to rank #{projectedWinnerRank}.
                 </p>
               )}
@@ -332,9 +332,9 @@ const LiveMatchView = ({
           </div>
 
           {upsetAlert && (
-            <div className="mt-3 rounded-xl border border-rose-400/35 bg-rose-950/40 p-3">
-              <p className="text-sm font-semibold text-rose-200">⚠️ {upsetAlert.title}</p>
-              <p className="text-xs sm:text-sm text-rose-100 mt-1">{upsetAlert.message}</p>
+            <div className="live-upset-shell mt-3 rounded-xl border border-rose-400/35 bg-rose-950/40 p-3">
+              <p className="live-upset-title text-sm font-semibold text-rose-200">⚠️ {upsetAlert.title}</p>
+              <p className="live-upset-copy text-xs sm:text-sm text-rose-100 mt-1">{upsetAlert.message}</p>
             </div>
           )}
         </div>
@@ -342,37 +342,37 @@ const LiveMatchView = ({
 
       {/* Next Matches Preview */}
       {nextMatches.length > 0 && (
-        <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6">
+        <div className="theme-card live-next-shell rounded-xl sm:rounded-2xl p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <Users size={16} className="text-slate-300 sm:w-5 sm:h-5" />
-            <h3 className="font-bold text-base sm:text-lg text-slate-100">Coming Up Next ({nextMatches.length})</h3>
+            <Users size={16} className="live-next-icon text-slate-300 sm:w-5 sm:h-5" />
+            <h3 className="live-next-title font-bold text-base sm:text-lg text-slate-100">Coming Up Next ({nextMatches.length})</h3>
           </div>
-          <p className="text-xs text-slate-400 mb-3">Click a match to make it LIVE NOW.</p>
+          <p className="live-next-note text-xs text-slate-400 mb-3">Click a match to make it LIVE NOW.</p>
           <div className="space-y-2 sm:space-y-3 max-h-80 overflow-y-auto pr-1">
             {nextMatches.map((match, index) => (
               <button
                 key={match.id}
                 type="button"
                 onClick={() => onSelectUpcomingMatch?.(match.id)}
-                className="w-full text-left rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-500/35 bg-slate-900/55 hover:border-cyan-400/60 hover:bg-slate-900 transition-all"
+                className="live-upcoming-card w-full text-left rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-500/35 bg-slate-900/55 hover:border-cyan-400/60 hover:bg-slate-900 transition-all"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                    <span className="text-xs font-bold text-slate-400">#{index + 1}</span>
+                    <span className="live-upcoming-index text-xs font-bold text-slate-400">#{index + 1}</span>
                     <span className="text-base sm:text-lg">{match.team1?.emoji}</span>
-                    <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
+                    <span className="live-upcoming-team text-xs sm:text-sm font-semibold text-slate-100 truncate">
                       {match.team1?.name}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400 mx-1 sm:mx-2">vs</span>
+                  <span className="live-upcoming-vs text-xs text-slate-400 mx-1 sm:mx-2">vs</span>
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 justify-end">
-                    <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
+                    <span className="live-upcoming-team text-xs sm:text-sm font-semibold text-slate-100 truncate">
                       {match.team2?.name}
                     </span>
                     <span className="text-base sm:text-lg">{match.team2?.emoji}</span>
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-cyan-300 font-semibold">
+                <div className="live-upcoming-round mt-2 text-xs text-cyan-300 font-semibold">
                   Round {match.round} • Match {match.id}
                 </div>
                 <div className="mt-2">

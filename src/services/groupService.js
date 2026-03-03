@@ -264,6 +264,85 @@ export const groupService = {
       .sort((a, b) => new Date(a.joinedAt || 0).getTime() - new Date(b.joinedAt || 0).getTime());
   },
 
+  async updateGroupMemberRole({ groupId, targetUserId, nextRole, adminUserId }) {
+    if (!['admin', 'member', 'viewer'].includes(nextRole)) {
+      throw new Error('Invalid group role');
+    }
+
+    const meta = await getMetaWithDefaults();
+    const adminMembership = meta.groupMembers.find(
+      item => item.groupId === groupId && item.userId === adminUserId && item.role === 'admin'
+    );
+    if (!adminMembership) throw new Error('Only admin can update member role');
+
+    const targetMembership = meta.groupMembers.find(
+      item => item.groupId === groupId && item.userId === targetUserId
+    );
+    if (!targetMembership) throw new Error('Group member not found');
+
+    const nextMembers = meta.groupMembers.map((item) => {
+      if (item.groupId === groupId && item.userId === targetUserId) {
+        return { ...item, role: nextRole };
+      }
+      return item;
+    });
+
+    const adminCount = nextMembers.filter(item => item.groupId === groupId && item.role === 'admin').length;
+    if (adminCount === 0) {
+      throw new Error('Group must have at least one admin');
+    }
+
+    await saveMeta({
+      groups: meta.groups,
+      groupMembers: nextMembers,
+      groupInvites: meta.groupInvites,
+      groupJoinRequests: meta.groupJoinRequests,
+    });
+
+    return {
+      status: 'updated',
+      role: nextRole,
+    };
+  },
+
+  async removeGroupMember({ groupId, targetUserId, adminUserId }) {
+    const meta = await getMetaWithDefaults();
+    const adminMembership = meta.groupMembers.find(
+      item => item.groupId === groupId && item.userId === adminUserId && item.role === 'admin'
+    );
+    if (!adminMembership) throw new Error('Only admin can remove members');
+
+    if (targetUserId === adminUserId) {
+      throw new Error('Admin cannot remove own membership');
+    }
+
+    const targetMemberships = meta.groupMembers.filter(
+      item => item.groupId === groupId && item.userId === targetUserId
+    );
+    if (targetMemberships.length === 0) throw new Error('Group member not found');
+
+    const nextMembers = meta.groupMembers.filter(
+      item => !(item.groupId === groupId && item.userId === targetUserId)
+    );
+
+    const adminCount = nextMembers.filter(item => item.groupId === groupId && item.role === 'admin').length;
+    if (adminCount === 0) {
+      throw new Error('Cannot remove the last admin');
+    }
+
+    await saveMeta({
+      groups: meta.groups,
+      groupMembers: nextMembers,
+      groupInvites: meta.groupInvites,
+      groupJoinRequests: meta.groupJoinRequests,
+    });
+
+    return {
+      status: 'removed',
+      removedUserId: targetUserId,
+    };
+  },
+
   async approveJoinRequest({ requestId, adminUserId }) {
     const meta = await getMetaWithDefaults();
     const request = meta.groupJoinRequests.find(item => item.id === requestId);

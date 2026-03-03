@@ -81,9 +81,9 @@ if (matchType === 'doubles') {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto app-modal-shell casual-modal-shell">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col app-modal-shell casual-modal-shell">
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between sticky top-0 casual-modal-header">
+        <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between relative z-[70] shrink-0 casual-modal-header">
           <div>
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
               <Users size={24} /> Record Casual Match
@@ -100,7 +100,7 @@ if (matchType === 'doubles') {
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto overflow-x-hidden min-h-0 casual-modal-body">
           {/* Match Type Selector */}
           <div className="mb-6">
             <label className="block text-sm font-bold text-gray-700 mb-3">

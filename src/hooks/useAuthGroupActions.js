@@ -18,6 +18,8 @@ export const useAuthGroupActions = ({
   requestAccessMutation,
   approveJoinMutation,
   rejectJoinMutation,
+  updateGroupMemberRoleMutation,
+  removeGroupMemberMutation,
   setAuthLoading,
   setIsGuestViewer,
   setCurrentUser,
@@ -32,6 +34,7 @@ export const useAuthGroupActions = ({
   setSeenPendingRequestIds,
   setShowRequestCenter,
   setInviteLoading,
+  setAdminAccounts,
   setStep,
 }) => {
   const handleLogin = async ({ email, password }) => {
@@ -112,6 +115,7 @@ export const useAuthGroupActions = ({
     setRecentJoinReviews([]);
     setSeenPendingRequestIds([]);
     setShowRequestCenter(false);
+    setAdminAccounts([]);
     setActiveGroup(null);
     setGroupRole(null);
     setStep('setup');
@@ -194,6 +198,21 @@ export const useAuthGroupActions = ({
     setRecentJoinReviews(recent);
   };
 
+  const refreshAdminMembers = async () => {
+    if (!currentUser || !activeGroup) return [];
+    const members = await queryClient.fetchQuery({
+      queryKey: queryKeys.adminGroupMembers(activeGroup.id, currentUser.$id),
+      queryFn: () => groupService.getGroupMembersForAdmin({
+        groupId: activeGroup.id,
+        adminUserId: currentUser.$id,
+      }),
+      staleTime: 5 * 1000,
+    });
+    const safeMembers = Array.isArray(members) ? members : [];
+    setAdminAccounts(safeMembers);
+    return safeMembers;
+  };
+
   const handleApproveRequest = async (requestId) => {
     if (!currentUser || !activeGroup || groupRole !== 'admin') return;
     setInviteLoading(true);
@@ -236,6 +255,49 @@ export const useAuthGroupActions = ({
     }
   };
 
+  const handlePromoteMemberToAdmin = async (targetUserId) => {
+    if (!currentUser || !activeGroup || groupRole !== 'admin') return;
+    setInviteLoading(true);
+    try {
+      await updateGroupMemberRoleMutation.mutateAsync({
+        groupId: activeGroup.id,
+        targetUserId,
+        nextRole: 'admin',
+        adminUserId: currentUser.$id,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminGroupMembers(activeGroup.id, currentUser.$id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.userGroups(targetUserId) });
+      await refreshAdminMembers();
+      showToast('Member promoted to admin');
+    } catch (error) {
+      console.error('Promote member failed:', error);
+      showToast(error?.message || 'Failed to promote member', 'error');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleRemoveMember = async (targetUserId) => {
+    if (!currentUser || !activeGroup || groupRole !== 'admin') return;
+    setInviteLoading(true);
+    try {
+      await removeGroupMemberMutation.mutateAsync({
+        groupId: activeGroup.id,
+        targetUserId,
+        adminUserId: currentUser.$id,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminGroupMembers(activeGroup.id, currentUser.$id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.userGroups(targetUserId) });
+      await refreshAdminMembers();
+      showToast('Member removed');
+    } catch (error) {
+      console.error('Remove member failed:', error);
+      showToast(error?.message || 'Failed to remove member', 'error');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   const handleOpenRequestCenter = () => {
     setShowRequestCenter(true);
     setSeenPendingRequestIds(prev => {
@@ -270,6 +332,8 @@ export const useAuthGroupActions = ({
     handleWatchGroup,
     handleApproveRequest,
     handleRejectRequest,
+    handlePromoteMemberToAdmin,
+    handleRemoveMember,
     handleOpenRequestCenter,
     handleContinueAsViewer,
     handleSelectGroup,
