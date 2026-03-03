@@ -38,6 +38,19 @@ const UserProfileModal = ({
     setName((user?.name || user?.email?.split('@')[0] || '').trim());
   }, [user?.name, user?.email]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    const previousTouchAction = body.style.touchAction;
+    body.style.overflow = 'hidden';
+    body.style.touchAction = 'none';
+    return () => {
+      body.style.overflow = previousOverflow;
+      body.style.touchAction = previousTouchAction;
+    };
+  }, []);
+
   const canEditPhoto = Boolean(linkedPlayerName);
   const canManualLink = !linkedPlayerName;
   const canLinkOthers = role === 'admin';
@@ -65,15 +78,15 @@ const UserProfileModal = ({
 
   return (
     <div className="fixed inset-0 z-[260] bg-black/50 flex items-center justify-center p-4 user-profile-overlay app-overlay">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden user-profile-shell app-modal-shell">
-        <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-4 flex items-center justify-between">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden user-profile-shell app-modal-shell flex flex-col max-h-[90vh]">
+        <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-4 flex items-center justify-between shrink-0">
           <h3 className="text-white text-lg font-bold">My Profile</h3>
           <button onClick={onClose} className="text-white hover:bg-white/20 rounded-lg p-2" aria-label="Close profile">
             <X size={18} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto min-h-0">
           <div className="flex items-center gap-3">
             <PlayerAvatar name={linkedPlayerName || name || user?.email || 'Player'} photoUrl={photoUrl} size="lg" />
             <div className="min-w-0">

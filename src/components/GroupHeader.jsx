@@ -5,6 +5,7 @@ const GroupHeader = ({
   group,
   role,
   user,
+  isMobileViewport = false,
   onLogout,
   onBackToGroups,
   pendingRequests = [],
@@ -24,6 +25,7 @@ const GroupHeader = ({
       : 'bg-slate-100 text-slate-600 border-slate-200';
   const showRequestButton = role === 'admin' && onOpenRequestCenter;
   const topActionGridClass = showRequestButton ? 'grid-cols-3' : 'grid-cols-2';
+  const showPrimaryActions = !isMobileViewport;
 
   return (
     <div className="theme-topbar px-3 sm:px-4 py-3">
@@ -42,48 +44,50 @@ const GroupHeader = ({
             </div>
 
             <div className="w-full lg:w-auto flex flex-col gap-2">
-              <div className={`grid ${topActionGridClass} sm:flex sm:items-center gap-2`}>
-                {user && onOpenProfile && (
-                  <button
-                    onClick={onOpenProfile}
-                    className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
-                    title="Open profile"
-                  >
-                    <UserCircle2 size={18} />
-                    <span className="text-sm font-semibold">Profile</span>
-                  </button>
-                )}
-                {onGoHome && (
-                  <button
-                    onClick={onGoHome}
-                    className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
-                    title="Go home"
-                  >
-                    <House size={18} />
-                    <span className="text-sm font-semibold">Home</span>
-                  </button>
-                )}
-                {showRequestButton && (
-                  <button
-                    onClick={onOpenRequestCenter}
-                    className="relative w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
-                    title="Open admin hub"
-                  >
-                    <Bell size={18} />
-                    <span className="text-sm font-semibold">Admin Hub</span>
-                    {pendingRequests.length > 0 && (
-                      <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-slate-900 text-white text-[11px]">
-                        {pendingRequests.length}
-                      </span>
-                    )}
-                    {unreadRequestCount > 0 && (
-                      <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-500 text-white text-[10px]">
-                        {Math.min(unreadRequestCount, 9)}
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
+              {showPrimaryActions && (
+                <div className={`grid ${topActionGridClass} sm:flex sm:items-center gap-2`}>
+                  {user && onOpenProfile && (
+                    <button
+                      onClick={onOpenProfile}
+                      className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
+                      title="Open profile"
+                    >
+                      <UserCircle2 size={18} />
+                      <span className="text-sm font-semibold">Profile</span>
+                    </button>
+                  )}
+                  {onGoHome && (
+                    <button
+                      onClick={onGoHome}
+                      className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
+                      title="Go home"
+                    >
+                      <House size={18} />
+                      <span className="text-sm font-semibold">Home</span>
+                    </button>
+                  )}
+                  {showRequestButton && (
+                    <button
+                      onClick={onOpenRequestCenter}
+                      className="relative w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
+                      title="Open admin hub"
+                    >
+                      <Bell size={18} />
+                      <span className="text-sm font-semibold">Admin Hub</span>
+                      {pendingRequests.length > 0 && (
+                        <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-slate-900 text-white text-[11px]">
+                          {pendingRequests.length}
+                        </span>
+                      )}
+                      {unreadRequestCount > 0 && (
+                        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-500 text-white text-[10px]">
+                          {Math.min(unreadRequestCount, 9)}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
                 {onBackToGroups && (

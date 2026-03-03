@@ -1,14 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Zap } from 'lucide-react';
 
 const BracketMatchModal = ({ match, onSave, onClose }) => {
   const [score1, setScore1] = useState(match.score1 !== null ? match.score1 : '');
   const [score2, setScore2] = useState(match.score2 !== null ? match.score2 : '');
   const [isSaving, setIsSaving] = useState(false);
+  const score1Ref = useRef(null);
+  const score2Ref = useRef(null);
 
   useEffect(() => {
     setScore1(match.score1 !== null ? match.score1 : '');
     setScore2(match.score2 !== null ? match.score2 : '');
+    requestAnimationFrame(() => {
+      score1Ref.current?.focus();
+    });
   }, [match]);
 
   const handleSave = async () => {
@@ -18,11 +23,30 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      await Promise.resolve(onSave(match.id, parseInt(score1), parseInt(score2)));
+      await Promise.resolve(onSave(match.id, parseInt(score1, 10), parseInt(score2, 10)));
       onClose();
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const applyQuickWinner = (winnerTeam) => {
+    const current1 = Number.parseInt(score1, 10);
+    const current2 = Number.parseInt(score2, 10);
+    if (winnerTeam === 1) {
+      const loserScore = Number.isFinite(current2) ? Math.max(0, current2) : 0;
+      const winnerScore = Math.max(21, loserScore + (loserScore >= 20 ? 2 : 1), Number.isFinite(current1) ? current1 : 0);
+      setScore1(String(winnerScore));
+      setScore2(String(loserScore));
+    } else {
+      const loserScore = Number.isFinite(current1) ? Math.max(0, current1) : 0;
+      const winnerScore = Math.max(21, loserScore + (loserScore >= 20 ? 2 : 1), Number.isFinite(current2) ? current2 : 0);
+      setScore1(String(loserScore));
+      setScore2(String(winnerScore));
+    }
+    requestAnimationFrame(() => {
+      score2Ref.current?.focus();
+    });
   };
 
   if (!match.team1 || !match.team2) {
@@ -69,6 +93,7 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
               </div>
             </div>
             <input
+              ref={score1Ref}
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
@@ -77,6 +102,17 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
                 const value = e.target.value;
                 if (value === '' || /^\d+$/.test(value)) {
                   setScore1(value);
+                  if (value !== '' && score2 === '') {
+                    requestAnimationFrame(() => {
+                      score2Ref.current?.focus();
+                    });
+                  }
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  score2Ref.current?.focus();
                 }
               }}
               disabled={isSaving}
@@ -104,6 +140,7 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
               </div>
             </div>
             <input
+              ref={score2Ref}
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
@@ -114,11 +151,38 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
                   setScore2(value);
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleSave();
+                }
+              }}
               disabled={isSaving}
               placeholder="Score"
               className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none text-center text-2xl font-bold"
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => applyQuickWinner(1)}
+            disabled={isSaving}
+            className="score-quick-btn score-quick-btn-one"
+          >
+            <Zap size={13} />
+            <span>{match.team1.name} wins</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => applyQuickWinner(2)}
+            disabled={isSaving}
+            className="score-quick-btn score-quick-btn-two"
+          >
+            <Zap size={13} />
+            <span>{match.team2.name} wins</span>
+          </button>
         </div>
 
         <div className="flex gap-3">

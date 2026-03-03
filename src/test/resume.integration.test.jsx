@@ -9,6 +9,7 @@ vi.mock('../hooks/useAppwriteSync', () => ({
     isAppwriteEnabled: false,
     isConfigChecked: true,
     isSyncing: false,
+    queuedWritesCount: 0,
     currentTournamentId: null,
     setCurrentTournamentId: vi.fn(),
     loadFromAppwrite: vi.fn(async () => null),
@@ -19,7 +20,16 @@ vi.mock('../hooks/useAppwriteSync', () => ({
     saveMembersToAppwrite: vi.fn(async (payload) => payload),
     saveTemplatesToAppwrite: vi.fn(async (payload) => payload),
     savePlayerPhotosToAppwrite: vi.fn(async (payload) => payload),
+    saveCasualMatchToAppwrite: vi.fn(async (payload) => payload),
+    deleteCasualMatchFromAppwrite: vi.fn(async () => true),
     syncCurrentTournament: vi.fn(async () => null),
+    patchTournamentMatches: vi.fn(async () => ({
+      updatedMatches: 0,
+      updatedParticipants: 0,
+      deletedParticipants: 0,
+      missingMatches: 0,
+    })),
+    flushOfflineOutbox: vi.fn(async () => ({ flushedCount: 0, remainingCount: 0 })),
   }),
 }));
 

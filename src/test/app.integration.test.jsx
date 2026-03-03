@@ -9,6 +9,7 @@ vi.mock('../hooks/useAppwriteSync', () => ({
     isAppwriteEnabled: false,
     isConfigChecked: true,
     isSyncing: false,
+    queuedWritesCount: 0,
     currentTournamentId: null,
     setCurrentTournamentId: vi.fn(),
     loadFromAppwrite: vi.fn(async () => null),
@@ -19,7 +20,16 @@ vi.mock('../hooks/useAppwriteSync', () => ({
     saveMembersToAppwrite: vi.fn(async (payload) => payload),
     saveTemplatesToAppwrite: vi.fn(async (payload) => payload),
     savePlayerPhotosToAppwrite: vi.fn(async (payload) => payload),
+    saveCasualMatchToAppwrite: vi.fn(async (payload) => payload),
+    deleteCasualMatchFromAppwrite: vi.fn(async () => true),
     syncCurrentTournament: vi.fn(async () => null),
+    patchTournamentMatches: vi.fn(async () => ({
+      updatedMatches: 0,
+      updatedParticipants: 0,
+      deletedParticipants: 0,
+      missingMatches: 0,
+    })),
+    flushOfflineOutbox: vi.fn(async () => ({ flushedCount: 0, remainingCount: 0 })),
   }),
 }));
 
@@ -82,5 +92,49 @@ describe('App integration flows', () => {
     }
 
     expect(generateButton).not.toBeDisabled();
+  });
+
+  it('runs full local feature flow: start -> generate -> submit -> table -> home -> resume', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByText(/Local mode/i)).toBeInTheDocument();
+
+    const tournamentNameInput = await screen.findByPlaceholderText(/Summer Smash 2024/i);
+    await user.clear(tournamentNameInput);
+    await user.type(tournamentNameInput, 'Full Flow Cup');
+    await user.click(screen.getByRole('button', { name: /Start Tournament/i }));
+
+    expect(await screen.findByText(/Enter Team Details/i)).toBeInTheDocument();
+    const teamNameInputs = screen.getAllByPlaceholderText('Team Name');
+    const player1Inputs = screen.getAllByPlaceholderText('Player 1 Name');
+    const player2Inputs = screen.getAllByPlaceholderText('Player 2 Name');
+
+    for (let i = 0; i < teamNameInputs.length; i += 1) {
+      await user.type(teamNameInputs[i], `Flow Team ${i + 1}`);
+      await user.type(player1Inputs[i], `Flow${i + 1}A`);
+      await user.type(player2Inputs[i], `Flow${i + 1}B`);
+    }
+
+    await user.click(screen.getByRole('button', { name: /Generate Tournament/i }));
+    expect(await screen.findByRole('button', { name: /Submit & Continue/i })).toBeInTheDocument();
+
+    const [score1Input, score2Input] = screen.getAllByPlaceholderText('0');
+    await user.type(score1Input, '21');
+    await user.type(score2Input, '18');
+    await user.click(screen.getByRole('button', { name: /Submit & Continue/i }));
+    expect(await screen.findByText(/Match 2/i, {}, { timeout: 5000 })).toBeInTheDocument();
+
+    const tableButtons = screen.getAllByRole('button', { name: /^Table$/i });
+    await user.click(tableButtons[0]);
+    expect(await screen.findByText(/Points Table/i)).toBeInTheDocument();
+
+    const homeButtons = screen.getAllByRole('button', { name: /^Home$/i });
+    await user.click(homeButtons[0]);
+    expect(await screen.findByPlaceholderText(/Summer Smash 2024/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Resume/i }));
+    expect(await screen.findByRole('button', { name: /Submit & Continue/i })).toBeInTheDocument();
+    expect(screen.getByText(/Match 2/i)).toBeInTheDocument();
   });
 });

@@ -1,5 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Users, Calendar, History, TrendingUp, Trophy, X, Sparkles, BarChart3, ChevronDown, ChevronUp, Clock3, Play, PencilLine } from 'lucide-react';
+import {
+  Users,
+  Calendar,
+  History,
+  TrendingUp,
+  Trophy,
+  X,
+  Sparkles,
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Play,
+  PencilLine,
+  RefreshCw,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+} from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
 import TemplateManager from './TemplateManager';
 import PlayerProfileModal from './PlayerProfileModal';
@@ -21,15 +39,15 @@ const ActionButton = ({
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`setup-quick-access-btn w-full text-left rounded-xl px-3 py-2.5 transition-all border ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    className={`setup-quick-access-btn w-full text-left rounded-xl px-2.5 py-2 sm:px-3 sm:py-2.5 transition-all border ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
   >
     <div className="flex items-start gap-2.5">
       <span className="mt-0.5">
-        <Icon size={16} />
+        <Icon size={15} />
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold leading-tight">{title}</p>
-        <p className="text-xs opacity-80 mt-0.5 leading-tight">{subtitle}</p>
+        <p className="text-xs sm:text-sm font-semibold leading-tight">{title}</p>
+        <p className="text-[11px] sm:text-xs opacity-80 mt-0.5 leading-tight">{subtitle}</p>
       </div>
     </div>
   </button>
@@ -45,6 +63,33 @@ const LoadingRows = ({ rows = 4 }) => (
     ))}
   </div>
 );
+
+const SyncStatusChip = ({ syncStatus = null }) => {
+  if (!syncStatus) return null;
+  return (
+    <div className={`setup-sync-chip sync-feedback-chip setup-sync-${syncStatus.tone || 'saved'}`}>
+      <span className="setup-sync-chip-dot" />
+      <span className="setup-sync-chip-label">{syncStatus.label || 'Ready'}</span>
+      {syncStatus.busy && <RefreshCw size={12} className="animate-spin" />}
+    </div>
+  );
+};
+
+const buildFormSummary = (rawSeries = []) => {
+  const series = (Array.isArray(rawSeries) ? rawSeries : [])
+    .filter((value) => value === 'W' || value === 'L' || value === 'D')
+    .slice(-4);
+  if (series.length === 0) {
+    return { label: 'No form', tone: 'neutral' };
+  }
+  const wins = series.filter((token) => token === 'W').length;
+  const losses = series.filter((token) => token === 'L').length;
+  const points = wins - losses;
+  return {
+    label: series.join(''),
+    tone: points > 0 ? 'up' : points < 0 ? 'down' : 'neutral',
+  };
+};
 
 const SetupScreen = ({ 
   tournamentName, 
@@ -100,6 +145,8 @@ const SetupScreen = ({
   historyHydrationPending = false,
   casualHydrationPending = false,
   getActionPending = () => false,
+  syncStatus = null,
+  isMobileViewport = false,
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [numTeamsInput, setNumTeamsInput] = useState(String(numTeams));
@@ -190,7 +237,6 @@ const SetupScreen = ({
       }),
     ])
   ), [eloLeaderboard, tournamentHistory, casualMatches]);
-
   const displayTournamentHistory = historyLoading && (tournamentHistory || []).length === 0
     ? historyCacheRef.current
     : (tournamentHistory || []);
@@ -203,27 +249,56 @@ const SetupScreen = ({
   const displayEloLeaderboard = statsLoading && (eloLeaderboard || []).length === 0
     ? eloCacheRef.current
     : (eloLeaderboard || []);
+  const eloFormMetaByPlayer = useMemo(() => {
+    const map = new Map();
+    (displayEloLeaderboard || []).forEach((player) => {
+      const history = Array.isArray(player?.history) ? player.history : [];
+      const trendSeries = history
+        .slice(-4)
+        .map((entry) => Number(entry?.change))
+        .map((value) => (value > 0 ? 'W' : value < 0 ? 'L' : 'D'));
+      map.set(player.name, buildFormSummary(trendSeries));
+    });
+    return map;
+  }, [displayEloLeaderboard]);
   const historyCountLabel = historyLoading ? '...' : String(displayTournamentHistory.length);
   const casualCountLabel = casualLoading ? '...' : String(displayCasualMatches.length);
   const showHistorySkeleton = historyLoading && displayTournamentHistory.length === 0;
   const showCasualSkeleton = casualLoading && displayCasualMatches.length === 0;
   const showStatsSkeleton = statsLoading && displayAllTimeStats.length === 0;
   const showEloSkeleton = statsLoading && displayEloLeaderboard.length === 0;
+  const completedTournamentsCount = useMemo(
+    () => displayTournamentHistory.filter((entry) => entry?.champion || entry?.status === 'completed').length,
+    [displayTournamentHistory]
+  );
+  const totalTournamentMatchesPlayed = useMemo(
+    () => displayTournamentHistory.reduce((total, entry) => {
+      const fixtureCount = (Array.isArray(entry?.fixtures) ? entry.fixtures : []).filter((match) => match?.completed).length;
+      const bracketCount = (Array.isArray(entry?.bracket) ? entry.bracket : [])
+        .flatMap((round) => (Array.isArray(round) ? round : []))
+        .filter((match) => match?.completed).length;
+      const finalCount = entry?.finalMatch?.completed ? 1 : 0;
+      return total + fixtureCount + bracketCount + finalCount;
+    }, 0),
+    [displayTournamentHistory]
+  );
+  const totalMatchesPlayed = totalTournamentMatchesPlayed + displayCasualMatches.length;
+  const topEloPlayer = displayEloLeaderboard[0] || null;
 
   return (
-    <div className="theme-page py-8 px-4">
+    <div className="theme-page py-8 px-4 app-screen-home">
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🏸</div>
-          <h1 className="theme-title text-4xl md:text-5xl font-bold mb-2">
+          <h1 className="theme-title app-hero-title text-4xl md:text-5xl font-bold mb-2">
             Badminton Tournament
           </h1>
-          <p className="text-gray-600">Professional tournament management</p>
+          <p className="text-gray-600 app-hero-subtitle">Professional tournament management</p>
         </div>
 
-        <div className="theme-card rounded-2xl p-6 md:p-8 mb-6">
+        <div className="theme-card app-surface-card app-card-tier-primary app-rhythm-panel rounded-2xl p-6 md:p-8 mb-6">
           {scheduledTournaments.length > 0 && (
-            <div className="mb-6 rounded-xl p-4 setup-highlight-card setup-scheduled-card">
+            <div className="mb-6 rounded-xl p-4 setup-highlight-card setup-scheduled-card app-surface-card app-card-tier-secondary">
               <p className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
                 <Clock3 size={16} /> Scheduled Tournaments ({scheduledTournaments.length})
               </p>
@@ -283,7 +358,7 @@ const SetupScreen = ({
           )}
 
           {activeLiveTournaments.length > 0 && (
-            <div className="mb-6 rounded-xl p-4 setup-highlight-card setup-live-card">
+            <div className="mb-6 rounded-xl p-4 setup-highlight-card setup-live-card app-surface-card app-card-tier-secondary">
               <p className="text-sm font-semibold text-emerald-900 mb-3 flex items-center gap-2 setup-live-title">
                 <Play size={16} /> Live Tournament ({activeLiveTournaments.length})
               </p>
@@ -332,6 +407,45 @@ const SetupScreen = ({
             </div>
           )}
 
+            <div className="mb-6 setup-dashboard-shell">
+              <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-gray-700 setup-dashboard-title">Home Dashboard</p>
+                <SyncStatusChip syncStatus={syncStatus} />
+              </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="setup-dashboard-card app-surface-card app-card-tier-tertiary">
+                <div className="setup-dashboard-icon">
+                  <History size={15} />
+                </div>
+                <p className="setup-dashboard-value">{completedTournamentsCount}</p>
+                <p className="setup-dashboard-label">Completed Tournaments</p>
+              </div>
+              <div className="setup-dashboard-card app-surface-card app-card-tier-tertiary">
+                <div className="setup-dashboard-icon">
+                  <Calendar size={15} />
+                </div>
+                <p className="setup-dashboard-value">{displayCasualMatches.length}</p>
+                <p className="setup-dashboard-label">Casual Matches</p>
+              </div>
+              <div className="setup-dashboard-card app-surface-card app-card-tier-tertiary">
+                <div className="setup-dashboard-icon">
+                  <TrendingUp size={15} />
+                </div>
+                <p className="setup-dashboard-value">{totalMatchesPlayed}</p>
+                <p className="setup-dashboard-label">Total Matches Played</p>
+              </div>
+              <div className="setup-dashboard-card app-surface-card app-card-tier-tertiary">
+                <div className="setup-dashboard-icon">
+                  <Trophy size={15} />
+                </div>
+                <p className="setup-dashboard-value">{topEloPlayer ? topEloPlayer.rating : '--'}</p>
+                <p className="setup-dashboard-label">
+                  {topEloPlayer ? `${topEloPlayer.name} (Top ELO)` : 'Top ELO Pending'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <TemplateManager
             templates={tournamentTemplates}
             currentConfig={{ gameMode, tournamentFormat, format, numTeams }}
@@ -356,15 +470,17 @@ const SetupScreen = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <ActionButton
-                icon={History}
-                title={`Tournament History (${historyCountLabel})`}
-                subtitle={canDeleteActions ? 'View/delete past tournaments' : 'View past tournaments'}
-                className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
-                onClick={() => setShowHistory(true)}
-                disabled={historyLoading}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
+              {!isMobileViewport && (
+                <ActionButton
+                  icon={History}
+                  title={`Tournament History (${historyCountLabel})`}
+                  subtitle={canDeleteActions ? 'View/delete past tournaments' : 'View past tournaments'}
+                  className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
+                  onClick={() => setShowHistory(true)}
+                  disabled={historyLoading}
+                />
+              )}
               <ActionButton
                 icon={Calendar}
                 title={`Casual Matches (${casualCountLabel})`}
@@ -487,7 +603,7 @@ const SetupScreen = ({
             </div>
 
             <button onClick={() => onNext(numTeamsInput)} disabled={!tournamentName.trim() || startTournamentPending}
-              className="btn-brand w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50">
+              className={`btn-brand action-feedback-btn ${startTournamentPending ? 'is-busy' : ''} w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50`}>
               <div className="flex items-center justify-center gap-2">
                 <Users size={20} /> {startTournamentPending ? 'Starting...' : 'Start Tournament'}
               </div>
@@ -497,7 +613,7 @@ const SetupScreen = ({
             <button 
               onClick={onRecordCasualMatch}
               disabled={startTournamentPending}
-              className="btn-brand-alt w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mt-3 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="btn-brand-alt action-feedback-btn w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mt-3 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <div className="flex items-center justify-center gap-2">
                 <Trophy size={20} /> Record Casual Match
@@ -513,8 +629,8 @@ const SetupScreen = ({
 
       {showHistory && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden history-modal-shell app-modal-shell">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-history">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden history-modal-shell app-modal-shell">
+            <div className="app-gradient-band p-6 flex items-center justify-between setup-modal-header setup-modal-header-history">
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <History size={24} /> Tournament History
               </h3>
@@ -594,8 +710,8 @@ const SetupScreen = ({
       {/* Casual Match History Modal */}
       {showCasualHistory && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden casual-history-shell app-modal-shell">
-            <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-casual">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden casual-history-shell app-modal-shell">
+            <div className="app-gradient-band p-6 flex items-center justify-between setup-modal-header setup-modal-header-casual">
               <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                 <Calendar size={24} /> Casual Match History
               </h3>
@@ -665,9 +781,9 @@ const SetupScreen = ({
       {/* All-Time Stats Modal */}
       {showAllTimeStats && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden setup-stats-modal-shell app-modal-shell">
-            <div className="bg-gradient-to-r from-orange-600 to-red-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-stats">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden setup-stats-modal-shell app-modal-shell">
+            <div className="app-gradient-band p-6 flex items-center justify-between setup-modal-header setup-modal-header-stats">
+              <h3 className="text-2xl font-bold text-white flex items-center gap-2 app-section-heading">
                 <TrendingUp size={24} /> All-Time Player Statistics
               </h3>
               <button
@@ -694,55 +810,86 @@ const SetupScreen = ({
                   <p>No player statistics available yet</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Player</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">🏆</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Tournaments</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Played</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Won</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Win %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayAllTimeStats.map((player, index) => (
-                        <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="px-4 py-4 text-center font-bold text-lg">
-                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-2">
-                              <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
-                              <button
-                                type="button"
-                                onClick={() => setSelectedPlayerName(player.name)}
-                                className="font-bold text-blue-700 hover:text-blue-900 hover:underline"
-                              >
-                                {player.name}
-                              </button>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-bold text-sm">
-                              {player.championships}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-center font-semibold">{player.tournamentsPlayed}</td>
-                          <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
-                          <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
-                          <td className="px-4 py-4 text-center">
-                            <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm stats-win-badge">
-                              {player.winPercentage}%
-                            </span>
-                          </td>
+                <>
+                  <div className="mobile-leaderboard-cards p-4">
+                    {displayAllTimeStats.map((player, index) => (
+                      <article key={`stats-modal-card-${player.name}`} className="leaderboard-mobile-card app-surface-card app-card-tier-secondary">
+                        <div className="leaderboard-mobile-top">
+                          <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                          <span className="leaderboard-stat-chip">🏆 {player.championships}</span>
+                        </div>
+                        <div className="leaderboard-mobile-team">
+                          <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPlayerName(player.name)}
+                            className="font-bold text-sm text-blue-700 hover:text-blue-900 hover:underline"
+                          >
+                            {player.name}
+                          </button>
+                        </div>
+                        <div className="leaderboard-mobile-metrics">
+                          <span className="leaderboard-stat-chip">Tours {player.tournamentsPlayed}</span>
+                          <span className="leaderboard-stat-chip">Played {player.matchesPlayed}</span>
+                          <span className="leaderboard-stat-chip leaderboard-stat-chip-up">Won {player.matchesWon}</span>
+                        </div>
+                        <div className="leaderboard-mobile-bottom">
+                          <span className="leaderboard-form-chip leaderboard-form-chip-up">Win {player.winPercentage}%</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="dense-table-shell overflow-x-auto">
+                    <table className="w-full min-w-[760px]">
+                      <thead className="bg-gray-100 sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Player</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">🏆</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Tournaments</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Played</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Won</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Win %</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {displayAllTimeStats.map((player, index) => (
+                          <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="px-4 py-4 text-center">
+                              <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-2">
+                                <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPlayerName(player.name)}
+                                  className="font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                                >
+                                  {player.name}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-bold text-sm">
+                                {player.championships}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-center font-semibold">{player.tournamentsPlayed}</td>
+                            <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
+                            <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm stats-win-badge">
+                                {player.winPercentage}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -752,9 +899,9 @@ const SetupScreen = ({
       {/* ELO Leaderboard Modal */}
       {showEloLeaderboard && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden setup-elo-modal-shell app-modal-shell">
-            <div className="bg-gradient-to-r from-yellow-600 to-orange-600 p-6 flex items-center justify-between setup-modal-header setup-modal-header-elo">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden setup-elo-modal-shell app-modal-shell">
+            <div className="app-gradient-band p-6 flex items-center justify-between setup-modal-header setup-modal-header-elo">
+              <h3 className="text-2xl font-bold text-white flex items-center gap-2 app-section-heading">
                 <Trophy size={24} /> ELO Rating Leaderboard
               </h3>
               <button
@@ -781,65 +928,122 @@ const SetupScreen = ({
                   <p>No ELO ratings yet. Complete matches to build the leaderboard!</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[620px] elo-table-polished">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Player</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Rating</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Matches</th>
-                        <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Last Change</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayEloLeaderboard.map((player, index) => {
-                        const lastMatch = player.history && player.history.length > 0 ? player.history[player.history.length - 1] : null;
-                        return (
-                          <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
-                            <td className="px-4 py-4 text-center font-bold text-lg">
-                              {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="flex items-center gap-2 min-w-0 elo-player-cell">
-                                <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedPlayerName(player.name)}
-                                  className="font-bold text-blue-700 hover:text-blue-900 hover:underline truncate min-w-0 elo-player-name"
-                                >
-                                  {player.name}
-                                </button>
-                                {eloGamificationMap[player.name]?.level && (
-                                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full elo-level-badge elo-level-inline max-w-[140px] truncate">
-                                    {eloGamificationMap[player.name].level.icon} {eloGamificationMap[player.name].level.name}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                              <span className={`px-3 py-1 rounded-full font-bold text-sm elo-rating-chip ${
-                                player.rating >= 1200 ? 'elo-rating-gold' :
-                                player.rating >= 1000 ? 'elo-rating-green' :
-                                'elo-rating-neutral'
-                              }`}>
-                                {player.rating}
+                <>
+                  <div className="mobile-leaderboard-cards p-4">
+                    {displayEloLeaderboard.map((player, index) => {
+                      const lastMatch = player.history && player.history.length > 0 ? player.history[player.history.length - 1] : null;
+                      const delta = Number(lastMatch?.change || 0);
+                      const trendMeta = eloFormMetaByPlayer.get(player.name) || buildFormSummary([]);
+                      const moveTone = delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
+                      return (
+                        <article key={`elo-modal-card-${player.name}`} className="leaderboard-mobile-card app-surface-card app-card-tier-secondary">
+                          <div className="leaderboard-mobile-top">
+                            <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                            <span className={`leaderboard-move-chip leaderboard-move-chip-${moveTone}`}>
+                              {delta > 0 ? <ArrowUpRight size={13} /> : delta < 0 ? <ArrowDownRight size={13} /> : <Minus size={13} />}
+                              <span>{delta > 0 ? '+' : ''}{delta}</span>
+                            </span>
+                          </div>
+                          <div className="leaderboard-mobile-team">
+                            <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPlayerName(player.name)}
+                              className="font-bold text-sm text-blue-700 hover:text-blue-900 hover:underline truncate"
+                            >
+                              {player.name}
+                            </button>
+                          </div>
+                          <div className="leaderboard-mobile-metrics">
+                            <span className={`leaderboard-stat-chip ${player.rating >= 1200 ? 'leaderboard-stat-chip-up' : ''}`}>ELO {player.rating}</span>
+                            <span className="leaderboard-stat-chip">Matches {player.matchesPlayed}</span>
+                          </div>
+                          <div className="leaderboard-mobile-bottom">
+                            <span className={`leaderboard-form-chip leaderboard-form-chip-${trendMeta.tone}`}>Form {trendMeta.label}</span>
+                            {eloGamificationMap[player.name]?.level && (
+                              <span className="leaderboard-tier-chip">
+                                <Sparkles size={11} />
+                                <span>{eloGamificationMap[player.name].level.name}</span>
                               </span>
-                            </td>
-                            <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
-                            <td className="px-4 py-4 text-center">
-                              {lastMatch && (
-                                <span className={`font-bold ${lastMatch.change > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {lastMatch.change > 0 ? '+' : ''}{lastMatch.change}
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+
+                  <div className="dense-table-shell overflow-x-auto">
+                    <table className="w-full min-w-[760px] elo-table-polished">
+                      <thead className="bg-gray-100 sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Player</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Rating</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Matches</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Move</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Form</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Δ ELO</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayEloLeaderboard.map((player, index) => {
+                          const lastMatch = player.history && player.history.length > 0 ? player.history[player.history.length - 1] : null;
+                          const delta = Number(lastMatch?.change || 0);
+                          const trendMeta = eloFormMetaByPlayer.get(player.name) || buildFormSummary([]);
+                          const moveTone = delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
+                          return (
+                            <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-4 text-center">
+                                <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-2 min-w-0 elo-player-cell">
+                                  <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedPlayerName(player.name)}
+                                    className="font-bold text-blue-700 hover:text-blue-900 hover:underline truncate min-w-0 elo-player-name"
+                                  >
+                                    {player.name}
+                                  </button>
+                                  {eloGamificationMap[player.name]?.level && (
+                                    <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full elo-level-badge elo-level-inline max-w-[140px] truncate">
+                                      {eloGamificationMap[player.name].level.icon} {eloGamificationMap[player.name].level.name}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <span className={`px-3 py-1 rounded-full font-bold text-sm elo-rating-chip ${
+                                  player.rating >= 1200 ? 'elo-rating-gold' :
+                                  player.rating >= 1000 ? 'elo-rating-green' :
+                                  'elo-rating-neutral'
+                                }`}>
+                                  {player.rating}
                                 </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              </td>
+                              <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
+                              <td className="px-4 py-4 text-center">
+                                <span className={`leaderboard-move-chip leaderboard-move-chip-${moveTone}`}>
+                                  {delta > 0 ? <ArrowUpRight size={13} /> : delta < 0 ? <ArrowDownRight size={13} /> : <Minus size={13} />}
+                                  <span>{delta > 0 ? '+' : ''}{delta}</span>
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <span className={`leaderboard-form-chip leaderboard-form-chip-${trendMeta.tone}`}>{trendMeta.label}</span>
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <span className={`rank-change-indicator ${delta > 0 ? 'rank-change-up text-green-600' : delta < 0 ? 'rank-change-down text-red-600' : ''}`}>
+                                  {delta > 0 ? '+' : ''}{delta}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>

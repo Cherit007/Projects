@@ -5,6 +5,7 @@ const PwaControls = React.memo(function PwaControls({
   queuedWritesCount = 0,
   flushOfflineOutbox,
   showToast,
+  mode = 'floating',
 }) {
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
@@ -289,6 +290,79 @@ const PwaControls = React.memo(function PwaControls({
       showToast?.('Failed to sync queued changes', 'error');
     }
   };
+
+  if (mode === 'drawer') {
+    const hasActionItems = (
+      (showInstallPrompt && !isStandaloneApp)
+      || (showNotificationPrompt && notificationPermission === 'default')
+      || showPwaUpdate
+      || queuedWritesCount > 0
+      || isOffline
+    );
+
+    return (
+      <div className="utility-drawer-section">
+        {showInstallPrompt && !isStandaloneApp && (
+          <button
+            type="button"
+            onClick={handleInstallPwa}
+            className="utility-drawer-action"
+            aria-label="Install app"
+          >
+            <Download size={17} />
+            <span>Install App</span>
+          </button>
+        )}
+
+        {showNotificationPrompt && notificationPermission === 'default' && (
+          <button
+            type="button"
+            onClick={handleEnableNotifications}
+            className="utility-drawer-action"
+            aria-label="Enable notifications"
+          >
+            <Bell size={17} />
+            <span>Enable Alerts</span>
+          </button>
+        )}
+
+        {showPwaUpdate && (
+          <button
+            type="button"
+            onClick={handleApplyPwaUpdate}
+            className="utility-drawer-action"
+            aria-label="Apply app update"
+          >
+            <RefreshCw size={17} />
+            <span>Update App</span>
+          </button>
+        )}
+
+        {queuedWritesCount > 0 && (
+          <button
+            type="button"
+            className="utility-drawer-action"
+            onClick={handleFlushQueuedWrites}
+            title="Sync queued offline changes now"
+          >
+            <CloudUpload size={17} />
+            <span>{queuedWritesCount} pending sync</span>
+          </button>
+        )}
+
+        {isOffline && (
+          <div className="utility-drawer-status" role="status" aria-live="polite">
+            <WifiOff size={16} />
+            <span>Offline mode enabled</span>
+          </div>
+        )}
+
+        {!hasActionItems && (
+          <p className="utility-drawer-empty">No pending utility actions.</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

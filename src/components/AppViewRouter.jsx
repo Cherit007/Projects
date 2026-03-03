@@ -60,6 +60,7 @@ const AppViewRouter = ({
   casualMatchProps,
   showCasualMatch,
   appModals,
+  isMobileViewport = false,
 }) => {
   if (!isConfigChecked || !authResolved || !groupResolved) {
     return <ScreenFallback />;
@@ -132,6 +133,7 @@ const AppViewRouter = ({
             group={activeGroup}
             role={groupRole}
             user={currentUser}
+            isMobileViewport={isMobileViewport}
             onOpenProfile={onOpenProfile}
             onGoHome={onGoHome}
             onBackToGroups={onBackToGroups}
@@ -167,6 +169,7 @@ const AppViewRouter = ({
             group={activeGroup}
             role={groupRole}
             user={currentUser}
+            isMobileViewport={isMobileViewport}
             onOpenProfile={onOpenProfile}
             onGoHome={onGoHome}
             onBackToGroups={onBackToGroups}
@@ -190,6 +193,7 @@ const AppViewRouter = ({
             group={activeGroup}
             role={groupRole}
             user={currentUser}
+            isMobileViewport={isMobileViewport}
             onOpenProfile={onOpenProfile}
             onGoHome={onGoHome}
             onBackToGroups={onBackToGroups}

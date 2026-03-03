@@ -1192,10 +1192,10 @@ export const useTournamentActions = ({
   };
 
   const saveMatchResult = async (matchId, score1, score2) => {
-    if (!assertCanOperate()) return;
+    if (!assertCanOperate()) return false;
     if (score1 === '' || score2 === '' || score1 === score2) {
       showToast('Invalid scores', 'error');
-      return;
+      return false;
     }
     const syncTournamentId = resolveSyncTournamentId();
     const missingCloudId = Boolean(isAppwriteEnabled && !syncTournamentId);
@@ -1203,7 +1203,7 @@ export const useTournamentActions = ({
     const match = fixtures.find((m) => m.id === matchId);
     if (!match) {
       showToast('Live match not found. Please refresh and resume.', 'error');
-      return;
+      return false;
     }
     const prediction = predictMatchOutcome({
       match,
@@ -1393,6 +1393,7 @@ export const useTournamentActions = ({
     }
 
     showToast('Result saved! ✓');
+    return true;
   };
 
   const prioritizeMatch = (matchId) => {
@@ -1599,7 +1600,7 @@ export const useTournamentActions = ({
   };
 
   const saveBracketMatchResult = async (matchId, score1, score2) => {
-    if (!assertCanOperate()) return;
+    if (!assertCanOperate()) return false;
     const sourceMatch = bracket.flat().find((m) => m.id === matchId);
     const prediction = predictMatchOutcome({
       match: sourceMatch,
@@ -1738,13 +1739,14 @@ export const useTournamentActions = ({
     }
 
     showToast('Result saved! ✓');
+    return true;
   };
 
   const saveFinalResult = async (score1, score2, finalistsOverride = null) => {
-    if (!assertCanOperate()) return;
+    if (!assertCanOperate()) return false;
     if (score1 === '' || score2 === '' || score1 === score2) {
       showToast('Invalid scores', 'error');
-      return;
+      return false;
     }
 
     const pointsTable = calculatePointsTable(teams, fixtures);
@@ -1818,6 +1820,7 @@ export const useTournamentActions = ({
     tournament.aiSummaries = nextSummaries;
     await saveTournamentHistory(tournament);
     showToast(`🎉 ${winner.name} are the champions!`);
+    return true;
   };
 
   const saveCasualMatch = async (matchData) => {

@@ -1,7 +1,8 @@
 import React, { Suspense, lazy, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Moon, Sun } from 'lucide-react';
+import { Bell, House, Moon, SlidersHorizontal, Sun, UserCircle2, X } from 'lucide-react';
 import AppViewRouter from './components/AppViewRouter';
+import MobileBottomNav from './components/MobileBottomNav';
 import Toast from './components/Toast';
 import PwaControls from './components/PwaControls';
 import { useAppwriteSync } from './hooks/useAppwriteSync';
@@ -282,6 +283,54 @@ const App = () => {
   const casualHydrationPromiseRef = useRef(null);
   const [pendingActions, setPendingActions] = useState({});
   const pendingActionsRef = useRef({});
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
+  const [showUtilityDrawer, setShowUtilityDrawer] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const media = window.matchMedia('(max-width: 767px)');
+    const updateViewport = () => {
+      setIsMobileViewport(media.matches);
+    };
+    updateViewport();
+    if (media.addEventListener) {
+      media.addEventListener('change', updateViewport);
+    } else {
+      media.addListener(updateViewport);
+    }
+    return () => {
+      if (media.removeEventListener) {
+        media.removeEventListener('change', updateViewport);
+      } else {
+        media.removeListener(updateViewport);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMobileViewport) return;
+    setShowUtilityDrawer(false);
+  }, [isMobileViewport]);
+
+  useEffect(() => {
+    if (!showUtilityDrawer) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowUtilityDrawer(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showUtilityDrawer]);
+
+  useEffect(() => {
+    setShowUtilityDrawer(false);
+  }, [step]);
 
   const hydratePlayerPhotos = (rawPhotos = {}) => {
     const urls = {};
@@ -549,6 +598,9 @@ const App = () => {
       toastTimerRef.current = null;
     }, 3000);
   }, []);
+  const toggleThemeMode = useCallback(() => {
+    setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
 
   const setActionPending = useCallback((actionKey, pending) => {
     if (!actionKey) return;
@@ -574,7 +626,8 @@ const App = () => {
     if (pendingActionsRef.current[actionKey]) return false;
     setActionPending(actionKey, true);
     try {
-      await actionFn();
+      const result = await actionFn();
+      if (typeof result === 'boolean') return result;
       return true;
     } finally {
       setActionPending(actionKey, false);
@@ -611,6 +664,45 @@ const App = () => {
     () => pendingJoinRequests.filter(item => !seenPendingRequestIds.includes(item.id)).length,
     [pendingJoinRequests, seenPendingRequestIds]
   );
+  const pendingActionCount = useMemo(
+    () => Object.keys(pendingActions || {}).length,
+    [pendingActions]
+  );
+  const syncStatus = useMemo(() => {
+    if (!isAppwriteEnabled) {
+      return {
+        tone: 'local',
+        label: 'Local mode',
+        detail: 'Saved on this device',
+        busy: pendingActionCount > 0,
+      };
+    }
+    if (queuedWritesCount > 0) {
+      return {
+        tone: 'queued',
+        label: `${queuedWritesCount} queued`,
+        detail: 'Will sync when online',
+        busy: true,
+      };
+    }
+    if (isSyncing || pendingActionCount > 0) {
+      const detail = pendingActionCount > 0
+        ? `${pendingActionCount} action${pendingActionCount > 1 ? 's' : ''} in progress`
+        : 'Syncing latest changes';
+      return {
+        tone: 'syncing',
+        label: 'Syncing...',
+        detail,
+        busy: true,
+      };
+    }
+    return {
+      tone: 'saved',
+      label: 'All changes saved',
+      detail: 'Cloud sync is up to date',
+      busy: false,
+    };
+  }, [isAppwriteEnabled, isSyncing, queuedWritesCount, pendingActionCount]);
 
   const assertCanOperate = () => {
     if (canOperate) return true;
@@ -2044,6 +2136,28 @@ const App = () => {
     }
   };
 
+  const handleRefreshTournamentFromCloud = async () => {
+    if (!isAppwriteEnabled) return false;
+    const targetId = String(currentTournamentId || '').trim()
+      || String(activeTournamentLock?.id || '').trim();
+    if (!targetId) return false;
+
+    try {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tournamentDetail(activeGroup?.id, targetId),
+      });
+      const detailed = await ensureTournamentDetailsForId(targetId);
+      if (!detailed) return false;
+      if (step === 'tournament') {
+        resumeActiveTournament(detailed);
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to refresh live tournament:', error);
+      return false;
+    }
+  };
+
   const handleEditScheduledTournament = async (tournamentId) => {
     const scheduled = await ensureTournamentDetailsForId(tournamentId);
     if (!scheduled) return;
@@ -2228,6 +2342,51 @@ const App = () => {
     }
   };
 
+  const handleMobileGoHome = () => {
+    setShowHistory(false);
+    setShowCasualHistory(false);
+    setShowAllTimeStats(false);
+    setShowEloLeaderboard(false);
+    setShowCasualMatch(false);
+    setShowUtilityDrawer(false);
+    if (step !== 'setup' || showRequestCenter) {
+      handleHeaderGoHome();
+    }
+  };
+
+  const handleMobileGoLive = async () => {
+    setShowUtilityDrawer(false);
+    if (step === 'tournament') return;
+
+    const liveTournament = activeLiveTournaments[0] || null;
+    if (!liveTournament) {
+      showToast('No live tournament to resume yet', 'error');
+      return;
+    }
+
+    const targetId = liveTournament.id || liveTournament.appwriteId || null;
+    await withActionLock(
+      `setup.resume-live.${String(targetId || 'active')}`,
+      () => handleResumeActiveTournament(targetId)
+    );
+  };
+
+  const handleMobileOpenHistory = () => {
+    setShowUtilityDrawer(false);
+    if (step !== 'setup' || showRequestCenter) {
+      handleHeaderGoHome();
+    }
+    void handleOpenHistoryModal();
+  };
+
+  const handleMobileOpenStats = () => {
+    setShowUtilityDrawer(false);
+    if (step !== 'setup' || showRequestCenter) {
+      handleHeaderGoHome();
+    }
+    void handleOpenAllTimeStatsModal();
+  };
+
   const setupScreenProps = {
     step,
     tournamentName,
@@ -2334,6 +2493,8 @@ const App = () => {
     historyHydrationPending,
     casualHydrationPending,
     getActionPending: isActionPending,
+    syncStatus,
+    isMobileViewport,
   };
 
   const teamEntryProps = {
@@ -2383,10 +2544,19 @@ const App = () => {
     playerPhotos,
     onUpdatePlayerPhoto: updatePlayerPhoto,
     canEditPlayerPhoto: canEditOwnProfile,
-    onSaveMatchResult: saveMatchResult,
+    onSaveMatchResult: async (matchId, score1, score2) => withActionLock(
+      `tournament.score.${String(matchId || 'live')}`,
+      () => Promise.resolve(saveMatchResult(matchId, score1, score2))
+    ),
     onPrioritizeMatch: prioritizeMatch,
-    onSaveBracketResult: saveBracketMatchResult,
-    onSaveFinalResult: saveFinalResult,
+    onSaveBracketResult: async (matchId, score1, score2) => withActionLock(
+      `tournament.bracket.${String(matchId || 'match')}`,
+      () => Promise.resolve(saveBracketMatchResult(matchId, score1, score2))
+    ),
+    onSaveFinalResult: async (score1, score2, finalistsOverride) => withActionLock(
+      'tournament.final',
+      () => Promise.resolve(saveFinalResult(score1, score2, finalistsOverride))
+    ),
     onSwapTeamMember: swapTeamMember,
     swapHistory,
     onGoHome: handleHeaderGoHome,
@@ -2402,10 +2572,12 @@ const App = () => {
       'tournament.next',
       () => Promise.resolve(startNextTournament(options))
     ),
+    onRefreshTournament: handleRefreshTournamentFromCloud,
     calculatePointsTable,
     calculatePlayerStats,
     getPlayerLeaderboard,
     getActionPending: isActionPending,
+    syncStatus,
   };
 
   const casualMatchProps = {
@@ -2415,6 +2587,46 @@ const App = () => {
     onAddPlayer: updatePlayerDatabase,
     onClose: () => setShowCasualMatch(false),
   };
+
+  const canRenderWorkspace = !requiresAuth || Boolean(activeGroup);
+  const shouldShowMobileBottomNav = Boolean(
+    isMobileViewport
+    && canRenderWorkspace
+    && isConfigChecked
+    && authResolved
+    && groupResolved
+    && !isViewerMode
+    && step !== 'tournament'
+    && !showCasualMatch
+  );
+  const mobileNavActiveKey = useMemo(() => {
+    if (showUtilityDrawer) return 'utilities';
+    if (showHistory || showCasualHistory) return 'history';
+    if (showAllTimeStats || showEloLeaderboard || showRequestCenter) return 'stats';
+    if (step === 'tournament') return 'live';
+    return 'home';
+  }, [
+    showUtilityDrawer,
+    showHistory,
+    showCasualHistory,
+    showAllTimeStats,
+    showEloLeaderboard,
+    showRequestCenter,
+    step,
+  ]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const bodyClass = 'has-mobile-root-nav';
+    if (shouldShowMobileBottomNav) {
+      document.body.classList.add(bodyClass);
+    } else {
+      document.body.classList.remove(bodyClass);
+    }
+    return () => {
+      document.body.classList.remove(bodyClass);
+    };
+  }, [shouldShowMobileBottomNav]);
 
   const shouldRenderAppModals = Boolean(
     requiresAuth
@@ -2505,24 +2717,143 @@ const App = () => {
         casualMatchProps={casualMatchProps}
         showCasualMatch={showCasualMatch}
         appModals={appModals}
+        isMobileViewport={isMobileViewport}
       />
       <Toast message={toast?.message} type={toast?.type} />
 
-      <button
-        type="button"
-        onClick={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-        className="theme-toggle-btn"
-        aria-label={themeMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-        title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      >
-        {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        <span className="hidden sm:inline">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
-      </button>
-      <PwaControls
-        queuedWritesCount={queuedWritesCount}
-        flushOfflineOutbox={flushOfflineOutbox}
-        showToast={showToast}
-      />
+      {!isMobileViewport && (
+        <>
+          <button
+            type="button"
+            onClick={toggleThemeMode}
+            className="theme-toggle-btn"
+            aria-label={themeMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            <span className="hidden sm:inline">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+          <PwaControls
+            queuedWritesCount={queuedWritesCount}
+            flushOfflineOutbox={flushOfflineOutbox}
+            showToast={showToast}
+            mode="floating"
+          />
+        </>
+      )}
+
+      {isMobileViewport && (
+        <>
+          {!shouldShowMobileBottomNav && (
+            <button
+              type="button"
+              onClick={() => setShowUtilityDrawer((prev) => !prev)}
+              className={`utility-fab ${showUtilityDrawer ? 'is-open' : ''}`}
+              aria-label={showUtilityDrawer ? 'Close utility drawer' : 'Open utility drawer'}
+              title={showUtilityDrawer ? 'Close utilities' : 'Open utilities'}
+            >
+              {showUtilityDrawer ? <X size={18} /> : <SlidersHorizontal size={18} />}
+              <span>Utilities</span>
+            </button>
+          )}
+
+          <div
+            className={`utility-drawer-overlay ${showUtilityDrawer ? 'is-open' : ''}`}
+            onClick={() => setShowUtilityDrawer(false)}
+            aria-hidden={!showUtilityDrawer}
+          >
+            <div
+              className="utility-drawer-sheet app-modal-shell"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Mobile utility drawer"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="utility-drawer-header">
+                <p className="utility-drawer-title">Utilities</p>
+                <button
+                  type="button"
+                  className="utility-drawer-close"
+                  onClick={() => setShowUtilityDrawer(false)}
+                  aria-label="Close utility drawer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="utility-drawer-body">
+                {(step !== 'setup' || showRequestCenter || showHistory || showCasualHistory || showAllTimeStats || showEloLeaderboard) && (
+                  <button
+                    type="button"
+                    onClick={handleMobileGoHome}
+                    className="utility-drawer-action"
+                    aria-label="Go to home"
+                  >
+                    <House size={17} />
+                    <span>Go Home</span>
+                  </button>
+                )}
+                {requiresAuth && currentUser && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUtilityDrawer(false);
+                      setShowProfileModal(true);
+                    }}
+                    className="utility-drawer-action"
+                    aria-label="Open profile"
+                  >
+                    <UserCircle2 size={17} />
+                    <span>Open Profile</span>
+                  </button>
+                )}
+                {requiresAuth && groupRole === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUtilityDrawer(false);
+                      if (step !== 'setup') {
+                        handleHeaderGoHome();
+                      }
+                      setShowRequestCenter(true);
+                    }}
+                    className="utility-drawer-action"
+                    aria-label="Open admin hub"
+                  >
+                    <Bell size={17} />
+                    <span>Admin Hub</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleThemeMode}
+                  className="utility-drawer-action"
+                  aria-label={themeMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                >
+                  {themeMode === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+                  <span>{themeMode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}</span>
+                </button>
+                <PwaControls
+                  queuedWritesCount={queuedWritesCount}
+                  flushOfflineOutbox={flushOfflineOutbox}
+                  showToast={showToast}
+                  mode="drawer"
+                />
+              </div>
+            </div>
+          </div>
+
+          <MobileBottomNav
+            isVisible={shouldShowMobileBottomNav}
+            activeKey={mobileNavActiveKey}
+            onHome={handleMobileGoHome}
+            onLive={handleMobileGoLive}
+            onHistory={handleMobileOpenHistory}
+            onStats={handleMobileOpenStats}
+            onUtilities={() => setShowUtilityDrawer((prev) => !prev)}
+          />
+        </>
+      )}
     </>
   );
 };

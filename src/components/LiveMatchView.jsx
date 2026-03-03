@@ -1,8 +1,24 @@
-import React, { useMemo, useState } from 'react';
-import { Trophy, Clock, TrendingUp, Users } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Trophy,
+  Clock,
+  TrendingUp,
+  Users,
+  CheckCircle2,
+  AlertTriangle,
+  Zap,
+  RefreshCw,
+  Plus,
+  Minus,
+  Hand,
+  X,
+} from 'lucide-react';
 import MatchPredictionCard from './predictions/MatchPredictionCard';
 import PlayerAvatar from './PlayerAvatar';
 import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
+import { hapticError, hapticSubmit, hapticSuccess, hapticTap } from '../utils/haptics';
+
+const QUICK_SCORE_MODE_ENABLED = false;
 
 const LiveMatchView = ({ 
   currentMatch, 
@@ -14,28 +30,163 @@ const LiveMatchView = ({
   playerPhotos = {},
   pointsTable = [],
   tournamentHistory = [],
-  casualMatches = []
+  casualMatches = [],
+  syncState = null,
 }) => {
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [celebrationActive, setCelebrationActive] = useState(false);
+  const [submitFeedbackState, setSubmitFeedbackState] = useState('idle');
+  const [isQuickScoreModeOpen, setIsQuickScoreModeOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
+  const score1InputRef = useRef(null);
+  const score2InputRef = useRef(null);
+  const submitFeedbackTimerRef = useRef(null);
+
+  useEffect(() => {
+    setScore1('');
+    setScore2('');
+    setSubmitFeedbackState('idle');
+    if (submitFeedbackTimerRef.current) {
+      clearTimeout(submitFeedbackTimerRef.current);
+      submitFeedbackTimerRef.current = null;
+    }
+    setIsQuickScoreModeOpen(QUICK_SCORE_MODE_ENABLED && isMobileViewport);
+    requestAnimationFrame(() => {
+      score1InputRef.current?.focus();
+    });
+  }, [currentMatch?.id, isMobileViewport]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const media = window.matchMedia('(max-width: 767px)');
+    const syncViewport = () => setIsMobileViewport(media.matches);
+    syncViewport();
+    if (media.addEventListener) {
+      media.addEventListener('change', syncViewport);
+    } else {
+      media.addListener(syncViewport);
+    }
+    return () => {
+      if (media.removeEventListener) {
+        media.removeEventListener('change', syncViewport);
+      } else {
+        media.removeListener(syncViewport);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!QUICK_SCORE_MODE_ENABLED) {
+      setIsQuickScoreModeOpen(false);
+      return;
+    }
+    if (!isQuickScoreModeOpen || typeof document === 'undefined') return undefined;
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previousOverflow;
+    };
+  }, [isQuickScoreModeOpen]);
+
+  useEffect(() => () => {
+    if (submitFeedbackTimerRef.current) {
+      clearTimeout(submitFeedbackTimerRef.current);
+      submitFeedbackTimerRef.current = null;
+    }
+  }, []);
+
+  const getQuickWinnerScores = (winnerTeam) => {
+    const current1 = Number.parseInt(score1, 10);
+    const current2 = Number.parseInt(score2, 10);
+    if (winnerTeam === 1) {
+      const loserScore = Number.isFinite(current2) ? Math.max(0, current2) : 0;
+      const winnerScore = Math.max(21, loserScore + (loserScore >= 20 ? 2 : 1), Number.isFinite(current1) ? current1 : 0);
+      return { nextScore1: String(winnerScore), nextScore2: String(loserScore) };
+    }
+    const loserScore = Number.isFinite(current1) ? Math.max(0, current1) : 0;
+    const winnerScore = Math.max(21, loserScore + (loserScore >= 20 ? 2 : 1), Number.isFinite(current2) ? current2 : 0);
+    return { nextScore1: String(loserScore), nextScore2: String(winnerScore) };
+  };
+
+  const setTeamScore = (teamIndex, nextValue) => {
+    const normalized = Number.isFinite(Number(nextValue))
+      ? String(Math.max(0, Math.min(99, Number(nextValue))))
+      : '';
+    if (teamIndex === 1) {
+      setScore1(normalized);
+      return;
+    }
+    setScore2(normalized);
+  };
+
+  const adjustTeamScore = (teamIndex, delta) => {
+    const currentRaw = teamIndex === 1 ? score1 : score2;
+    const currentValue = Number.parseInt(currentRaw, 10);
+    const safeValue = Number.isFinite(currentValue) ? currentValue : 0;
+    setTeamScore(teamIndex, Math.max(0, safeValue + delta));
+    hapticTap();
+  };
+
+  const applyQuickWinner = (winnerTeam) => {
+    const { nextScore1, nextScore2 } = getQuickWinnerScores(winnerTeam);
+    setScore1(nextScore1);
+    setScore2(nextScore2);
+    hapticTap();
+    requestAnimationFrame(() => {
+      score2InputRef.current?.focus();
+    });
+  };
 
   const handleSubmit = async () => {
     if (!score1 || !score2 || score1 === score2) return;
-    
+    const draftScore1 = score1;
+    const draftScore2 = score2;
+    const parsedScore1 = Number.parseInt(draftScore1, 10);
+    const parsedScore2 = Number.parseInt(draftScore2, 10);
+    if (!Number.isFinite(parsedScore1) || !Number.isFinite(parsedScore2)) return;
+
     setIsSubmitting(true);
-    setCelebrationActive(true);
+    setSubmitFeedbackState('loading');
+    hapticSubmit();
+    setScore1('');
+    setScore2('');
 
     try {
-      await Promise.resolve(onSaveScore(currentMatch.id, parseInt(score1, 10), parseInt(score2, 10)));
-      setScore1('');
-      setScore2('');
+      const result = await Promise.resolve(onSaveScore(currentMatch.id, parsedScore1, parsedScore2));
+      if (result === false) {
+        setScore1(draftScore1);
+        setScore2(draftScore2);
+        setSubmitFeedbackState('idle');
+        hapticError();
+        return;
+      }
+      hapticSuccess();
+      setSubmitFeedbackState('success');
+      if (submitFeedbackTimerRef.current) {
+        clearTimeout(submitFeedbackTimerRef.current);
+      }
+      submitFeedbackTimerRef.current = setTimeout(() => {
+        setSubmitFeedbackState('idle');
+        submitFeedbackTimerRef.current = null;
+      }, 360);
+      setIsQuickScoreModeOpen(false);
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        score1InputRef.current?.focus();
+      });
     } catch (_error) {
+      setScore1(draftScore1);
+      setScore2(draftScore2);
+      setSubmitFeedbackState('idle');
+      hapticError();
       // Parent handles user-facing errors via toasts.
     } finally {
       setIsSubmitting(false);
-      setCelebrationActive(false);
     }
   };
 
@@ -136,23 +287,9 @@ const LiveMatchView = ({
   });
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className={`live-board transition-all duration-500 ${celebrationActive ? 'scale-[1.01]' : ''}`}>
-        {celebrationActive && (
-          <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
-            {[...Array(16)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-2 h-2 bg-cyan-300 rounded-full animate-ping"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 0.45}s`
-                }}
-              />
-            ))}
-          </div>
-        )}
+    <div className="space-y-4 sm:space-y-6 app-screen-live">
+      <div className={`live-board app-surface-card app-card-tier-primary submit-feedback-${submitFeedbackState}`}>
+        <div className={`live-submit-flash ${submitFeedbackState === 'success' ? 'is-active' : ''}`} />
 
         <div className="relative z-10 p-4 sm:p-6 lg:p-8">
           <div className="flex items-center justify-between gap-3">
@@ -167,8 +304,52 @@ const LiveMatchView = ({
           </div>
 
           <div className="live-title-chip mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/40 px-3 py-2 text-center">
-            <h2 className="live-title-text text-sm sm:text-base font-semibold text-sky-100">{tournamentName}</h2>
+            <h2 className="live-title-text app-section-heading text-sm sm:text-base font-semibold text-sky-100">{tournamentName}</h2>
           </div>
+
+          {QUICK_SCORE_MODE_ENABLED && (
+            <div className="quick-score-primary mt-4 rounded-2xl border border-cyan-400/30 bg-cyan-950/35 p-3 sm:p-4" data-no-gesture="true">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <p className="text-cyan-100 text-sm sm:text-base font-bold">Quick Score Mode</p>
+                  <p className="text-cyan-200/80 text-xs">Primary scoring flow with large tap controls.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsQuickScoreModeOpen(true)}
+                  disabled={isSubmitting}
+                  className="quick-score-launch-btn"
+                >
+                  <Hand size={15} />
+                  <span>Open Quick Score</span>
+                </button>
+              </div>
+              <div className="live-quick-mode mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => applyQuickWinner(1)}
+                  disabled={isSubmitting}
+                  className="score-quick-btn score-quick-btn-one"
+                >
+                  <Zap size={14} />
+                  <span>{currentMatch.team1.name} wins</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyQuickWinner(2)}
+                  disabled={isSubmitting}
+                  className="score-quick-btn score-quick-btn-two"
+                >
+                  <Zap size={14} />
+                  <span>{currentMatch.team2.name} wins</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <p className="manual-score-note mt-4 text-[11px] sm:text-xs text-slate-300">
+            Manual score entry:
+          </p>
 
           <section className="mt-6">
             <p className="live-team-label live-team-label-one text-sky-300 text-sm sm:text-base font-semibold">Team 1</p>
@@ -196,6 +377,7 @@ const LiveMatchView = ({
                   ))}
                 </div>
                 <input
+                  ref={score1InputRef}
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
@@ -206,10 +388,17 @@ const LiveMatchView = ({
                       setScore1(value);
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      score2InputRef.current?.focus();
+                    }
+                  }}
                   placeholder="0"
                   className="score-input w-24 sm:w-28 rounded-2xl px-2 py-2 text-center text-5xl sm:text-6xl font-black leading-none outline-none"
                   disabled={isSubmitting}
                   aria-label={`${currentMatch.team1.name} score`}
+                  data-no-gesture="true"
                 />
               </div>
               <div className="live-team-roster mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
@@ -254,6 +443,7 @@ const LiveMatchView = ({
                   ))}
                 </div>
                 <input
+                  ref={score2InputRef}
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
@@ -264,10 +454,17 @@ const LiveMatchView = ({
                       setScore2(value);
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleSubmit();
+                    }
+                  }}
                   placeholder="0"
                   className="score-input w-24 sm:w-28 rounded-2xl px-2 py-2 text-center text-5xl sm:text-6xl font-black leading-none outline-none"
                   disabled={isSubmitting}
                   aria-label={`${currentMatch.team2.name} score`}
+                  data-no-gesture="true"
                 />
               </div>
               <div className="live-team-roster mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
@@ -280,23 +477,39 @@ const LiveMatchView = ({
             </div>
           </section>
 
-          <button
-            onClick={handleSubmit}
-            disabled={!score1 || !score2 || score1 === score2 || isSubmitting}
-            className="submit-slab mt-6 sm:mt-8 w-full rounded-2xl py-4 sm:py-5 text-base sm:text-2xl font-extrabold tracking-wide text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3"
-          >
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white" />
-                <span>Saving Result...</span>
-              </>
-            ) : (
-              <>
-                <Trophy size={20} className="sm:w-6 sm:h-6" />
-                <span>SUBMIT &amp; CONTINUE</span>
-              </>
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3" data-no-gesture="true">
+            <button
+              onClick={handleSubmit}
+              disabled={!score1 || !score2 || score1 === score2 || isSubmitting || submitFeedbackState === 'success'}
+              className={`submit-slab action-feedback-btn ${isSubmitting ? 'is-busy' : ''} ${submitFeedbackState === 'success' ? 'submit-feedback-success' : ''} w-full sm:flex-1 rounded-2xl py-4 sm:py-5 text-base sm:text-2xl font-extrabold tracking-wide text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3`}
+            >
+              {(isSubmitting || submitFeedbackState === 'loading') ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white" />
+                  <span>Saving...</span>
+                </>
+              ) : submitFeedbackState === 'success' ? (
+                <>
+                  <CheckCircle2 size={20} className="sm:w-6 sm:h-6" />
+                  <span>Saved</span>
+                </>
+              ) : (
+                <>
+                  <Trophy size={20} className="sm:w-6 sm:h-6" />
+                  <span>SUBMIT &amp; CONTINUE</span>
+                </>
+              )}
+            </button>
+
+            {syncState?.status && (
+              <div className={`live-inline-sync live-inline-sync-${syncState.status} live-inline-sync-inline`}>
+                {syncState.status === 'syncing' && <RefreshCw size={14} className="animate-spin" />}
+                {syncState.status === 'saved' && <CheckCircle2 size={14} />}
+                {syncState.status === 'error' && <AlertTriangle size={14} />}
+                <span>{syncState.label || (syncState.status === 'saved' ? 'Saved' : (syncState.status === 'error' ? 'Retry' : 'Saving...'))}</span>
+              </div>
             )}
-          </button>
+          </div>
 
           {score1 === score2 && score1 !== '' && (
             <p className="live-tie-warning text-center text-rose-300 text-xs sm:text-sm mt-3 font-semibold">
@@ -340,9 +553,134 @@ const LiveMatchView = ({
         </div>
       </div>
 
+      {QUICK_SCORE_MODE_ENABLED && isQuickScoreModeOpen && (
+        <div
+          className="quick-score-overlay app-overlay fixed inset-0 z-[255] p-0 sm:p-4 flex items-end sm:items-center justify-center"
+          onClick={() => setIsQuickScoreModeOpen(false)}
+        >
+          <div
+            className="quick-score-sheet app-modal-shell w-full max-w-2xl"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Quick score mode"
+          >
+            <div className="quick-score-sheet-header">
+              <div>
+                <p className="quick-score-sheet-title">Quick Score Mode</p>
+                <p className="quick-score-sheet-copy">Tap large pads for fast scoring.</p>
+              </div>
+              <button
+                type="button"
+                className="quick-score-close-btn"
+                onClick={() => setIsQuickScoreModeOpen(false)}
+                aria-label="Close quick score mode"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="quick-score-sheet-body">
+              <div className="quick-score-grid">
+                <div className="quick-score-team-pad quick-score-team-pad-one">
+                  <p className="quick-score-team-name">{currentMatch.team1.name}</p>
+                  <div className="quick-score-controls">
+                    <button
+                      type="button"
+                      className="quick-score-adjust-btn"
+                      onClick={() => adjustTeamScore(1, -1)}
+                      disabled={isSubmitting}
+                      aria-label={`Decrease ${currentMatch.team1.name} score`}
+                    >
+                      <Minus size={20} />
+                    </button>
+                    <div className="quick-score-value">{score1 || '0'}</div>
+                    <button
+                      type="button"
+                      className="quick-score-adjust-btn"
+                      onClick={() => adjustTeamScore(1, 1)}
+                      disabled={isSubmitting}
+                      aria-label={`Increase ${currentMatch.team1.name} score`}
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="quick-score-winner-chip score-quick-btn score-quick-btn-one"
+                    onClick={() => applyQuickWinner(1)}
+                    disabled={isSubmitting}
+                  >
+                    <Zap size={14} />
+                    <span>{currentMatch.team1.name} wins</span>
+                  </button>
+                </div>
+
+                <div className="quick-score-team-pad quick-score-team-pad-two">
+                  <p className="quick-score-team-name">{currentMatch.team2.name}</p>
+                  <div className="quick-score-controls">
+                    <button
+                      type="button"
+                      className="quick-score-adjust-btn"
+                      onClick={() => adjustTeamScore(2, -1)}
+                      disabled={isSubmitting}
+                      aria-label={`Decrease ${currentMatch.team2.name} score`}
+                    >
+                      <Minus size={20} />
+                    </button>
+                    <div className="quick-score-value">{score2 || '0'}</div>
+                    <button
+                      type="button"
+                      className="quick-score-adjust-btn"
+                      onClick={() => adjustTeamScore(2, 1)}
+                      disabled={isSubmitting}
+                      aria-label={`Increase ${currentMatch.team2.name} score`}
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="quick-score-winner-chip score-quick-btn score-quick-btn-two"
+                    onClick={() => applyQuickWinner(2)}
+                    disabled={isSubmitting}
+                  >
+                    <Zap size={14} />
+                    <span>{currentMatch.team2.name} wins</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="quick-score-submit-row">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!score1 || !score2 || score1 === score2 || isSubmitting || submitFeedbackState === 'success'}
+                  className={`quick-score-submit-btn submit-slab action-feedback-btn ${isSubmitting ? 'is-busy' : ''} ${submitFeedbackState === 'success' ? 'submit-feedback-success' : ''}`}
+                >
+                  {(isSubmitting || submitFeedbackState === 'loading')
+                    ? 'Saving...'
+                    : submitFeedbackState === 'success'
+                      ? 'Saved'
+                      : 'Submit & Continue'}
+                </button>
+                {syncState?.status && (
+                  <div className={`live-inline-sync live-inline-sync-${syncState.status} live-inline-sync-inline`}>
+                    {syncState.status === 'syncing' && <RefreshCw size={14} className="animate-spin" />}
+                    {syncState.status === 'saved' && <CheckCircle2 size={14} />}
+                    {syncState.status === 'error' && <AlertTriangle size={14} />}
+                    <span>{syncState.label || (syncState.status === 'saved' ? 'Saved' : (syncState.status === 'error' ? 'Retry' : 'Saving...'))}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Next Matches Preview */}
       {nextMatches.length > 0 && (
-        <div className="theme-card live-next-shell rounded-xl sm:rounded-2xl p-4 sm:p-6">
+        <div className="theme-card live-next-shell app-surface-card app-card-tier-secondary rounded-xl sm:rounded-2xl p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <Users size={16} className="live-next-icon text-slate-300 sm:w-5 sm:h-5" />
             <h3 className="live-next-title font-bold text-base sm:text-lg text-slate-100">Coming Up Next ({nextMatches.length})</h3>

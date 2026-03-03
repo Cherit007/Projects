@@ -1,18 +1,56 @@
-import React, { useMemo, useState } from 'react';
-import { Trophy, RotateCcw, RefreshCw, Edit2, TrendingUp, Users, House, Menu } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Trophy,
+  RotateCcw,
+  RefreshCw,
+  Edit2,
+  TrendingUp,
+  Users,
+  House,
+  Menu,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  Sparkles,
+} from 'lucide-react';
 import LiveMatchView from './LiveMatchView';
 import MatchCard from './MatchCard';
 import FinalMatchCard from './FinalMatchCard';
 import BracketView from './BracketView';
 import BracketMatchModal from './Bracketmatchmodal';
 import PlayerProfileModal from './PlayerProfileModal';
-import MatchSummaryFeed from './MatchSummaryFeed';
+import LiveActivityFeed from './LiveActivityFeed';
 import TournamentAwards from './TournamentAwards';
 import AutocompleteInput from './AutocompleteInput';
 import { buildPlayerAdvancedProfile } from '../utils/playerProfileAnalytics';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildPlayerGamification } from '../utils/playerGamification';
 import PlayerAvatar from './PlayerAvatar';
+
+const parseActivityTimestamp = (value) => {
+  if (!value) return null;
+  const ts = Date.parse(String(value));
+  return Number.isFinite(ts) ? ts : null;
+};
+
+const buildFormSummary = (rawSeries = []) => {
+  const series = (Array.isArray(rawSeries) ? rawSeries : [])
+    .filter((value) => value === 'W' || value === 'L' || value === 'D')
+    .slice(-4);
+  if (series.length === 0) {
+    return { label: 'No form', tone: 'neutral', wins: 0, losses: 0 };
+  }
+  const wins = series.filter((token) => token === 'W').length;
+  const losses = series.filter((token) => token === 'L').length;
+  const points = wins - losses;
+  const tone = points > 0 ? 'up' : points < 0 ? 'down' : 'neutral';
+  return {
+    label: series.join(''),
+    tone,
+    wins,
+    losses,
+  };
+};
 
 const TournamentView = ({
   tournamentName,
@@ -46,10 +84,12 @@ const TournamentView = ({
   onResetTournament,
   onRerunTournament,
   onStartNextTournament,
+  onRefreshTournament = null,
   calculatePointsTable,
   calculatePlayerStats,
   getPlayerLeaderboard,
   getActionPending = () => false,
+  syncStatus = null,
 }) => {
   const [activeTab, setActiveTab] = useState('fixtures');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -69,10 +109,137 @@ const TournamentView = ({
   const [showFutureClashModal, setShowFutureClashModal] = useState(false);
   const [futureClashMatches, setFutureClashMatches] = useState([]);
   const [futureClashPlayer, setFutureClashPlayer] = useState('');
+  const [matchSyncState, setMatchSyncState] = useState({});
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const [championBurstActive, setChampionBurstActive] = useState(false);
+  const gestureStartRef = useRef({ x: 0, y: 0, active: false, swipeUsed: false, pullReady: false });
+  const resetPullTimerRef = useRef(null);
+  const syncTimersRef = useRef({});
+  const championBurstTimerRef = useRef(null);
+  const championBurstKeyRef = useRef('');
   const isPendingAction = (actionKey) => Boolean(getActionPending?.(actionKey));
   const resetPending = isPendingAction('tournament.reset');
   const rematchPending = isPendingAction('tournament.rematch');
   const nextTournamentPending = isPendingAction('tournament.next');
+  const syncTone = String(syncStatus?.tone || 'saved');
+  const mobileCommandItems = useMemo(() => {
+    const items = [
+      {
+        key: 'home',
+        label: 'Home',
+        icon: House,
+        onClick: onGoHome,
+        active: false,
+      },
+      {
+        key: 'fixtures',
+        label: 'Live',
+        icon: RefreshCw,
+        onClick: () => setActiveTab('fixtures'),
+        active: activeTab === 'fixtures',
+      },
+    ];
+
+    if (tournamentFormat === 'league') {
+      items.push({
+        key: 'table',
+        label: 'Table',
+        icon: TrendingUp,
+        onClick: () => setActiveTab('table'),
+        active: activeTab === 'table',
+      });
+      items.push({
+        key: 'stats',
+        label: 'Stats',
+        icon: Users,
+        onClick: () => setActiveTab('stats'),
+        active: activeTab === 'stats',
+      });
+    }
+
+    items.push({
+      key: 'elo',
+      label: 'ELO',
+      icon: TrendingUp,
+      onClick: () => setActiveTab('elo'),
+      active: activeTab === 'elo',
+    });
+    items.push({
+      key: 'final',
+      label: 'Final',
+      icon: Trophy,
+      onClick: () => setActiveTab('final'),
+      active: activeTab === 'final',
+    });
+
+    return items;
+  }, [activeTab, onGoHome, tournamentFormat]);
+  const swipeTabOrder = useMemo(() => {
+    const order = ['fixtures'];
+    if (tournamentFormat === 'league') {
+      order.push('table', 'stats');
+    }
+    order.push('elo', 'final');
+    return order;
+  }, [tournamentFormat]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
+    const bodyClass = 'has-mobile-command-bar';
+    const syncBodyClass = () => {
+      const isMobileViewport = window.matchMedia
+        ? window.matchMedia('(max-width: 767px)').matches
+        : window.innerWidth < 768;
+      if (isMobileViewport) {
+        document.body.classList.add(bodyClass);
+      } else {
+        document.body.classList.remove(bodyClass);
+      }
+    };
+
+    syncBodyClass();
+    window.addEventListener('resize', syncBodyClass);
+    return () => {
+      window.removeEventListener('resize', syncBodyClass);
+      document.body.classList.remove(bodyClass);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const media = window.matchMedia('(max-width: 767px)');
+    const syncViewport = () => setIsMobileViewport(media.matches);
+    syncViewport();
+    if (media.addEventListener) {
+      media.addEventListener('change', syncViewport);
+    } else {
+      media.addListener(syncViewport);
+    }
+    return () => {
+      if (media.removeEventListener) {
+        media.removeEventListener('change', syncViewport);
+      } else {
+        media.removeListener(syncViewport);
+      }
+    };
+  }, []);
+
+  useEffect(() => () => {
+    if (resetPullTimerRef.current) {
+      clearTimeout(resetPullTimerRef.current);
+      resetPullTimerRef.current = null;
+    }
+    Object.values(syncTimersRef.current || {}).forEach((timerId) => {
+      clearTimeout(timerId);
+    });
+    syncTimersRef.current = {};
+    if (championBurstTimerRef.current) {
+      clearTimeout(championBurstTimerRef.current);
+      championBurstTimerRef.current = null;
+    }
+  }, []);
 
   // Find current match (first incomplete)
   const currentMatch = useMemo(() => (
@@ -91,10 +258,81 @@ const TournamentView = ({
   const pointsTable = useMemo(() => (
     tournamentFormat === 'league' ? calculatePointsTable(teams, fixtures) : []
   ), [tournamentFormat, teams, fixtures, calculatePointsTable]);
+  const completedFixturesOrdered = useMemo(() => (
+    fixtures
+      .filter((match) => Boolean(match?.completed))
+      .sort((a, b) => {
+        const roundA = Number(a?.round || 0);
+        const roundB = Number(b?.round || 0);
+        if (roundA !== roundB) return roundA - roundB;
+        return String(a?.id || '').localeCompare(String(b?.id || ''));
+      })
+  ), [fixtures]);
+  const teamFormMetaById = useMemo(() => {
+    const historyByTeamId = new Map();
+    completedFixturesOrdered.forEach((match) => {
+      const score1 = Number(match?.score1);
+      const score2 = Number(match?.score2);
+      if (!Number.isFinite(score1) || !Number.isFinite(score2) || score1 === score2) return;
+      const team1Id = String(match?.team1?.id || '');
+      const team2Id = String(match?.team2?.id || '');
+      if (!team1Id || !team2Id) return;
+      const team1Won = score1 > score2;
+      const token1 = team1Won ? 'W' : 'L';
+      const token2 = team1Won ? 'L' : 'W';
+      if (!historyByTeamId.has(team1Id)) historyByTeamId.set(team1Id, []);
+      if (!historyByTeamId.has(team2Id)) historyByTeamId.set(team2Id, []);
+      historyByTeamId.get(team1Id).push(token1);
+      historyByTeamId.get(team2Id).push(token2);
+    });
+
+    const summaryByTeamId = new Map();
+    teams.forEach((team) => {
+      const teamId = String(team?.id || '');
+      if (!teamId) return;
+      summaryByTeamId.set(teamId, buildFormSummary(historyByTeamId.get(teamId) || []));
+    });
+    return summaryByTeamId;
+  }, [completedFixturesOrdered, teams]);
+  const pointsTableRankMovement = useMemo(() => {
+    if (tournamentFormat !== 'league' || pointsTable.length === 0) {
+      return new Map();
+    }
+    const completedMatches = completedFixturesOrdered;
+    if (completedMatches.length === 0) {
+      return new Map();
+    }
+    const tableBefore = calculatePointsTable(teams, completedMatches.slice(0, -1));
+    const previousRankById = new Map(
+      tableBefore.map((team, index) => [String(team?.id || ''), index + 1])
+    );
+    const movementMap = new Map();
+    pointsTable.forEach((team, index) => {
+      const teamId = String(team?.id || '');
+      const previousRank = previousRankById.get(teamId);
+      const nextRank = index + 1;
+      if (!Number.isFinite(previousRank) || previousRank === nextRank) return;
+      movementMap.set(teamId, {
+        previousRank,
+        nextRank,
+        delta: previousRank - nextRank,
+      });
+    });
+    return movementMap;
+  }, [tournamentFormat, pointsTable, completedFixturesOrdered, calculatePointsTable, teams]);
 
   const playerStats = useMemo(() => (
     tournamentFormat === 'league' ? calculatePlayerStats(teams, fixtures) : []
   ), [tournamentFormat, teams, fixtures, calculatePlayerStats]);
+  const championConfettiPieces = useMemo(() => (
+    Array.from({ length: 18 }, (_, index) => ({
+      id: index,
+      x: 8 + ((index * 11) % 84),
+      delay: index * 38,
+      rotation: ((index * 23) % 80) - 40,
+      hue: (40 + (index * 17)) % 360,
+    }))
+  ), []);
   
   // Filter ELO leaderboard to only show players in current tournament
   const currentTournamentPlayers = useMemo(() => {
@@ -117,6 +355,18 @@ const TournamentView = ({
     () => allEloLeaderboard.filter((player) => currentTournamentPlayers.has(player.name)),
     [allEloLeaderboard, currentTournamentPlayers]
   );
+  const eloFormMetaByPlayer = useMemo(() => {
+    const map = new Map();
+    eloLeaderboard.forEach((player) => {
+      const history = Array.isArray(player?.history) ? player.history : [];
+      const trendSeries = history
+        .slice(-4)
+        .map((entry) => Number(entry?.change))
+        .map((value) => (value > 0 ? 'W' : value < 0 ? 'L' : 'D'));
+      map.set(player.name, buildFormSummary(trendSeries));
+    });
+    return map;
+  }, [eloLeaderboard]);
   const selectedPlayerProfile = selectedPlayerName ? playerRatings[selectedPlayerName] : null;
   const selectedPlayerMember = selectedPlayerName
     ? (members || []).find(member => (member?.name || '').trim().toLowerCase() === selectedPlayerName.trim().toLowerCase())
@@ -189,11 +439,219 @@ const TournamentView = ({
       );
     }) || null;
   }, [champion, tournamentHistory, currentTournamentId, tournamentName]);
+  const currentTournamentRecord = useMemo(() => {
+    if (!Array.isArray(tournamentHistory) || tournamentHistory.length === 0) return null;
+    const targetId = String(currentTournamentId || '').trim();
+    if (targetId) {
+      const byId = tournamentHistory.find((entry) => {
+        const entryIds = [entry?.appwriteId, entry?.id]
+          .map((value) => String(value || '').trim())
+          .filter(Boolean);
+        return entryIds.includes(targetId);
+      });
+      if (byId) return byId;
+    }
+    const targetName = String(tournamentName || '').trim().toLowerCase();
+    if (!targetName) return null;
+    return tournamentHistory.find((entry) => (
+      String(entry?.name || '').trim().toLowerCase() === targetName
+    )) || null;
+  }, [tournamentHistory, currentTournamentId, tournamentName]);
+  const summaryTimestampByMatchId = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(aiMatchSummaries) ? aiMatchSummaries : []).forEach((summary) => {
+      const key = String(summary?.matchId || '').trim().toLowerCase();
+      if (!key) return;
+      const ts = parseActivityTimestamp(summary?.createdAt);
+      if (!Number.isFinite(ts)) return;
+      const previous = map.get(key);
+      if (!Number.isFinite(previous) || ts > previous) {
+        map.set(key, ts);
+      }
+    });
+    return map;
+  }, [aiMatchSummaries]);
+  const liveActivityEvents = useMemo(() => {
+    const events = [];
+    let sequence = 0;
+    const sourceTournament = completedTournamentRecord || currentTournamentRecord;
+
+    const toTimestamp = (...values) => {
+      for (const value of values) {
+        const parsed = parseActivityTimestamp(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return null;
+    };
+    const toTeamName = (team, fallback = 'Team') => {
+      const name = String(team?.name || '').trim();
+      return name || fallback;
+    };
+    const resolveMatchTimestamp = (match) => {
+      const matchKey = String(match?.id || '').trim().toLowerCase();
+      const summaryTime = matchKey ? summaryTimestampByMatchId.get(matchKey) : null;
+      if (Number.isFinite(summaryTime)) return summaryTime;
+      return toTimestamp(match?.completedAt, match?.updatedAt, match?.date);
+    };
+    const pushEvent = ({ id, type, message, detail = '', timestamp = null }) => {
+      if (!message) return;
+      events.push({
+        id: id || `activity-${type || 'event'}-${sequence}`,
+        type: type || 'match-result',
+        message,
+        detail,
+        timestamp: Number.isFinite(timestamp) ? timestamp : null,
+        sequence,
+      });
+      sequence += 1;
+    };
+    const pushMatchEvent = (match, phaseLabel) => {
+      if (!match?.completed) return;
+      const score1 = Number(match?.score1);
+      const score2 = Number(match?.score2);
+      if (!Number.isFinite(score1) || !Number.isFinite(score2) || score1 === score2) return;
+      const team1Name = toTeamName(match?.team1, 'Team 1');
+      const team2Name = toTeamName(match?.team2, 'Team 2');
+      const winnerName = score1 > score2 ? team1Name : team2Name;
+      const loserName = score1 > score2 ? team2Name : team1Name;
+      pushEvent({
+        id: `match-${String(match?.id || sequence)}`,
+        type: 'match-result',
+        message: `${winnerName} beat ${loserName}`,
+        detail: `${phaseLabel || 'Match'} • ${score1}-${score2}`,
+        timestamp: resolveMatchTimestamp(match),
+      });
+    };
+
+    pushEvent({
+      id: `start-${String(sourceTournament?.appwriteId || sourceTournament?.id || tournamentName || 'live')}`,
+      type: 'tournament-started',
+      message: `${sourceTournament?.name || tournamentName || 'Tournament'} started`,
+      detail: tournamentFormat === 'league' ? 'League format' : 'Knockout format',
+      timestamp: toTimestamp(
+        sourceTournament?.createdAt,
+        sourceTournament?.updatedAt,
+        sourceTournament?.date
+      ),
+    });
+
+    const completedLeagueMatches = (Array.isArray(fixtures) ? fixtures : [])
+      .filter((match) => Boolean(match?.completed))
+      .sort((a, b) => {
+        const roundA = Number(a?.round || 0);
+        const roundB = Number(b?.round || 0);
+        if (roundA !== roundB) return roundA - roundB;
+        return String(a?.id || '').localeCompare(String(b?.id || ''));
+      });
+
+    completedLeagueMatches.forEach((match) => {
+      pushMatchEvent(match, `Round ${match?.round || '-'}`);
+    });
+
+    if (tournamentFormat === 'league' && completedLeagueMatches.length > 0) {
+      const processed = [];
+      completedLeagueMatches.forEach((match) => {
+        const tableBefore = calculatePointsTable(teams, processed);
+        const beforeRankById = new Map(
+          tableBefore.map((team, index) => [String(team?.id || ''), index + 1])
+        );
+        processed.push(match);
+        const tableAfter = calculatePointsTable(teams, processed);
+        const movers = tableAfter
+          .map((team, index) => {
+            const teamId = String(team?.id || '');
+            const previousRank = beforeRankById.get(teamId);
+            const nextRank = index + 1;
+            if (!Number.isFinite(previousRank) || previousRank === nextRank) return null;
+            return {
+              teamName: String(team?.name || 'Team').trim() || 'Team',
+              previousRank,
+              nextRank,
+              delta: nextRank - previousRank,
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.delta - b.delta);
+
+        if (movers.length === 0) return;
+        const mover = movers[0];
+        const movement = Math.abs(mover.previousRank - mover.nextRank);
+        pushEvent({
+          id: `rank-${String(match?.id || sequence)}`,
+          type: 'rank-changed',
+          message: `${mover.teamName} moved ${mover.nextRank < mover.previousRank ? 'up' : 'down'} to #${mover.nextRank}`,
+          detail: `${movement} place${movement === 1 ? '' : 's'} changed`,
+          timestamp: resolveMatchTimestamp(match),
+        });
+      });
+    }
+
+    (Array.isArray(bracket) ? bracket : []).forEach((round, roundIndex) => {
+      (Array.isArray(round) ? round : []).forEach((match) => {
+        const roundLabel = String(match?.round || '').trim();
+        const phaseLabel = roundLabel || `Knockout R${roundIndex + 1}`;
+        pushMatchEvent(match, phaseLabel);
+      });
+    });
+
+    if (completedTournamentRecord?.finalMatch?.completed) {
+      pushMatchEvent(completedTournamentRecord.finalMatch, 'Final');
+    } else if (champion && summaryTimestampByMatchId.has('final')) {
+      pushEvent({
+        id: 'match-final-summary',
+        type: 'match-result',
+        message: `${toTeamName(champion, 'Champion')} won the final`,
+        detail: 'Final',
+        timestamp: summaryTimestampByMatchId.get('final'),
+      });
+    }
+
+    return events
+      .sort((a, b) => {
+        const aTs = Number.isFinite(a?.timestamp) ? a.timestamp : -Infinity;
+        const bTs = Number.isFinite(b?.timestamp) ? b.timestamp : -Infinity;
+        if (aTs !== bTs) return bTs - aTs;
+        return Number(b?.sequence || 0) - Number(a?.sequence || 0);
+      })
+      .slice(0, 80);
+  }, [
+    completedTournamentRecord,
+    currentTournamentRecord,
+    tournamentName,
+    tournamentFormat,
+    fixtures,
+    bracket,
+    champion,
+    calculatePointsTable,
+    teams,
+    summaryTimestampByMatchId,
+  ]);
 
   const leagueMatchesComplete = useMemo(
     () => fixtures.length > 0 && fixtures.every((match) => match.completed),
     [fixtures]
   );
+
+  useEffect(() => {
+    if (!champion || activeTab !== 'final') {
+      setChampionBurstActive(false);
+      if (!champion) {
+        championBurstKeyRef.current = '';
+      }
+      return;
+    }
+    const burstKey = `${String(currentTournamentId || tournamentName || 'live')}:${String(champion?.name || champion?.player || champion?.player1 || '')}`;
+    if (championBurstKeyRef.current === burstKey) return;
+    championBurstKeyRef.current = burstKey;
+    setChampionBurstActive(true);
+    if (championBurstTimerRef.current) {
+      clearTimeout(championBurstTimerRef.current);
+    }
+    championBurstTimerRef.current = setTimeout(() => {
+      setChampionBurstActive(false);
+      championBurstTimerRef.current = null;
+    }, 1800);
+  }, [champion, activeTab, currentTournamentId, tournamentName]);
 
   const getTeamPlayers = (team) => {
     if (!team) return [];
@@ -499,23 +957,216 @@ const TournamentView = ({
     }
   };
 
+  const setInlineSyncState = useCallback((rowKey, nextState) => {
+    const normalizedKey = String(rowKey || '').trim();
+    if (!normalizedKey) return;
+    setMatchSyncState((prev) => ({
+      ...prev,
+      [normalizedKey]: {
+        ...(prev[normalizedKey] || {}),
+        ...(nextState || {}),
+      },
+    }));
+  }, []);
+
+  const scheduleInlineSyncStateClear = useCallback((rowKey, delayMs = 2400) => {
+    const normalizedKey = String(rowKey || '').trim();
+    if (!normalizedKey) return;
+    if (syncTimersRef.current[normalizedKey]) {
+      clearTimeout(syncTimersRef.current[normalizedKey]);
+    }
+    syncTimersRef.current[normalizedKey] = setTimeout(() => {
+      setMatchSyncState((prev) => {
+        const next = { ...prev };
+        delete next[normalizedKey];
+        return next;
+      });
+      delete syncTimersRef.current[normalizedKey];
+    }, delayMs);
+  }, []);
+
+  const getInlineSyncState = useCallback((rowKey, actionScope = 'score') => {
+    const normalizedKey = String(rowKey || '').trim();
+    if (actionScope === 'final' && isPendingAction('tournament.final')) {
+      return { status: 'syncing', label: 'Saving...' };
+    }
+    if (
+      normalizedKey
+      && (
+        isPendingAction(`tournament.score.${normalizedKey}`)
+        || isPendingAction(`tournament.bracket.${normalizedKey}`)
+      )
+    ) {
+      return { status: 'syncing', label: 'Saving...' };
+    }
+    return normalizedKey ? (matchSyncState[normalizedKey] || null) : null;
+  }, [isPendingAction, matchSyncState]);
+
+  const swipeToAdjacentTab = useCallback((direction) => {
+    const currentIndex = swipeTabOrder.indexOf(activeTab);
+    if (currentIndex < 0) return;
+    const offset = direction === 'left' ? 1 : -1;
+    const nextTab = swipeTabOrder[currentIndex + offset];
+    if (nextTab) setActiveTab(nextTab);
+  }, [activeTab, swipeTabOrder]);
+
+  const triggerPullRefresh = useCallback(async () => {
+    if (isPullRefreshing || typeof onRefreshTournament !== 'function') return;
+    setIsPullRefreshing(true);
+    setPullDistance(72);
+    try {
+      await Promise.resolve(onRefreshTournament());
+    } finally {
+      setIsPullRefreshing(false);
+      if (resetPullTimerRef.current) {
+        clearTimeout(resetPullTimerRef.current);
+      }
+      resetPullTimerRef.current = setTimeout(() => {
+        setPullDistance(0);
+        resetPullTimerRef.current = null;
+      }, 180);
+    }
+  }, [isPullRefreshing, onRefreshTournament]);
+
+  const handleContentTouchStart = useCallback((event) => {
+    if (!isMobileViewport || isPullRefreshing) return;
+    const target = event.target;
+    const blockGesture = target?.closest?.(
+      'input, textarea, select, button, [data-no-gesture], .overflow-x-auto, .scrollbar-thin'
+    );
+    if (blockGesture) return;
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    gestureStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      active: true,
+      swipeUsed: false,
+      pullReady: window.scrollY <= 0,
+    };
+  }, [isMobileViewport, isPullRefreshing]);
+
+  const handleContentTouchMove = useCallback((event) => {
+    const state = gestureStartRef.current;
+    if (!state.active) return;
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    const deltaX = touch.clientX - state.x;
+    const deltaY = touch.clientY - state.y;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    if (!state.swipeUsed && absX > 52 && absX > absY + 12) {
+      state.swipeUsed = true;
+      swipeToAdjacentTab(deltaX < 0 ? 'left' : 'right');
+      return;
+    }
+
+    if (!state.pullReady || deltaY <= 0 || absY < absX + 10) return;
+    const nextPull = Math.min(96, Math.max(0, deltaY * 0.5));
+    setPullDistance(nextPull);
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+  }, [swipeToAdjacentTab]);
+
+  const handleContentTouchEnd = useCallback(() => {
+    const state = gestureStartRef.current;
+    gestureStartRef.current = { x: 0, y: 0, active: false, swipeUsed: false, pullReady: false };
+    if (!state.active || state.swipeUsed || pullDistance <= 0) {
+      setPullDistance(0);
+      return;
+    }
+    if (pullDistance >= 62) {
+      void triggerPullRefresh();
+      return;
+    }
+    setPullDistance(0);
+  }, [pullDistance, triggerPullRefresh]);
+
   const handleSaveMatchResult = async (matchId, score1, score2) => {
-    await Promise.resolve(onSaveMatchResult(matchId, score1, score2));
-    setTimeout(validateDuplicatePlayersAfterGame, 0);
+    const key = String(matchId || '').trim();
+    setInlineSyncState(key, {
+      status: 'syncing',
+      label: 'Saving...',
+      score1: Number(score1),
+      score2: Number(score2),
+      updatedAt: Date.now(),
+    });
+    try {
+      const result = await Promise.resolve(onSaveMatchResult(matchId, score1, score2));
+      if (result === false) {
+        setInlineSyncState(key, { status: 'error', label: 'Retry' });
+        scheduleInlineSyncStateClear(key);
+        return false;
+      }
+      setInlineSyncState(key, { status: 'saved', label: 'Saved', updatedAt: Date.now() });
+      scheduleInlineSyncStateClear(key);
+      setTimeout(validateDuplicatePlayersAfterGame, 0);
+      return true;
+    } catch {
+      setInlineSyncState(key, { status: 'error', label: 'Retry' });
+      scheduleInlineSyncStateClear(key);
+      return false;
+    }
   };
 
   const handleSaveBracketResult = async (matchId, score1, score2) => {
-    await Promise.resolve(onSaveBracketResult(matchId, score1, score2));
-    setTimeout(validateDuplicatePlayersAfterGame, 0);
+    const key = String(matchId || '').trim();
+    setInlineSyncState(key, {
+      status: 'syncing',
+      label: 'Saving...',
+      score1: Number(score1),
+      score2: Number(score2),
+      updatedAt: Date.now(),
+    });
+    try {
+      const result = await Promise.resolve(onSaveBracketResult(matchId, score1, score2));
+      if (result === false) {
+        setInlineSyncState(key, { status: 'error', label: 'Retry' });
+        scheduleInlineSyncStateClear(key);
+        return false;
+      }
+      setInlineSyncState(key, { status: 'saved', label: 'Saved', updatedAt: Date.now() });
+      scheduleInlineSyncStateClear(key);
+      setTimeout(validateDuplicatePlayersAfterGame, 0);
+      return true;
+    } catch {
+      setInlineSyncState(key, { status: 'error', label: 'Retry' });
+      scheduleInlineSyncStateClear(key);
+      return false;
+    }
   };
 
   const handleSaveFinalResult = async (score1, score2, finalistsOverride = null) => {
-    await Promise.resolve(onSaveFinalResult(score1, score2, finalistsOverride));
-    setTimeout(validateDuplicatePlayersAfterGame, 0);
+    const key = 'final';
+    setInlineSyncState(key, {
+      status: 'syncing',
+      label: 'Saving...',
+      score1: Number(score1),
+      score2: Number(score2),
+      updatedAt: Date.now(),
+    });
+    try {
+      const result = await Promise.resolve(onSaveFinalResult(score1, score2, finalistsOverride));
+      if (result === false) {
+        setInlineSyncState(key, { status: 'error', label: 'Retry' });
+        scheduleInlineSyncStateClear(key);
+        return false;
+      }
+      setInlineSyncState(key, { status: 'saved', label: 'Saved', updatedAt: Date.now() });
+      scheduleInlineSyncStateClear(key);
+      setTimeout(validateDuplicatePlayersAfterGame, 0);
+      return true;
+    } catch {
+      setInlineSyncState(key, { status: 'error', label: 'Retry' });
+      scheduleInlineSyncStateClear(key);
+      return false;
+    }
   };
 
   return (
-    <div className="theme-page">
+    <div className="theme-page app-screen-live">
       {/* Header */}
       <div className="sticky top-0 theme-topbar tour-sticky-header shadow-md z-[130]">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -543,7 +1194,7 @@ const TournamentView = ({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl md:text-3xl font-bold text-gray-800">🏸 {tournamentName}</h1>
+                  <h1 className="text-2xl md:text-3xl font-bold text-gray-800 app-section-heading">🏸 {tournamentName}</h1>
                   <button onClick={() => { setTempTournamentName(tournamentName); setIsEditingName(true); }}
                     className="text-gray-400 hover:text-gray-600 p-1">
                     <Edit2 size={18} />
@@ -556,6 +1207,13 @@ const TournamentView = ({
                 {tournamentFormat === 'semiFinal' && 'Semi Final + Final'}
                 {tournamentFormat === 'fullKnockout' && 'Full Knockout Bracket'}
               </p>
+              {syncStatus && (
+                <div className={`tour-sync-chip sync-feedback-chip tour-sync-${syncTone}`}>
+                  <span className="tour-sync-dot" />
+                  <span>{syncStatus.label || 'All changes saved'}</span>
+                  {syncStatus.busy && <RefreshCw size={12} className="animate-spin" />}
+                </div>
+              )}
             </div>
             <div className="hidden md:flex gap-2 flex-wrap">
               <button onClick={onGoHome}
@@ -653,7 +1311,7 @@ const TournamentView = ({
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="hidden md:flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             <button onClick={() => setActiveTab('fixtures')}
               className={`tour-tab-btn px-3 sm:px-4 py-2 rounded-full font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
                 activeTab === 'fixtures' ? 'tour-tab-active' : ''}`}>
@@ -688,10 +1346,37 @@ const TournamentView = ({
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div
+        className="max-w-7xl mx-auto px-4 py-6 pb-28 md:pb-6 tour-gesture-shell"
+        onTouchStart={handleContentTouchStart}
+        onTouchMove={handleContentTouchMove}
+        onTouchEnd={handleContentTouchEnd}
+        onTouchCancel={handleContentTouchEnd}
+      >
+        {isMobileViewport && typeof onRefreshTournament === 'function' && (
+          <div
+            className={`tour-pull-indicator ${
+              pullDistance >= 62 ? 'is-ready' : ''
+            } ${isPullRefreshing ? 'is-refreshing' : ''}`}
+            style={{
+              transform: `translateY(${Math.max(-14, pullDistance - 40)}px)`,
+              opacity: pullDistance > 0 || isPullRefreshing ? 1 : 0,
+            }}
+          >
+            <span>
+              {isPullRefreshing
+                ? 'Refreshing live tournament...'
+                : pullDistance >= 62
+                  ? 'Release to refresh'
+                  : 'Pull down to refresh'}
+            </span>
+            {(isPullRefreshing || pullDistance >= 62) && <RefreshCw size={14} className={isPullRefreshing ? 'animate-spin' : ''} />}
+          </div>
+        )}
+
         {activeTab === 'fixtures' && (
           <div className="space-y-6">
-            <MatchSummaryFeed summaries={aiMatchSummaries} />
+            <LiveActivityFeed events={liveActivityEvents} />
             {tournamentFormat === 'league' ? (
               <>
                 {/* Live Match View */}
@@ -707,6 +1392,7 @@ const TournamentView = ({
                     pointsTable={pointsTable}
                     tournamentHistory={tournamentHistory}
                     casualMatches={casualMatches}
+                    syncState={getInlineSyncState(currentMatch?.id, 'score')}
                   />
                 )}
 
@@ -719,7 +1405,12 @@ const TournamentView = ({
                     </h3>
                     <div className="space-y-4">
                       {fixtures.filter(m => m.completed).map(match => (
-                        <MatchCard key={match.id} match={match} onSave={handleSaveMatchResult} />
+                        <MatchCard
+                          key={match.id}
+                          match={match}
+                          onSave={handleSaveMatchResult}
+                          syncState={getInlineSyncState(match?.id, 'score')}
+                        />
                       ))}
                     </div>
                   </div>
@@ -749,53 +1440,129 @@ const TournamentView = ({
         )}
 
         {activeTab === 'table' && tournamentFormat === 'league' && (
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl overflow-hidden tour-points-card">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 sm:p-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+          <div className="bg-white rounded-xl sm:rounded-2xl overflow-hidden tour-points-card app-surface-card app-card-tier-primary app-rhythm-panel">
+            <div className="app-gradient-band p-4 sm:p-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 app-section-heading">
                 <Trophy size={20} className="sm:w-6 sm:h-6" /> Points Table
               </h2>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px]">
+
+            <div className="mobile-leaderboard-cards p-3 sm:p-4">
+              {pointsTable.map((team, index) => {
+                const movement = pointsTableRankMovement.get(String(team.id));
+                const movementDirection = movement ? (movement.delta > 0 ? 'up' : 'down') : 'neutral';
+                const formMeta = teamFormMetaById.get(String(team.id)) || buildFormSummary([]);
+                const pointDiff = Number(team?.scoreDiff || 0);
+                return (
+                  <article
+                    key={`table-card-${team.id}`}
+                    className={`leaderboard-mobile-card app-surface-card app-card-tier-secondary ${movement ? `table-rank-flash table-rank-flash-${movementDirection}` : ''}`}
+                  >
+                    <div className="leaderboard-mobile-top">
+                      <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                      {movement ? (
+                        <span className={`leaderboard-move-chip leaderboard-move-chip-${movementDirection}`}>
+                          {movement.delta > 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+                          <span>{Math.abs(movement.delta)}</span>
+                        </span>
+                      ) : (
+                        <span className="leaderboard-move-chip leaderboard-move-chip-neutral">
+                          <Minus size={13} />
+                          <span>0</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="leaderboard-mobile-team">
+                      <span className="text-xl">{team.emoji}</span>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm leading-tight truncate">{team.name}</p>
+                        <p className="text-xs opacity-80 truncate">{team.player || team.player1}{team.player2 && ` & ${team.player2}`}</p>
+                      </div>
+                    </div>
+                    <div className="leaderboard-mobile-metrics">
+                      <span className="leaderboard-stat-chip">Pts {team.points}</span>
+                      <span className={`leaderboard-stat-chip ${pointDiff > 0 ? 'leaderboard-stat-chip-up' : pointDiff < 0 ? 'leaderboard-stat-chip-down' : ''}`}>
+                        Diff {pointDiff > 0 ? '+' : ''}{pointDiff}
+                      </span>
+                      <span className={`leaderboard-stat-chip ${(team.netMatchRate || 0) > 0 ? 'leaderboard-stat-chip-up' : (team.netMatchRate || 0) < 0 ? 'leaderboard-stat-chip-down' : ''}`}>
+                        NMR {(team.netMatchRate || 0) > 0 ? '+' : ''}{(team.netMatchRate || 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="leaderboard-mobile-bottom">
+                      <span className={`leaderboard-form-chip leaderboard-form-chip-${formMeta.tone}`}>Form {formMeta.label}</span>
+                      <span className="text-[11px] opacity-75">W {team.won} • L {team.lost} • P {team.played}</span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="dense-table-shell overflow-x-auto">
+              <table className="w-full min-w-[760px]">
                 <thead className="bg-gray-100 tour-table-head">
                   <tr>
-                    <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Pos</th>
+                    <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Rank</th>
                     <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Team</th>
                     <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">P</th>
                     <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">W</th>
                     <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">L</th>
                     <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Pts</th>
+                    <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Diff</th>
                     <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">NMR</th>
+                    <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Form</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pointsTable.map((team, index) => (
-                    <tr key={team.id} className={`border-b border-gray-200 hover:bg-gray-50 ${index < 2 ? 'points-top-two-row' : ''}`}>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4">
-                        <span className="font-bold text-base sm:text-lg">
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                        </span>
-                      </td>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <span className="text-lg sm:text-2xl">{team.emoji}</span>
-                          <div className="min-w-0">
-                            <p className="font-bold text-sm sm:text-base text-gray-800 truncate">{team.name}</p>
-                            <p className="text-xs text-gray-600 truncate">{team.player || team.player1}{team.player2 && ` & ${team.player2}`}</p>
+                  {pointsTable.map((team, index) => {
+                    const movement = pointsTableRankMovement.get(String(team.id));
+                    const movementDirection = movement ? (movement.delta > 0 ? 'up' : 'down') : '';
+                    const formMeta = teamFormMetaById.get(String(team.id)) || buildFormSummary([]);
+                    const pointDiff = Number(team?.scoreDiff || 0);
+                    return (
+                      <tr
+                        key={team.id}
+                        className={`tour-data-row border-b border-gray-200 hover:bg-gray-50 ${index < 2 ? 'points-top-two-row' : ''} ${movement ? `table-rank-flash table-rank-flash-${movementDirection}` : ''}`}
+                      >
+                        <td className="px-2 sm:px-4 py-3 sm:py-4">
+                          <div className="table-rank-cell">
+                            <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                            {movement && (
+                              <span
+                                className={`table-rank-chip table-rank-chip-${movementDirection}`}
+                                title={`Moved from #${movement.previousRank} to #${movement.nextRank}`}
+                              >
+                                {movement.delta > 0 ? '▲' : '▼'} {Math.abs(movement.delta)}
+                              </span>
+                            )}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-sm">{team.played}</td>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-green-600 text-sm">{team.won}</td>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-red-600 text-sm">{team.lost}</td>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
-                        <span className="bg-blue-100 text-blue-700 px-2 sm:px-3 py-1 rounded-full font-bold text-xs sm:text-sm points-chip">{team.points}</span>
-                      </td>
-                      <td className={`px-2 sm:px-4 py-3 sm:py-4 text-center font-bold text-sm ${(team.netMatchRate || 0) > 0 ? 'text-green-600' : (team.netMatchRate || 0) < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                        {(team.netMatchRate || 0) > 0 ? '+' : ''}{(team.netMatchRate || 0).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-2 sm:px-4 py-3 sm:py-4">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <span className="text-lg sm:text-2xl">{team.emoji}</span>
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm sm:text-base text-gray-800 truncate">{team.name}</p>
+                              <p className="text-xs text-gray-600 truncate">{team.player || team.player1}{team.player2 && ` & ${team.player2}`}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-sm">{team.played}</td>
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-green-600 text-sm">{team.won}</td>
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-red-600 text-sm">{team.lost}</td>
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                          <span className="bg-blue-100 text-blue-700 px-2 sm:px-3 py-1 rounded-full font-bold text-xs sm:text-sm points-chip">{team.points}</span>
+                        </td>
+                        <td className={`px-2 sm:px-4 py-3 sm:py-4 text-center font-bold text-sm ${pointDiff > 0 ? 'text-green-600' : pointDiff < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                          {pointDiff > 0 ? '+' : ''}{pointDiff}
+                        </td>
+                        <td className={`px-2 sm:px-4 py-3 sm:py-4 text-center font-bold text-sm ${(team.netMatchRate || 0) > 0 ? 'text-green-600' : (team.netMatchRate || 0) < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                          {(team.netMatchRate || 0) > 0 ? '+' : ''}{(team.netMatchRate || 0).toFixed(2)}
+                        </td>
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                          <span className={`leaderboard-form-chip leaderboard-form-chip-${formMeta.tone}`}>{formMeta.label}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -806,9 +1573,9 @@ const TournamentView = ({
         )}
 
         {activeTab === 'stats' && tournamentFormat === 'league' && (
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl overflow-hidden tour-stats-card">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 sm:p-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+          <div className="bg-white rounded-xl sm:rounded-2xl overflow-hidden tour-stats-card app-surface-card app-card-tier-primary app-rhythm-panel">
+            <div className="app-gradient-band p-4 sm:p-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 app-section-heading">
                 <TrendingUp size={20} className="sm:w-6 sm:h-6" /> Player Statistics
               </h2>
             </div>
@@ -819,8 +1586,40 @@ const TournamentView = ({
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto scrollbar-thin">
-                  <table className="w-full min-w-[600px]">
+                <div className="mobile-leaderboard-cards p-3 sm:p-4">
+                  {playerStats.map((player, index) => (
+                    <article key={`stats-card-${player.name}`} className="leaderboard-mobile-card app-surface-card app-card-tier-secondary">
+                      <div className="leaderboard-mobile-top">
+                        <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                        <span className="leaderboard-stat-chip">{player.teamEmoji} {player.team}</span>
+                      </div>
+                      <div className="leaderboard-mobile-team">
+                        <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPlayerName(player.name)}
+                            className="font-bold text-sm leading-tight text-left truncate"
+                          >
+                            {player.name}
+                          </button>
+                          <p className="text-xs opacity-75">{player.matchesWon} wins in {player.matchesPlayed} played</p>
+                        </div>
+                      </div>
+                      <div className="leaderboard-mobile-metrics">
+                        <span className="leaderboard-stat-chip">Played {player.matchesPlayed}</span>
+                        <span className="leaderboard-stat-chip leaderboard-stat-chip-up">Won {player.matchesWon}</span>
+                        <span className="leaderboard-stat-chip">Scored {player.totalScored}</span>
+                      </div>
+                      <div className="leaderboard-mobile-bottom">
+                        <span className="leaderboard-form-chip leaderboard-form-chip-up">Win {player.winPercentage}%</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="dense-table-shell overflow-x-auto scrollbar-thin">
+                  <table className="w-full min-w-[720px]">
                     <thead className="bg-gray-100 sticky top-0 tour-table-head">
                       <tr>
                         <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Rank</th>
@@ -833,9 +1632,9 @@ const TournamentView = ({
                     </thead>
                     <tbody>
                       {playerStats.map((player, index) => (
-                        <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-bold text-base sm:text-lg">
-                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                        <tr key={player.name} className="tour-data-row border-b border-gray-200 hover:bg-gray-50">
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                            <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
                           </td>
                           <td className="px-2 sm:px-4 py-3 sm:py-4">
                             <div className="flex items-center gap-2 sm:gap-3">
@@ -877,9 +1676,9 @@ const TournamentView = ({
         )}
 
         {activeTab === 'elo' && (
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl overflow-hidden tour-elo-card">
-            <div className="bg-gradient-to-r from-yellow-600 to-orange-600 p-4 sm:p-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+          <div className="bg-white rounded-xl sm:rounded-2xl overflow-hidden tour-elo-card app-surface-card app-card-tier-primary app-rhythm-panel">
+            <div className="app-gradient-band p-4 sm:p-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 app-section-heading">
                 <Trophy size={20} className="sm:w-6 sm:h-6" /> ELO Leaderboard
               </h2>
             </div>
@@ -889,68 +1688,134 @@ const TournamentView = ({
                 <p className="text-sm sm:text-base">Complete matches to build the leaderboard!</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] elo-table-polished">
-                  <thead className="bg-gray-100 tour-table-head">
-                    <tr>
-                      <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Rank</th>
-                      <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Player</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Rating</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Matches</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Change</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {eloLeaderboard.map((player, index) => {
-                      const lastMatch = player.history?.[player.history.length - 1];
-                      return (
-                        <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-bold text-base sm:text-lg">
-                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                          </td>
-                          <td className="px-2 sm:px-4 py-3 sm:py-4">
-                            <div className="flex items-center gap-2 min-w-0 elo-player-cell">
-                              <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
-                              <button
-                                type="button"
-                                onClick={() => setSelectedPlayerName(player.name)}
-                                className="font-bold text-sm sm:text-base text-blue-700 hover:text-blue-900 hover:underline truncate text-left min-w-0 elo-player-name"
-                              >
-                                {player.name}
-                              </button>
-                              {eloGamificationMap[player.name]?.level && (
-                                <span className="text-[10px] sm:text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full elo-level-badge elo-level-inline max-w-[132px] truncate">
-                                  {eloGamificationMap[player.name].level.icon} {eloGamificationMap[player.name].level.name}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
-                            <span className={`px-2 sm:px-4 py-1 sm:py-2 rounded-full font-bold text-sm sm:text-base elo-rating-chip ${
-                              player.rating >= 1200 ? 'elo-rating-gold' :
-                              player.rating >= 1000 ? 'elo-rating-green' :
-                              'elo-rating-neutral'
-                            }`}>
-                              {player.rating}
+              <>
+                <div className="mobile-leaderboard-cards p-3 sm:p-4">
+                  {eloLeaderboard.map((player, index) => {
+                    const lastMatch = player.history?.[player.history.length - 1];
+                    const delta = Number(lastMatch?.change || 0);
+                    const trendMeta = eloFormMetaByPlayer.get(player.name) || buildFormSummary([]);
+                    const moveTone = delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
+                    return (
+                      <article key={`elo-card-${player.name}`} className="leaderboard-mobile-card app-surface-card app-card-tier-secondary">
+                        <div className="leaderboard-mobile-top">
+                          <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                          <span className={`leaderboard-move-chip leaderboard-move-chip-${moveTone}`}>
+                            {delta > 0 ? <ArrowUpRight size={13} /> : delta < 0 ? <ArrowDownRight size={13} /> : <Minus size={13} />}
+                            <span>{delta > 0 ? '+' : ''}{delta}</span>
+                          </span>
+                        </div>
+                        <div className="leaderboard-mobile-team">
+                          <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                          <div className="min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPlayerName(player.name)}
+                              className="font-bold text-sm leading-tight text-left truncate"
+                            >
+                              {player.name}
+                            </button>
+                            <p className="text-xs opacity-80">{player.matchesPlayed} matches</p>
+                          </div>
+                        </div>
+                        <div className="leaderboard-mobile-metrics">
+                          <span className={`leaderboard-stat-chip ${player.rating >= 1200 ? 'leaderboard-stat-chip-up' : ''}`}>ELO {player.rating}</span>
+                          <span className={`leaderboard-stat-chip ${moveTone === 'up' ? 'leaderboard-stat-chip-up' : moveTone === 'down' ? 'leaderboard-stat-chip-down' : ''}`}>
+                            Δ {delta > 0 ? '+' : ''}{delta}
+                          </span>
+                        </div>
+                        <div className="leaderboard-mobile-bottom">
+                          <span className={`leaderboard-form-chip leaderboard-form-chip-${trendMeta.tone}`}>
+                            Form {trendMeta.label}
+                          </span>
+                          {eloGamificationMap[player.name]?.level && (
+                            <span className="leaderboard-tier-chip">
+                              <Sparkles size={11} />
+                              <span>{eloGamificationMap[player.name].level.name}</span>
                             </span>
-                          </td>
-                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-sm">{player.matchesPlayed}</td>
-                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
-                            {lastMatch && (
-                              <span className={`font-bold text-sm ${lastMatch.change > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {lastMatch.change > 0 ? '+' : ''}{lastMatch.change}
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="dense-table-shell overflow-x-auto">
+                  <table className="w-full min-w-[820px] elo-table-polished">
+                    <thead className="bg-gray-100 tour-table-head">
+                      <tr>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Rank</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-gray-700">Player</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Rating</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Matches</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Move</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Form</th>
+                        <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-gray-700">Δ ELO</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eloLeaderboard.map((player, index) => {
+                        const lastMatch = player.history?.[player.history.length - 1];
+                        const delta = Number(lastMatch?.change || 0);
+                        const moveTone = delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
+                        const trendMeta = eloFormMetaByPlayer.get(player.name) || buildFormSummary([]);
+                        return (
+                          <tr key={player.name} className="tour-data-row border-b border-gray-200 hover:bg-gray-50">
+                            <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                              <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 sm:py-4">
+                              <div className="flex items-center gap-2 min-w-0 elo-player-cell">
+                                <PlayerAvatar name={player.name} photoUrl={playerPhotos[player.name]} size="sm" />
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPlayerName(player.name)}
+                                  className="font-bold text-sm sm:text-base text-blue-700 hover:text-blue-900 hover:underline truncate text-left min-w-0 elo-player-name"
+                                >
+                                  {player.name}
+                                </button>
+                                {eloGamificationMap[player.name]?.level && (
+                                  <span className="text-[10px] sm:text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full elo-level-badge elo-level-inline max-w-[132px] truncate">
+                                    {eloGamificationMap[player.name].level.icon} {eloGamificationMap[player.name].level.name}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                              <span className={`px-2 sm:px-4 py-1 sm:py-2 rounded-full font-bold text-sm sm:text-base elo-rating-chip ${
+                                player.rating >= 1200 ? 'elo-rating-gold' :
+                                player.rating >= 1000 ? 'elo-rating-green' :
+                                'elo-rating-neutral'
+                              }`}>
+                                {player.rating}
                               </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 sm:py-4 text-center font-semibold text-sm">{player.matchesPlayed}</td>
+                            <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                              <span className={`leaderboard-move-chip leaderboard-move-chip-${moveTone}`}>
+                                {delta > 0 ? <ArrowUpRight size={13} /> : delta < 0 ? <ArrowDownRight size={13} /> : <Minus size={13} />}
+                                <span>{delta > 0 ? '+' : ''}{delta}</span>
+                              </span>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                              <span className={`leaderboard-form-chip leaderboard-form-chip-${trendMeta.tone}`}>
+                                {trendMeta.label}
+                              </span>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 sm:py-4 text-center">
+                              <span className={`rank-change-indicator text-sm ${delta > 0 ? 'rank-change-up text-green-600' : delta < 0 ? 'rank-change-down text-red-600' : ''}`}>
+                                {delta > 0 ? '+' : ''}{delta}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
                 <div className="p-3 sm:p-4 bg-gray-50 text-xs text-gray-600 tour-elo-footnote">
                   <p>All players start at 1000 • Ratings update after each match</p>
                 </div>
-              </div>
+              </>
             )}
           </div>
         )}
@@ -961,10 +1826,24 @@ const TournamentView = ({
               <>
                 {champion ? (
                   <div className="space-y-4 sm:space-y-6">
-                    <div className="bg-white rounded-2xl p-8 sm:p-12 text-center tour-final-panel">
+                    <div className="bg-white rounded-2xl p-8 sm:p-12 text-center tour-final-panel app-surface-card app-card-tier-primary app-screen-final app-rhythm-panel">
                       <div className="text-5xl sm:text-6xl mb-4">🏆</div>
-                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4">Tournament Complete!</h2>
-                      <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto tour-final-champion-core">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 app-section-heading">Tournament Complete!</h2>
+                      <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto tour-final-champion-core champion-burst-host">
+                        <div className={`champion-confetti-burst ${championBurstActive ? 'is-active' : ''}`} aria-hidden="true">
+                          {championConfettiPieces.map((piece) => (
+                            <span
+                              key={`league-burst-${piece.id}`}
+                              className="champion-confetti-piece"
+                              style={{
+                                '--burst-x': `${piece.x}%`,
+                                '--burst-delay': `${piece.delay}ms`,
+                                '--burst-rotation': `${piece.rotation}deg`,
+                                '--burst-hue': String(piece.hue),
+                              }}
+                            />
+                          ))}
+                        </div>
                         <div className="text-4xl sm:text-5xl mb-3">{champion.emoji}</div>
                         <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{champion.name}</h3>
                         <p className="text-sm sm:text-base text-gray-600">
@@ -997,10 +1876,11 @@ const TournamentView = ({
                       finalists={finalSelection.finalists}
                       onSave={handleSaveFinalResult}
                       playerRatings={playerRatings}
+                      syncState={getInlineSyncState('final', 'final')}
                     />
                   </>
                 ) : (
-                  <div className="bg-white rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center tour-final-panel">
+                  <div className="bg-white rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center tour-final-panel app-surface-card app-card-tier-primary app-screen-final app-rhythm-panel">
                     <Trophy size={48} className="mx-auto text-yellow-500 mb-4 sm:w-16 sm:h-16" />
                     <p className="text-base sm:text-lg text-gray-500 mb-4">Complete all league matches first</p>
                     <p className="text-sm text-gray-400">
@@ -1010,14 +1890,28 @@ const TournamentView = ({
                 )}
               </>
             ) : (
-              <div className="bg-white rounded-2xl p-8 sm:p-12 text-center tour-final-panel">
+              <div className="bg-white rounded-2xl p-8 sm:p-12 text-center tour-final-panel app-surface-card app-card-tier-primary app-screen-final app-rhythm-panel">
                 <Trophy size={48} className="mx-auto text-yellow-500 mb-4 sm:w-16 sm:h-16" />
                 {champion ? (
                   <div className="space-y-4 sm:space-y-6">
                     <div>
                       <div className="text-5xl sm:text-6xl mb-4">🏆</div>
-                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4">Tournament Complete!</h2>
-                      <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto tour-final-champion-core">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 app-section-heading">Tournament Complete!</h2>
+                      <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 max-w-md mx-auto tour-final-champion-core champion-burst-host">
+                        <div className={`champion-confetti-burst ${championBurstActive ? 'is-active' : ''}`} aria-hidden="true">
+                          {championConfettiPieces.map((piece) => (
+                            <span
+                              key={`knockout-burst-${piece.id}`}
+                              className="champion-confetti-piece"
+                              style={{
+                                '--burst-x': `${piece.x}%`,
+                                '--burst-delay': `${piece.delay}ms`,
+                                '--burst-rotation': `${piece.rotation}deg`,
+                                '--burst-hue': String(piece.hue),
+                              }}
+                            />
+                          ))}
+                        </div>
                         <div className="text-4xl sm:text-5xl mb-3">{champion.emoji}</div>
                         <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{champion.name}</h3>
                         <p className="text-sm sm:text-base text-gray-600">
@@ -1050,10 +1944,29 @@ const TournamentView = ({
         )}
       </div>
 
+      <div className="md:hidden tour-command-bar-shell">
+        <div className="tour-command-bar">
+          {mobileCommandItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={item.onClick}
+                className={`tour-command-btn ${item.active ? 'tour-command-btn-active' : ''}`}
+              >
+                <Icon size={16} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {showNextTournamentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full app-modal-shell tour-modal-shell">
-            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-5">
+          <div className="bg-white rounded-2xl max-w-md w-full app-modal-shell tour-modal-shell">
+            <div className="app-gradient-band p-5">
               <h3 className="text-lg sm:text-xl font-bold text-white">Start Next Tournament</h3>
               <p className="text-xs sm:text-sm text-indigo-100 mt-1">
                 OK starts directly with same teams. Edit opens team edit page.
@@ -1101,8 +2014,8 @@ const TournamentView = ({
 
       {showSwapMemberModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full app-modal-shell tour-modal-shell">
-            <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-5">
+          <div className="bg-white rounded-2xl max-w-md w-full app-modal-shell tour-modal-shell">
+            <div className="app-gradient-band p-5">
               <h3 className="text-lg sm:text-xl font-bold text-white">Swap Team Member</h3>
               <p className="text-xs sm:text-sm text-cyan-100 mt-1">
                 Replace one team member for upcoming matches. Other teams remain unchanged.
@@ -1192,8 +2105,8 @@ const TournamentView = ({
 
       {showDuplicatePlayerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full app-modal-shell tour-modal-shell">
-            <div className="bg-gradient-to-r from-red-600 to-orange-600 p-5">
+          <div className="bg-white rounded-2xl max-w-md w-full app-modal-shell tour-modal-shell">
+            <div className="app-gradient-band p-5">
               <h3 className="text-lg sm:text-xl font-bold text-white">Duplicate Player Found</h3>
               <p className="text-xs sm:text-sm text-red-100 mt-1">
                 Same player is assigned to multiple teams. Please fix before continuing.
@@ -1222,8 +2135,8 @@ const TournamentView = ({
 
       {showFutureClashModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full app-modal-shell tour-modal-shell">
-            <div className="bg-gradient-to-r from-amber-600 to-orange-600 p-5">
+          <div className="bg-white rounded-2xl max-w-md w-full app-modal-shell tour-modal-shell">
+            <div className="app-gradient-band p-5">
               <h3 className="text-lg sm:text-xl font-bold text-white">Future Match Conflict</h3>
               <p className="text-xs sm:text-sm text-amber-100 mt-1">
                 Swap completed, but {futureClashPlayer} is also on opponent side in upcoming match(es).
