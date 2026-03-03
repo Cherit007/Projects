@@ -2,6 +2,21 @@
 
 React + Vite app for badminton tournament management, casual match tracking, ELO ratings, and Appwrite sync.
 
+## PWA Support
+
+This app is now configured as a Progressive Web App (PWA):
+
+- `manifest.webmanifest` for install metadata
+- Service worker (`public/sw.js`) for app-shell/offline caching
+- Install icons in `public/` (`192x192`, `512x512`, maskable, apple touch icon)
+- Standalone mode support on mobile/desktop after "Add to Home Screen"
+
+Notes:
+
+- Offline mode covers app shell and static assets after first successful load.
+- Live Appwrite reads/writes still need internet.
+- Service worker is registered only in production builds.
+
 ## Migration Docs
 
 - Appwrite migration runbook: [`docs/appwrite-migration.md`](docs/appwrite-migration.md)
