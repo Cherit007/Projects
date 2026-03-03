@@ -277,6 +277,66 @@ body[data-theme='dark'] .theme-page textarea::placeholder {
   color: rgba(153, 177, 210, 0.75) !important;
 }
 
+body[data-theme='dark'] .theme-page .snake-draft-panel {
+  border-color: rgba(101, 173, 255, 0.5) !important;
+  background:
+    radial-gradient(130% 140% at 0% 0%, rgba(73, 162, 255, 0.18), rgba(73, 162, 255, 0) 58%),
+    linear-gradient(155deg, rgba(11, 30, 58, 0.94), rgba(7, 19, 36, 0.92));
+  box-shadow: inset 0 0 0 1px rgba(176, 215, 255, 0.12);
+}
+
+body[data-theme='dark'] .theme-page .snake-draft-label {
+  color: #e6f0ff !important;
+}
+
+body[data-theme='dark'] .theme-page .snake-draft-note {
+  color: #bfd4f4 !important;
+}
+
+body[data-theme='dark'] .theme-page .snake-draft-panel input[type='checkbox'] {
+  accent-color: #5ca9ff;
+}
+
+body[data-theme='dark'] .theme-page .snake-draft-textarea {
+  background: rgba(8, 21, 40, 0.85) !important;
+  border-color: rgba(120, 172, 240, 0.42) !important;
+  color: #e6f1ff !important;
+}
+
+body[data-theme='dark'] .theme-page .snake-draft-textarea:focus {
+  border-color: rgba(132, 191, 255, 0.8) !important;
+  box-shadow: 0 0 0 3px rgba(71, 146, 236, 0.2);
+}
+
+body[data-theme='dark'] .theme-page .snake-draft-run {
+  background: linear-gradient(130deg, #388ef0, #2e73db) !important;
+  border: 1px solid rgba(169, 214, 255, 0.35) !important;
+}
+
+body[data-theme='dark'] .theme-page .snake-draft-run:hover {
+  background: linear-gradient(130deg, #4b9fff, #3d82e9) !important;
+}
+
+body[data-theme='dark'] .theme-page .odd-rotation-panel {
+  border-color: rgba(94, 154, 232, 0.52) !important;
+  background:
+    radial-gradient(130% 140% at 0% 0%, rgba(69, 152, 253, 0.16), rgba(69, 152, 253, 0) 56%),
+    linear-gradient(155deg, rgba(12, 28, 52, 0.94), rgba(7, 18, 34, 0.92));
+  box-shadow: inset 0 0 0 1px rgba(170, 212, 255, 0.12);
+}
+
+body[data-theme='dark'] .theme-page .odd-rotation-label {
+  color: #e3efff !important;
+}
+
+body[data-theme='dark'] .theme-page .odd-rotation-note {
+  color: #bdd2f1 !important;
+}
+
+body[data-theme='dark'] .theme-page .odd-rotation-panel input[type='checkbox'] {
+  accent-color: #59a8ff;
+}
+
 body[data-theme='dark'] .theme-page button {
   transition: all 0.2s ease;
 }

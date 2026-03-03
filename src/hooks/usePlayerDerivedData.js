@@ -18,23 +18,51 @@ export const usePlayerDerivedData = ({
   gameMode,
   fixtures,
   bracket,
+  compute = {},
 }) => {
+  const computeTeamNameDatabase = compute.teamNameDatabase !== false;
+  const computePairingAnalytics = compute.pairingAnalytics !== false;
+  const computeFormPowerRankings = compute.formPowerRankings !== false;
+  const computeProfileInsights = compute.profileInsights !== false;
+  const computeUnlinkedPlayerNames = compute.unlinkedPlayerNames !== false;
+
+  const emptyPairingAnalytics = useMemo(() => ({
+    totalDoublesMatches: 0,
+    totalTrackedPairs: 0,
+    bestCombinations: [],
+    whoShouldPair: [],
+    rotationSuggestions: [],
+  }), []);
+
+  const emptyFormPowerRankings = useMemo(() => ({
+    leaderboard: [],
+    weeklyLeaderboard: [],
+    monthlyLeaderboard: [],
+  }), []);
+
   const teamNameDatabase = useMemo(() => {
+    if (!computeTeamNameDatabase) return [];
     const names = tournamentHistory
       .flatMap(tournament => tournament?.teams || [])
       .map(team => team?.name?.trim())
       .filter(Boolean);
 
     return [...new Set(names)];
-  }, [tournamentHistory]);
+  }, [tournamentHistory, computeTeamNameDatabase]);
 
-  const pairingAnalytics = useMemo(() => buildPairingAnalytics({
-    tournamentHistory,
-    casualMatches,
-    playerRatings,
-  }), [tournamentHistory, casualMatches, playerRatings]);
+  const pairingAnalytics = useMemo(() => {
+    if (!computePairingAnalytics) return emptyPairingAnalytics;
+    return buildPairingAnalytics({
+      tournamentHistory,
+      casualMatches,
+      playerRatings,
+    });
+  }, [tournamentHistory, casualMatches, playerRatings, computePairingAnalytics, emptyPairingAnalytics]);
 
-  const formPowerRankings = useMemo(() => buildFormPowerRankings(playerRatings), [playerRatings]);
+  const formPowerRankings = useMemo(() => {
+    if (!computeFormPowerRankings) return emptyFormPowerRankings;
+    return buildFormPowerRankings(playerRatings);
+  }, [playerRatings, computeFormPowerRankings, emptyFormPowerRankings]);
 
   const currentUserMember = useMemo(() => {
     if (!currentUser || !Array.isArray(members)) return null;
@@ -49,6 +77,7 @@ export const usePlayerDerivedData = ({
   const currentUserPlayerProfile = currentUserPlayerName ? (playerRatings[currentUserPlayerName] || null) : null;
 
   const currentUserPlayerTeam = useMemo(() => {
+    if (!computeProfileInsights) return null;
     if (!currentUserPlayerName) return null;
     const inCurrentTeams = teams.find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(currentUserPlayerName));
     if (inCurrentTeams) return inCurrentTeams;
@@ -57,35 +86,45 @@ export const usePlayerDerivedData = ({
       .flatMap(tournament => tournament?.teams || [])
       .find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(currentUserPlayerName));
     return fromHistory || null;
-  }, [currentUserPlayerName, teams, tournamentHistory]);
+  }, [currentUserPlayerName, teams, tournamentHistory, computeProfileInsights]);
 
-  const currentUserAdvancedStats = useMemo(() => buildPlayerAdvancedProfile({
-    playerName: currentUserPlayerName,
-    tournamentHistory,
-    casualMatches,
-    liveTournament: {
-      tournamentName,
-      tournamentFormat,
-      gameMode,
-      fixtures,
-      bracket,
-    },
-  }), [currentUserPlayerName, tournamentHistory, casualMatches, tournamentName, tournamentFormat, gameMode, fixtures, bracket]);
+  const currentUserAdvancedStats = useMemo(() => {
+    if (!computeProfileInsights) return null;
+    return buildPlayerAdvancedProfile({
+      playerName: currentUserPlayerName,
+      tournamentHistory,
+      casualMatches,
+      liveTournament: {
+        tournamentName,
+        tournamentFormat,
+        gameMode,
+        fixtures,
+        bracket,
+      },
+    });
+  }, [currentUserPlayerName, tournamentHistory, casualMatches, tournamentName, tournamentFormat, gameMode, fixtures, bracket, computeProfileInsights]);
 
-  const currentUserAchievements = useMemo(() => buildPlayerAchievements({
-    playerName: currentUserPlayerName,
-    playerRatings,
-    tournamentHistory,
-    casualMatches,
-  }), [currentUserPlayerName, playerRatings, tournamentHistory, casualMatches]);
+  const currentUserAchievements = useMemo(() => {
+    if (!computeProfileInsights) return null;
+    return buildPlayerAchievements({
+      playerName: currentUserPlayerName,
+      playerRatings,
+      tournamentHistory,
+      casualMatches,
+    });
+  }, [currentUserPlayerName, playerRatings, tournamentHistory, casualMatches, computeProfileInsights]);
 
-  const currentUserGamification = useMemo(() => buildPlayerGamification({
-    playerName: currentUserPlayerName,
-    tournamentHistory,
-    casualMatches,
-  }), [currentUserPlayerName, tournamentHistory, casualMatches]);
+  const currentUserGamification = useMemo(() => {
+    if (!computeProfileInsights) return null;
+    return buildPlayerGamification({
+      playerName: currentUserPlayerName,
+      tournamentHistory,
+      casualMatches,
+    });
+  }, [currentUserPlayerName, tournamentHistory, casualMatches, computeProfileInsights]);
 
   const unlinkedPlayerNames = useMemo(() => {
+    if (!computeUnlinkedPlayerNames) return [];
     const fromCurrentTeams = (teams || [])
       .flatMap((team) => [team?.player, team?.player1, team?.player2])
       .filter(Boolean);
@@ -115,7 +154,7 @@ export const usePlayerDerivedData = ({
         .filter(Boolean)
     );
     return allNames.filter((name) => !linkedNames.has(name.toLowerCase()));
-  }, [playerDatabase, playerRatings, teams, tournamentHistory, casualMatches, members]);
+  }, [playerDatabase, playerRatings, teams, tournamentHistory, casualMatches, members, computeUnlinkedPlayerNames]);
 
   return {
     teamNameDatabase,

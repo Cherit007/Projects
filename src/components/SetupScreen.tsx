@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Users, Calendar, History, TrendingUp, Trophy, X, Sparkles, BarChart3, ChevronDown, ChevronUp, Clock3, Play, PencilLine } from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
 import TemplateManager from './TemplateManager';
@@ -33,6 +33,17 @@ const ActionButton = ({
       </div>
     </div>
   </button>
+);
+
+const LoadingRows = ({ rows = 4 }) => (
+  <div className="space-y-3 animate-pulse">
+    {Array.from({ length: rows }, (_, index) => (
+      <div
+        key={`skeleton-row-${index}`}
+        className="h-20 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100"
+      />
+    ))}
+  </div>
 );
 
 const SetupScreen = ({ 
@@ -88,6 +99,7 @@ const SetupScreen = ({
   casualHydrated = true,
   historyHydrationPending = false,
   casualHydrationPending = false,
+  getActionPending = () => false,
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [numTeamsInput, setNumTeamsInput] = useState(String(numTeams));
@@ -95,10 +107,44 @@ const SetupScreen = ({
   const [showPairingAnalytics, setShowPairingAnalytics] = useState(false);
   const [showPowerRankings, setShowPowerRankings] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
+  const historyCacheRef = useRef(Array.isArray(tournamentHistory) ? tournamentHistory : []);
+  const casualCacheRef = useRef(Array.isArray(casualMatches) ? casualMatches : []);
+  const allTimeStatsCacheRef = useRef(Array.isArray(allTimeStats) ? allTimeStats : []);
+  const eloCacheRef = useRef(Array.isArray(eloLeaderboard) ? eloLeaderboard : []);
 
   useEffect(() => {
     setNumTeamsInput(String(numTeams));
   }, [numTeams]);
+
+  const historyLoading = Boolean(isAppwriteEnabled && (historyHydrationPending || !historyHydrated));
+  const casualLoading = Boolean(isAppwriteEnabled && (casualHydrationPending || !casualHydrated));
+  const statsLoading = Boolean(isAppwriteEnabled && (
+    historyHydrationPending
+    || casualHydrationPending
+    || !historyHydrated
+    || !casualHydrated
+  ));
+  const isPendingAction = (actionKey) => Boolean(getActionPending?.(actionKey));
+  const startTournamentPending = isPendingAction('setup.start-tournament');
+
+  useEffect(() => {
+    if (!historyLoading) {
+      historyCacheRef.current = Array.isArray(tournamentHistory) ? tournamentHistory : [];
+    }
+  }, [historyLoading, tournamentHistory]);
+
+  useEffect(() => {
+    if (!casualLoading) {
+      casualCacheRef.current = Array.isArray(casualMatches) ? casualMatches : [];
+    }
+  }, [casualLoading, casualMatches]);
+
+  useEffect(() => {
+    if (!statsLoading) {
+      allTimeStatsCacheRef.current = Array.isArray(allTimeStats) ? allTimeStats : [];
+      eloCacheRef.current = Array.isArray(eloLeaderboard) ? eloLeaderboard : [];
+    }
+  }, [statsLoading, allTimeStats, eloLeaderboard]);
 
   const formatCasualTeam = (team) => {
     if (!team) return 'Unknown';
@@ -145,12 +191,24 @@ const SetupScreen = ({
     ])
   ), [eloLeaderboard, tournamentHistory, casualMatches]);
 
-  const historyCountLabel = isAppwriteEnabled && !historyHydrated
-    ? '...'
-    : String((tournamentHistory || []).length);
-  const casualCountLabel = isAppwriteEnabled && !casualHydrated
-    ? '...'
-    : String((casualMatches || []).length);
+  const displayTournamentHistory = historyLoading && (tournamentHistory || []).length === 0
+    ? historyCacheRef.current
+    : (tournamentHistory || []);
+  const displayCasualMatches = casualLoading && (casualMatches || []).length === 0
+    ? casualCacheRef.current
+    : (casualMatches || []);
+  const displayAllTimeStats = statsLoading && (allTimeStats || []).length === 0
+    ? allTimeStatsCacheRef.current
+    : (allTimeStats || []);
+  const displayEloLeaderboard = statsLoading && (eloLeaderboard || []).length === 0
+    ? eloCacheRef.current
+    : (eloLeaderboard || []);
+  const historyCountLabel = historyLoading ? '...' : String(displayTournamentHistory.length);
+  const casualCountLabel = casualLoading ? '...' : String(displayCasualMatches.length);
+  const showHistorySkeleton = historyLoading && displayTournamentHistory.length === 0;
+  const showCasualSkeleton = casualLoading && displayCasualMatches.length === 0;
+  const showStatsSkeleton = statsLoading && displayAllTimeStats.length === 0;
+  const showEloSkeleton = statsLoading && displayEloLeaderboard.length === 0;
 
   return (
     <div className="theme-page py-8 px-4">
@@ -172,6 +230,9 @@ const SetupScreen = ({
               <div className="space-y-2">
                 {scheduledTournaments.slice(0, 4).map((tournament) => {
                   const tournamentId = tournament.id || tournament.appwriteId;
+                  const editPending = Boolean(tournamentId && isPendingAction(`setup.edit-scheduled.${String(tournamentId)}`));
+                  const startPending = Boolean(tournamentId && isPendingAction(`setup.start-scheduled.${String(tournamentId)}`));
+                  const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
                   return (
                     <div key={tournamentId} className="rounded-lg border border-indigo-200 bg-white px-3 py-2">
                       <div className="flex flex-col gap-2">
@@ -189,24 +250,27 @@ const SetupScreen = ({
                           <button
                             type="button"
                             onClick={() => onEditScheduledTournament?.(tournamentId)}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1"
+                            disabled={!tournamentId || editPending || startPending || deletePending}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
                           >
-                            <PencilLine size={11} /> Edit
+                            <PencilLine size={11} /> {editPending ? 'Loading...' : 'Edit'}
                           </button>
                           <button
                             type="button"
                             onClick={() => onStartScheduledTournament?.(tournamentId)}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 flex items-center gap-1"
+                            disabled={!tournamentId || startPending || deletePending}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
                           >
-                            <Play size={11} /> Start
+                            <Play size={11} /> {startPending ? 'Starting...' : 'Start'}
                           </button>
                           {canDeleteActions && (
                             <button
                               type="button"
                               onClick={() => onDeleteTournament?.(tournamentId)}
-                              className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200"
+                              disabled={!tournamentId || deletePending || startPending || editPending}
+                              className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              Delete
+                              {deletePending ? 'Deleting...' : 'Delete'}
                             </button>
                           )}
                         </div>
@@ -227,6 +291,8 @@ const SetupScreen = ({
                 {activeLiveTournaments.slice(0, 3).map((tournament, index) => {
                   const tournamentId = tournament.id || tournament.appwriteId;
                   const rowKey = tournamentId || `${tournament.name || 'live'}-${index}`;
+                  const resumePending = Boolean(isPendingAction(`setup.resume-live.${String(tournamentId || 'active')}`));
+                  const deletePending = Boolean(isPendingAction(`setup.delete-live.${String(tournamentId || 'active')}`));
                   return (
                     <div key={rowKey} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 setup-live-row">
                       <div className="flex items-center justify-between gap-3">
@@ -243,17 +309,19 @@ const SetupScreen = ({
                         <button
                           type="button"
                           onClick={() => onResumeActiveTournament?.(tournamentId)}
-                          className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 flex items-center gap-1 whitespace-nowrap setup-live-resume-btn"
+                          disabled={resumePending || deletePending}
+                          className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 whitespace-nowrap setup-live-resume-btn"
                         >
-                          <Play size={11} /> Resume
+                          <Play size={11} /> {resumePending ? 'Resuming...' : 'Resume'}
                         </button>
                         {canDeleteLiveTournament && (
                           <button
                             type="button"
                             onClick={() => onDeleteActiveTournament?.(tournamentId)}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 whitespace-nowrap setup-live-delete-btn"
+                            disabled={deletePending || resumePending}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap setup-live-delete-btn"
                           >
-                            Delete
+                            {deletePending ? 'Deleting...' : 'Delete'}
                           </button>
                         )}
                       </div>
@@ -295,7 +363,7 @@ const SetupScreen = ({
                 subtitle={canDeleteActions ? 'View/delete past tournaments' : 'View past tournaments'}
                 className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
                 onClick={() => setShowHistory(true)}
-                disabled={historyHydrationPending}
+                disabled={historyLoading}
               />
               <ActionButton
                 icon={Calendar}
@@ -303,7 +371,7 @@ const SetupScreen = ({
                 subtitle="Open casual match records"
                 className="bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
                 onClick={() => setShowCasualHistory(true)}
-                disabled={casualHydrationPending}
+                disabled={casualLoading}
               />
               <ActionButton
                 icon={Trophy}
@@ -311,7 +379,7 @@ const SetupScreen = ({
                 subtitle="Current rating rankings"
                 className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100"
                 onClick={() => setShowEloLeaderboard(true)}
-                disabled={historyHydrationPending || casualHydrationPending}
+                disabled={statsLoading}
               />
             </div>
 
@@ -325,7 +393,7 @@ const SetupScreen = ({
                     subtitle="Career summary across tournaments"
                     className="bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"
                     onClick={() => setShowAllTimeStats(true)}
-                    disabled={historyHydrationPending || casualHydrationPending}
+                    disabled={statsLoading}
                   />
                   <ActionButton
                     icon={Sparkles}
@@ -418,17 +486,18 @@ const SetupScreen = ({
               </p>
             </div>
 
-            <button onClick={() => onNext(numTeamsInput)} disabled={!tournamentName.trim()}
+            <button onClick={() => onNext(numTeamsInput)} disabled={!tournamentName.trim() || startTournamentPending}
               className="btn-brand w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50">
               <div className="flex items-center justify-center gap-2">
-                <Users size={20} /> Start Tournament
+                <Users size={20} /> {startTournamentPending ? 'Starting...' : 'Start Tournament'}
               </div>
             </button>
 
             {/* Record Casual Match Button */}
             <button 
               onClick={onRecordCasualMatch}
-              className="btn-brand-alt w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mt-3"
+              disabled={startTournamentPending}
+              className="btn-brand-alt w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mt-3 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <div className="flex items-center justify-center gap-2">
                 <Trophy size={20} /> Record Casual Match
@@ -458,15 +527,25 @@ const SetupScreen = ({
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
-              {tournamentHistory.length === 0 ? (
+              {historyLoading && displayTournamentHistory.length > 0 && (
+                <div className="mb-3 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-700">
+                  Refreshing latest tournament history...
+                </div>
+              )}
+              {showHistorySkeleton ? (
+                <LoadingRows rows={4} />
+              ) : displayTournamentHistory.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <History size={48} className="mx-auto mb-4 text-gray-300" />
                   <p>No tournament history yet</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {tournamentHistory.map(tournament => (
-                    <div key={tournament.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all bg-gradient-to-r from-white to-gray-50 history-entry-card">
+                  {displayTournamentHistory.map((tournament, index) => {
+                    const tournamentId = tournament.id || tournament.appwriteId;
+                    const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
+                    return (
+                    <div key={tournamentId || `${tournament.name || 'history'}-${index}`} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all bg-gradient-to-r from-white to-gray-50 history-entry-card">
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
@@ -479,9 +558,10 @@ const SetupScreen = ({
                             View
                           </button>
                           {canDeleteActions && (
-                            <button onClick={() => onDeleteTournament?.(tournament.id)}
-                              className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap">
-                              Delete
+                            <button onClick={() => onDeleteTournament?.(tournamentId)}
+                              disabled={!tournamentId || deletePending}
+                              className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
+                              {deletePending ? 'Deleting...' : 'Delete'}
                             </button>
                           )}
                         </div>
@@ -502,7 +582,8 @@ const SetupScreen = ({
                         </div>
                       )}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
             </div>
@@ -527,20 +608,28 @@ const SetupScreen = ({
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
-              {casualMatches.length === 0 ? (
+              {casualLoading && displayCasualMatches.length > 0 && (
+                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                  Refreshing latest casual matches...
+                </div>
+              )}
+              {showCasualSkeleton ? (
+                <LoadingRows rows={4} />
+              ) : displayCasualMatches.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
                   <p>No casual match history yet</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {casualMatches.map((match, index) => {
+                  {displayCasualMatches.map((match, index) => {
                     const team1Name = formatCasualTeam(match.team1);
                     const team2Name = formatCasualTeam(match.team2);
                     const score1 = Number(match.score1);
                     const score2 = Number(match.score2);
                     const isTeam1Winner = score1 > score2;
                     const matchId = match.id || match.appwriteId;
+                    const deletePending = Boolean(matchId && isPendingAction(`setup.delete-casual.${String(matchId)}`));
                     return (
                       <div key={matchId || index} className="border-2 border-gray-200 rounded-xl p-4 bg-gradient-to-r from-white to-gray-50 casual-history-card">
                         <div className="flex items-start justify-between gap-3 mb-2">
@@ -556,10 +645,10 @@ const SetupScreen = ({
                           {canDeleteActions && (
                             <button
                               onClick={() => onDeleteCasualMatch?.(matchId)}
-                              disabled={!matchId}
+                              disabled={!matchId || deletePending}
                               className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed casual-history-delete-btn"
                             >
-                              Delete
+                              {deletePending ? 'Deleting...' : 'Delete'}
                             </button>
                           )}
                         </div>
@@ -590,7 +679,16 @@ const SetupScreen = ({
               </button>
             </div>
             <div className="overflow-y-auto max-h-[calc(80vh-88px)]">
-              {allTimeStats.length === 0 ? (
+              {statsLoading && displayAllTimeStats.length > 0 && (
+                <div className="mx-4 mt-4 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
+                  Refreshing latest statistics...
+                </div>
+              )}
+              {showStatsSkeleton ? (
+                <div className="p-6">
+                  <LoadingRows rows={5} />
+                </div>
+              ) : displayAllTimeStats.length === 0 ? (
                 <div className="p-12 text-center text-gray-500">
                   <TrendingUp size={48} className="mx-auto mb-4 text-gray-300" />
                   <p>No player statistics available yet</p>
@@ -610,7 +708,7 @@ const SetupScreen = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {allTimeStats.map((player, index) => (
+                      {displayAllTimeStats.map((player, index) => (
                         <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="px-4 py-4 text-center font-bold text-lg">
                             {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
@@ -668,7 +766,16 @@ const SetupScreen = ({
               </button>
             </div>
             <div className="overflow-y-auto max-h-[calc(80vh-88px)]">
-              {eloLeaderboard.length === 0 ? (
+              {statsLoading && displayEloLeaderboard.length > 0 && (
+                <div className="mx-4 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                  Refreshing latest ELO rankings...
+                </div>
+              )}
+              {showEloSkeleton ? (
+                <div className="p-6">
+                  <LoadingRows rows={5} />
+                </div>
+              ) : displayEloLeaderboard.length === 0 ? (
                 <div className="p-12 text-center text-gray-500">
                   <Trophy size={48} className="mx-auto mb-4 text-gray-300" />
                   <p>No ELO ratings yet. Complete matches to build the leaderboard!</p>
@@ -686,7 +793,7 @@ const SetupScreen = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {eloLeaderboard.map((player, index) => {
+                      {displayEloLeaderboard.map((player, index) => {
                         const lastMatch = player.history && player.history.length > 0 ? player.history[player.history.length - 1] : null;
                         return (
                           <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">

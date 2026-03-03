@@ -29,14 +29,16 @@ const FinalMatchCard = ({ finalists, onSave, playerRatings = {} }) => {
     (finalists[1].player2 ? getPlayerRating(finalists[1].player2) : 0)
   ) / (finalists[1].player2 ? 2 : 1));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!score1 || !score2 || score1 === score2) return;
-    
+
+    if (isSubmitting) return;
     setIsSubmitting(true);
-    setTimeout(() => {
-      onSave(parseInt(score1), parseInt(score2), finalists);
+    try {
+      await Promise.resolve(onSave(parseInt(score1, 10), parseInt(score2, 10), finalists));
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -168,15 +170,15 @@ const FinalMatchCard = ({ finalists, onSave, playerRatings = {} }) => {
 
         {/* Submit Button */}
         <button
-          onClick={handleSubmit}
+          onClick={() => { void handleSubmit(); }}
           disabled={!score1 || !score2 || score1 === score2 || isSubmitting}
           className="w-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white py-4 sm:py-6 rounded-xl sm:rounded-2xl font-bold text-base sm:text-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3 tour-final-submit-btn"
         >
           {isSubmitting ? (
             <>
-              <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white"></div>
-              <span className="text-sm sm:text-base">Determining Champion...</span>
-            </>
+                <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white"></div>
+                <span className="text-sm sm:text-base">Saving Final...</span>
+              </>
           ) : (
             <>
               <Trophy size={20} className="sm:w-6 sm:h-6" />

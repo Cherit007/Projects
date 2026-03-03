@@ -5,15 +5,22 @@ const MatchCard = ({ match, onSave }) => {
   const [score1, setScore1] = useState(match.score1 !== null ? match.score1 : '');
   const [score2, setScore2] = useState(match.score2 !== null ? match.score2 : '');
   const [isEditing, setIsEditing] = useState(!match.completed);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setScore1(match.score1 !== null ? match.score1 : '');
     setScore2(match.score2 !== null ? match.score2 : '');
   }, [match.score1, match.score2]);
 
-  const handleSave = () => {
-    onSave(match.id, score1, score2);
-    setIsEditing(false);
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await Promise.resolve(onSave(match.id, score1, score2));
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEdit = () => {
@@ -48,6 +55,7 @@ const MatchCard = ({ match, onSave }) => {
             {!isEditing && (
               <button
                 onClick={handleEdit}
+                disabled={isSaving}
                 className="text-blue-600 hover:text-blue-700 p-1"
                 title="Edit result"
               >
@@ -81,7 +89,7 @@ const MatchCard = ({ match, onSave }) => {
                 setScore1(value);
               }
             }}
-            disabled={!isEditing}
+            disabled={!isEditing || isSaving}
             placeholder="Score"
             className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none disabled:bg-gray-100 text-center text-xl sm:text-2xl font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
@@ -119,7 +127,7 @@ const MatchCard = ({ match, onSave }) => {
                 setScore2(value);
               }
             }}
-            disabled={!isEditing}
+            disabled={!isEditing || isSaving}
             placeholder="Score"
             className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 text-center text-2xl font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
@@ -128,11 +136,12 @@ const MatchCard = ({ match, onSave }) => {
 
       {isEditing && (
         <button
-          onClick={handleSave}
-          className="w-full mt-4 bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+          onClick={() => { void handleSave(); }}
+          disabled={isSaving || score1 === '' || score2 === '' || score1 === score2}
+          className="w-full mt-4 bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transform hover:scale-[1.02] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           <Check size={18} />
-          {match.completed ? 'Update Result' : 'Save Result'}
+          {isSaving ? 'Saving...' : (match.completed ? 'Update Result' : 'Save Result')}
         </button>
       )}
       

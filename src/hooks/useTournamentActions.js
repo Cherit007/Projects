@@ -758,13 +758,28 @@ export const useTournamentActions = ({
     fallbackTournamentData = null,
     fallbackDelayMs = 900,
     fallbackImmediate = false,
+    requireDurableSync = false,
   } = {}) => {
     if (!isAppwriteEnabled || !tournamentId || !Array.isArray(matchPatches) || matchPatches.length === 0) {
       return true;
     }
 
+    const runDurableFallbackSync = async () => {
+      if (!fallbackTournamentData || typeof syncCurrentTournament !== 'function') return false;
+      try {
+        await syncCurrentTournament(fallbackTournamentData, tournamentId);
+        return true;
+      } catch (error) {
+        console.error('Durable fallback tournament sync failed:', error);
+        return false;
+      }
+    };
+
     if (typeof patchTournamentMatches !== 'function') {
       if (fallbackTournamentData) {
+        if (requireDurableSync) {
+          return runDurableFallbackSync();
+        }
         queueTournamentSync({
           tournamentId,
           tournamentData: fallbackTournamentData,
@@ -779,6 +794,9 @@ export const useTournamentActions = ({
       const summary = await patchTournamentMatches(matchPatches, tournamentId);
       if (Number(summary?.missingMatches || 0) > 0) {
         if (fallbackTournamentData) {
+          if (requireDurableSync) {
+            return runDurableFallbackSync();
+          }
           queueTournamentSync({
             tournamentId,
             tournamentData: fallbackTournamentData,
@@ -792,6 +810,9 @@ export const useTournamentActions = ({
     } catch (error) {
       console.error('Match patch sync failed; falling back to full tournament sync:', error);
       if (fallbackTournamentData) {
+        if (requireDurableSync) {
+          return runDurableFallbackSync();
+        }
         queueTournamentSync({
           tournamentId,
           tournamentData: fallbackTournamentData,
@@ -1259,41 +1280,39 @@ export const useTournamentActions = ({
     });
 
     if (isAppwriteEnabled) {
-      void (async () => {
-        if (syncTournamentId) {
-          if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
-          cloudIdWarningShownRef.current = false;
-          try {
-            const activeLockSnapshot = buildActiveTournamentSnapshot({
-              id: syncTournamentId,
-              fixturesSnapshot: updatedFixtures,
-              bracketSnapshot: bracket,
-              championSnapshot: champion,
-              aiSummariesSnapshot: nextSummaries,
-              swapHistorySnapshot: swapHistory,
-            });
-            await patchTournamentMatchesWithFallback({
-              tournamentId: syncTournamentId,
-              matchPatches: changedLeagueMatchPatches,
-              fallbackDelayMs: 450,
-              fallbackTournamentData: {
-                teams,
-                fixtures: updatedFixtures,
-                bracket,
-                champion,
-                finalMatch: null,
-                aiSummaries: nextSummaries,
-                swapHistory,
-              },
-            });
-            updateActiveTournamentLock(activeLockSnapshot);
-          } catch (error) {
-            console.error('Failed to sync match result to cloud:', error);
-            showToast('Result saved locally; cloud sync failed. Avoid refresh and try again.', 'error');
-          }
-          return;
+      if (syncTournamentId) {
+        if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
+        cloudIdWarningShownRef.current = false;
+        try {
+          const activeLockSnapshot = buildActiveTournamentSnapshot({
+            id: syncTournamentId,
+            fixturesSnapshot: updatedFixtures,
+            bracketSnapshot: bracket,
+            championSnapshot: champion,
+            aiSummariesSnapshot: nextSummaries,
+            swapHistorySnapshot: swapHistory,
+          });
+          await patchTournamentMatchesWithFallback({
+            tournamentId: syncTournamentId,
+            matchPatches: changedLeagueMatchPatches,
+            fallbackDelayMs: 450,
+            fallbackTournamentData: {
+              teams,
+              fixtures: updatedFixtures,
+              bracket,
+              champion,
+              finalMatch: null,
+              aiSummaries: nextSummaries,
+              swapHistory,
+            },
+            requireDurableSync: true,
+          });
+          updateActiveTournamentLock(activeLockSnapshot);
+        } catch (error) {
+          console.error('Failed to sync match result to cloud:', error);
+          showToast('Result saved locally; cloud sync failed. Avoid refresh and try again.', 'error');
         }
-
+      } else {
         try {
           updateActiveTournamentLock(buildActiveTournamentSnapshot({
             id: null,
@@ -1320,55 +1339,57 @@ export const useTournamentActions = ({
             aiSummariesSnapshot: nextSummaries,
             swapHistorySnapshot: swapHistory,
           });
-          if (!recoveredId) return;
 
-          try {
-            const recoveredLockSnapshot = buildActiveTournamentSnapshot({
-              id: recoveredId,
-              fixturesSnapshot: updatedFixtures,
-              bracketSnapshot: bracket,
-              championSnapshot: champion,
-              aiSummariesSnapshot: nextSummaries,
-              swapHistorySnapshot: swapHistory,
-            });
-            await patchTournamentMatchesWithFallback({
-              tournamentId: recoveredId,
-              matchPatches: changedLeagueMatchPatches,
-              fallbackImmediate: true,
-              fallbackTournamentData: {
+          if (recoveredId) {
+            try {
+              const recoveredLockSnapshot = buildActiveTournamentSnapshot({
+                id: recoveredId,
+                fixturesSnapshot: updatedFixtures,
+                bracketSnapshot: bracket,
+                championSnapshot: champion,
+                aiSummariesSnapshot: nextSummaries,
+                swapHistorySnapshot: swapHistory,
+              });
+              await patchTournamentMatchesWithFallback({
+                tournamentId: recoveredId,
+                matchPatches: changedLeagueMatchPatches,
+                fallbackImmediate: true,
+                fallbackTournamentData: {
+                  teams,
+                  fixtures: updatedFixtures,
+                  bracket,
+                  champion,
+                  finalMatch: null,
+                  aiSummaries: nextSummaries,
+                  swapHistory,
+                },
+                requireDurableSync: true,
+              });
+              updateActiveTournamentLock(recoveredLockSnapshot);
+              setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+                id: recoveredId,
+                appwriteId: recoveredId,
+                name: tournamentName,
+                date: new Date().toLocaleDateString(),
                 teams,
                 fixtures: updatedFixtures,
                 bracket,
                 champion,
-                finalMatch: null,
+                format,
+                gameMode,
+                tournamentFormat,
                 aiSummaries: nextSummaries,
                 swapHistory,
-              },
-            });
-            updateActiveTournamentLock(recoveredLockSnapshot);
-            setTournamentHistory((prev) => upsertTournamentHistory(prev, {
-              id: recoveredId,
-              appwriteId: recoveredId,
-              name: tournamentName,
-              date: new Date().toLocaleDateString(),
-              teams,
-              fixtures: updatedFixtures,
-              bracket,
-              champion,
-              format,
-              gameMode,
-              tournamentFormat,
-              aiSummaries: nextSummaries,
-              swapHistory,
-              status: champion ? 'completed' : 'active',
-            }));
-            cloudIdWarningShownRef.current = false;
-            showToast('Cloud sync restored for live tournament.');
-          } catch (error) {
-            console.error('Deferred cloud sync failed after id recovery:', error);
+                status: champion ? 'completed' : 'active',
+              }));
+              cloudIdWarningShownRef.current = false;
+              showToast('Cloud sync restored for live tournament.');
+            } catch (error) {
+              console.error('Deferred cloud sync failed after id recovery:', error);
+            }
           }
         }
-      })();
+      }
     }
 
     showToast('Result saved! ✓');
@@ -1709,6 +1730,7 @@ export const useTournamentActions = ({
               aiSummaries: nextSummaries,
               swapHistory,
             },
+            requireDurableSync: true,
           });
           updateActiveTournamentLock(activeLockSnapshot);
         }

@@ -48,7 +48,8 @@ const TournamentView = ({
   onStartNextTournament,
   calculatePointsTable,
   calculatePlayerStats,
-  getPlayerLeaderboard
+  getPlayerLeaderboard,
+  getActionPending = () => false,
 }) => {
   const [activeTab, setActiveTab] = useState('fixtures');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -68,6 +69,10 @@ const TournamentView = ({
   const [showFutureClashModal, setShowFutureClashModal] = useState(false);
   const [futureClashMatches, setFutureClashMatches] = useState([]);
   const [futureClashPlayer, setFutureClashPlayer] = useState('');
+  const isPendingAction = (actionKey) => Boolean(getActionPending?.(actionKey));
+  const resetPending = isPendingAction('tournament.reset');
+  const rematchPending = isPendingAction('tournament.rematch');
+  const nextTournamentPending = isPendingAction('tournament.next');
 
   // Find current match (first incomplete)
   const currentMatch = useMemo(() => (
@@ -185,9 +190,10 @@ const TournamentView = ({
     }) || null;
   }, [champion, tournamentHistory, currentTournamentId, tournamentName]);
 
-  const allLeagueMatchesComplete = () => {
-    return fixtures.length > 0 && fixtures.every(match => match.completed);
-  };
+  const leagueMatchesComplete = useMemo(
+    () => fixtures.length > 0 && fixtures.every((match) => match.completed),
+    [fixtures]
+  );
 
   const getTeamPlayers = (team) => {
     if (!team) return [];
@@ -251,7 +257,7 @@ const TournamentView = ({
   });
 
   const finalSelection = useMemo(() => {
-    if (!allLeagueMatchesComplete()) {
+    if (!leagueMatchesComplete) {
       return {
         finalists: null,
         oddPlayerIncluded: false,
@@ -337,7 +343,7 @@ const TournamentView = ({
       oddPlayerIncluded: true,
       oddPlayerReason: `${oddName} qualified with top individual points (${oddPoints}).`,
     };
-  }, [fixtures, teams, oddPlayerEnabled, oddPlayerName, calculatePointsTable]);
+  }, [leagueMatchesComplete, fixtures, teams, oddPlayerEnabled, oddPlayerName, calculatePointsTable]);
 
   const getOrdinalSuffix = (value) => {
     const num = Number(value);
@@ -398,13 +404,16 @@ const TournamentView = ({
     setShowSwapMemberModal(true);
   };
 
-  const handleNextTournamentAction = (editTeams) => {
+  const handleNextTournamentAction = async (editTeams) => {
+    if (nextTournamentPending) return;
     const normalizedName = String(nextTournamentName || '').trim();
-    onStartNextTournament({
+    const started = await Promise.resolve(onStartNextTournament({
       editTeams,
       tournamentNameOverride: normalizedName || getSuggestedNextTournamentName(tournamentName),
-    });
-    setShowNextTournamentModal(false);
+    }));
+    if (started !== false) {
+      setShowNextTournamentModal(false);
+    }
   };
 
   const handleSwapTeamChange = (value) => {
@@ -556,16 +565,18 @@ const TournamentView = ({
               </button>
               {champion && (
                 <button onClick={onRerunTournament}
-                  className="btn-brand flex items-center gap-2 px-4 py-2 rounded-xl hover:shadow-lg transition-all font-semibold">
+                  disabled={rematchPending || resetPending || nextTournamentPending}
+                  className="btn-brand flex items-center gap-2 px-4 py-2 rounded-xl hover:shadow-lg transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed">
                   <RefreshCw size={18} />
-                  <span>Rematch</span>
+                  <span>{rematchPending ? 'Starting...' : 'Rematch'}</span>
                 </button>
               )}
               {champion && (
                 <button onClick={openNextTournamentModal}
-                  className="tour-action-btn tour-action-indigo flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-semibold">
+                  disabled={nextTournamentPending || resetPending}
+                  className="tour-action-btn tour-action-indigo flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed">
                   <Trophy size={18} />
-                  <span>Next Tournament</span>
+                  <span>{nextTournamentPending ? 'Starting...' : 'Next Tournament'}</span>
                 </button>
               )}
               <button onClick={openSwapMemberModal}
@@ -574,9 +585,10 @@ const TournamentView = ({
                 <span>Swap Team Member</span>
               </button>
               <button onClick={onResetTournament}
-                className="tour-action-btn tour-action-red flex items-center gap-2 px-4 py-2 rounded-xl transition-all">
+                disabled={resetPending || rematchPending || nextTournamentPending}
+                className="tour-action-btn tour-action-red flex items-center gap-2 px-4 py-2 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                 <RotateCcw size={18} />
-                <span>Delete & New</span>
+                <span>{resetPending ? 'Deleting...' : 'Delete & New'}</span>
               </button>
             </div>
             <div className="md:hidden relative">
@@ -604,17 +616,19 @@ const TournamentView = ({
                         setShowHeaderMenu(false);
                         onRerunTournament();
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg tour-actions-item"
+                      disabled={rematchPending || resetPending || nextTournamentPending}
+                      className="w-full text-left px-3 py-2 rounded-lg tour-actions-item disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Rematch
+                      {rematchPending ? 'Starting...' : 'Rematch'}
                     </button>
                   )}
                   {champion && (
                     <button
                       onClick={openNextTournamentModal}
-                      className="w-full text-left px-3 py-2 rounded-lg tour-actions-item"
+                      disabled={nextTournamentPending || resetPending}
+                      className="w-full text-left px-3 py-2 rounded-lg tour-actions-item disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Next Tournament
+                      {nextTournamentPending ? 'Starting...' : 'Next Tournament'}
                     </button>
                   )}
                   <button
@@ -628,9 +642,10 @@ const TournamentView = ({
                       setShowHeaderMenu(false);
                       onResetTournament();
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg tour-actions-item danger"
+                    disabled={resetPending || rematchPending || nextTournamentPending}
+                    className="w-full text-left px-3 py-2 rounded-lg tour-actions-item danger disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Delete & New
+                    {resetPending ? 'Deleting...' : 'Delete & New'}
                   </button>
                 </div>
               )}
@@ -710,7 +725,7 @@ const TournamentView = ({
                   </div>
                 )}
 
-                {allLeagueMatchesComplete() && (
+                {leagueMatchesComplete && (
                   <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-6 text-center">
                     <Trophy size={48} className="mx-auto text-green-600 mb-3" />
                     <p className="text-lg font-bold text-green-700">All league matches completed!</p>
@@ -970,7 +985,7 @@ const TournamentView = ({
                       onSelectPlayer={(name) => setSelectedPlayerName(name)}
                     />
                   </div>
-                ) : allLeagueMatchesComplete() ? (
+                ) : leagueMatchesComplete ? (
                   <>
                     {finalSelection.oddPlayerIncluded && (
                       <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-800 tour-final-odd-banner">
@@ -1059,21 +1074,24 @@ const TournamentView = ({
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setShowNextTournamentModal(false)}
+                  disabled={nextTournamentPending}
                   className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleNextTournamentAction(true)}
-                  className="px-4 py-2 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 font-semibold"
+                  onClick={() => { void handleNextTournamentAction(true); }}
+                  disabled={nextTournamentPending}
+                  className="px-4 py-2 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Edit
+                  {nextTournamentPending ? 'Starting...' : 'Edit'}
                 </button>
                 <button
-                  onClick={() => handleNextTournamentAction(false)}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-semibold"
+                  onClick={() => { void handleNextTournamentAction(false); }}
+                  disabled={nextTournamentPending}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  OK
+                  {nextTournamentPending ? 'Starting...' : 'OK'}
                 </button>
               </div>
             </div>

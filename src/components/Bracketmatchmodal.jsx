@@ -4,18 +4,25 @@ import { X } from 'lucide-react';
 const BracketMatchModal = ({ match, onSave, onClose }) => {
   const [score1, setScore1] = useState(match.score1 !== null ? match.score1 : '');
   const [score2, setScore2] = useState(match.score2 !== null ? match.score2 : '');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setScore1(match.score1 !== null ? match.score1 : '');
     setScore2(match.score2 !== null ? match.score2 : '');
   }, [match]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (score1 === '' || score2 === '' || score1 === score2) {
       return;
     }
-    onSave(match.id, parseInt(score1), parseInt(score2));
-    onClose();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await Promise.resolve(onSave(match.id, parseInt(score1), parseInt(score2)));
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!match.team1 || !match.team2) {
@@ -72,6 +79,7 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
                   setScore1(value);
                 }
               }}
+              disabled={isSaving}
               placeholder="Score"
               className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none text-center text-2xl font-bold"
             />
@@ -106,6 +114,7 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
                   setScore2(value);
                 }
               }}
+              disabled={isSaving}
               placeholder="Score"
               className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none text-center text-2xl font-bold"
             />
@@ -115,16 +124,17 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-all"
+            disabled={isSaving}
+            className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
-            onClick={handleSave}
-            disabled={!score1 || !score2 || score1 === score2}
+            onClick={() => { void handleSave(); }}
+            disabled={!score1 || !score2 || score1 === score2 || isSaving}
             className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            ✓ Save Result
+            {isSaving ? 'Saving...' : '✓ Save Result'}
           </button>
         </div>
         {score1 === score2 && score1 !== '' && (

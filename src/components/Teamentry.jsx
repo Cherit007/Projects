@@ -12,6 +12,7 @@ const TeamEntry = ({
   onGenerate,
   onSchedule = () => {},
   loading,
+  getActionPending = () => false,
   onBack,
   oddPlayerEnabled = false,
   setOddPlayerEnabled = () => {},
@@ -23,6 +24,10 @@ const TeamEntry = ({
   const [draftError, setDraftError] = useState('');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
+
+  const isActionPending = (actionKey) => Boolean(getActionPending?.(actionKey));
+  const generatePending = Boolean(loading || isActionPending('teams.generate'));
+  const schedulePending = isActionPending('teams.schedule');
 
   const defaultDraftPool = useMemo(
     () => [...new Set((playerDatabase || []).map((name) => String(name || '').trim()).filter(Boolean))].join(', '),
@@ -114,7 +119,7 @@ const TeamEntry = ({
     setDraftError('');
   };
 
-  const canGenerate = !loading
+  const canGenerate = !generatePending
     && !teams.some(t => !t.name || (!t.player && !t.player1) || (gameMode !== 'singles' && !t.player2))
     && (!(gameMode !== 'singles' && oddPlayerEnabled) || oddPlayerName.trim());
 
@@ -230,8 +235,8 @@ const TeamEntry = ({
             </div>
           )}
 
-          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
-            <label className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+          <div className="snake-draft-panel mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <label className="snake-draft-label flex items-center gap-2 text-sm font-semibold text-blue-900">
               <input
                 type="checkbox"
                 checked={snakeDraftEnabled}
@@ -241,7 +246,7 @@ const TeamEntry = ({
             </label>
             {snakeDraftEnabled && (
               <>
-                <p className="mt-1 text-xs text-blue-800">
+                <p className="snake-draft-note mt-1 text-xs text-blue-800">
                   Auto-fill teams from a player pool, then edit manually if needed.
                 </p>
                 <div className="mt-3 space-y-2">
@@ -250,16 +255,16 @@ const TeamEntry = ({
                     onChange={(event) => setDraftPoolInput(event.target.value)}
                     placeholder={defaultDraftPool || 'Enter players separated by comma/new line'}
                     rows={3}
-                    className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:border-blue-500 outline-none bg-white"
+                    className="snake-draft-textarea w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:border-blue-500 outline-none bg-white"
                   />
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] text-blue-800">
+                    <p className="snake-draft-note text-[11px] text-blue-800">
                       Required players: {requiredPlayersLabel} ({teams.length} teams x {slotsPerTeam})
                     </p>
                     <button
                       type="button"
                       onClick={applySnakeDraft}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-all"
+                      className="snake-draft-run px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-all"
                     >
                       Run Snake Draft
                     </button>
@@ -273,8 +278,8 @@ const TeamEntry = ({
           </div>
 
           {gameMode !== 'singles' && (
-            <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <div className="odd-rotation-panel mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <label className="odd-rotation-label flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <input
                   type="checkbox"
                   checked={oddPlayerEnabled}
@@ -282,7 +287,7 @@ const TeamEntry = ({
                 />
                 Enable odd player rotation mode
               </label>
-              <p className="mt-1 text-xs text-slate-600">
+              <p className="odd-rotation-note mt-1 text-xs text-slate-600">
                 Use this when you have one extra doubles player (example: 7 players for 3 teams).
                 The odd player rotates into matches so everyone gets balanced play time.
               </p>
@@ -312,16 +317,16 @@ const TeamEntry = ({
               disabled={!canGenerate}
               className="btn-brand w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               <Calendar size={20} />
-              {loading ? 'Generating...' : 'Generate Tournament'}
+              {generatePending ? 'Generating...' : 'Generate Tournament'}
             </button>
 
             <button
               type="button"
               onClick={() => setShowScheduleModal(true)}
-              disabled={!canGenerate}
+              disabled={!canGenerate || schedulePending}
               className="w-full py-4 rounded-xl bg-slate-800 text-white font-semibold text-lg hover:bg-slate-900 hover:shadow-xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Schedule Match
+              {schedulePending ? 'Scheduling...' : 'Schedule Match'}
             </button>
           </div>
         </div>
@@ -344,6 +349,7 @@ const TeamEntry = ({
               <button
                 type="button"
                 onClick={() => setShowScheduleModal(false)}
+                disabled={schedulePending}
                 className="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200"
               >
                 Cancel
@@ -351,7 +357,7 @@ const TeamEntry = ({
               <button
                 type="button"
                 onClick={() => {
-                  onSchedule({
+                  void onSchedule({
                     oddPlayerEnabled,
                     oddPlayerName: oddPlayerName.trim(),
                     oddPlayerConfig: {
@@ -360,11 +366,14 @@ const TeamEntry = ({
                     },
                     scheduledAt: scheduleAt || null,
                   });
-                  setShowScheduleModal(false);
+                  if (!schedulePending) {
+                    setShowScheduleModal(false);
+                  }
                 }}
-                className="px-3 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900"
+                disabled={schedulePending}
+                className="px-3 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Save Schedule
+                {schedulePending ? 'Saving...' : 'Save Schedule'}
               </button>
             </div>
           </div>

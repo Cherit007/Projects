@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useRef, useSyncExternalStore } from 'react';
 
 const createAppStore = () => {
   const initialState = {
@@ -140,3 +140,44 @@ export const useAppStore = (selector) => useSyncExternalStore(
   () => selector(appStore.getState()),
   () => selector(appStore.getState()),
 );
+
+export const shallowEqual = (left, right) => {
+  if (Object.is(left, right)) return true;
+  if (!left || !right) return false;
+  if (typeof left !== 'object' || typeof right !== 'object') return false;
+
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  for (const key of leftKeys) {
+    if (!Object.prototype.hasOwnProperty.call(right, key)) return false;
+    if (!Object.is(left[key], right[key])) return false;
+  }
+  return true;
+};
+
+export const useAppStoreShallow = (selector) => {
+  const lastSelectionRef = useRef();
+  return useSyncExternalStore(
+    appStore.subscribe,
+    () => {
+      const nextSelection = selector(appStore.getState());
+      const previousSelection = lastSelectionRef.current;
+      if (shallowEqual(previousSelection, nextSelection)) {
+        return previousSelection;
+      }
+      lastSelectionRef.current = nextSelection;
+      return nextSelection;
+    },
+    () => {
+      const nextSelection = selector(appStore.getState());
+      const previousSelection = lastSelectionRef.current;
+      if (shallowEqual(previousSelection, nextSelection)) {
+        return previousSelection;
+      }
+      lastSelectionRef.current = nextSelection;
+      return nextSelection;
+    },
+  );
+};

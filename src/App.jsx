@@ -1,13 +1,19 @@
 import React, { Suspense, lazy, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Moon, Sun, Download, RefreshCw, WifiOff, Bell, CloudUpload } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import AppViewRouter from './components/AppViewRouter';
 import Toast from './components/Toast';
+import PwaControls from './components/PwaControls';
 import { useAppwriteSync } from './hooks/useAppwriteSync';
 import { usePlayerDerivedData } from './hooks/usePlayerDerivedData';
 import { useAuthGroupActions } from './hooks/useAuthGroupActions';
 import { useTournamentActions } from './hooks/useTournamentActions';
-import { useAppStore } from './store/appStore';
+import { useSetupPrefetchEffect } from './hooks/useSetupPrefetchEffect';
+import { useAuthBootstrapEffect } from './hooks/useAuthBootstrapEffect';
+import { useInitialDataLoadEffect } from './hooks/useInitialDataLoadEffect';
+import { useMemberLinkEffect } from './hooks/useMemberLinkEffect';
+import { useAdminRequestsEffect } from './hooks/useAdminRequestsEffect';
+import { useAppStoreShallow } from './store/appStore';
 import { casualMatchService } from './services/casualmatchservice';
 import { authService } from './services/authService';
 import { groupService } from './services/groupService';
@@ -27,24 +33,11 @@ const AppModals = lazy(() => import('./components/AppModals'));
 
 const App = () => {
   const queryClient = useQueryClient();
-  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
-  const [pwaUpdateRegistration, setPwaUpdateRegistration] = useState(null);
-  const [showPwaUpdate, setShowPwaUpdate] = useState(false);
-  const [isOffline, setIsOffline] = useState(() => (
-    typeof navigator !== 'undefined' ? !navigator.onLine : false
-  ));
-  const [notificationPermission, setNotificationPermission] = useState(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
-    return Notification.permission;
-  });
-  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const [themeMode, setThemeMode] = useState(() => {
     try {
       const savedTheme = localStorage.getItem('badminton_theme_mode');
       return savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark';
-    } catch (_error) {
+    } catch {
       return 'dark';
     }
   });
@@ -53,132 +46,10 @@ const App = () => {
     document.body.setAttribute('data-theme', themeMode);
     try {
       localStorage.setItem('badminton_theme_mode', themeMode);
-    } catch (_error) {
+    } catch {
       // Ignore storage errors (private mode / quota issues).
     }
   }, [themeMode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const detectStandalone = () => {
-      const standalone = Boolean(
-        window.matchMedia?.('(display-mode: standalone)')?.matches
-        || window.navigator?.standalone === true
-      );
-      setIsStandaloneApp(standalone);
-      if (standalone) {
-        setDeferredInstallPrompt(null);
-        setShowInstallPrompt(false);
-      }
-    };
-
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-      detectStandalone();
-      setDeferredInstallPrompt(event);
-      setShowInstallPrompt(true);
-    };
-
-    const handleAppInstalled = () => {
-      setDeferredInstallPrompt(null);
-      setShowInstallPrompt(false);
-      detectStandalone();
-    };
-
-    detectStandalone();
-
-    const displayModeMedia = window.matchMedia?.('(display-mode: standalone)');
-    const handleDisplayModeChange = () => detectStandalone();
-
-    if (displayModeMedia?.addEventListener) {
-      displayModeMedia.addEventListener('change', handleDisplayModeChange);
-    } else if (displayModeMedia?.addListener) {
-      displayModeMedia.addListener(handleDisplayModeChange);
-    }
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-      if (displayModeMedia?.removeEventListener) {
-        displayModeMedia.removeEventListener('change', handleDisplayModeChange);
-      } else if (displayModeMedia?.removeListener) {
-        displayModeMedia.removeListener(handleDisplayModeChange);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return undefined;
-
-    const refreshPermission = () => {
-      const permission = Notification.permission;
-      setNotificationPermission(permission);
-      setShowNotificationPrompt(isStandaloneApp && permission === 'default');
-    };
-
-    refreshPermission();
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        refreshPermission();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [isStandaloneApp]);
-
-  useEffect(() => {
-    if (!import.meta.env.PROD || typeof window === 'undefined' || !('serviceWorker' in navigator)) {
-      return undefined;
-    }
-
-    const handleUpdateAvailable = (event) => {
-      const registration = event?.detail?.registration || null;
-      setPwaUpdateRegistration(registration);
-      setShowPwaUpdate(true);
-    };
-
-    const handleSwUpdated = () => {
-      setShowPwaUpdate(false);
-      setPwaUpdateRegistration(null);
-    };
-
-    window.addEventListener('pwa:update-available', handleUpdateAvailable);
-    window.addEventListener('pwa:sw-updated', handleSwUpdated);
-
-    navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL).then((registration) => {
-      if (registration?.waiting) {
-        setPwaUpdateRegistration(registration);
-        setShowPwaUpdate(true);
-      }
-    }).catch(() => {});
-
-    return () => {
-      window.removeEventListener('pwa:update-available', handleUpdateAvailable);
-      window.removeEventListener('pwa:sw-updated', handleSwUpdated);
-    };
-  }, []);
 
   const normalizeTournamentFormat = (value) =>
     value === 'playInFinal' ? 'knockoutByes' : value;
@@ -222,39 +93,101 @@ const App = () => {
   };
 
   // State
-  const step = useAppStore((s) => s.step);
-  const setStep = useAppStore((s) => s.setStep);
-  const tournamentName = useAppStore((s) => s.tournamentName);
-  const setTournamentName = useAppStore((s) => s.setTournamentName);
-  const numTeams = useAppStore((s) => s.numTeams);
-  const setNumTeams = useAppStore((s) => s.setNumTeams);
-  const format = useAppStore((s) => s.format);
-  const setFormat = useAppStore((s) => s.setFormat);
-  const gameMode = useAppStore((s) => s.gameMode);
-  const setGameMode = useAppStore((s) => s.setGameMode);
-  const tournamentFormat = useAppStore((s) => s.tournamentFormat);
-  const setTournamentFormat = useAppStore((s) => s.setTournamentFormat);
-  const teams = useAppStore((s) => s.teams);
-  const setTeams = useAppStore((s) => s.setTeams);
-  const fixtures = useAppStore((s) => s.fixtures);
-  const setFixtures = useAppStore((s) => s.setFixtures);
-  const bracket = useAppStore((s) => s.bracket);
-  const setBracket = useAppStore((s) => s.setBracket);
-  const champion = useAppStore((s) => s.champion);
-  const setChampion = useAppStore((s) => s.setChampion);
+  const {
+    step,
+    setStep,
+    tournamentName,
+    setTournamentName,
+    numTeams,
+    setNumTeams,
+    format,
+    setFormat,
+    gameMode,
+    setGameMode,
+    tournamentFormat,
+    setTournamentFormat,
+    teams,
+    setTeams,
+    fixtures,
+    setFixtures,
+    bracket,
+    setBracket,
+    champion,
+    setChampion,
+    loading,
+    setLoading,
+  } = useAppStoreShallow((s) => ({
+    step: s.step,
+    setStep: s.setStep,
+    tournamentName: s.tournamentName,
+    setTournamentName: s.setTournamentName,
+    numTeams: s.numTeams,
+    setNumTeams: s.setNumTeams,
+    format: s.format,
+    setFormat: s.setFormat,
+    gameMode: s.gameMode,
+    setGameMode: s.setGameMode,
+    tournamentFormat: s.tournamentFormat,
+    setTournamentFormat: s.setTournamentFormat,
+    teams: s.teams,
+    setTeams: s.setTeams,
+    fixtures: s.fixtures,
+    setFixtures: s.setFixtures,
+    bracket: s.bracket,
+    setBracket: s.setBracket,
+    champion: s.champion,
+    setChampion: s.setChampion,
+    loading: s.loading,
+    setLoading: s.setLoading,
+  }));
   const [toast, setToast] = useState(null);
-  const loading = useAppStore((s) => s.loading);
-  const setLoading = useAppStore((s) => s.setLoading);
-  const playerDatabase = useAppStore((s) => s.playerDatabase);
-  const setPlayerDatabase = useAppStore((s) => s.setPlayerDatabase);
-  const members = useAppStore((s) => s.members);
-  const setMembers = useAppStore((s) => s.setMembers);
-  const playerRatings = useAppStore((s) => s.playerRatings);
-  const setPlayerRatings = useAppStore((s) => s.setPlayerRatings);
-  const tournamentHistory = useAppStore((s) => s.tournamentHistory);
-  const setTournamentHistory = useAppStore((s) => s.setTournamentHistory);
-  const casualMatches = useAppStore((s) => s.casualMatches);
-  const setCasualMatches = useAppStore((s) => s.setCasualMatches);
+  const {
+    playerDatabase,
+    setPlayerDatabase,
+    members,
+    setMembers,
+    playerRatings,
+    setPlayerRatings,
+    tournamentHistory,
+    setTournamentHistory,
+    casualMatches,
+    setCasualMatches,
+    tournamentTemplates,
+    setTournamentTemplates,
+    playerPhotos,
+    setPlayerPhotos,
+    playerPhotoRefs,
+    setPlayerPhotoRefs,
+    pendingPrefilledTeams,
+    setPendingPrefilledTeams,
+    aiMatchSummaries,
+    setAiMatchSummaries,
+    swapHistory,
+    setSwapHistory,
+  } = useAppStoreShallow((s) => ({
+    playerDatabase: s.playerDatabase,
+    setPlayerDatabase: s.setPlayerDatabase,
+    members: s.members,
+    setMembers: s.setMembers,
+    playerRatings: s.playerRatings,
+    setPlayerRatings: s.setPlayerRatings,
+    tournamentHistory: s.tournamentHistory,
+    setTournamentHistory: s.setTournamentHistory,
+    casualMatches: s.casualMatches,
+    setCasualMatches: s.setCasualMatches,
+    tournamentTemplates: s.tournamentTemplates,
+    setTournamentTemplates: s.setTournamentTemplates,
+    playerPhotos: s.playerPhotos,
+    setPlayerPhotos: s.setPlayerPhotos,
+    playerPhotoRefs: s.playerPhotoRefs,
+    setPlayerPhotoRefs: s.setPlayerPhotoRefs,
+    pendingPrefilledTeams: s.pendingPrefilledTeams,
+    setPendingPrefilledTeams: s.setPendingPrefilledTeams,
+    aiMatchSummaries: s.aiMatchSummaries,
+    setAiMatchSummaries: s.setAiMatchSummaries,
+    swapHistory: s.swapHistory,
+    setSwapHistory: s.setSwapHistory,
+  }));
   const [showCasualMatch, setShowCasualMatch] = useState(false);
   const [oddPlayerEnabled, setOddPlayerEnabled] = useState(false);
   const [oddPlayerName, setOddPlayerName] = useState('');
@@ -262,53 +195,76 @@ const App = () => {
   const [showCasualHistory, setShowCasualHistory] = useState(false);
   const [showAllTimeStats, setShowAllTimeStats] = useState(false);
   const [showEloLeaderboard, setShowEloLeaderboard] = useState(false);
-  const tournamentTemplates = useAppStore((s) => s.tournamentTemplates);
-  const setTournamentTemplates = useAppStore((s) => s.setTournamentTemplates);
-  const playerPhotos = useAppStore((s) => s.playerPhotos);
-  const setPlayerPhotos = useAppStore((s) => s.setPlayerPhotos);
-  const playerPhotoRefs = useAppStore((s) => s.playerPhotoRefs);
-  const setPlayerPhotoRefs = useAppStore((s) => s.setPlayerPhotoRefs);
-  const pendingPrefilledTeams = useAppStore((s) => s.pendingPrefilledTeams);
-  const setPendingPrefilledTeams = useAppStore((s) => s.setPendingPrefilledTeams);
-  const aiMatchSummaries = useAppStore((s) => s.aiMatchSummaries);
-  const setAiMatchSummaries = useAppStore((s) => s.setAiMatchSummaries);
-  const swapHistory = useAppStore((s) => s.swapHistory);
-  const setSwapHistory = useAppStore((s) => s.setSwapHistory);
-  const authLoading = useAppStore((s) => s.authLoading);
-  const setAuthLoading = useAppStore((s) => s.setAuthLoading);
-  const authResolved = useAppStore((s) => s.authResolved);
-  const setAuthResolved = useAppStore((s) => s.setAuthResolved);
-  const currentUser = useAppStore((s) => s.currentUser);
-  const setCurrentUser = useAppStore((s) => s.setCurrentUser);
-  const groupResolved = useAppStore((s) => s.groupResolved);
-  const setGroupResolved = useAppStore((s) => s.setGroupResolved);
-  const availableGroups = useAppStore((s) => s.availableGroups);
-  const setAvailableGroups = useAppStore((s) => s.setAvailableGroups);
-  const publicGroups = useAppStore((s) => s.publicGroups);
-  const setPublicGroups = useAppStore((s) => s.setPublicGroups);
-  const requestedGroupIds = useAppStore((s) => s.requestedGroupIds);
-  const setRequestedGroupIds = useAppStore((s) => s.setRequestedGroupIds);
-  const pendingJoinRequests = useAppStore((s) => s.pendingJoinRequests);
-  const setPendingJoinRequests = useAppStore((s) => s.setPendingJoinRequests);
-  const recentJoinReviews = useAppStore((s) => s.recentJoinReviews);
-  const setRecentJoinReviews = useAppStore((s) => s.setRecentJoinReviews);
-  const seenPendingRequestIds = useAppStore((s) => s.seenPendingRequestIds);
-  const setSeenPendingRequestIds = useAppStore((s) => s.setSeenPendingRequestIds);
-  const showRequestCenter = useAppStore((s) => s.showRequestCenter);
-  const setShowRequestCenter = useAppStore((s) => s.setShowRequestCenter);
-  const activeGroup = useAppStore((s) => s.activeGroup);
-  const setActiveGroup = useAppStore((s) => s.setActiveGroup);
-  const groupRole = useAppStore((s) => s.groupRole);
-  const setGroupRole = useAppStore((s) => s.setGroupRole);
-  const inviteLoading = useAppStore((s) => s.inviteLoading);
-  const setInviteLoading = useAppStore((s) => s.setInviteLoading);
-  const isGuestViewer = useAppStore((s) => s.isGuestViewer);
-  const setIsGuestViewer = useAppStore((s) => s.setIsGuestViewer);
+  const {
+    authLoading,
+    setAuthLoading,
+    authResolved,
+    setAuthResolved,
+    currentUser,
+    setCurrentUser,
+    groupResolved,
+    setGroupResolved,
+    availableGroups,
+    setAvailableGroups,
+    publicGroups,
+    setPublicGroups,
+    requestedGroupIds,
+    setRequestedGroupIds,
+    pendingJoinRequests,
+    setPendingJoinRequests,
+    recentJoinReviews,
+    setRecentJoinReviews,
+    seenPendingRequestIds,
+    setSeenPendingRequestIds,
+    showRequestCenter,
+    setShowRequestCenter,
+    activeGroup,
+    setActiveGroup,
+    groupRole,
+    setGroupRole,
+    inviteLoading,
+    setInviteLoading,
+    isGuestViewer,
+    setIsGuestViewer,
+    adminAccounts,
+    setAdminAccounts,
+  } = useAppStoreShallow((s) => ({
+    authLoading: s.authLoading,
+    setAuthLoading: s.setAuthLoading,
+    authResolved: s.authResolved,
+    setAuthResolved: s.setAuthResolved,
+    currentUser: s.currentUser,
+    setCurrentUser: s.setCurrentUser,
+    groupResolved: s.groupResolved,
+    setGroupResolved: s.setGroupResolved,
+    availableGroups: s.availableGroups,
+    setAvailableGroups: s.setAvailableGroups,
+    publicGroups: s.publicGroups,
+    setPublicGroups: s.setPublicGroups,
+    requestedGroupIds: s.requestedGroupIds,
+    setRequestedGroupIds: s.setRequestedGroupIds,
+    pendingJoinRequests: s.pendingJoinRequests,
+    setPendingJoinRequests: s.setPendingJoinRequests,
+    recentJoinReviews: s.recentJoinReviews,
+    setRecentJoinReviews: s.setRecentJoinReviews,
+    seenPendingRequestIds: s.seenPendingRequestIds,
+    setSeenPendingRequestIds: s.setSeenPendingRequestIds,
+    showRequestCenter: s.showRequestCenter,
+    setShowRequestCenter: s.setShowRequestCenter,
+    activeGroup: s.activeGroup,
+    setActiveGroup: s.setActiveGroup,
+    groupRole: s.groupRole,
+    setGroupRole: s.setGroupRole,
+    inviteLoading: s.inviteLoading,
+    setInviteLoading: s.setInviteLoading,
+    isGuestViewer: s.isGuestViewer,
+    setIsGuestViewer: s.setIsGuestViewer,
+    adminAccounts: s.adminAccounts,
+    setAdminAccounts: s.setAdminAccounts,
+  }));
   const [pendingLinkPrompt, setPendingLinkPrompt] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [activeTournamentLock, setActiveTournamentLock] = useState(null);
-  const adminAccounts = useAppStore((s) => s.adminAccounts);
-  const setAdminAccounts = useAppStore((s) => s.setAdminAccounts);
   const linkPromptedRef = useRef(new Set());
   const previousStepRef = useRef(step);
   const toastTimerRef = useRef(null);
@@ -324,6 +280,8 @@ const App = () => {
   const [casualHydrationPending, setCasualHydrationPending] = useState(false);
   const historyHydrationPromiseRef = useRef(null);
   const casualHydrationPromiseRef = useRef(null);
+  const [pendingActions, setPendingActions] = useState({});
+  const pendingActionsRef = useRef({});
 
   const hydratePlayerPhotos = (rawPhotos = {}) => {
     const urls = {};
@@ -592,152 +550,36 @@ const App = () => {
     }, 3000);
   }, []);
 
-  const showSystemNotification = useCallback(async (title, options = {}) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return false;
-    if (Notification.permission !== 'granted') return false;
-
-    const iconUrl = `${import.meta.env.BASE_URL}pwa-192x192.png`;
-    const baseOptions = {
-      icon: iconUrl,
-      badge: iconUrl,
-      ...options,
-    };
-
-    if ('serviceWorker' in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
-        if (registration?.showNotification) {
-          await registration.showNotification(title, baseOptions);
-          return true;
-        }
-      } catch {
-        // Fallback to window Notification below.
+  const setActionPending = useCallback((actionKey, pending) => {
+    if (!actionKey) return;
+    setPendingActions((prev) => {
+      const next = { ...prev };
+      if (pending) {
+        next[actionKey] = true;
+      } else {
+        delete next[actionKey];
       }
-    }
-
-    const notification = new Notification(title, baseOptions);
-    void notification;
-    return true;
+      pendingActionsRef.current = next;
+      return next;
+    });
   }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
+  const isActionPending = useCallback(
+    (actionKey) => Boolean(actionKey && pendingActions[actionKey]),
+    [pendingActions]
+  );
 
-    const handleOutboxFlushed = (event) => {
-      const flushedCount = Number(event?.detail?.flushedCount || 0);
-      if (!Number.isFinite(flushedCount) || flushedCount <= 0) return;
-      void showSystemNotification('Offline changes synced', {
-        body: `${flushedCount} queued change${flushedCount === 1 ? '' : 's'} uploaded to cloud.`,
-        tag: 'bfm-outbox-sync',
-      });
-    };
-
-    window.addEventListener('bfm:outbox-flushed', handleOutboxFlushed);
-    return () => {
-      window.removeEventListener('bfm:outbox-flushed', handleOutboxFlushed);
-    };
-  }, [showSystemNotification]);
-
-  const handleEnableNotifications = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      showToast('Notifications are not supported on this device', 'error');
-      return;
-    }
-    if (!isStandaloneApp) {
-      showToast('Install to Home Screen first, then enable notifications', 'error');
-      return;
-    }
-
+  const withActionLock = useCallback(async (actionKey, actionFn) => {
+    if (!actionKey || typeof actionFn !== 'function') return false;
+    if (pendingActionsRef.current[actionKey]) return false;
+    setActionPending(actionKey, true);
     try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      setShowNotificationPrompt(isStandaloneApp && permission === 'default');
-      if (permission === 'granted') {
-        showToast('Notifications enabled');
-        await showSystemNotification('Badminton App notifications enabled', {
-          body: 'You will receive sync updates for queued offline changes.',
-          tag: 'bfm-notifications-enabled',
-        });
-        return;
-      }
-      if (permission === 'denied') {
-        showToast('Notifications blocked in browser settings', 'error');
-      } else {
-        showToast('Notification prompt dismissed', 'error');
-      }
-    } catch (error) {
-      console.error('Notification permission request failed:', error);
-      showToast('Failed to enable notifications', 'error');
-    }
-  };
-
-  const handleInstallPwa = async () => {
-    if (isStandaloneApp) return;
-    if (!deferredInstallPrompt) {
-      showToast('Use browser menu and choose "Add to Home Screen"', 'error');
-      return;
-    }
-    try {
-      await deferredInstallPrompt.prompt();
-      const result = await deferredInstallPrompt.userChoice;
-      if (result?.outcome === 'accepted') {
-        showToast('Installing app...');
-      } else {
-        showToast('Install dismissed', 'error');
-      }
-    } catch (error) {
-      console.error('PWA install prompt failed:', error);
-      showToast('Install prompt failed', 'error');
+      await actionFn();
+      return true;
     } finally {
-      setDeferredInstallPrompt(null);
-      setShowInstallPrompt(false);
+      setActionPending(actionKey, false);
     }
-  };
-
-  const handleApplyPwaUpdate = async () => {
-    if (!import.meta.env.PROD || !('serviceWorker' in navigator)) {
-      setShowPwaUpdate(false);
-      return;
-    }
-    try {
-      const registration = pwaUpdateRegistration || await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
-      if (!registration) {
-        setShowPwaUpdate(false);
-        return;
-      }
-      if (registration.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        showToast('Updating app...');
-        return;
-      }
-
-      await registration.update();
-      if (registration.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        showToast('Updating app...');
-      } else {
-        setShowPwaUpdate(false);
-        showToast('App is already up to date');
-      }
-    } catch (error) {
-      console.error('Failed to apply PWA update:', error);
-      showToast('Update failed. Please refresh manually.', 'error');
-    }
-  };
-
-  const handleFlushQueuedWrites = async () => {
-    try {
-      const summary = await flushOfflineOutbox();
-      if (summary?.remainingCount > 0 && navigator.onLine) {
-        showToast('Some queued changes still need retry', 'error');
-      } else if (summary?.flushedCount === 0) {
-        showToast('No queued changes pending');
-      }
-    } catch (error) {
-      console.error('Failed to flush queued writes:', error);
-      showToast('Failed to sync queued changes', 'error');
-    }
-  };
+  }, [setActionPending]);
   // Appwrite Integration
   const {
     isAppwriteEnabled,
@@ -788,7 +630,7 @@ const App = () => {
     return false;
   };
 
-  const queryKeys = {
+  const queryKeys = useMemo(() => ({
     authCurrentUser: ['auth', 'current-user'],
     publicGroups: ['groups', 'public'],
     userGroups: (userId) => ['groups', 'user', userId],
@@ -801,7 +643,7 @@ const App = () => {
     tournamentHistory: (groupId) => ['tournaments', 'history', groupId || 'nogroup'],
     tournamentDetail: (groupId, tournamentId) => ['tournaments', 'detail', groupId || 'nogroup', String(tournamentId || '')],
     casualMatches: (groupId) => ['casual-matches', groupId || 'nogroup'],
-  };
+  }), []);
 
   const loginMutation = useMutation({
     mutationFn: ({ email, password }) => authService.login(email, password),
@@ -929,15 +771,6 @@ const App = () => {
     setPublicGroups(groups);
     return groups;
   };
-
-  useEffect(() => {
-    historyHydrationPromiseRef.current = null;
-    casualHydrationPromiseRef.current = null;
-    if (!isAppwriteEnabled) {
-      setHistoryHydrated(true);
-      setCasualHydrated(true);
-    }
-  }, [activeGroup?.id, isAppwriteEnabled]);
 
   const getTournamentIdCandidates = (tournament) => Array.from(new Set(
     [tournament?.appwriteId, tournament?.id]
@@ -1120,246 +953,73 @@ const App = () => {
     recoverRatingsIfMissing({ history, casual });
   };
 
-  useEffect(() => {
-    if (!isAppwriteEnabled) return;
-    if (step !== 'setup') return;
-    if (historyHydrated && casualHydrated) return;
-    if (historyHydrationPending || casualHydrationPending) return;
-    void prefetchHomeSetupData();
-  }, [
+  useSetupPrefetchEffect({
+    activeGroupId: activeGroup?.id,
     isAppwriteEnabled,
+    setHistoryHydrated,
+    setCasualHydrated,
+    historyHydrationPromiseRef,
+    casualHydrationPromiseRef,
     step,
     historyHydrated,
     casualHydrated,
     historyHydrationPending,
     casualHydrationPending,
-    activeGroup?.id,
-  ]);
+    prefetchHomeSetupData,
+  });
 
-  useEffect(() => {
-    if (!isConfigChecked) return;
+  useAuthBootstrapEffect({
+    isConfigChecked,
+    requiresAuth,
+    refreshPublicGroups,
+    fetchCurrentUser,
+    setCurrentUser,
+    setAuthResolved,
+    setGroupResolved,
+    setAuthLoading,
+    setAvailableGroups,
+    setActiveGroup,
+    setGroupRole,
+    refreshGroups,
+    queryClient,
+    queryKeys,
+    setRequestedGroupIds,
+  });
 
-    let mounted = true;
-    const loadAuth = async () => {
-      if (!requiresAuth) {
-        if (!mounted) return;
-        setAuthResolved(true);
-        setGroupResolved(true);
-        return;
-      }
+  useInitialDataLoadEffect({
+    isConfigChecked,
+    requiresAuth,
+    authResolved,
+    groupResolved,
+    activeGroup,
+    activeGroupId: activeGroup?.id,
+    isAppwriteEnabled,
+    queryClient,
+    queryKeys,
+    loadFromAppwrite,
+    setLoading,
+    setMembers,
+    hydratePlayerPhotos,
+    setPlayerPhotos,
+    setPlayerPhotoRefs,
+    setTournamentTemplates,
+    normalizeTournamentFormat,
+    normalizeTemplateTeams,
+    setPlayerDatabase,
+    setPlayerRatings,
+    markRatingsPersisted,
+    setTournamentHistory,
+    setCasualMatches,
+    setHistoryHydrated,
+    setCasualHydrated,
+    setActiveTournamentLock,
+    findActiveTournament,
+    resumeActiveTournament,
+    mergeMemberLinks,
+    applyMemberAccountLinks,
+    prefetchHomeSetupData,
+  });
 
-      setAuthLoading(true);
-      try {
-        await refreshPublicGroups();
-        const user = await fetchCurrentUser();
-        if (!mounted) return;
-        setCurrentUser(user);
-        setAuthResolved(true);
-
-        if (!user) {
-          setGroupResolved(true);
-          setAvailableGroups([]);
-          setActiveGroup(null);
-          setGroupRole(null);
-          return;
-        }
-
-        const groups = await refreshGroups(user);
-        if (!mounted) return;
-        const pendingRequested = await queryClient.fetchQuery({
-          queryKey: queryKeys.userPendingGroupIds(user.$id),
-          queryFn: () => groupService.getUserPendingRequestGroupIds(user.$id),
-          staleTime: 15 * 1000,
-        });
-        if (!mounted) return;
-        setRequestedGroupIds(pendingRequested);
-
-        if (groups.length === 1 && groups[0].role !== 'viewer') {
-          setActiveGroup(groups[0]);
-          setGroupRole(groups[0].role);
-        } else {
-          setActiveGroup(null);
-          setGroupRole(null);
-        }
-        setGroupResolved(true);
-      } catch (error) {
-        console.error('Failed to load auth state:', error);
-        if (!mounted) return;
-        setAuthResolved(true);
-        setGroupResolved(true);
-      } finally {
-        if (mounted) setAuthLoading(false);
-      }
-    };
-
-    loadAuth();
-    return () => {
-      mounted = false;
-    };
-  }, [isConfigChecked, requiresAuth]);
-
-  // Load data after auth/group access is resolved
-  useEffect(() => {
-    if (!isConfigChecked) return;
-    if (requiresAuth && (!authResolved || !groupResolved || !activeGroup)) return;
-
-    let mounted = true;
-  
-    const loadInitialData = async () => {
-      setLoading(true);
-    
-      try {
-        const localMembers = JSON.parse(localStorage.getItem("badminton_members") || "[]");
-        const localTemplates = JSON.parse(localStorage.getItem("badminton_templates") || "[]");
-        const localPhotos = JSON.parse(localStorage.getItem("badminton_player_photos") || "{}");
-
-        // 1️⃣ LOCAL MODE SUPPORT
-        if (!isAppwriteEnabled) {
-          console.log("Running in LOCAL MODE");
-    
-          const localPlayers = JSON.parse(localStorage.getItem("badminton_players") || "[]");
-          const localRatings = JSON.parse(localStorage.getItem("badminton_ratings") || "{}");
-          const localHistory = JSON.parse(localStorage.getItem("badminton_history") || "[]");
-          const localCasualMatches = JSON.parse(localStorage.getItem("badminton_casual_matches") || "[]");
-    
-          if (mounted) {
-            setMembers(localMembers);
-            const { urls, refs } = hydratePlayerPhotos(localPhotos);
-            setPlayerPhotos(urls);
-            setPlayerPhotoRefs(refs);
-            setTournamentTemplates(
-              localTemplates.map(template => ({
-                ...template,
-                tournamentFormat: normalizeTournamentFormat(template.tournamentFormat || 'league'),
-                teams: normalizeTemplateTeams(
-                  template.teams || [],
-                  template.gameMode || 'doubles',
-                  template.numTeams || 3
-                ),
-              }))
-            );
-            setPlayerDatabase(localPlayers);
-            setPlayerRatings(localRatings);
-            markRatingsPersisted(localRatings || {});
-            setTournamentHistory(localHistory);
-            setCasualMatches(localCasualMatches);
-            setHistoryHydrated(true);
-            setCasualHydrated(true);
-            const localActive = findActiveTournament(localHistory);
-            resumeActiveTournament(localActive);
-          }
-    
-          return;
-        }
-    
-        // 2️⃣ APPWRITE MODE
-        setHistoryHydrated(false);
-        setCasualHydrated(false);
-        setTournamentHistory([]);
-        setCasualMatches([]);
-
-        const appwriteData = await queryClient.fetchQuery({
-          queryKey: queryKeys.appwriteData(activeGroup?.id),
-          queryFn: () => loadFromAppwrite({
-            includeTournaments: false,
-            includePlayerDatabase: true,
-            includeRatings: true,
-            includeMeta: true,
-          }),
-          staleTime: 5 * 60 * 1000,
-        });
-        const tournamentSummaries = await queryClient.fetchQuery({
-          queryKey: queryKeys.tournamentSummaries(activeGroup?.id),
-          queryFn: () => tournamentService.getTournamentSummaries(40, activeGroup?.id, ['active', 'scheduled']),
-          staleTime: 5 * 60 * 1000,
-        });
-    
-        if (mounted && appwriteData) {
-          const appwriteTournaments = tournamentSummaries || [];
-          setTournamentHistory(appwriteTournaments);
-          setPlayerDatabase(appwriteData.playerDatabase || []);
-          setPlayerRatings(appwriteData.playerRatings || {});
-          markRatingsPersisted(appwriteData.playerRatings || {});
-          const loadedMembers = appwriteData.members?.length ? appwriteData.members : localMembers;
-          const restoredMembers = applyMemberAccountLinks(
-            mergeMemberLinks(loadedMembers, localMembers),
-            appwriteData.memberAccountLinks
-          );
-          setMembers(restoredMembers);
-          const sourcePhotos = Object.keys(appwriteData.playerPhotos || {}).length ? appwriteData.playerPhotos : localPhotos;
-          const { urls, refs } = hydratePlayerPhotos(sourcePhotos);
-          setPlayerPhotos(urls);
-          setPlayerPhotoRefs(refs);
-          const sourceTemplates = appwriteData.templates?.length ? appwriteData.templates : localTemplates;
-          setTournamentTemplates(
-            sourceTemplates.map(template => ({
-              ...template,
-              tournamentFormat: normalizeTournamentFormat(template.tournamentFormat || 'league'),
-              teams: normalizeTemplateTeams(
-                template.teams || [],
-                template.gameMode || 'doubles',
-                template.numTeams || 3
-              ),
-            }))
-          );
-          setHistoryHydrated(false);
-          setActiveTournamentLock(appwriteData.activeTournament || null);
-          const activeFromCloud = findActiveTournament(appwriteTournaments);
-          const lock = appwriteData.activeTournament;
-          const lockCandidate = (lock && lock.status === 'active') ? {
-            id: lock.id || null,
-            appwriteId: lock.id || null,
-            name: lock.name || 'Live tournament',
-            date: lock.updatedAt ? new Date(lock.updatedAt).toLocaleDateString() : '',
-            teams: Array.isArray(lock.teams) ? lock.teams : [],
-            fixtures: Array.isArray(lock.fixtures) ? lock.fixtures : [],
-            bracket: Array.isArray(lock.bracket) ? lock.bracket : [],
-            champion: lock.champion || null,
-            aiSummaries: Array.isArray(lock.aiSummaries) ? lock.aiSummaries : [],
-            swapHistory: Array.isArray(lock.swapHistory) ? lock.swapHistory : [],
-            format: lock.format || '1',
-            gameMode: lock.gameMode || 'doubles',
-            tournamentFormat: normalizeTournamentFormat(lock.tournamentFormat || 'league'),
-            status: 'active',
-          } : null;
-          const scoreTournament = (tournament) => {
-            const completedFixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
-              .filter((match) => match?.completed).length;
-            const completedBracket = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
-              .flatMap((round) => (Array.isArray(round) ? round : []))
-              .filter((match) => match?.completed).length;
-            return completedFixtures + completedBracket + (tournament?.champion ? 10000 : 0);
-          };
-          const preferredActive = activeFromCloud && lockCandidate
-            ? (scoreTournament(lockCandidate) > scoreTournament(activeFromCloud) ? lockCandidate : activeFromCloud)
-            : (activeFromCloud || lockCandidate);
-          const hasDetailedCloudState = Boolean(
-            preferredActive
-            && (
-              (Array.isArray(preferredActive.fixtures) && preferredActive.fixtures.length > 0)
-              || (Array.isArray(preferredActive.bracket) && preferredActive.bracket.length > 0)
-              || (Array.isArray(preferredActive.teams) && preferredActive.teams.length > 0 && !preferredActive.isSummary)
-            )
-          );
-          if (preferredActive && hasDetailedCloudState) {
-            resumeActiveTournament(preferredActive);
-          }
-          void prefetchHomeSetupData();
-        }
-    
-      } catch (error) {
-        console.error("Error loading:", error);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    
-    loadInitialData();
-  
-    return () => {
-      mounted = false;
-    };
-  }, [isAppwriteEnabled, isConfigChecked, requiresAuth, authResolved, groupResolved, activeGroup?.id, queryClient]); // Load after access is resolved
   
   // Auto-save player ratings to Appwrite
   useEffect(() => {
@@ -1413,12 +1073,15 @@ const App = () => {
     }
   }, []);
 
+  const shouldComputeTeamNameDatabase = step === 'setup' || step === 'teams';
+  const shouldComputeSetupAnalytics = step === 'setup';
+  const shouldComputeProfileInsights = showProfileModal || Boolean(pendingLinkPrompt);
+
   const {
     teamNameDatabase,
     pairingAnalytics,
     formPowerRankings,
     currentUserMember,
-    currentUserPlayerName,
     currentUserPlayerProfile,
     currentUserPlayerTeam,
     currentUserAdvancedStats,
@@ -1438,112 +1101,14 @@ const App = () => {
     gameMode,
     fixtures,
     bracket,
+    compute: {
+      teamNameDatabase: shouldComputeTeamNameDatabase,
+      pairingAnalytics: shouldComputeSetupAnalytics,
+      formPowerRankings: shouldComputeSetupAnalytics,
+      profileInsights: shouldComputeProfileInsights,
+      unlinkedPlayerNames: shouldComputeProfileInsights,
+    },
   });
-
-  useEffect(() => {
-    // Show account-link flow only for approved group members.
-    if (!requiresAuth || !currentUser || !activeGroup || groupRole !== 'member' || isGuestViewer || loading) return;
-    const email = (currentUser.email || '').toLowerCase();
-    const accountName = (currentUser.name || '').trim();
-    const emailLocalPart = (currentUser.email || '').split('@')[0]?.trim() || '';
-    const displayName = (accountName || emailLocalPart || currentUser.email || '').trim();
-    if (!displayName) return;
-    const normalizedName = displayName.toLowerCase();
-    const currentTournamentPlayers = (teams || [])
-      .flatMap((team) => [team?.player, team?.player1, team?.player2])
-      .filter(Boolean);
-    const knownPlayers = [...new Set([...(playerDatabase || []), ...currentTournamentPlayers])];
-    const matchedPlayerName = knownPlayers.find(
-      (playerName) => (playerName || '').trim().toLowerCase() === normalizedName
-    );
-
-    const linkedByIdentity = members.find((member) => (
-      member.linkedAccountId === currentUser.$id
-      || ((member.linkedEmail || '').toLowerCase() === email)
-    ));
-
-    if (linkedByIdentity) {
-      if (pendingLinkPrompt) setPendingLinkPrompt(null);
-      const patched = {
-        ...linkedByIdentity,
-        linkedAccountId: currentUser.$id,
-        linkedEmail: currentUser.email,
-        name: linkedByIdentity.name || displayName,
-      };
-      if (JSON.stringify(patched) !== JSON.stringify(linkedByIdentity)) {
-        const updated = members.map(member => (
-          member.id === linkedByIdentity.id ? patched : member
-        ));
-        setMembers(updated);
-        saveMembersToLocal(updated);
-      }
-      return;
-    }
-
-    // If this name already has a linked profile in the group, skip prompting.
-    const alreadyLinkedByName = members.some((member) => (
-      Boolean(member.linkedAccountId || member.linkedEmail)
-      && (member.name || '').trim().toLowerCase() === normalizedName
-    ));
-    if (alreadyLinkedByName) {
-      if (pendingLinkPrompt) setPendingLinkPrompt(null);
-      return;
-    }
-
-    const sameNameMembers = members.filter(
-      member => (member.name || '').trim().toLowerCase() === normalizedName
-    );
-    const hasLinkedSameName = sameNameMembers.some(
-      member => Boolean(member.linkedAccountId || member.linkedEmail)
-    );
-    const unlinkedSameName = sameNameMembers.find(
-      member => !member.linkedAccountId && !member.linkedEmail
-    );
-
-    if (pendingLinkPrompt) return;
-
-    // Ask before linking an existing same-name unlinked member.
-    if (unlinkedSameName && !hasLinkedSameName) {
-      const promptKey = `${activeGroup.id}:${currentUser.$id}:member:${normalizedName}`;
-      if (linkPromptedRef.current.has(promptKey)) return;
-      linkPromptedRef.current.add(promptKey);
-      setPendingLinkPrompt({
-        type: 'member',
-        promptKey,
-        memberId: unlinkedSameName.id,
-        memberName: unlinkedSameName.name,
-        displayName,
-      });
-      return;
-    }
-
-    // If player exists in tournament/player database but no member profile exists yet, ask to link that player identity.
-    if (matchedPlayerName && sameNameMembers.length === 0 && !hasLinkedSameName) {
-      const promptKey = `${activeGroup.id}:${currentUser.$id}:playerdb:${normalizedName}`;
-      if (linkPromptedRef.current.has(promptKey)) return;
-      linkPromptedRef.current.add(promptKey);
-      setPendingLinkPrompt({
-        type: 'player',
-        promptKey,
-        playerName: matchedPlayerName,
-        displayName,
-      });
-      return;
-    }
-
-    // If no member with this name exists, create a linked profile member for the account.
-    if (sameNameMembers.length === 0) {
-      const next = [{
-        id: `member-${Date.now()}`,
-        name: displayName,
-        phone: '',
-        linkedAccountId: currentUser.$id,
-        linkedEmail: currentUser.email,
-      }, ...members];
-      setMembers(next);
-      saveMembersToLocal(next);
-    }
-  }, [requiresAuth, currentUser, activeGroup, groupRole, isGuestViewer, members, playerDatabase, teams, loading, pendingLinkPrompt]);
 
   const canEditOwnProfile = (playerName) => {
     if (!currentUserMember || !playerName) return false;
@@ -1552,84 +1117,19 @@ const App = () => {
     return (currentUserMember.name || '').trim().toLowerCase() === normalized;
   };
 
-  useEffect(() => {
-    if (!requiresAuth || !currentUser || !activeGroup || groupRole !== 'admin') {
-      setPendingJoinRequests([]);
-      setRecentJoinReviews([]);
-      setSeenPendingRequestIds([]);
-      setShowRequestCenter(false);
-      return;
-    }
-
-    let mounted = true;
-    const loadRequests = async () => {
-      try {
-        const requests = await queryClient.fetchQuery({
-          queryKey: queryKeys.adminPendingRequests(activeGroup.id, currentUser.$id),
-          queryFn: () => groupService.getPendingRequestsForAdmin({
-            groupId: activeGroup.id,
-            adminUserId: currentUser.$id,
-          }),
-          staleTime: 10 * 1000,
-        });
-        const recent = await queryClient.fetchQuery({
-          queryKey: queryKeys.adminRecentReviews(activeGroup.id, currentUser.$id),
-          queryFn: () => groupService.getRecentReviewedRequestsForAdmin({
-            groupId: activeGroup.id,
-            adminUserId: currentUser.$id,
-            limit: 6,
-          }),
-          staleTime: 10 * 1000,
-        });
-        if (mounted) {
-          setPendingJoinRequests(requests);
-          setRecentJoinReviews(recent);
-        }
-      } catch (_error) {
-        if (mounted) {
-          setPendingJoinRequests([]);
-          setRecentJoinReviews([]);
-        }
-      }
-    };
-
-    loadRequests();
-    return () => {
-      mounted = false;
-    };
-  }, [requiresAuth, currentUser, activeGroup, groupRole, queryClient]);
-
-  useEffect(() => {
-    if (!requiresAuth || !currentUser || !activeGroup || groupRole !== 'admin') {
-      setAdminAccounts([]);
-      return;
-    }
-    let mounted = true;
-    const loadAdminAccounts = async () => {
-      try {
-        const accounts = await queryClient.fetchQuery({
-          queryKey: queryKeys.adminGroupMembers(activeGroup.id, currentUser.$id),
-          queryFn: () => groupService.getGroupMembersForAdmin({
-            groupId: activeGroup.id,
-            adminUserId: currentUser.$id,
-          }),
-          staleTime: 20 * 1000,
-        });
-        if (mounted) setAdminAccounts(accounts || []);
-      } catch (_error) {
-        if (mounted) setAdminAccounts([]);
-      }
-    };
-    loadAdminAccounts();
-    return () => {
-      mounted = false;
-    };
-  }, [requiresAuth, currentUser, activeGroup, groupRole, queryClient]);
-
-  useEffect(() => {
-    setShowRequestCenter(false);
-    setSeenPendingRequestIds([]);
-  }, [activeGroup?.id]);
+  useAdminRequestsEffect({
+    requiresAuth,
+    currentUser,
+    activeGroup,
+    groupRole,
+    queryClient,
+    queryKeys,
+    setPendingJoinRequests,
+    setRecentJoinReviews,
+    setSeenPendingRequestIds,
+    setShowRequestCenter,
+    setAdminAccounts,
+  });
 
   // Initialize teams
   useEffect(() => {
@@ -1721,6 +1221,23 @@ const App = () => {
     }
     localStorage.setItem("badminton_members", JSON.stringify(safeMembers));
   };
+
+  useMemberLinkEffect({
+    requiresAuth,
+    currentUser,
+    activeGroup,
+    groupRole,
+    isGuestViewer,
+    loading,
+    members,
+    playerDatabase,
+    teams,
+    pendingLinkPrompt,
+    setPendingLinkPrompt,
+    setMembers,
+    saveMembersToLocal,
+    linkPromptedRef,
+  });
 
   const saveTemplatesToLocal = (updatedTemplates) => {
     if (isAppwriteEnabled) {
@@ -2189,12 +1706,6 @@ const App = () => {
     deleteCasualMatchMutation,
   });
 
-  useEffect(() => {
-    if (groupRole !== 'member' && pendingLinkPrompt) {
-      setPendingLinkPrompt(null);
-    }
-  }, [groupRole, pendingLinkPrompt]);
-
   const {
     handleLogin,
     handleRegister,
@@ -2417,7 +1928,7 @@ const App = () => {
           const detailed = await ensureTournamentDetailsForId(candidate.appwriteId || candidate.id);
           active = pickPreferredTournament(candidate, detailed);
         }
-      } catch (_error) {
+      } catch {
         // Ignore network issues and fallback to the existing local state.
       }
     }
@@ -2600,18 +2111,32 @@ const App = () => {
 
   const handleOpenHistoryModal = () => {
     setShowHistory(true);
+    if (isAppwriteEnabled && !historyHydrated && !historyHydrationPending) {
+      void ensureTournamentHistoryHydrated();
+    }
   };
 
   const handleOpenCasualHistoryModal = () => {
     setShowCasualHistory(true);
+    if (isAppwriteEnabled && !casualHydrated && !casualHydrationPending) {
+      void ensureCasualMatchesHydrated();
+    }
   };
 
   const handleOpenAllTimeStatsModal = () => {
     setShowAllTimeStats(true);
+    if (isAppwriteEnabled) {
+      if (!historyHydrated && !historyHydrationPending) void ensureTournamentHistoryHydrated();
+      if (!casualHydrated && !casualHydrationPending) void ensureCasualMatchesHydrated();
+    }
   };
 
   const handleOpenEloModal = () => {
     setShowEloLeaderboard(true);
+    if (isAppwriteEnabled) {
+      if (!historyHydrated && !historyHydrationPending) void ensureTournamentHistoryHydrated();
+      if (!casualHydrated && !casualHydrationPending) void ensureCasualMatchesHydrated();
+    }
   };
 
   const shouldHydrateForTournamentDelete = (id) => {
@@ -2715,7 +2240,10 @@ const App = () => {
     setGameMode,
     tournamentFormat,
     setTournamentFormat,
-    onNext: handleStartTournament,
+    onNext: async (rawNumTeamsInput) => withActionLock(
+      'setup.start-tournament',
+      () => handleStartTournament(rawNumTeamsInput)
+    ),
     onRecordCasualMatch: () => {
       if (!assertCanOperate()) return;
       setShowCasualMatch(true);
@@ -2723,10 +2251,22 @@ const App = () => {
     tournamentHistory,
     scheduledTournaments,
     activeLiveTournaments,
-    onEditScheduledTournament: handleEditScheduledTournament,
-    onStartScheduledTournament: handleStartScheduledTournament,
-    onResumeActiveTournament: handleResumeActiveTournament,
-    onDeleteActiveTournament: handleDeleteActiveTournament,
+    onEditScheduledTournament: async (tournamentId) => withActionLock(
+      `setup.edit-scheduled.${String(tournamentId || '')}`,
+      () => handleEditScheduledTournament(tournamentId)
+    ),
+    onStartScheduledTournament: async (tournamentId) => withActionLock(
+      `setup.start-scheduled.${String(tournamentId || '')}`,
+      () => handleStartScheduledTournament(tournamentId)
+    ),
+    onResumeActiveTournament: async (tournamentId) => withActionLock(
+      `setup.resume-live.${String(tournamentId || 'active')}`,
+      () => handleResumeActiveTournament(tournamentId)
+    ),
+    onDeleteActiveTournament: async (tournamentId) => withActionLock(
+      `setup.delete-live.${String(tournamentId || 'active')}`,
+      () => handleDeleteActiveTournament(tournamentId)
+    ),
     canDeleteLiveTournament: canDelete,
     canDeleteActions: canDelete,
     casualMatches,
@@ -2771,8 +2311,14 @@ const App = () => {
     onSaveTemplate: saveTournamentTemplate,
     onApplyTemplate: applyTournamentTemplate,
     onDeleteTemplate: deleteTournamentTemplate,
-    onDeleteTournament: handleDeleteTournamentWithHydration,
-    onDeleteCasualMatch: handleDeleteCasualWithHydration,
+    onDeleteTournament: async (tournamentId) => withActionLock(
+      `setup.delete-tournament.${String(tournamentId || '')}`,
+      () => handleDeleteTournamentWithHydration(tournamentId)
+    ),
+    onDeleteCasualMatch: async (matchId) => withActionLock(
+      `setup.delete-casual.${String(matchId || '')}`,
+      () => handleDeleteCasualWithHydration(matchId)
+    ),
     allTimeStats: cumulativeAllTimeStats,
     eloLeaderboard,
     playerRatings,
@@ -2787,6 +2333,7 @@ const App = () => {
     casualHydrated,
     historyHydrationPending,
     casualHydrationPending,
+    getActionPending: isActionPending,
   };
 
   const teamEntryProps = {
@@ -2796,14 +2343,21 @@ const App = () => {
     gameMode,
     playerDatabase,
     teamNameDatabase,
-    onGenerate: generateFixtures,
+    onGenerate: async (params) => withActionLock(
+      'teams.generate',
+      () => generateFixtures(params)
+    ),
     loading,
     oddPlayerEnabled,
     setOddPlayerEnabled,
     oddPlayerName,
     setOddPlayerName,
     onBack: () => setStep('setup'),
-    onSchedule: scheduleTournament,
+    onSchedule: async (params) => withActionLock(
+      'teams.schedule',
+      () => scheduleTournament(params)
+    ),
+    getActionPending: isActionPending,
   };
 
   const tournamentViewProps = {
@@ -2836,12 +2390,22 @@ const App = () => {
     onSwapTeamMember: swapTeamMember,
     swapHistory,
     onGoHome: handleHeaderGoHome,
-    onResetTournament: handleResetTournamentWithHydration,
-    onRerunTournament: rerunTournament,
-    onStartNextTournament: startNextTournament,
+    onResetTournament: async () => withActionLock(
+      'tournament.reset',
+      () => handleResetTournamentWithHydration()
+    ),
+    onRerunTournament: async () => withActionLock(
+      'tournament.rematch',
+      () => Promise.resolve(rerunTournament())
+    ),
+    onStartNextTournament: async (options) => withActionLock(
+      'tournament.next',
+      () => Promise.resolve(startNextTournament(options))
+    ),
     calculatePointsTable,
     calculatePlayerStats,
     getPlayerLeaderboard,
+    getActionPending: isActionPending,
   };
 
   const casualMatchProps = {
@@ -2954,74 +2518,11 @@ const App = () => {
         {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         <span className="hidden sm:inline">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
       </button>
-
-      {showInstallPrompt && !isStandaloneApp && (
-        <button
-          type="button"
-          onClick={handleInstallPwa}
-          className="pwa-install-btn"
-          aria-label="Install app"
-          title="Install app"
-        >
-          <Download size={18} />
-          <span className="hidden sm:inline">Install App</span>
-        </button>
-      )}
-
-      {showNotificationPrompt && notificationPermission === 'default' && (
-        <button
-          type="button"
-          onClick={handleEnableNotifications}
-          className="pwa-notify-btn"
-          aria-label="Enable notifications"
-          title="Enable notifications"
-        >
-          <Bell size={18} />
-          <span className="hidden sm:inline">Enable Alerts</span>
-        </button>
-      )}
-
-      {showPwaUpdate && (
-        <div className="pwa-update-banner" role="status" aria-live="polite">
-          <p className="pwa-update-title">New version available</p>
-          <div className="pwa-update-actions">
-            <button
-              type="button"
-              className="pwa-update-refresh-btn"
-              onClick={handleApplyPwaUpdate}
-            >
-              <RefreshCw size={15} />
-              <span>Refresh</span>
-            </button>
-            <button
-              type="button"
-              className="pwa-update-dismiss-btn"
-              onClick={() => setShowPwaUpdate(false)}
-            >
-              Later
-            </button>
-          </div>
-        </div>
-      )}
-
-      {queuedWritesCount > 0 && (
-        <button
-          type="button"
-          className="pwa-sync-badge"
-          onClick={handleFlushQueuedWrites}
-          title="Sync queued offline changes now"
-        >
-          <CloudUpload size={15} />
-          <span>{queuedWritesCount} pending sync</span>
-        </button>
-      )}
-
-      {isOffline && (
-        <div className="pwa-network-badge" role="status" aria-live="polite">
-          <WifiOff size={15} />
-          <span>Offline Mode</span>
-        </div>
-      )}
+      <PwaControls
+        queuedWritesCount={queuedWritesCount}
+        flushOfflineOutbox={flushOfflineOutbox}
+        showToast={showToast}
+      />
     </>
   );
 };
