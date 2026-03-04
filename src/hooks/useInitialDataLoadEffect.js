@@ -149,7 +149,7 @@ export const useInitialDataLoadEffect = ({
           setActiveTournamentLock(appwriteData.activeTournament || null);
           const activeFromCloud = findActiveTournament(appwriteTournaments);
           const lock = appwriteData.activeTournament;
-          const lockCandidate = (lock && lock.status === 'active') ? {
+          let lockCandidate = (lock && lock.status === 'active') ? {
             id: lock.id || null,
             appwriteId: lock.id || null,
             name: lock.name || 'Live tournament',
@@ -165,6 +165,47 @@ export const useInitialDataLoadEffect = ({
             tournamentFormat: normalizeTournamentFormat(lock.tournamentFormat || 'league'),
             status: 'active',
           } : null;
+          if (lockCandidate && !activeFromCloud) {
+            const lockId = String(lockCandidate.id || lockCandidate.appwriteId || '').trim();
+            const lockName = String(lockCandidate.name || '').trim().toLowerCase();
+            const lockMatchesSummary = (appwriteTournaments || []).some((item) => {
+              const summaryId = String(item?.id || item?.appwriteId || '').trim();
+              const summaryName = String(item?.name || '').trim().toLowerCase();
+              if (item?.status !== 'active' || item?.champion) return false;
+              if (lockId && summaryId && lockId === summaryId) return true;
+              return Boolean(lockName && summaryName && lockName === summaryName);
+            });
+
+            if (!lockMatchesSummary) {
+              if (lockId) {
+                try {
+                  const lockDetail = await tournamentService.getTournamentById(lockId, activeGroupId);
+                  if (lockDetail?.status === 'active' && !lockDetail?.champion) {
+                    lockCandidate = lockDetail;
+                  } else {
+                    lockCandidate = null;
+                  }
+                } catch {
+                  lockCandidate = null;
+                }
+              } else {
+                lockCandidate = null;
+              }
+            }
+          }
+          if (!lockCandidate && lock) {
+            setActiveTournamentLock(null);
+            queryClient.setQueryData(
+              queryKeys.appwriteData(activeGroupId),
+              (cached) => {
+                if (!cached || typeof cached !== 'object') return cached;
+                return {
+                  ...cached,
+                  activeTournament: null,
+                };
+              }
+            );
+          }
           const scoreTournament = (tournament) => {
             const completedFixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
               .filter((match) => match?.completed).length;

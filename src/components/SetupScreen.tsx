@@ -64,12 +64,18 @@ const LoadingRows = ({ rows = 4 }) => (
   </div>
 );
 
-const SyncStatusChip = ({ syncStatus = null }) => {
+const SyncStatusChip = ({ syncStatus = null, freshnessText = '' }) => {
   if (!syncStatus) return null;
+  const secondaryText = syncStatus?.busy
+    ? String(syncStatus?.detail || '').trim()
+    : String(freshnessText || syncStatus?.detail || '').trim();
   return (
     <div className={`setup-sync-chip sync-feedback-chip setup-sync-${syncStatus.tone || 'saved'}`}>
       <span className="setup-sync-chip-dot" />
-      <span className="setup-sync-chip-label">{syncStatus.label || 'Ready'}</span>
+      <span className="setup-sync-chip-label">
+        {syncStatus.label || 'Ready'}
+        {secondaryText ? ` · ${secondaryText}` : ''}
+      </span>
       {syncStatus.busy && <RefreshCw size={12} className="animate-spin" />}
     </div>
   );
@@ -145,6 +151,8 @@ const SetupScreen = ({
   casualHydrationPending = false,
   getActionPending = () => false,
   syncStatus = null,
+  lastDataUpdatedAt = 0,
+  realtimeConnected = false,
   isMobileViewport = false,
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
@@ -153,6 +161,7 @@ const SetupScreen = ({
   const [showPairingAnalytics, setShowPairingAnalytics] = useState(false);
   const [showPowerRankings, setShowPowerRankings] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
+  const [freshnessNow, setFreshnessNow] = useState(() => Date.now());
   const historyCacheRef = useRef(Array.isArray(tournamentHistory) ? tournamentHistory : []);
   const casualCacheRef = useRef(Array.isArray(casualMatches) ? casualMatches : []);
   const allTimeStatsCacheRef = useRef(Array.isArray(allTimeStats) ? allTimeStats : []);
@@ -172,6 +181,36 @@ const SetupScreen = ({
   ));
   const isPendingAction = (actionKey) => Boolean(getActionPending?.(actionKey));
   const startTournamentPending = isPendingAction('setup.start-tournament');
+
+  useEffect(() => {
+    if (!isAppwriteEnabled || !lastDataUpdatedAt) return undefined;
+    const timerId = setInterval(() => {
+      setFreshnessNow(Date.now());
+    }, 15 * 1000);
+    return () => clearInterval(timerId);
+  }, [isAppwriteEnabled, lastDataUpdatedAt]);
+
+  const freshnessText = useMemo(() => {
+    if (!isAppwriteEnabled) return 'Device local';
+    const updatedAt = Number(lastDataUpdatedAt || 0);
+    if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+      return realtimeConnected ? 'Sync warming up' : 'Waiting for cloud sync';
+    }
+    const elapsedMinutes = Math.max(0, Math.floor((freshnessNow - updatedAt) / (60 * 1000)));
+    if (elapsedMinutes < 1) return 'Synced just now';
+    if (elapsedMinutes < 60) {
+      return `Synced ${elapsedMinutes} min${elapsedMinutes === 1 ? '' : 's'} ago`;
+    }
+
+    const updatedDate = new Date(updatedAt);
+    const nowDate = new Date(freshnessNow);
+    const sameDay = updatedDate.toDateString() === nowDate.toDateString();
+    const timeLabel = updatedDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (sameDay) return `Synced at ${timeLabel}`;
+
+    const dateLabel = updatedDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return `Synced ${dateLabel}, ${timeLabel}`;
+  }, [isAppwriteEnabled, lastDataUpdatedAt, realtimeConnected, freshnessNow]);
 
   useEffect(() => {
     if (!historyLoading) {
@@ -417,7 +456,7 @@ const SetupScreen = ({
             <div className="mb-6 setup-dashboard-shell">
               <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-semibold text-gray-700 setup-dashboard-title">Home Dashboard</p>
-                <SyncStatusChip syncStatus={syncStatus} />
+                <SyncStatusChip syncStatus={syncStatus} freshnessText={freshnessText} />
               </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               <div className="setup-dashboard-card app-surface-card app-card-tier-tertiary">

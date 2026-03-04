@@ -42,6 +42,8 @@ export const useTournamentShell = ({
   isSyncing,
   isMobileViewport,
   syncStatus,
+  lastDataUpdatedAt,
+  realtimeConnected,
   canDelete,
   cumulativeAllTimeStats,
   eloLeaderboard,
@@ -212,6 +214,8 @@ export const useTournamentShell = ({
     casualHydrationPending,
     getActionPending: isActionPending,
     syncStatus,
+    lastDataUpdatedAt,
+    realtimeConnected,
     isMobileViewport,
   };
 

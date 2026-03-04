@@ -72,6 +72,7 @@ export const useTournamentActions = ({
   const tournamentSyncTimerRef = useRef(null);
   const pendingTournamentSyncRef = useRef(null);
   const tournamentSyncInFlightRef = useRef(false);
+  const createTournamentRunIdRef = useRef(0);
   const remoteActiveCacheRef = useRef({
     hasValue: false,
     value: null,
@@ -375,8 +376,18 @@ export const useTournamentActions = ({
         .filter(Boolean);
       return ids.includes(normalizedTarget);
     };
+    const normalizeName = (value) => String(value || '').trim().toLowerCase();
+    const incomingName = normalizeName(tournament?.name);
+    const incomingIsLive = tournament?.status === 'active' && !tournament?.champion;
     const existingIndex = history.findIndex((t) => (
       incomingIds.some((candidateId) => matchesId(t, candidateId))
+      || (
+        incomingIsLive
+        && t?.status === 'active'
+        && !t?.champion
+        && incomingName
+        && normalizeName(t?.name) === incomingName
+      )
     ));
     return existingIndex >= 0
       ? history.map((t, index) => (index === existingIndex ? tournament : t))
@@ -898,37 +909,56 @@ export const useTournamentActions = ({
     return null;
   };
 
-  const clearActiveTournamentLockIfMatches = async ({ tournamentId, tournamentName } = {}) => {
-    if (!isAppwriteEnabled) return;
+  const clearActiveTournamentLockIfMatches = async ({
+    tournamentId,
+    tournamentName,
+    force = false,
+  } = {}) => {
+    if (!isAppwriteEnabled) return false;
     const targetId = String(tournamentId || '').trim();
     const targetName = String(tournamentName || '').trim().toLowerCase();
+    const clearLock = async () => {
+      await updateActiveTournamentLock(null, { immediate: true });
+      setActiveTournamentLock?.(null);
+      return true;
+    };
     const lockMatchesTarget = (lock) => {
       if (!lock) return false;
       const lockId = String(lock.id || '').trim();
+      const lockAppwriteId = String(lock.appwriteId || '').trim();
       const lockName = String(lock.name || '').trim().toLowerCase();
-      const idMatch = Boolean(lockId && targetId && lockId === targetId);
+      const idMatch = Boolean(
+        targetId
+        && (
+          (lockId && lockId === targetId)
+          || (lockAppwriteId && lockAppwriteId === targetId)
+        )
+      );
       const nameMatch = Boolean(lockName && targetName && lockName === targetName);
       return idMatch || nameMatch;
     };
 
     try {
-      if (remoteActiveCacheRef.current?.hasValue) {
-        const cachedLock = remoteActiveCacheRef.current.value || null;
-        if (!lockMatchesTarget(cachedLock)) return;
-        await updateActiveTournamentLock(null, { immediate: true });
-        setActiveTournamentLock?.(null);
-        return;
+      if (force) {
+        return clearLock();
       }
 
-      const meta = await appDataService.getAppMeta({ groupId: activeGroup?.id });
+      if (remoteActiveCacheRef.current?.hasValue) {
+        const cachedLock = remoteActiveCacheRef.current.value || null;
+        if (lockMatchesTarget(cachedLock)) {
+          return clearLock();
+        }
+      }
+
+      const meta = await appDataService.getAppMeta({ groupId: activeGroup?.id, force: true });
       const lock = meta?.activeTournament;
       if (lockMatchesTarget(lock)) {
-        await updateActiveTournamentLock(null, { immediate: true });
-        setActiveTournamentLock?.(null);
+        return clearLock();
       }
     } catch {
       // Ignore lock clear failures.
     }
+    return false;
   };
 
   const blockWhenLiveTournamentExists = async () => {
@@ -1009,6 +1039,8 @@ export const useTournamentActions = ({
   } = {}) => {
     if (!assertCanOperate()) return;
     if (await blockWhenLiveTournamentExists()) return;
+    const createRunId = createTournamentRunIdRef.current + 1;
+    createTournamentRunIdRef.current = createRunId;
     const selectedTeams = teamsOverride || teams;
     const selectedTournamentFormat = tournamentFormatOverride || tournamentFormat;
     const selectedFormat = formatOverride || format;
@@ -1086,6 +1118,22 @@ export const useTournamentActions = ({
           const saved = await saveTournamentMutation.mutateAsync(tournamentData);
           if (!saved) return;
           const savedId = saved.appwriteId || saved.id || await resolveSyncTournamentIdForWrite();
+          const isStaleCreate = createRunId !== createTournamentRunIdRef.current;
+          if (isStaleCreate) {
+            if (savedId) {
+              try {
+                await deleteTournamentMutation.mutateAsync(savedId);
+              } catch {
+                // Ignore cleanup errors for stale create writes.
+              }
+            }
+            await clearActiveTournamentLockIfMatches({
+              tournamentId: savedId || null,
+              tournamentName: selectedTournamentName,
+              force: true,
+            });
+            return;
+          }
           if (savedId) setCurrentTournamentId(savedId);
           setTournamentHistory((prev) => upsertTournamentHistory(prev, {
             ...saved,
@@ -2001,8 +2049,9 @@ export const useTournamentActions = ({
   };
 
   const resetTournament = async (options = {}) => {
-    const { skipConfirm = false } = options || {};
+    const { skipConfirm = false, waitForCloudSync = false } = options || {};
     if (!assertCanDelete()) return { success: false };
+    createTournamentRunIdRef.current += 1;
     if (!skipConfirm) {
       const confirmed = await requestConfirmation({
         title: 'Delete & Start New',
@@ -2056,7 +2105,6 @@ export const useTournamentActions = ({
       });
 
       setTournamentHistory(updatedHistory);
-      const hasActiveRemaining = updatedHistory.some((item) => item?.status === 'active' && !item?.champion);
       const recalculatedRatings = recalculateEloFromHistory(updatedHistory, casualMatches);
       const recalculatedRatingsDelta = typeof buildRatingsDelta === 'function'
         ? buildRatingsDelta(playerRatings || {}, recalculatedRatings || {})
@@ -2097,28 +2145,25 @@ export const useTournamentActions = ({
             // Ignore remote summary read errors and continue with collected ids.
           }
           let deletedFromCloud = cloudDeleteIds.length === 0;
+          let deletedAny = false;
           for (const deleteId of cloudDeleteIds) {
-            // Keep calls sequential so we stop at first successful delete.
+            // Keep calls sequential and try all candidates to remove duplicate active entries.
             const result = await deleteTournamentMutation.mutateAsync(deleteId);
             if (result !== false) {
               deletedFromCloud = true;
-              await clearActiveTournamentLockIfMatches({
-                tournamentId: deleteId,
-                tournamentName: tournamentName,
-              });
-              break;
+              deletedAny = true;
             }
           }
           if (!deletedFromCloud) {
             showToast('Failed to delete tournament from cloud. Cleared local state only.', 'error');
           }
 
-          if (cloudDeleteIds.length === 0) {
-            await clearActiveTournamentLockIfMatches({ tournamentName: tournamentName });
-          }
-
-          if (!hasActiveRemaining) {
-            await updateActiveTournamentLock(null, { immediate: true });
+          if (deletedAny || cloudDeleteIds.length === 0) {
+            await clearActiveTournamentLockIfMatches({
+              tournamentId: cloudDeleteIds[0],
+              tournamentName: tournamentName,
+              force: true,
+            });
           }
 
           await saveRatingsMutation.mutateAsync(recalculatedRatingsDelta);
@@ -2142,6 +2187,11 @@ export const useTournamentActions = ({
       };
 
       if (isAppwriteEnabled) {
+        if (waitForCloudSync) {
+          await persistDeletion();
+          showToast('Tournament deleted. ELO/stats recalculated.');
+          return deleteResult;
+        }
         showToast('Tournament deleted locally. Cloud sync in progress.');
         void persistDeletion().then(() => {
           showToast('Tournament deleted. ELO/stats recalculated.');
@@ -2232,8 +2282,13 @@ export const useTournamentActions = ({
   };
 
   const handleDeleteTournamentFromSetup = async (id, options = {}) => {
-    const { skipConfirm = false, skipProgressToast = false } = options || {};
+    const {
+      skipConfirm = false,
+      skipProgressToast = false,
+      awaitCloudSync = false,
+    } = options || {};
     if (!assertCanDelete()) return false;
+    createTournamentRunIdRef.current += 1;
     if (!id) {
       showToast('Tournament id not found for delete', 'error');
       return false;
@@ -2355,23 +2410,24 @@ export const useTournamentActions = ({
         }
 
         let deletedFromCloud = false;
+        let deletedAny = false;
         for (const candidateId of cloudDeleteIds) {
-          // Keep calls sequential so we stop at first successful delete.
+          // Keep calls sequential and try all candidates to remove duplicate active entries.
           const result = await deleteTournamentMutation.mutateAsync(candidateId);
           if (result !== false) {
             deletedFromCloud = true;
-            await clearActiveTournamentLockIfMatches({
-              tournamentId: candidateId,
-              tournamentName: tournament?.name,
-            });
-            break;
+            deletedAny = true;
           }
         }
         if (!deletedFromCloud) {
           throw new Error('Failed to delete tournament from cloud');
         }
-        if (targetIsActive || !hasActiveRemaining) {
-          await updateActiveTournamentLock(null, { immediate: true });
+        if (deletedAny || cloudDeleteIds.length === 0) {
+          await clearActiveTournamentLockIfMatches({
+            tournamentId: cloudDeleteIds[0],
+            tournamentName: tournament?.name,
+            force: targetIsActive || !hasActiveRemaining,
+          });
         }
         await saveRatingsMutation.mutateAsync(recalculatedRatingsDelta);
         if (typeof markRatingsPersisted === 'function') {
@@ -2397,6 +2453,16 @@ export const useTournamentActions = ({
 
     if (isAppwriteEnabled) {
       showToast('Tournament deleted');
+      if (awaitCloudSync || targetIsActive) {
+        try {
+          await persistDeletion();
+          return true;
+        } catch (error) {
+          console.error('Tournament delete cloud sync failed:', error);
+          showToast('Tournament deleted locally, but cloud sync failed.', 'error');
+          return false;
+        }
+      }
       void persistDeletion().catch((error) => {
         console.error('Tournament delete cloud sync failed:', error);
         showToast('Tournament deleted locally, but cloud sync failed.', 'error');

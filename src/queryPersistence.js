@@ -6,8 +6,8 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 
 const QUERY_CACHE_STORAGE_KEY = 'bfm:rq-cache:v2';
 const LEGACY_QUERY_CACHE_STORAGE_KEY = 'bfm:rq-cache:v1';
-const QUERY_CACHE_BUSTER = '2026-03-03';
-const QUERY_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const QUERY_CACHE_BUSTER = '2026-03-04-cache-policy-v2';
+const QUERY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const PERSIST_THROTTLE_MS = 800;
 
 const ROOT_QUERY_KEYS = new Set([
@@ -16,6 +16,11 @@ const ROOT_QUERY_KEYS = new Set([
   'casual-matches',
   'groups',
 ]);
+const EXCLUDED_QUERY_PREFIXES = [
+  ['tournaments', 'detail'],
+  ['groups', 'admin'],
+  ['groups', 'pending'],
+];
 
 let persistenceStarted = false;
 let activeUnsubscribe = null;
@@ -31,9 +36,17 @@ const getPersister = () => createSyncStoragePersister({
   throttleTime: PERSIST_THROTTLE_MS,
 });
 
+const queryKeyStartsWith = (full, prefix) => {
+  if (!Array.isArray(full) || !Array.isArray(prefix) || prefix.length === 0) return false;
+  if (full.length < prefix.length) return false;
+  return prefix.every((value, index) => String(full[index]) === String(value));
+};
+
 const shouldPersistQuery = (query) => {
-  const rootKey = Array.isArray(query?.queryKey) ? String(query.queryKey[0] || '') : '';
+  const queryKey = Array.isArray(query?.queryKey) ? query.queryKey : [];
+  const rootKey = String(queryKey[0] || '');
   if (!ROOT_QUERY_KEYS.has(rootKey)) return false;
+  if (EXCLUDED_QUERY_PREFIXES.some((prefix) => queryKeyStartsWith(queryKey, prefix))) return false;
   return query?.state?.status === 'success' && query?.state?.data !== undefined;
 };
 

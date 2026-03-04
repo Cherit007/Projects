@@ -26,6 +26,38 @@ export const useHomeData = ({
 }) => {
   const historyHydrationVersionRef = useRef(0);
   const casualHydrationVersionRef = useRef(0);
+  const normalizeName = (value) => String(value || '').trim().toLowerCase();
+  const getTournamentIds = (item) => Array.from(new Set(
+    [item?.id, item?.appwriteId]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  const hasIdOverlap = (left, right) => {
+    const leftIds = getTournamentIds(left);
+    const rightIds = getTournamentIds(right);
+    if (leftIds.length === 0 || rightIds.length === 0) return false;
+    return leftIds.some((id) => rightIds.includes(id));
+  };
+  const isActiveLiveTournament = (item) => item?.status === 'active' && !item?.champion;
+  const mergeHydratedHistoryWithLocalLive = (remoteHistory = [], localHistory = []) => {
+    const remote = Array.isArray(remoteHistory) ? remoteHistory : [];
+    const local = Array.isArray(localHistory) ? localHistory : [];
+    const localActive = local.filter((item) => isActiveLiveTournament(item));
+    if (localActive.length === 0) return remote;
+
+    const preservedLocalActive = localActive.filter((localItem) => {
+      const localName = normalizeName(localItem?.name);
+      return !remote.some((remoteItem) => {
+        if (hasIdOverlap(localItem, remoteItem)) return true;
+        if (!isActiveLiveTournament(remoteItem)) return false;
+        const remoteName = normalizeName(remoteItem?.name);
+        return Boolean(localName && remoteName && localName === remoteName);
+      });
+    });
+
+    if (preservedLocalActive.length === 0) return remote;
+    return [...preservedLocalActive, ...remote];
+  };
 
   const invalidateHydrationRequests = () => {
     historyHydrationVersionRef.current += 1;
@@ -94,16 +126,20 @@ export const useHomeData = ({
           queryFn: () => tournamentService.getAllTournaments(100, activeGroupId),
           staleTime: 5 * 60 * 1000,
         });
+        const mergedHistory = mergeHydratedHistoryWithLocalLive(
+          history || [],
+          tournamentHistory || []
+        );
         if (historyHydrationVersionRef.current !== requestVersion) {
           return tournamentHistory || [];
         }
-        setTournamentHistory(history || []);
+        setTournamentHistory(mergedHistory);
         recoverRatingsIfMissing({
-          history: history || [],
+          history: mergedHistory,
           casual: casualMatches || [],
         });
         setHistoryHydrated(true);
-        return history || [];
+        return mergedHistory;
       } catch (error) {
         console.error('Failed to load tournament history:', error);
         if (!silent) {

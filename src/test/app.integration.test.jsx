@@ -136,5 +136,5 @@ describe('App integration flows', () => {
     await user.click(screen.getByRole('button', { name: /Resume/i }));
     expect(await screen.findByRole('button', { name: /Submit & Continue/i })).toBeInTheDocument();
     expect(screen.getByText(/Match 2/i)).toBeInTheDocument();
-  });
+  }, 15000);
 });

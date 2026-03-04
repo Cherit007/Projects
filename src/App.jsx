@@ -18,6 +18,7 @@ import { useMemberLinkEffect } from './hooks/useMemberLinkEffect';
 import { useAdminRequestsEffect } from './hooks/useAdminRequestsEffect';
 import { useDashboardDerivedData } from './hooks/useDashboardDerivedData';
 import { useModalManager } from './hooks/useModalManager';
+import { useRealtimeCacheSync } from './hooks/useRealtimeCacheSync';
 import { useAppStoreShallow } from './store/appStore';
 import { appDataService } from './services/appDataService';
 import { tournamentService } from './services/tournamentService';
@@ -505,10 +506,67 @@ const App = () => {
     setAdminAccounts,
     setStep,
   });
+  const {
+    realtimeConnected,
+    lastCachePatchAt,
+  } = useRealtimeCacheSync({
+    enabled: Boolean(
+      isAppwriteEnabled
+      && activeGroup?.id
+      && (!requiresAuth || authResolved)
+    ),
+    activeGroupId: activeGroup?.id,
+    queryClient,
+    setTournamentHistory,
+    setCasualMatches,
+  });
   const pendingActionCount = useMemo(
     () => Object.keys(pendingActions || {}).length,
     [pendingActions]
   );
+  const [lastDataUpdatedAt, setLastDataUpdatedAt] = useState(0);
+  const computeDashboardCacheUpdatedAt = useCallback(() => {
+    if (!isAppwriteEnabled || !activeGroup?.id) return 0;
+    const candidateKeys = [
+      queryKeys.appwriteData(activeGroup?.id),
+      queryKeys.tournamentSummaries(activeGroup?.id),
+      queryKeys.tournamentHistory(activeGroup?.id),
+      queryKeys.casualMatches(activeGroup?.id),
+    ];
+    return candidateKeys.reduce((max, key) => {
+      const updatedAt = Number(queryClient.getQueryState(key)?.dataUpdatedAt || 0);
+      return Number.isFinite(updatedAt) && updatedAt > max ? updatedAt : max;
+    }, 0);
+  }, [isAppwriteEnabled, activeGroup?.id, queryClient]);
+
+  useEffect(() => {
+    if (!isAppwriteEnabled || !activeGroup?.id) {
+      setLastDataUpdatedAt(0);
+      return undefined;
+    }
+
+    const recomputeUpdatedAt = () => {
+      const cachedUpdatedAt = computeDashboardCacheUpdatedAt();
+      const next = Math.max(cachedUpdatedAt, Number(lastCachePatchAt || 0));
+      setLastDataUpdatedAt((prev) => (prev === next ? prev : next));
+    };
+
+    recomputeUpdatedAt();
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      const queryKey = event?.query?.queryKey;
+      const rootKey = Array.isArray(queryKey) ? String(queryKey[0] || '') : '';
+      if (!['appwrite', 'tournaments', 'casual-matches'].includes(rootKey)) return;
+      recomputeUpdatedAt();
+    });
+    return unsubscribe;
+  }, [
+    isAppwriteEnabled,
+    activeGroup?.id,
+    queryClient,
+    computeDashboardCacheUpdatedAt,
+    lastCachePatchAt,
+  ]);
+
   const syncStatus = useMemo(() => {
     if (!isAppwriteEnabled) {
       return {
@@ -627,7 +685,19 @@ const App = () => {
     historyHydrationPromiseRef,
     casualHydrationPromiseRef,
   });
-
+  const clearBootstrapActiveTournamentCache = useCallback(() => {
+    if (!isAppwriteEnabled) return;
+    queryClient.setQueryData(
+      queryKeys.appwriteData(activeGroup?.id),
+      (cached) => {
+        if (!cached || typeof cached !== 'object') return cached;
+        return {
+          ...cached,
+          activeTournament: null,
+        };
+      }
+    );
+  }, [isAppwriteEnabled, queryClient, activeGroup?.id]);
   useAuthBootstrapEffect({
     isConfigChecked,
     requiresAuth,
@@ -1571,6 +1641,7 @@ const App = () => {
     const deleted = await handleDeleteTournamentFromSetup(targetId, {
       skipConfirm: true,
       skipProgressToast: needsHydration,
+      awaitCloudSync: true,
     });
     if (!deleted) return;
     setTournamentHistory((prev) => removeTournamentFromList(prev, {
@@ -1579,6 +1650,7 @@ const App = () => {
       removeActiveByName: true,
     }));
     setActiveTournamentLock(null);
+    clearBootstrapActiveTournamentCache();
     if (deleteIds.some((id) => String(currentTournamentId || '').trim() === id)) {
       setCurrentTournamentId(null);
     }
@@ -1630,6 +1702,7 @@ const App = () => {
         });
         if (String(activeTournamentLock?.id || '').trim() === targetId) {
           setActiveTournamentLock(null);
+          clearBootstrapActiveTournamentCache();
         }
         return null;
       }
@@ -1835,6 +1908,9 @@ const App = () => {
     ));
     const normalizedTargetName = normalizeTournamentName(target?.name);
     const removeActiveByName = Boolean(target?.status === 'active' && !target?.champion && normalizedTargetName);
+    if (removeActiveByName) {
+      clearBootstrapActiveTournamentCache();
+    }
     pruneTournamentQueryCacheAfterDelete({
       targetIds: deleteIds,
       targetName: normalizedTargetName,
@@ -1901,7 +1977,7 @@ const App = () => {
         ensureCasualMatchesHydrated(),
       ]);
     }
-    const result = await resetTournament({ skipConfirm: true });
+    const result = await resetTournament({ skipConfirm: true, waitForCloudSync: true });
     if (!result?.success || !isAppwriteEnabled) return;
 
     const deleteIds = Array.from(new Set([
@@ -1915,6 +1991,7 @@ const App = () => {
       removeActiveByName: true,
     }));
     setActiveTournamentLock(null);
+    clearBootstrapActiveTournamentCache();
     if (deleteIds.some((id) => String(currentTournamentId || '').trim() === id)) {
       setCurrentTournamentId(null);
     }
@@ -2041,6 +2118,8 @@ const App = () => {
     isSyncing,
     isMobileViewport,
     syncStatus,
+    lastDataUpdatedAt,
+    realtimeConnected,
     canDelete,
     cumulativeAllTimeStats,
     eloLeaderboard,
