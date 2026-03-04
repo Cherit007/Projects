@@ -118,10 +118,10 @@ describe('TournamentView command bar and sync state', () => {
     const command = within(commandBar);
 
     await user.click(command.getByRole('button', { name: /Table/i }));
-    expect(screen.getByText(/Points Table/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Points Table/i })).toBeInTheDocument();
 
     await user.click(command.getByRole('button', { name: /Final/i }));
-    expect(screen.getByText(/Complete all league matches first/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Complete all league matches first/i)).toBeInTheDocument();
 
     await user.click(command.getByRole('button', { name: /^Home$/i }));
     expect(onGoHome).toHaveBeenCalledTimes(1);
@@ -146,6 +146,6 @@ describe('TournamentView command bar and sync state', () => {
     expect(eloButton).toBeInTheDocument();
     await user.click(eloButton);
 
-    expect(screen.getByText(/ELO Leaderboard/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /ELO Leaderboard/i })).toBeInTheDocument();
   });
 });

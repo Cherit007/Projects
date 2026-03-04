@@ -1,27 +1,87 @@
 import { databases, DATABASE_ID, COLLECTIONS, ID } from '../appwrite.config';
+import { z } from 'zod';
 
 const APP_META_DOC_ID = 'global-app-meta';
 const META_CACHE_TTL_MS = 15 * 1000;
+const DEFAULT_GROUP_ID = 'default-group';
+
+const jsonRecordSchema = z.record(z.string(), z.unknown());
+const appMetaSchema = z.object({
+  members: z.array(z.unknown()),
+  memberAccountLinks: jsonRecordSchema,
+  templates: z.array(z.unknown()),
+  playerPhotos: jsonRecordSchema,
+  groups: z.array(z.unknown()),
+  groupMembers: z.array(z.unknown()),
+  groupInvites: z.array(z.unknown()),
+  groupJoinRequests: z.array(z.unknown()),
+  activeTournament: z.unknown().nullable(),
+  updatedAt: z.string().nullable(),
+}).passthrough();
+const appMetaUpdateSchema = appMetaSchema.partial();
+const activeTournamentLockSchema = z.object({
+  id: z.string().optional(),
+  appwriteId: z.string().optional(),
+  name: z.string().optional(),
+  status: z.string().optional(),
+  updatedAt: z.string().optional(),
+  teams: z.array(z.unknown()).optional(),
+  fixtures: z.array(z.unknown()).optional(),
+  bracket: z.array(z.unknown()).optional(),
+  champion: z.unknown().nullable().optional(),
+  aiSummaries: z.array(z.unknown()).optional(),
+  swapHistory: z.array(z.unknown()).optional(),
+  format: z.string().optional(),
+  gameMode: z.string().optional(),
+  tournamentFormat: z.string().optional(),
+  date: z.string().optional(),
+}).passthrough();
 
 let metaCache = {
   hasValue: false,
   value: null,
   cachedAt: 0,
+  groupId: DEFAULT_GROUP_ID,
 };
 
 const parseJson = (value, fallback) => {
   try {
     return value ? JSON.parse(value) : fallback;
-  } catch (_error) {
+  } catch {
     return fallback;
   }
 };
 
 const isMetaEnabled = () => Boolean(COLLECTIONS.APP_META);
+const isActiveLockCollectionEnabled = () => Boolean(COLLECTIONS.GROUP_ACTIVE_LOCKS);
+
+const toGroupId = (groupId) => {
+  const value = String(groupId || '').trim();
+  return value || DEFAULT_GROUP_ID;
+};
+
+const hashGroupId = (value) => {
+  let hash = 0;
+  const input = String(value || '');
+  for (let index = 0; index < input.length; index += 1) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+};
+
+const buildActiveLockDocId = (groupId) => `lock-${hashGroupId(groupId)}`;
 
 const shouldRetryWithoutMemberAccountLinks = (error) => {
   const message = String(error?.message || '');
   return error?.code === 400 && message.includes('Unknown attribute') && message.includes('memberAccountLinks');
+};
+
+const isUnknownAttributeError = (error, attributeName) => {
+  const message = String(error?.message || '');
+  return error?.code === 400
+    && message.includes('Unknown attribute')
+    && message.includes(attributeName);
 };
 
 const parseInvitesEnvelope = (value) => {
@@ -47,18 +107,33 @@ const parseInvitesEnvelope = (value) => {
   };
 };
 
-const getCachedMeta = () => {
+const getCachedMeta = (groupId = DEFAULT_GROUP_ID) => {
   if (!metaCache.hasValue) return undefined;
+  if (metaCache.groupId !== groupId) return undefined;
   if (Date.now() - metaCache.cachedAt > META_CACHE_TTL_MS) return undefined;
   return metaCache.value;
 };
 
-const setMetaCache = (value) => {
+const setMetaCache = (value, groupId = DEFAULT_GROUP_ID) => {
   metaCache = {
     hasValue: true,
     value: value ?? null,
     cachedAt: Date.now(),
+    groupId,
   };
+};
+
+const parseMaybeJson = (value, fallback) => {
+  if (typeof value === 'string') return parseJson(value, fallback);
+  if (value && typeof value === 'object') return value;
+  return fallback;
+};
+
+const parseWithSchema = (schema, value, context, fallback) => {
+  const result = schema.safeParse(value);
+  if (result.success) return result.data;
+  console.warn(`Invalid ${context} structure. Falling back to safe defaults.`, result.error.flatten());
+  return fallback;
 };
 
 const toMetaEnvelope = (meta) => ({
@@ -77,16 +152,132 @@ const toMetaEnvelope = (meta) => ({
   activeTournament: meta?.activeTournament || null,
   updatedAt: meta?.updatedAt || null,
 });
+
+const readActiveTournamentLockFromCollection = async (groupId) => {
+  if (!isActiveLockCollectionEnabled()) {
+    return {
+      activeTournament: null,
+      updatedAt: null,
+      found: false,
+    };
+  }
+
+  try {
+    const doc = await databases.getDocument(
+      DATABASE_ID,
+      COLLECTIONS.GROUP_ACTIVE_LOCKS,
+      buildActiveLockDocId(groupId)
+    );
+    const parsedRaw = parseMaybeJson(doc.activeTournamentJson ?? doc.activeTournament, null);
+    const normalized = parsedRaw === null
+      ? null
+      : parseWithSchema(
+          activeTournamentLockSchema,
+          parsedRaw,
+          'active tournament lock document',
+          parsedRaw && typeof parsedRaw === 'object' ? parsedRaw : null
+        );
+    return {
+      activeTournament: normalized || null,
+      updatedAt: doc.updatedAt || doc.$updatedAt || null,
+      found: true,
+    };
+  } catch (error) {
+    if (error?.code === 404) {
+      return {
+        activeTournament: null,
+        updatedAt: null,
+        found: false,
+      };
+    }
+    throw error;
+  }
+};
+
+const upsertActiveTournamentLockInCollection = async ({
+  groupId,
+  activeTournament,
+  updatedAt,
+}) => {
+  const payloadCandidates = [
+    {
+      groupId,
+      activeTournamentJson: JSON.stringify(activeTournament || null),
+      updatedAt,
+    },
+    {
+      groupId,
+      activeTournament: JSON.stringify(activeTournament || null),
+      updatedAt,
+    },
+  ];
+
+  const saveWithPayload = async (body) => {
+    try {
+      await databases.updateDocument(
+        DATABASE_ID,
+        COLLECTIONS.GROUP_ACTIVE_LOCKS,
+        buildActiveLockDocId(groupId),
+        body
+      );
+    } catch (error) {
+      if (error?.code !== 404) throw error;
+      await databases.createDocument(
+        DATABASE_ID,
+        COLLECTIONS.GROUP_ACTIVE_LOCKS,
+        ID.custom(buildActiveLockDocId(groupId)),
+        body
+      );
+    }
+  };
+
+  let lastError = null;
+  for (const payload of payloadCandidates) {
+    try {
+      await saveWithPayload(payload);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (
+        !isUnknownAttributeError(error, 'activeTournamentJson')
+        && !isUnknownAttributeError(error, 'activeTournament')
+      ) {
+        throw error;
+      }
+    }
+  }
+  if (lastError) throw lastError;
+};
 export const appDataService = {
   isMetaEnabled,
 
   async getAppMeta(options = {}) {
-    if (!isMetaEnabled()) return null;
-    const { force = false } = options || {};
+    if (!isMetaEnabled() && !isActiveLockCollectionEnabled()) return null;
+    const { force = false, groupId = null } = options || {};
+    const resolvedGroupId = toGroupId(groupId);
 
     if (!force) {
-      const cached = getCachedMeta();
+      const cached = getCachedMeta(resolvedGroupId);
       if (cached !== undefined) return cached;
+    }
+
+    let activeLockFromCollection = null;
+    let activeLockUpdatedAt = null;
+    let activeLockFoundInCollection = false;
+    if (isActiveLockCollectionEnabled()) {
+      const lockState = await readActiveTournamentLockFromCollection(resolvedGroupId);
+      activeLockFromCollection = lockState.activeTournament;
+      activeLockUpdatedAt = lockState.updatedAt;
+      activeLockFoundInCollection = Boolean(lockState.found);
+    }
+
+    if (!isMetaEnabled()) {
+      const metaOnly = toMetaEnvelope({
+        activeTournament: activeLockFromCollection,
+        updatedAt: activeLockUpdatedAt,
+      });
+      setMetaCache(metaOnly, resolvedGroupId);
+      return metaOnly;
     }
 
     try {
@@ -116,37 +307,82 @@ export const appDataService = {
         activeTournament: parsedActiveTournament,
         updatedAt: doc.updatedAt || null,
       };
-      setMetaCache(parsed);
-      return parsed;
+      const normalized = parseWithSchema(
+        appMetaSchema,
+        parsed,
+        'app meta document',
+        toMetaEnvelope(parsed)
+      );
+      const withActiveLock = {
+        ...normalized,
+        activeTournament: isActiveLockCollectionEnabled()
+          ? (activeLockFoundInCollection ? activeLockFromCollection : normalized.activeTournament)
+          : normalized.activeTournament,
+        updatedAt: activeLockUpdatedAt || normalized.updatedAt,
+      };
+      setMetaCache(withActiveLock, resolvedGroupId);
+      return withActiveLock;
     } catch (error) {
       if (error?.code === 404) {
-        setMetaCache(null);
-        return null;
+        const fallbackMeta = isActiveLockCollectionEnabled()
+          ? toMetaEnvelope({
+              activeTournament: activeLockFoundInCollection ? activeLockFromCollection : null,
+              updatedAt: activeLockUpdatedAt,
+            })
+          : null;
+        setMetaCache(fallbackMeta, resolvedGroupId);
+        return fallbackMeta;
       }
       throw error;
     }
   },
 
-  async saveAppMeta(updates = {}) {
-    if (!isMetaEnabled()) return null;
+  async saveAppMeta(updates = {}, options = {}) {
+    if (!isMetaEnabled() && !isActiveLockCollectionEnabled()) return null;
+    const { groupId = null } = options || {};
+    const resolvedGroupId = toGroupId(groupId);
+    const safeUpdates = parseWithSchema(
+      appMetaUpdateSchema,
+      updates || {},
+      'app meta update payload',
+      {}
+    );
 
-    const updateKeys = Object.keys(updates || {});
+    const updateKeys = Object.keys(safeUpdates || {});
     const activeOnlyUpdate = updateKeys.length > 0 && updateKeys.every((key) => key === 'activeTournament');
     if (activeOnlyUpdate) {
-      return this.saveActiveTournamentLock(updates.activeTournament ?? null);
+      return this.saveActiveTournamentLock(
+        safeUpdates.activeTournament ?? null,
+        { groupId: resolvedGroupId }
+      );
     }
 
-    const existing = toMetaEnvelope(await this.getAppMeta());
+    if (!isMetaEnabled()) {
+      const activeTournamentUpdate = Object.prototype.hasOwnProperty.call(safeUpdates, 'activeTournament')
+        ? safeUpdates.activeTournament ?? null
+        : null;
+      if (activeTournamentUpdate !== null || Object.prototype.hasOwnProperty.call(safeUpdates, 'activeTournament')) {
+        await this.saveActiveTournamentLock(activeTournamentUpdate, { groupId: resolvedGroupId });
+      }
+      const fallbackMeta = toMetaEnvelope({
+        activeTournament: activeTournamentUpdate,
+        updatedAt: new Date().toISOString(),
+      });
+      setMetaCache(fallbackMeta, resolvedGroupId);
+      return fallbackMeta;
+    }
+
+    const existing = toMetaEnvelope(await this.getAppMeta({ groupId: resolvedGroupId }));
     const merged = {
-      members: updates.members ?? existing.members,
-      memberAccountLinks: updates.memberAccountLinks ?? existing.memberAccountLinks,
-      templates: updates.templates ?? existing.templates,
-      playerPhotos: updates.playerPhotos ?? existing.playerPhotos,
-      groups: updates.groups ?? existing.groups,
-      groupMembers: updates.groupMembers ?? existing.groupMembers,
-      groupInvites: updates.groupInvites ?? existing.groupInvites,
-      groupJoinRequests: updates.groupJoinRequests ?? existing.groupJoinRequests,
-      activeTournament: updates.activeTournament ?? existing.activeTournament,
+      members: safeUpdates.members ?? existing.members,
+      memberAccountLinks: safeUpdates.memberAccountLinks ?? existing.memberAccountLinks,
+      templates: safeUpdates.templates ?? existing.templates,
+      playerPhotos: safeUpdates.playerPhotos ?? existing.playerPhotos,
+      groups: safeUpdates.groups ?? existing.groups,
+      groupMembers: safeUpdates.groupMembers ?? existing.groupMembers,
+      groupInvites: safeUpdates.groupInvites ?? existing.groupInvites,
+      groupJoinRequests: safeUpdates.groupJoinRequests ?? existing.groupJoinRequests,
+      activeTournament: safeUpdates.activeTournament ?? existing.activeTournament,
       updatedAt: new Date().toISOString(),
     };
 
@@ -160,7 +396,7 @@ export const appDataService = {
       groupInvites: JSON.stringify({
         invites: merged.groupInvites,
         joinRequests: merged.groupJoinRequests,
-        activeTournament: merged.activeTournament,
+        ...(isActiveLockCollectionEnabled() ? {} : { activeTournament: merged.activeTournament }),
       }),
       updatedAt: merged.updatedAt,
     };
@@ -195,20 +431,76 @@ export const appDataService = {
       await saveWithPayload(fallbackPayload);
     }
 
-    setMetaCache(merged);
+    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'activeTournament')) {
+      await this.saveActiveTournamentLock(
+        merged.activeTournament ?? null,
+        { groupId: resolvedGroupId }
+      );
+    }
+
+    setMetaCache(merged, resolvedGroupId);
     return merged;
   },
 
-  async saveActiveTournamentLock(activeTournament = null) {
-    if (!isMetaEnabled()) return null;
+  async saveActiveTournamentLock(activeTournament = null, options = {}) {
+    if (!isMetaEnabled() && !isActiveLockCollectionEnabled()) return null;
+    const { groupId = null } = options || {};
+    const resolvedGroupId = toGroupId(groupId);
+    const normalizedActiveTournament = activeTournament === null
+      ? null
+      : parseWithSchema(
+          activeTournamentLockSchema,
+          activeTournament,
+          'active tournament lock payload',
+          activeTournament && typeof activeTournament === 'object' ? activeTournament : null
+        );
     const updatedAt = new Date().toISOString();
+
+    if (isActiveLockCollectionEnabled()) {
+      await upsertActiveTournamentLockInCollection({
+        groupId: resolvedGroupId,
+        activeTournament: normalizedActiveTournament || null,
+        updatedAt,
+      });
+
+      const existingForCache = toMetaEnvelope(
+        getCachedMeta(resolvedGroupId) !== undefined
+          ? getCachedMeta(resolvedGroupId)
+          : await this.getAppMeta({ groupId: resolvedGroupId })
+      );
+      const merged = {
+        ...existingForCache,
+        activeTournament: normalizedActiveTournament || null,
+        updatedAt,
+      };
+      setMetaCache(merged, resolvedGroupId);
+      return {
+        activeTournament: merged.activeTournament,
+        updatedAt,
+      };
+    }
+
+    if (!isMetaEnabled()) {
+      const fallbackMeta = toMetaEnvelope({
+        activeTournament: normalizedActiveTournament || null,
+        updatedAt,
+      });
+      setMetaCache(fallbackMeta, resolvedGroupId);
+      return {
+        activeTournament: fallbackMeta.activeTournament,
+        updatedAt,
+      };
+    }
+
     const existing = toMetaEnvelope(
-      getCachedMeta() !== undefined ? getCachedMeta() : await this.getAppMeta()
+      getCachedMeta(resolvedGroupId) !== undefined
+        ? getCachedMeta(resolvedGroupId)
+        : await this.getAppMeta({ groupId: resolvedGroupId })
     );
     const nextEnvelope = {
       invites: existing.groupInvites,
       joinRequests: existing.groupJoinRequests,
-      activeTournament: activeTournament || null,
+      activeTournament: normalizedActiveTournament || null,
     };
 
     try {
@@ -246,7 +538,7 @@ export const appDataService = {
       activeTournament: nextEnvelope.activeTournament,
       updatedAt,
     };
-    setMetaCache(merged);
+    setMetaCache(merged, resolvedGroupId);
     return {
       activeTournament: nextEnvelope.activeTournament,
       updatedAt,

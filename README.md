@@ -185,3 +185,97 @@ Create these indexes in Appwrite to avoid query fallback scans and keep heavy ac
 - Key index: `matchId`
 - Composite key index: `groupId + matchId`
 - Composite unique index: `groupId + matchId + sideNo + slotNo`
+
+## Normalized Group Collections (New)
+
+These collections replace group data embedded in the `app_meta` JSON envelope.
+If these env vars are set, group management flows read/write these collections directly.
+
+- `VITE_APPWRITE_COLLECTION_GROUPS`
+- `VITE_APPWRITE_COLLECTION_GROUP_MEMBERS`
+- `VITE_APPWRITE_COLLECTION_GROUP_INVITES`
+- `VITE_APPWRITE_COLLECTION_GROUP_JOIN_REQUESTS`
+- `VITE_APPWRITE_COLLECTION_GROUP_ACTIVE_LOCKS`
+
+### `VITE_APPWRITE_COLLECTION_GROUPS`
+
+Columns:
+
+- `name`
+- `creatorId`
+- `createdAt`
+
+Indexes:
+
+- Key index: `createdAt`
+- Key index: `creatorId`
+
+### `VITE_APPWRITE_COLLECTION_GROUP_MEMBERS`
+
+Columns:
+
+- `groupId`
+- `userId`
+- `role`
+- `email`
+- `name`
+- `joinedAt`
+- `invitedBy`
+
+Indexes:
+
+- Key index: `groupId`
+- Key index: `userId`
+- Composite unique index: `groupId + userId`
+- Composite key index: `groupId + role`
+
+### `VITE_APPWRITE_COLLECTION_GROUP_INVITES`
+
+Columns:
+
+- `groupId`
+- `code`
+- `role`
+- `createdBy`
+- `createdAt`
+- `expiresAt`
+- `revoked`
+
+Indexes:
+
+- Key index: `code`
+- Key index: `groupId`
+- Composite key index: `groupId + revoked`
+
+### `VITE_APPWRITE_COLLECTION_GROUP_JOIN_REQUESTS`
+
+Columns:
+
+- `groupId`
+- `userId`
+- `name`
+- `email`
+- `status`
+- `createdAt`
+- `reviewedAt`
+- `reviewedBy`
+
+Indexes:
+
+- Key index: `groupId`
+- Key index: `userId`
+- Key index: `status`
+- Composite unique index: `groupId + userId + status`
+- Composite key index: `groupId + status`
+
+### `VITE_APPWRITE_COLLECTION_GROUP_ACTIVE_LOCKS`
+
+Columns:
+
+- `groupId`
+- `activeTournamentJson` (string JSON payload)
+- `updatedAt`
+
+Indexes:
+
+- Unique index: `groupId`

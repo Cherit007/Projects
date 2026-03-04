@@ -179,7 +179,7 @@ const LiveMatchView = ({
         window.scrollTo({ top: 0, behavior: 'smooth' });
         score1InputRef.current?.focus();
       });
-    } catch (_error) {
+    } catch {
       setScore1(draftScore1);
       setScore2(draftScore2);
       setSubmitFeedbackState('idle');
@@ -278,6 +278,8 @@ const LiveMatchView = ({
     : null;
   const projectedMargin = hasValidProjection ? Math.abs(parsedScore1 - parsedScore2) : null;
   const projectedWinnerRank = hasValidProjection ? getRankAfterOutcome(projectedWinnerId, projectedWinnerId, projectedMargin) : null;
+  const mobileStickyScore1 = score1 || '0';
+  const mobileStickyScore2 = score2 || '0';
   const upsetAlert = getUpsetAlert({
     prediction: currentMatchPrediction,
     score1,
@@ -306,6 +308,20 @@ const LiveMatchView = ({
           <div className="live-title-chip mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/40 px-3 py-2 text-center">
             <h2 className="live-title-text app-section-heading text-sm sm:text-base font-semibold text-sky-100">{tournamentName}</h2>
           </div>
+
+          {isMobileViewport && (
+            <div className="live-sticky-mini-board" data-no-gesture="true">
+              <div className="live-sticky-mini-team">
+                <p className="live-sticky-mini-label">{currentMatch.team1.name}</p>
+                <p className="live-sticky-mini-score">{mobileStickyScore1}</p>
+              </div>
+              <div className="live-sticky-mini-divider">:</div>
+              <div className="live-sticky-mini-team">
+                <p className="live-sticky-mini-label">{currentMatch.team2.name}</p>
+                <p className="live-sticky-mini-score">{mobileStickyScore2}</p>
+              </div>
+            </div>
+          )}
 
           {QUICK_SCORE_MODE_ENABLED && (
             <div className="quick-score-primary mt-4 rounded-2xl border border-cyan-400/30 bg-cyan-950/35 p-3 sm:p-4" data-no-gesture="true">

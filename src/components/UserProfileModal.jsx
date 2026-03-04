@@ -18,6 +18,7 @@ const UserProfileModal = ({
   advancedStats,
   achievements,
   gamification,
+  leaderboardRank = null,
   onClose,
   onSaveName,
   onSavePhoto,
@@ -250,6 +251,7 @@ const UserProfileModal = ({
           advancedStats={advancedStats}
           achievements={achievements}
           gamification={gamification}
+          leaderboardRank={leaderboardRank}
           photoUrl={photoUrl}
           isLinked
           canEditPhoto

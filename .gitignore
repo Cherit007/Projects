@@ -13,6 +13,8 @@ dist-ssr
 *.local
 backups
 migration-reports
+playwright-report
+test-results
 
 # Editor directories and files
 .vscode/*

@@ -22,6 +22,7 @@ const GroupRequestsCenter = ({
   onRejectRequest,
   onPromoteMemberToAdmin,
   onRemoveMember,
+  onConfirmAction,
   onBack,
   loading,
 }) => {
@@ -33,10 +34,17 @@ const GroupRequestsCenter = ({
   });
   const adminCount = sortedMembers.filter((member) => member.role === 'admin').length;
 
-  const handleRemoveMember = (member) => {
+  const handleRemoveMember = async (member) => {
     if (!member?.userId || !onRemoveMember) return;
     const label = member.name || member.email || 'this member';
-    const confirmed = window.confirm(`Remove ${label} from "${group?.name || 'this group'}"?`);
+    if (typeof onConfirmAction !== 'function') return;
+    const confirmed = await Promise.resolve(onConfirmAction({
+      title: 'Remove Member',
+      message: `Remove ${label} from "${group?.name || 'this group'}"?`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    }));
     if (!confirmed) return;
     onRemoveMember(member.userId);
   };

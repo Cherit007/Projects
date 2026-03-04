@@ -51,7 +51,7 @@ const MatchCard = ({ match, onSave, syncState = null }) => {
         saveFeedbackTimerRef.current = null;
       }, 360);
       hapticSuccess();
-    } catch (_error) {
+    } catch {
       setSaveFeedbackState('idle');
       hapticError();
     } finally {
@@ -147,11 +147,6 @@ const MatchCard = ({ match, onSave, syncState = null }) => {
                 const value = e.target.value;
                 if (value === '' || /^\d+$/.test(value)) {
                   setScore1(value);
-                  if (value !== '' && score2 === '') {
-                    requestAnimationFrame(() => {
-                      score2Ref.current?.focus();
-                    });
-                  }
                 }
               }}
             onKeyDown={(e) => {

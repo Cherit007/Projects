@@ -12,7 +12,7 @@ const getPhotoUrl = (fileId) => {
   try {
     const url = storage.getFileView(BUCKETS.PLAYER_PHOTOS, fileId);
     return typeof url === 'string' ? url : String(url);
-  } catch (_error) {
+  } catch {
     return '';
   }
 };

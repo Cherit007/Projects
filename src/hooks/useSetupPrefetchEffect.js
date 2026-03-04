@@ -7,12 +7,6 @@ export const useSetupPrefetchEffect = ({
   setCasualHydrated,
   historyHydrationPromiseRef,
   casualHydrationPromiseRef,
-  step,
-  historyHydrated,
-  casualHydrated,
-  historyHydrationPending,
-  casualHydrationPending,
-  prefetchHomeSetupData,
 }) => {
   useEffect(() => {
     historyHydrationPromiseRef.current = null;
@@ -22,22 +16,4 @@ export const useSetupPrefetchEffect = ({
       setCasualHydrated(true);
     }
   }, [activeGroupId, isAppwriteEnabled, historyHydrationPromiseRef, casualHydrationPromiseRef, setHistoryHydrated, setCasualHydrated]);
-
-  useEffect(() => {
-    if (!isAppwriteEnabled) return;
-    if (step !== 'setup') return;
-    if (historyHydrated && casualHydrated) return;
-    if (historyHydrationPending || casualHydrationPending) return;
-    void prefetchHomeSetupData();
-  }, [
-    isAppwriteEnabled,
-    step,
-    historyHydrated,
-    casualHydrated,
-    historyHydrationPending,
-    casualHydrationPending,
-    activeGroupId,
-    prefetchHomeSetupData,
-  ]);
 };
-

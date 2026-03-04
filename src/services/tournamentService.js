@@ -1,4 +1,5 @@
 import { databases, DATABASE_ID, COLLECTIONS, ID, Query } from '../appwrite.config';
+import { z } from 'zod';
 
 const DEFAULT_GROUP_ID = 'default-group';
 const PAGE_SIZE = 100;
@@ -10,9 +11,109 @@ const TOURNAMENT_DELETE_MODE = String(
   import.meta.env.VITE_APPWRITE_TOURNAMENT_DELETE_MODE || 'soft'
 ).trim().toLowerCase();
 
+const teamPayloadSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  name: z.string().optional(),
+  player: z.string().optional(),
+  player1: z.string().optional(),
+  player2: z.string().optional(),
+}).passthrough();
+
+const matchPatchSchema = z.object({
+  matchKind: z.string().optional(),
+  id: z.union([z.string(), z.number()]).optional(),
+  legacyMatchId: z.union([z.string(), z.number()]).optional(),
+  bracketRoundIndex: z.union([z.string(), z.number()]).optional(),
+  bracketMatchIndex: z.union([z.string(), z.number()]).optional(),
+  team1: teamPayloadSchema.nullish(),
+  team2: teamPayloadSchema.nullish(),
+  score1: z.union([z.string(), z.number(), z.null()]).optional(),
+  score2: z.union([z.string(), z.number(), z.null()]).optional(),
+  completed: z.union([z.boolean(), z.string(), z.number()]).optional(),
+  roundLabel: z.union([z.string(), z.number()]).optional(),
+  round: z.union([z.string(), z.number()]).optional(),
+  roundNo: z.union([z.string(), z.number()]).optional(),
+  nextLegacyMatchId: z.union([z.string(), z.number()]).optional(),
+  nextMatchId: z.union([z.string(), z.number()]).optional(),
+}).passthrough();
+
+const tournamentDocSchema = z.object({
+  $id: z.string(),
+  groupId: z.string().optional(),
+  legacyTournamentId: z.union([z.string(), z.number()]).optional(),
+  name: z.string().optional(),
+  dateLabel: z.string().optional(),
+  status: z.string().optional(),
+  gameMode: z.string().optional(),
+  tournamentFormat: z.string().optional(),
+  format: z.string().optional(),
+  oddPlayerEnabled: z.union([z.boolean(), z.string(), z.number()]).optional(),
+  oddPlayerName: z.string().optional(),
+  sourceCreatedAt: z.string().optional(),
+  sourceUpdatedAt: z.string().optional(),
+  $createdAt: z.string().optional(),
+  $updatedAt: z.string().optional(),
+}).passthrough();
+
+const tournamentTeamDocSchema = z.object({
+  $id: z.string(),
+  legacyTeamId: z.union([z.string(), z.number()]).optional(),
+  teamNo: z.union([z.string(), z.number()]).optional(),
+  teamName: z.string().optional(),
+  emoji: z.string().optional(),
+  player1Name: z.string().optional(),
+  player2Name: z.string().optional(),
+}).passthrough();
+
+const tournamentMatchDocSchema = z.object({
+  $id: z.string(),
+  legacyMatchId: z.union([z.string(), z.number()]).optional(),
+  matchKind: z.string().optional(),
+  roundLabel: z.union([z.string(), z.number()]).optional(),
+  roundNo: z.union([z.string(), z.number()]).optional(),
+  sequenceNo: z.union([z.string(), z.number()]).optional(),
+  bracketRoundIndex: z.union([z.string(), z.number()]).optional(),
+  bracketMatchIndex: z.union([z.string(), z.number()]).optional(),
+  nextLegacyMatchId: z.union([z.string(), z.number()]).optional(),
+  team1Id: z.string().optional(),
+  team2Id: z.string().optional(),
+  team1Name: z.string().optional(),
+  team2Name: z.string().optional(),
+  score1: z.union([z.string(), z.number(), z.null()]).optional(),
+  score2: z.union([z.string(), z.number(), z.null()]).optional(),
+  completed: z.union([z.boolean(), z.string(), z.number()]).optional(),
+  winnerSide: z.string().optional(),
+}).passthrough();
+
+const matchParticipantDocSchema = z.object({
+  $id: z.string(),
+  matchId: z.string().optional(),
+  sideNo: z.union([z.string(), z.number()]).optional(),
+  slotNo: z.union([z.string(), z.number()]).optional(),
+  playerName: z.string().optional(),
+}).passthrough();
+
 const playerLookupCache = new Map();
 const tournamentChildrenCache = new Map();
 const missingIndexCache = new Set();
+
+const parseWithSchema = (schema, value, context, fallback) => {
+  const result = schema.safeParse(value);
+  if (result.success) return result.data;
+  console.warn(`Invalid ${context} payload detected. Falling back to safe value.`, result.error.flatten());
+  return fallback;
+};
+
+const normalizeDocList = (docs, schema, context) => (
+  (Array.isArray(docs) ? docs : [])
+    .map((doc) => parseWithSchema(
+      schema,
+      doc,
+      context,
+      doc && typeof doc === 'object' ? doc : null
+    ))
+    .filter(Boolean)
+);
 
 const ensureV2Configured = () => {
   if (
@@ -456,7 +557,21 @@ const sortMatchesBySequence = (a, b) => {
 };
 
 const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], matchPlayerDocs = [] }) => {
-  const sortedTeamDocs = [...teamDocs].sort((a, b) => {
+  const safeTournamentDoc = parseWithSchema(
+    tournamentDocSchema,
+    tournamentDoc,
+    'tournament document',
+    tournamentDoc && typeof tournamentDoc === 'object' ? tournamentDoc : {}
+  );
+  const normalizedTeamDocs = normalizeDocList(teamDocs, tournamentTeamDocSchema, 'tournament team document');
+  const normalizedMatchDocs = normalizeDocList(matchDocs, tournamentMatchDocSchema, 'tournament match document');
+  const normalizedMatchPlayerDocs = normalizeDocList(
+    matchPlayerDocs,
+    matchParticipantDocSchema,
+    'match participant document'
+  );
+
+  const sortedTeamDocs = [...normalizedTeamDocs].sort((a, b) => {
     const aNo = Number(a.teamNo || 0);
     const bNo = Number(b.teamNo || 0);
     if (Number.isFinite(aNo) && Number.isFinite(bNo) && aNo !== bNo) return aNo - bNo;
@@ -470,7 +585,7 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
   });
 
   const participantsByMatchId = new Map();
-  matchPlayerDocs.forEach((row) => {
+  normalizedMatchPlayerDocs.forEach((row) => {
     const matchId = toNonEmptyString(row.matchId);
     if (!matchId) return;
     const bucket = participantsByMatchId.get(matchId) || [];
@@ -482,7 +597,7 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
   const bracketByRound = new Map();
   let finalMatch = null;
 
-  const sortedMatches = [...matchDocs].sort(sortMatchesBySequence);
+  const sortedMatches = [...normalizedMatchDocs].sort(sortMatchesBySequence);
 
   sortedMatches.forEach((row) => {
     const parsed = parseMatchDocument({
@@ -545,17 +660,17 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
     return null;
   };
 
-  const champion = toNonEmptyString(tournamentDoc?.status).toLowerCase() === 'completed'
+  const champion = toNonEmptyString(safeTournamentDoc?.status).toLowerCase() === 'completed'
     ? findChampion()
     : null;
 
   return {
-    id: tournamentDoc.$id,
-    appwriteId: tournamentDoc.$id,
-    groupId: tournamentDoc.groupId,
-    legacyTournamentId: tournamentDoc.legacyTournamentId,
-    name: tournamentDoc.name,
-    date: tournamentDoc.dateLabel,
+    id: safeTournamentDoc.$id,
+    appwriteId: safeTournamentDoc.$id,
+    groupId: safeTournamentDoc.groupId,
+    legacyTournamentId: safeTournamentDoc.legacyTournamentId,
+    name: safeTournamentDoc.name,
+    date: safeTournamentDoc.dateLabel,
     teams,
     fixtures,
     bracket,
@@ -563,14 +678,14 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
     champion,
     aiSummaries: [],
     swapHistory: [],
-    format: tournamentDoc.format || '1',
-    gameMode: tournamentDoc.gameMode || 'doubles',
-    tournamentFormat: tournamentDoc.tournamentFormat || 'league',
-    status: tournamentDoc.status || (champion ? 'completed' : 'active'),
-    oddPlayerEnabled: parseBoolean(tournamentDoc.oddPlayerEnabled),
-    oddPlayerName: toNonEmptyString(tournamentDoc.oddPlayerName),
-    createdAt: tournamentDoc.sourceCreatedAt || tournamentDoc.$createdAt,
-    updatedAt: tournamentDoc.sourceUpdatedAt || tournamentDoc.$updatedAt,
+    format: safeTournamentDoc.format || '1',
+    gameMode: safeTournamentDoc.gameMode || 'doubles',
+    tournamentFormat: safeTournamentDoc.tournamentFormat || 'league',
+    status: safeTournamentDoc.status || (champion ? 'completed' : 'active'),
+    oddPlayerEnabled: parseBoolean(safeTournamentDoc.oddPlayerEnabled),
+    oddPlayerName: toNonEmptyString(safeTournamentDoc.oddPlayerName),
+    createdAt: safeTournamentDoc.sourceCreatedAt || safeTournamentDoc.$createdAt,
+    updatedAt: safeTournamentDoc.sourceUpdatedAt || safeTournamentDoc.$updatedAt,
   };
 };
 
@@ -1413,7 +1528,16 @@ export const tournamentService = {
     };
     if (!targetTournamentId) return baseSummary;
 
-    const normalizedPatches = (Array.isArray(patches) ? patches : [])
+    const validatedPatches = (Array.isArray(patches) ? patches : [])
+      .map((patch, index) => {
+        const parsed = matchPatchSchema.safeParse(patch);
+        if (parsed.success) return parsed.data;
+        console.warn(`Ignoring invalid tournament match patch at index ${index}.`, parsed.error.flatten());
+        return null;
+      })
+      .filter(Boolean);
+
+    const normalizedPatches = validatedPatches
       .map((patch) => {
         const roundValue = patch?.roundLabel ?? patch?.round ?? patch?.roundNo;
         const matchKind = normalizePatchMatchKind(patch?.matchKind, roundValue);

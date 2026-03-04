@@ -103,7 +103,6 @@ const SetupScreen = ({
   tournamentFormat,
   setTournamentFormat,
   onNext,
-  onRecordCasualMatch,
   tournamentHistory,
   scheduledTournaments = [],
   activeLiveTournaments = [],
@@ -200,6 +199,14 @@ const SetupScreen = ({
   };
 
   const selectedPlayerProfile = selectedPlayerName ? playerRatings?.[selectedPlayerName] : null;
+  const selectedPlayerLeaderboardRank = useMemo(() => {
+    if (!selectedPlayerName) return null;
+    const target = selectedPlayerName.trim().toLowerCase();
+    const index = (eloLeaderboard || []).findIndex((entry) => (
+      String(entry?.name || '').trim().toLowerCase() === target
+    ));
+    return index >= 0 ? index + 1 : null;
+  }, [selectedPlayerName, eloLeaderboard]);
   const selectedPlayerMember = selectedPlayerName
     ? (members || []).find(member => (member?.name || '').trim().toLowerCase() === selectedPlayerName.trim().toLowerCase())
     : null;
@@ -261,8 +268,8 @@ const SetupScreen = ({
     });
     return map;
   }, [displayEloLeaderboard]);
-  const historyCountLabel = historyLoading ? '...' : String(displayTournamentHistory.length);
-  const casualCountLabel = casualLoading ? '...' : String(displayCasualMatches.length);
+  const historyCountLabel = String(displayTournamentHistory.length);
+  const casualCountLabel = String(displayCasualMatches.length);
   const showHistorySkeleton = historyLoading && displayTournamentHistory.length === 0;
   const showCasualSkeleton = casualLoading && displayCasualMatches.length === 0;
   const showStatsSkeleton = statsLoading && displayAllTimeStats.length === 0;
@@ -478,7 +485,6 @@ const SetupScreen = ({
                   subtitle={canDeleteActions ? 'View/delete past tournaments' : 'View past tournaments'}
                   className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
                   onClick={() => setShowHistory(true)}
-                  disabled={historyLoading}
                 />
               )}
               <ActionButton
@@ -487,7 +493,6 @@ const SetupScreen = ({
                 subtitle="Open casual match records"
                 className="bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
                 onClick={() => setShowCasualHistory(true)}
-                disabled={casualLoading}
               />
               <ActionButton
                 icon={Trophy}
@@ -495,7 +500,6 @@ const SetupScreen = ({
                 subtitle="Current rating rankings"
                 className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100"
                 onClick={() => setShowEloLeaderboard(true)}
-                disabled={statsLoading}
               />
             </div>
 
@@ -509,7 +513,6 @@ const SetupScreen = ({
                     subtitle="Career summary across tournaments"
                     className="bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"
                     onClick={() => setShowAllTimeStats(true)}
-                    disabled={statsLoading}
                   />
                   <ActionButton
                     icon={Sparkles}
@@ -609,19 +612,8 @@ const SetupScreen = ({
               </div>
             </button>
 
-            {/* Record Casual Match Button */}
-            <button 
-              onClick={onRecordCasualMatch}
-              disabled={startTournamentPending}
-              className="btn-brand-alt action-feedback-btn w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all mt-3 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Trophy size={20} /> Record Casual Match
-              </div>
-            </button>
-
             <p className="text-center text-xs text-gray-500 mt-3">
-              💡 Record individual matches or start a full tournament
+              💡 Start a full tournament from here. Use Quick Actions for casual match entry.
             </p>
           </div>
         </div>
@@ -1065,6 +1057,7 @@ const SetupScreen = ({
         advancedStats={selectedPlayerAdvancedStats}
         achievements={selectedPlayerAchievements}
         gamification={selectedPlayerGamification}
+        leaderboardRank={selectedPlayerLeaderboardRank}
         photoUrl={selectedPlayerName ? playerPhotos[selectedPlayerName] : ''}
         isLinked={selectedPlayerIsLinked}
         canEditPhoto={selectedPlayerCanEditPhoto}

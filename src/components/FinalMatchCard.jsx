@@ -73,7 +73,7 @@ const FinalMatchCard = ({ finalists, onSave, playerRatings = {}, syncState = nul
         setSubmitFeedbackState('idle');
         submitFeedbackTimerRef.current = null;
       }, 420);
-    } catch (_error) {
+    } catch {
       setSubmitFeedbackState('idle');
     } finally {
       setIsSubmitting(false);

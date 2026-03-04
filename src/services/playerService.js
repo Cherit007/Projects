@@ -1,9 +1,58 @@
 import { databases, DATABASE_ID, COLLECTIONS, ID, Query } from '../appwrite.config';
+import { z } from 'zod';
 
 const DEFAULT_GROUP_ID = 'default-group';
 const PAGE_SIZE = 100;
 const IN_QUERY_LIMIT = 100;
 const missingIndexCache = new Set();
+
+const ratingHistoryEntrySchema = z.object({
+  matchId: z.union([z.string(), z.number()]).optional(),
+  oldRating: z.union([z.string(), z.number()]).optional(),
+  newRating: z.union([z.string(), z.number()]).optional(),
+  change: z.union([z.string(), z.number()]).optional(),
+  opponent: z.string().optional(),
+  result: z.string().optional(),
+  date: z.string().optional(),
+}).passthrough();
+
+const ratingSnapshotSchema = z.object({
+  rating: z.union([z.string(), z.number()]).optional(),
+  matchesPlayed: z.union([z.string(), z.number()]).optional(),
+  history: z.array(ratingHistoryEntrySchema).optional(),
+}).passthrough();
+
+const ratingsRecordSchema = z.record(z.string(), ratingSnapshotSchema);
+const ratingsDeltaSchema = z.object({
+  changedRatings: ratingsRecordSchema.optional(),
+  deletedPlayerNames: z.array(z.string()).optional(),
+}).passthrough();
+
+const ratingsCurrentDocSchema = z.object({
+  $id: z.string().optional(),
+  groupId: z.string().optional(),
+  playerId: z.string().optional(),
+  player: z.string().optional(),
+  playerName: z.string().optional(),
+  displayName: z.string().optional(),
+  name: z.string().optional(),
+  rating: z.union([z.string(), z.number()]).optional(),
+  currentRating: z.union([z.string(), z.number()]).optional(),
+  elo: z.union([z.string(), z.number()]).optional(),
+  ratingValue: z.union([z.string(), z.number()]).optional(),
+  matchesPlayed: z.union([z.string(), z.number()]).optional(),
+  matches: z.union([z.string(), z.number()]).optional(),
+  gamesPlayed: z.union([z.string(), z.number()]).optional(),
+  lastChange: z.union([z.string(), z.number()]).optional(),
+  ratingDelta: z.union([z.string(), z.number()]).optional(),
+  delta: z.union([z.string(), z.number()]).optional(),
+  lastResult: z.string().optional(),
+  result: z.string().optional(),
+  sourceUpdatedAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  $updatedAt: z.string().optional(),
+  migratedAt: z.string().optional(),
+}).passthrough();
 
 const ensureV2Configured = () => {
   if (!COLLECTIONS.PLAYERS_V2 || !COLLECTIONS.RATINGS_CURRENT_V2) {
@@ -63,6 +112,13 @@ const indexCacheKey = (collectionId, scope) => `${collectionId}::${scope}`;
 const hasMissingIndex = (collectionId, scope) => missingIndexCache.has(indexCacheKey(collectionId, scope));
 const markMissingIndex = (collectionId, scope) => {
   missingIndexCache.add(indexCacheKey(collectionId, scope));
+};
+
+const parseWithSchema = (schema, value, context, fallback) => {
+  const result = schema.safeParse(value);
+  if (result.success) return result.data;
+  console.warn(`Invalid ${context} payload. Falling back to safe default.`, result.error.flatten());
+  return fallback;
 };
 
 const chunk = (items, size = IN_QUERY_LIMIT) => {
@@ -173,7 +229,6 @@ const listByGroupAndValues = async ({ collectionId, groupId, key, values }) => {
           Query.orderAsc('$id'),
           ...(cursor ? [Query.cursorAfter(cursor)] : []),
         ];
-        // eslint-disable-next-line no-await-in-loop
         const response = await databases.listDocuments(DATABASE_ID, collectionId, queries);
         const page = response?.documents || [];
         if (page.length === 0) break;
@@ -263,8 +318,6 @@ const ensurePlayersExist = async ({ groupId, names = [], source = 'runtime.playe
     const displayName = String(rawName || '').trim();
     const normalized = normalizeName(displayName);
     if (!normalized || byNormalized.has(normalized)) continue;
-
-    // eslint-disable-next-line no-await-in-loop
     const created = await databases.createDocument(
       DATABASE_ID,
       COLLECTIONS.PLAYERS_V2,
@@ -326,7 +379,6 @@ export const playerService = {
           updatePayload.source = 'runtime.player-database';
         }
         if (Object.keys(updatePayload).length > 0) {
-          // eslint-disable-next-line no-await-in-loop
           await databases.updateDocument(
             DATABASE_ID,
             COLLECTIONS.PLAYERS_V2,
@@ -342,7 +394,6 @@ export const playerService = {
           source: 'runtime.player-database',
           migratedAt: now,
         };
-        // eslint-disable-next-line no-await-in-loop
         await databases.createDocument(
           DATABASE_ID,
           COLLECTIONS.PLAYERS_V2,
@@ -357,7 +408,6 @@ export const playerService = {
       for (const doc of existing) {
         const normalized = normalizeName(doc.normalizedName || doc.displayName);
         if (keep.has(normalized)) continue;
-        // eslint-disable-next-line no-await-in-loop
         await databases.deleteDocument(DATABASE_ID, COLLECTIONS.PLAYERS_V2, doc.$id);
       }
     }
@@ -402,7 +452,13 @@ export const playerService = {
     ensureV2Configured();
     const resolvedGroupId = toGroupId(groupId);
     const now = new Date().toISOString();
-    const input = ratings && typeof ratings === 'object' ? ratings : {};
+    const rawInput = ratings && typeof ratings === 'object' ? ratings : {};
+    const input = parseWithSchema(
+      ratingsRecordSchema,
+      rawInput,
+      'ratings snapshot',
+      {}
+    );
     const names = Object.keys(input);
 
     const playerByNormalized = await ensurePlayersExist({
@@ -439,7 +495,6 @@ export const playerService = {
       const existingDoc = existingByPlayerNormalized.get(normalized);
       if (existingDoc?.$id) {
         if (!isRatingDocEqual(existingDoc, payload)) {
-          // eslint-disable-next-line no-await-in-loop
           await databases.updateDocument(
             DATABASE_ID,
             COLLECTIONS.RATINGS_CURRENT_V2,
@@ -452,7 +507,6 @@ export const playerService = {
           ...payload,
           migratedAt: now,
         };
-        // eslint-disable-next-line no-await-in-loop
         await databases.createDocument(
           DATABASE_ID,
           COLLECTIONS.RATINGS_CURRENT_V2,
@@ -465,7 +519,6 @@ export const playerService = {
     for (const doc of existingRatings) {
       const normalized = normalizeName(doc.playerName);
       if (keepNormalized.has(normalized)) continue;
-      // eslint-disable-next-line no-await-in-loop
       await databases.deleteDocument(DATABASE_ID, COLLECTIONS.RATINGS_CURRENT_V2, doc.$id);
     }
 
@@ -480,11 +533,15 @@ export const playerService = {
     ensureV2Configured();
     const resolvedGroupId = toGroupId(groupId);
     const now = new Date().toISOString();
-    const changedInput = deltaPayload?.changedRatings && typeof deltaPayload.changedRatings === 'object'
-      ? deltaPayload.changedRatings
-      : {};
-    const deletedInput = Array.isArray(deltaPayload?.deletedPlayerNames)
-      ? deltaPayload.deletedPlayerNames
+    const safeDelta = parseWithSchema(
+      ratingsDeltaSchema,
+      deltaPayload || {},
+      'ratings delta',
+      {}
+    );
+    const changedInput = safeDelta?.changedRatings || {};
+    const deletedInput = Array.isArray(safeDelta?.deletedPlayerNames)
+      ? safeDelta.deletedPlayerNames
       : [];
 
     const changedEntries = Object.entries(changedInput)
@@ -563,7 +620,6 @@ export const playerService = {
       const existingDoc = existingByNormalized.get(normalized);
       if (existingDoc?.$id) {
         if (!isRatingDocEqual(existingDoc, payload)) {
-          // eslint-disable-next-line no-await-in-loop
           await databases.updateDocument(
             DATABASE_ID,
             COLLECTIONS.RATINGS_CURRENT_V2,
@@ -572,7 +628,6 @@ export const playerService = {
           );
         }
       } else {
-        // eslint-disable-next-line no-await-in-loop
         await databases.createDocument(
           DATABASE_ID,
           COLLECTIONS.RATINGS_CURRENT_V2,
@@ -588,7 +643,6 @@ export const playerService = {
     for (const normalized of deletedNormalized) {
       const existingDoc = existingByNormalized.get(normalized);
       if (!existingDoc?.$id) continue;
-      // eslint-disable-next-line no-await-in-loop
       await databases.deleteDocument(
         DATABASE_ID,
         COLLECTIONS.RATINGS_CURRENT_V2,
@@ -635,12 +689,18 @@ export const playerService = {
           ])
           .filter(([id, name]) => id && name)
       );
-    } catch (_error) {
+    } catch {
       // Keep running even if player-name lookup fails.
     }
 
     const ratingsByName = new Map();
-    docs.forEach((doc) => {
+    docs.forEach((rawDoc) => {
+      const doc = parseWithSchema(
+        ratingsCurrentDocSchema,
+        rawDoc,
+        'ratings_current_v2 document',
+        rawDoc && typeof rawDoc === 'object' ? rawDoc : {}
+      );
       const playerId = pickFirstString(doc, ['playerId', 'player']);
       const name = pickFirstString(doc, ['playerName', 'displayName', 'name'])
         || playerNameById.get(playerId)

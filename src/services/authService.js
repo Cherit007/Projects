@@ -4,7 +4,7 @@ export const authService = {
   async getCurrentUser() {
     try {
       return await account.get();
-    } catch (_error) {
+    } catch {
       return null;
     }
   },

@@ -4,6 +4,26 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.jsx'
 import { queryClient } from './queryClient'
+import { restoreQueryCache, startQueryCachePersistence } from './queryPersistence'
+
+const renderApp = () => {
+  createRoot(document.getElementById('root')).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+};
+
+const bootstrap = async () => {
+  if (typeof window !== 'undefined') {
+    await restoreQueryCache(queryClient);
+    startQueryCachePersistence(queryClient);
+  }
+
+  renderApp();
+};
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -41,10 +61,4 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </StrictMode>,
-)
+void bootstrap();

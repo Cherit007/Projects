@@ -21,6 +21,13 @@ export const COLLECTIONS = {
   MATCH_PLAYERS_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_MATCH_PLAYERS || '',
   PLAYERS_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_PLAYERS || '',
   RATINGS_CURRENT_V2: import.meta.env.VITE_APPWRITE_COLLECTION_V2_RATINGS_CURRENT || '',
+
+  // Normalized group/access collections (replaces app_meta JSON envelope for group domain)
+  GROUPS: import.meta.env.VITE_APPWRITE_COLLECTION_GROUPS || '',
+  GROUP_MEMBERS: import.meta.env.VITE_APPWRITE_COLLECTION_GROUP_MEMBERS || '',
+  GROUP_INVITES: import.meta.env.VITE_APPWRITE_COLLECTION_GROUP_INVITES || '',
+  GROUP_JOIN_REQUESTS: import.meta.env.VITE_APPWRITE_COLLECTION_GROUP_JOIN_REQUESTS || '',
+  GROUP_ACTIVE_LOCKS: import.meta.env.VITE_APPWRITE_COLLECTION_GROUP_ACTIVE_LOCKS || '',
 };
 
 export const BUCKETS = {

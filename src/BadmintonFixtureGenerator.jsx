@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Trophy, Users, Calendar, RotateCcw, Share2, History, TrendingUp, RefreshCw, ChevronDown, Edit2, X } from 'lucide-react';
 import AutocompleteInput from './components/AutocompleteInput';
 import MatchCard from './components/MatchCard';
 import FinalMatchCard from './components/FinalMatchCard';
 import Toast from './components/Toast';
+import ConfirmActionModal from './components/ConfirmActionModal';
 import { 
   calculatePointsTable, 
   calculatePlayerStats, 
@@ -13,22 +14,22 @@ import {
   getPlayerLeaderboard
 } from './utils/calculations';
 
-const BadmintonFixtureGenerator = () => {
-  const defaultTeamConfigs = [
-    { emoji: '🔥', name: 'Fire Smashers', player1: 'Alex Chen', player2: 'Sarah Kim' },
-    { emoji: '⚡', name: 'Thunder Shots', player1: 'Mike Johnson', player2: 'Emma Davis' },
-    { emoji: '🌟', name: 'Star Rallyers', player1: 'David Lee', player2: 'Lisa Wang' },
-    { emoji: '💎', name: 'Diamond Drops', player1: 'Chris Brown', player2: 'Amy Liu' },
-    { emoji: '🎯', name: 'Ace Strikers', player1: 'Tom Wilson', player2: 'Kate Zhang' },
-    { emoji: '🚀', name: 'Rocket Serves', player1: 'Ryan Park', player2: 'Mia Chen' },
-    { emoji: '👑', name: 'Royal Netters', player1: 'James Garcia', player2: 'Sophia Lee' },
-    { emoji: '🌊', name: 'Wave Smashers', player1: 'Daniel Kim', player2: 'Olivia Wu' },
-    { emoji: '🏆', name: 'Trophy Hunters', player1: 'Kevin Ng', player2: 'Grace Park' },
-    { emoji: '⭐', name: 'Stellar Shuttles', player1: 'Brian Li', player2: 'Rachel Tan' },
-    { emoji: '🎨', name: 'Art of Smash', player1: 'Eric Chen', player2: 'Jessica Yu' },
-    { emoji: '🌈', name: 'Rainbow Rallies', player1: 'Andrew Kim', player2: 'Nicole Wang' },
-  ];
+const DEFAULT_TEAM_CONFIGS = [
+  { emoji: '🔥', name: 'Fire Smashers', player1: 'Alex Chen', player2: 'Sarah Kim' },
+  { emoji: '⚡', name: 'Thunder Shots', player1: 'Mike Johnson', player2: 'Emma Davis' },
+  { emoji: '🌟', name: 'Star Rallyers', player1: 'David Lee', player2: 'Lisa Wang' },
+  { emoji: '💎', name: 'Diamond Drops', player1: 'Chris Brown', player2: 'Amy Liu' },
+  { emoji: '🎯', name: 'Ace Strikers', player1: 'Tom Wilson', player2: 'Kate Zhang' },
+  { emoji: '🚀', name: 'Rocket Serves', player1: 'Ryan Park', player2: 'Mia Chen' },
+  { emoji: '👑', name: 'Royal Netters', player1: 'James Garcia', player2: 'Sophia Lee' },
+  { emoji: '🌊', name: 'Wave Smashers', player1: 'Daniel Kim', player2: 'Olivia Wu' },
+  { emoji: '🏆', name: 'Trophy Hunters', player1: 'Kevin Ng', player2: 'Grace Park' },
+  { emoji: '⭐', name: 'Stellar Shuttles', player1: 'Brian Li', player2: 'Rachel Tan' },
+  { emoji: '🎨', name: 'Art of Smash', player1: 'Eric Chen', player2: 'Jessica Yu' },
+  { emoji: '🌈', name: 'Rainbow Rallies', player1: 'Andrew Kim', player2: 'Nicole Wang' },
+];
 
+const BadmintonFixtureGenerator = () => {
   const [step, setStep] = useState('setup');
   const [tournamentName, setTournamentName] = useState('');
   const [numTeams, setNumTeams] = useState(3);
@@ -37,6 +38,7 @@ const BadmintonFixtureGenerator = () => {
   const [fixtures, setFixtures] = useState([]);
   const [activeTab, setActiveTab] = useState('fixtures');
   const [toast, setToast] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tournamentHistory, setTournamentHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -49,6 +51,8 @@ const BadmintonFixtureGenerator = () => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempTournamentName, setTempTournamentName] = useState('');
   const [playerRatings, setPlayerRatings] = useState({});
+  const confirmResolverRef = useRef(null);
+  const tournamentIdSeedRef = useRef(1);
 
   useEffect(() => {
     const savedHistory = localStorage.getItem('badmintonTournamentHistory');
@@ -129,16 +133,22 @@ const BadmintonFixtureGenerator = () => {
 
   useEffect(() => {
     if (step === 'teams') {
-      const newTeams = Array.from({ length: numTeams }, (_, i) => ({
-        id: i + 1,
-        emoji: defaultTeamConfigs[i]?.emoji || '🏸',
-        name: defaultTeamConfigs[i]?.name || `Team ${i + 1}`,
-        player1: defaultTeamConfigs[i]?.player1 || '',
-        player2: defaultTeamConfigs[i]?.player2 || '',
-      }));
+        const newTeams = Array.from({ length: numTeams }, (_, i) => ({
+          id: i + 1,
+          emoji: DEFAULT_TEAM_CONFIGS[i]?.emoji || '🏸',
+          name: DEFAULT_TEAM_CONFIGS[i]?.name || `Team ${i + 1}`,
+          player1: DEFAULT_TEAM_CONFIGS[i]?.player1 || '',
+          player2: DEFAULT_TEAM_CONFIGS[i]?.player2 || '',
+        }));
       setTeams(newTeams);
     }
   }, [step, numTeams]);
+
+  const getNextTournamentId = () => {
+    const nextId = `legacy-${tournamentIdSeedRef.current}`;
+    tournamentIdSeedRef.current += 1;
+    return nextId;
+  };
 
   const updatePlayerDatabase = (playerName) => {
     if (playerName && playerName.trim() !== '') {
@@ -215,7 +225,7 @@ const BadmintonFixtureGenerator = () => {
     setFinalMatch({ team1: finalists[0], team2: finalists[1], score1: parseInt(score1), score2: parseInt(score2) });
     setChampion(winner);
     const tournament = {
-      id: Date.now(), name: tournamentName, date: new Date().toLocaleDateString(), teams: teams, fixtures: fixtures,
+      id: getNextTournamentId(), name: tournamentName, date: new Date().toLocaleDateString(), teams: teams, fixtures: fixtures,
       finalMatch: { team1: finalists[0], team2: finalists[1], score1: parseInt(score1), score2: parseInt(score2) },
       champion: winner, format: format,
     };
@@ -224,10 +234,17 @@ const BadmintonFixtureGenerator = () => {
   };
 
   const resetTournament = () => {
-    if (window.confirm('Are you sure you want to start a new tournament?')) {
+    void requestConfirmAction({
+      title: 'Start New Tournament',
+      message: 'Are you sure you want to start a new tournament?',
+      confirmLabel: 'Start New',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    }).then((confirmed) => {
+      if (!confirmed) return;
       localStorage.removeItem('badmintonCurrentTournament');
       setStep('setup'); setTournamentName(''); setNumTeams(3); setTeams([]); setFixtures([]); setChampion(null); setFinalMatch(null); setActiveTab('fixtures');
-    }
+    });
   };
 
   const rerunTournament = () => {
@@ -259,13 +276,51 @@ const BadmintonFixtureGenerator = () => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
-
-  const deleteTournamentFromHistory = (tournamentId) => {
-    if (window.confirm('Delete this tournament from history?')) {
-      setTournamentHistory(prev => prev.filter(t => t.id !== tournamentId));
-      showToast('Tournament deleted from history');
+  const closeConfirmDialog = (confirmed) => {
+    const resolver = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    setConfirmDialog(null);
+    if (typeof resolver === 'function') {
+      resolver(Boolean(confirmed));
     }
   };
+  const requestConfirmAction = (options = {}) => (
+    new Promise((resolve) => {
+      const normalized = typeof options === 'string' ? { message: options } : (options || {});
+      if (typeof confirmResolverRef.current === 'function') {
+        confirmResolverRef.current(false);
+      }
+      confirmResolverRef.current = resolve;
+      setConfirmDialog({
+        title: normalized.title || 'Confirm Action',
+        message: normalized.message || 'Are you sure?',
+        confirmLabel: normalized.confirmLabel || 'Confirm',
+        cancelLabel: normalized.cancelLabel || 'Cancel',
+        tone: normalized.tone || 'danger',
+      });
+    })
+  );
+
+  const deleteTournamentFromHistory = (tournamentId) => {
+    void requestConfirmAction({
+      title: 'Delete Tournament',
+      message: 'Delete this tournament from history?',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      setTournamentHistory(prev => prev.filter(t => t.id !== tournamentId));
+      showToast('Tournament deleted from history');
+    });
+  };
+
+  useEffect(() => () => {
+    if (typeof confirmResolverRef.current === 'function') {
+      confirmResolverRef.current(false);
+      confirmResolverRef.current = null;
+    }
+  }, []);
 
   const exportAllData = () => {
     const exportData = {
@@ -1028,6 +1083,16 @@ const renderTournament = () => {
       {step === 'setup' && renderSetup()}
       {step === 'teams' && renderTeamsEntry()}
       {step === 'tournament' && renderTournament()}
+      <ConfirmActionModal
+        open={Boolean(confirmDialog)}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        confirmLabel={confirmDialog?.confirmLabel}
+        cancelLabel={confirmDialog?.cancelLabel}
+        tone={confirmDialog?.tone}
+        onConfirm={() => closeConfirmDialog(true)}
+        onCancel={() => closeConfirmDialog(false)}
+      />
       <Toast message={toast?.message} type={toast?.type} />
     </>
   );

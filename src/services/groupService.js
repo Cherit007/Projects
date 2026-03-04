@@ -1,4 +1,5 @@
-import { appDataService } from './appDataService';
+import { groupCollectionsService } from './groupCollectionsService';
+import { queueLocalStorageJson } from './localStorageWriteService';
 
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const LOCAL_GROUP_META_KEY = 'badminton_group_meta';
@@ -6,12 +7,7 @@ const LOCAL_GROUP_META_KEY = 'badminton_group_meta';
 const randomInviteCode = () => Math.random().toString(36).slice(2, 10).toUpperCase();
 
 const getMetaWithDefaults = async () => {
-  let meta = null;
-  if (appDataService.isMetaEnabled()) {
-    meta = await appDataService.getAppMeta();
-  } else {
-    meta = JSON.parse(localStorage.getItem(LOCAL_GROUP_META_KEY) || '{}');
-  }
+  const meta = JSON.parse(localStorage.getItem(LOCAL_GROUP_META_KEY) || '{}');
   return {
     ...meta,
     groups: Array.isArray(meta.groups) ? meta.groups : [],
@@ -22,15 +18,12 @@ const getMetaWithDefaults = async () => {
 };
 
 const saveMeta = async ({ groups, groupMembers, groupInvites, groupJoinRequests }) => {
-  if (appDataService.isMetaEnabled()) {
-    return appDataService.saveAppMeta({ groups, groupMembers, groupInvites, groupJoinRequests });
-  }
   const payload = { groups, groupMembers, groupInvites, groupJoinRequests };
-  localStorage.setItem(LOCAL_GROUP_META_KEY, JSON.stringify(payload));
+  queueLocalStorageJson(LOCAL_GROUP_META_KEY, payload);
   return payload;
 };
 
-export const groupService = {
+const legacyGroupService = {
   async getAllGroups() {
     const meta = await getMetaWithDefaults();
     return [...meta.groups].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -417,3 +410,34 @@ export const groupService = {
     return { status: 'rejected' };
   },
 };
+
+const GROUP_SERVICE_METHODS = [
+  'getAllGroups',
+  'getUserGroups',
+  'createGroup',
+  'createInviteCode',
+  'resolveGroupByInvite',
+  'joinGroupByInvite',
+  'getMembership',
+  'getUserPendingRequestGroupIds',
+  'requestGroupAccess',
+  'getPendingRequestsForAdmin',
+  'getRecentReviewedRequestsForAdmin',
+  'getGroupMembersForAdmin',
+  'updateGroupMemberRole',
+  'removeGroupMember',
+  'approveJoinRequest',
+  'rejectJoinRequest',
+];
+
+const buildRoutedGroupService = () => GROUP_SERVICE_METHODS.reduce((acc, methodName) => {
+  acc[methodName] = async (...args) => {
+    if (groupCollectionsService.isEnabled()) {
+      return groupCollectionsService[methodName](...args);
+    }
+    return legacyGroupService[methodName](...args);
+  };
+  return acc;
+}, {});
+
+export const groupService = buildRoutedGroupService();

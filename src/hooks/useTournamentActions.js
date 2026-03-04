@@ -8,6 +8,7 @@ import {
 } from '../utils/calculations';
 import { appDataService } from '../services/appDataService';
 import { tournamentService } from '../services/tournamentService';
+import { queueLocalStorageJson } from '../services/localStorageWriteService';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
@@ -15,6 +16,7 @@ import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
 export const useTournamentActions = ({
   assertCanOperate,
   assertCanDelete,
+  confirmAction,
   showToast,
   isAppwriteEnabled,
   activeGroup,
@@ -83,6 +85,15 @@ export const useTournamentActions = ({
     }
     setTimeout(resolve, 0);
   });
+  const requestConfirmation = async (options = {}) => {
+    if (typeof confirmAction !== 'function') return false;
+    try {
+      const result = await confirmAction(options);
+      return Boolean(result);
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => () => {
     if (activeLockTimerRef.current) {
@@ -220,7 +231,7 @@ export const useTournamentActions = ({
         pruneMissing,
       });
     } else if (!isAppwriteEnabled) {
-      localStorage.setItem('badminton_players', JSON.stringify(rebuilt));
+      queueLocalStorageJson('badminton_players', rebuilt);
     }
     return rebuilt;
   };
@@ -478,13 +489,13 @@ export const useTournamentActions = ({
     }
 
     try {
-      const meta = await appDataService.getAppMeta();
+      const meta = await appDataService.getAppMeta({ groupId: activeGroup?.id });
       const lock = meta?.activeTournament;
       if (lock && lock.status === 'active') {
         setRemoteActiveCache(lock);
         return lock;
       }
-    } catch (_error) {
+    } catch {
       // Ignore meta read errors and fallback to tournament collection scan.
     }
 
@@ -495,7 +506,7 @@ export const useTournamentActions = ({
       )) || null;
       setRemoteActiveCache(active);
       return active;
-    } catch (_error) {
+    } catch {
       return null;
     }
   };
@@ -504,10 +515,13 @@ export const useTournamentActions = ({
     if (!isAppwriteEnabled) return;
     setRemoteActiveCache(payload || null);
     try {
-      await appDataService.saveAppMeta({
-        activeTournament: payload || null,
-      });
-    } catch (_error) {
+      await appDataService.saveAppMeta(
+        {
+          activeTournament: payload || null,
+        },
+        { groupId: activeGroup?.id }
+      );
+    } catch {
       // Non-blocking: tournament flow should continue even if meta update fails.
     }
   };
@@ -906,7 +920,7 @@ export const useTournamentActions = ({
         return;
       }
 
-      const meta = await appDataService.getAppMeta();
+      const meta = await appDataService.getAppMeta({ groupId: activeGroup?.id });
       const lock = meta?.activeTournament;
       if (lockMatchesTarget(lock)) {
         await updateActiveTournamentLock(null, { immediate: true });
@@ -1182,7 +1196,7 @@ export const useTournamentActions = ({
       };
       setTournamentHistory((prev) => {
         const next = [scheduled, ...prev];
-        localStorage.setItem('badminton_history', JSON.stringify(next));
+        queueLocalStorageJson('badminton_history', next);
         return next;
       });
     }
@@ -1274,7 +1288,7 @@ export const useTournamentActions = ({
         status: champion ? 'completed' : 'active',
       });
       if (!isAppwriteEnabled) {
-        localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
+        queueLocalStorageJson('badminton_history', updatedHistory);
       }
       return updatedHistory;
     });
@@ -1322,7 +1336,7 @@ export const useTournamentActions = ({
             aiSummariesSnapshot: nextSummaries,
             swapHistorySnapshot: swapHistory,
           }));
-        } catch (_error) {
+        } catch {
           // Keep running even if lock update fails.
         }
 
@@ -1594,7 +1608,7 @@ export const useTournamentActions = ({
         tournamentName: tournament.name,
       });
     } else {
-      localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
+      queueLocalStorageJson('badminton_history', updatedHistory);
     }
     return updatedHistory;
   };
@@ -1852,7 +1866,7 @@ export const useTournamentActions = ({
         };
         setCasualMatches((prev) => {
           const updatedMatches = [localMatch, ...prev];
-          localStorage.setItem('badminton_casual_matches', JSON.stringify(updatedMatches));
+          queueLocalStorageJson('badminton_casual_matches', updatedMatches);
           return updatedMatches;
         });
       }
@@ -1986,9 +2000,19 @@ export const useTournamentActions = ({
     return ratings;
   };
 
-  const resetTournament = async () => {
-    if (!assertCanDelete()) return;
-    if (!window.confirm('Delete this tournament and start new? This will remove its impact from ELO/stats.')) return;
+  const resetTournament = async (options = {}) => {
+    const { skipConfirm = false } = options || {};
+    if (!assertCanDelete()) return { success: false };
+    if (!skipConfirm) {
+      const confirmed = await requestConfirmation({
+        title: 'Delete & Start New',
+        message: 'Delete this tournament and start new? This will remove its impact from ELO/stats.',
+        confirmLabel: 'Delete & Start New',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!confirmed) return { success: false, cancelled: true };
+    }
 
     try {
       const pushUniqueId = (list, value) => {
@@ -2013,6 +2037,11 @@ export const useTournamentActions = ({
           pushUniqueId(deleteCandidateIds, itemId);
         }
       });
+      const deleteResult = {
+        success: true,
+        deleteIds: [...deleteCandidateIds],
+        targetName: normalizedTournamentName,
+      };
 
       const updatedHistory = tournamentHistory.filter((t) => {
         const tId = typeof t?.id === 'string' ? t.id.trim() : '';
@@ -2049,17 +2078,30 @@ export const useTournamentActions = ({
       const persistDeletion = async () => {
         const cloudDeleteIds = [...deleteCandidateIds];
         if (isAppwriteEnabled) {
-          const remoteActive = await fetchRemoteActiveLiveTournament();
+          const remoteActive = await fetchRemoteActiveLiveTournament({ force: true });
           pushUniqueId(cloudDeleteIds, remoteActive?.appwriteId);
           pushUniqueId(cloudDeleteIds, remoteActive?.id);
+          try {
+            const remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
+            (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : []).forEach((summary) => {
+              const summaryName = String(summary?.name || '').trim().toLowerCase();
+              const summaryIds = [summary?.id, summary?.appwriteId]
+                .map((value) => String(value || '').trim())
+                .filter(Boolean);
+              const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
+              const nameMatched = normalizedTournamentName && summaryName && summaryName === normalizedTournamentName;
+              if (!idMatched && !nameMatched) return;
+              summaryIds.forEach((value) => pushUniqueId(cloudDeleteIds, value));
+            });
+          } catch {
+            // Ignore remote summary read errors and continue with collected ids.
+          }
           let deletedFromCloud = cloudDeleteIds.length === 0;
           for (const deleteId of cloudDeleteIds) {
             // Keep calls sequential so we stop at first successful delete.
-            // eslint-disable-next-line no-await-in-loop
             const result = await deleteTournamentMutation.mutateAsync(deleteId);
             if (result !== false) {
               deletedFromCloud = true;
-              // eslint-disable-next-line no-await-in-loop
               await clearActiveTournamentLockIfMatches({
                 tournamentId: deleteId,
                 tournamentName: tournamentName,
@@ -2084,7 +2126,7 @@ export const useTournamentActions = ({
             markRatingsPersisted(recalculatedRatings || {});
           }
         } else {
-          localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
+          queueLocalStorageJson('badminton_history', updatedHistory);
         }
 
         await rebuildPlayerDatabase({
@@ -2107,13 +2149,16 @@ export const useTournamentActions = ({
           console.error('Error syncing deleted tournament to cloud:', error);
           showToast('Tournament deleted locally, but cloud sync failed.', 'error');
         });
+        return deleteResult;
       } else {
         await persistDeletion();
         showToast('Tournament deleted. ELO/stats recalculated.');
+        return deleteResult;
       }
     } catch (error) {
       console.error('Error deleting current tournament:', error);
       showToast('Failed to delete current tournament', 'error');
+      return { success: false, error };
     }
   };
 
@@ -2193,7 +2238,16 @@ export const useTournamentActions = ({
       showToast('Tournament id not found for delete', 'error');
       return false;
     }
-    if (!skipConfirm && !window.confirm('Delete this tournament?')) return false;
+    if (!skipConfirm) {
+      const confirmed = await requestConfirmation({
+        title: 'Delete Tournament',
+        message: 'Delete this tournament?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!confirmed) return false;
+    }
     if (!skipProgressToast) {
       showToast('Deleting tournament...');
       await yieldToUi();
@@ -2267,19 +2321,45 @@ export const useTournamentActions = ({
     }
 
     if (!isAppwriteEnabled) {
-      localStorage.setItem('badminton_history', JSON.stringify(updatedHistory));
+      queueLocalStorageJson('badminton_history', updatedHistory);
     }
 
     const persistDeletion = async () => {
       if (isAppwriteEnabled && deleteId) {
+        const cloudDeleteIds = deleteCandidateIds.length > 0 ? [...deleteCandidateIds] : [deleteId];
+        const remoteActive = await fetchRemoteActiveLiveTournament({ force: true });
+        pushUniqueId(cloudDeleteIds, remoteActive?.appwriteId);
+        pushUniqueId(cloudDeleteIds, remoteActive?.id);
+
+        if (normalizedTargetName) {
+          const remoteName = String(remoteActive?.name || '').trim().toLowerCase();
+          if (remoteName && remoteName === normalizedTargetName) {
+            pushUniqueId(cloudDeleteIds, remoteActive?.appwriteId);
+            pushUniqueId(cloudDeleteIds, remoteActive?.id);
+          }
+        }
+        try {
+          const remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
+          (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : []).forEach((summary) => {
+            const summaryName = String(summary?.name || '').trim().toLowerCase();
+            const summaryIds = [summary?.id, summary?.appwriteId]
+              .map((value) => String(value || '').trim())
+              .filter(Boolean);
+            const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
+            const nameMatched = normalizedTargetName && summaryName && summaryName === normalizedTargetName;
+            if (!idMatched && !nameMatched) return;
+            summaryIds.forEach((value) => pushUniqueId(cloudDeleteIds, value));
+          });
+        } catch {
+          // Ignore remote summary read errors and continue with collected ids.
+        }
+
         let deletedFromCloud = false;
-        for (const candidateId of (deleteCandidateIds.length > 0 ? deleteCandidateIds : [deleteId])) {
+        for (const candidateId of cloudDeleteIds) {
           // Keep calls sequential so we stop at first successful delete.
-          // eslint-disable-next-line no-await-in-loop
           const result = await deleteTournamentMutation.mutateAsync(candidateId);
           if (result !== false) {
             deletedFromCloud = true;
-            // eslint-disable-next-line no-await-in-loop
             await clearActiveTournamentLockIfMatches({
               tournamentId: candidateId,
               tournamentName: tournament?.name,
@@ -2332,7 +2412,16 @@ export const useTournamentActions = ({
   const handleDeleteCasualMatchFromSetup = async (id, options = {}) => {
     const { skipConfirm = false, skipProgressToast = false } = options || {};
     if (!assertCanDelete()) return false;
-    if (!skipConfirm && !window.confirm('Delete this casual match?')) return false;
+    if (!skipConfirm) {
+      const confirmed = await requestConfirmation({
+        title: 'Delete Casual Match',
+        message: 'Delete this casual match?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!confirmed) return false;
+    }
     if (!skipProgressToast) {
       showToast('Deleting casual match...');
       await yieldToUi();
@@ -2346,7 +2435,7 @@ export const useTournamentActions = ({
       setCasualMatches(updatedCasualMatches);
 
       if (!isAppwriteEnabled) {
-        localStorage.setItem('badminton_casual_matches', JSON.stringify(updatedCasualMatches));
+        queueLocalStorageJson('badminton_casual_matches', updatedCasualMatches);
       }
 
       const recalculatedRatings = recalculateEloFromHistory(tournamentHistory, updatedCasualMatches);

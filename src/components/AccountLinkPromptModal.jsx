@@ -8,7 +8,7 @@ const AccountLinkPromptModal = ({ prompt, onConfirm, onSkip }) => {
   const isMemberPrompt = prompt.type === 'member';
 
   return (
-    <div className="fixed inset-0 z-[280] bg-black/50 flex items-center justify-center p-4 app-overlay">
+    <div className="fixed inset-0 z-[280] bg-black/50 flex items-center justify-center p-4 app-overlay app-overlay-center">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden app-modal-shell account-link-shell">
         <div className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white px-5 py-4">
           <div className="flex items-center gap-2">
@@ -30,14 +30,14 @@ const AccountLinkPromptModal = ({ prompt, onConfirm, onSkip }) => {
             <button
               type="button"
               onClick={onSkip}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+              className="modal-btn modal-btn-secondary text-sm"
             >
               Not now
             </button>
             <button
               type="button"
               onClick={onConfirm}
-              className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              className="modal-btn modal-btn-primary text-sm"
             >
               Link now
             </button>

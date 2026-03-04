@@ -1,4 +1,5 @@
 import { groupService } from '../services/groupService';
+import { clearPersistedQueryCache } from '../queryPersistence';
 
 export const useAuthGroupActions = ({
   currentUser,
@@ -119,6 +120,7 @@ export const useAuthGroupActions = ({
     setActiveGroup(null);
     setGroupRole(null);
     setStep('setup');
+    clearPersistedQueryCache();
   };
 
   const handleCreateGroup = async (name) => {

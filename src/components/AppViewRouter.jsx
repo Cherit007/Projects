@@ -53,6 +53,7 @@ const AppViewRouter = ({
   onRejectRequest,
   onPromoteMemberToAdmin,
   onRemoveGroupMember,
+  onConfirmAction,
   viewerDashboardProps,
   setupScreenProps,
   teamEntryProps,
@@ -152,6 +153,7 @@ const AppViewRouter = ({
             onRejectRequest={onRejectRequest}
             onPromoteMemberToAdmin={onPromoteMemberToAdmin}
             onRemoveMember={onRemoveGroupMember}
+            onConfirmAction={onConfirmAction}
             loading={inviteLoading}
             onBack={onCloseRequestCenter}
           />

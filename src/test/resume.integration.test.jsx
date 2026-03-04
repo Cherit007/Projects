@@ -178,6 +178,7 @@ describe('Resume tournament integration', () => {
 
     expect(await screen.findByText(/Match 1/i)).toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: /Delete & New/i })[0]);
+    await user.click(await screen.findByRole('button', { name: /Delete & Start New/i }));
 
     expect(await screen.findByPlaceholderText(/Summer Smash 2024/i)).toBeInTheDocument();
     await waitFor(() => {

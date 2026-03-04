@@ -32,7 +32,6 @@ export const useInitialDataLoadEffect = ({
   resumeActiveTournament,
   mergeMemberLinks,
   applyMemberAccountLinks,
-  prefetchHomeSetupData,
 }) => {
   useEffect(() => {
     if (!isConfigChecked) return;
@@ -86,10 +85,20 @@ export const useInitialDataLoadEffect = ({
         }
 
         // Appwrite mode
-        setHistoryHydrated(false);
-        setCasualHydrated(false);
-        setTournamentHistory([]);
-        setCasualMatches([]);
+        const cachedTournamentHistory = queryClient.getQueryData(queryKeys.tournamentHistory(activeGroupId));
+        const cachedTournamentSummaries = queryClient.getQueryData(queryKeys.tournamentSummaries(activeGroupId));
+        const cachedCasualMatches = queryClient.getQueryData(queryKeys.casualMatches(activeGroupId));
+        const hasCachedTournamentHistory = Array.isArray(cachedTournamentHistory);
+        const hasCachedCasualMatches = Array.isArray(cachedCasualMatches);
+
+        setHistoryHydrated(hasCachedTournamentHistory);
+        setCasualHydrated(hasCachedCasualMatches);
+        setTournamentHistory(
+          hasCachedTournamentHistory
+            ? cachedTournamentHistory
+            : (Array.isArray(cachedTournamentSummaries) ? cachedTournamentSummaries : [])
+        );
+        setCasualMatches(hasCachedCasualMatches ? cachedCasualMatches : []);
 
         const appwriteData = await queryClient.fetchQuery({
           queryKey: queryKeys.appwriteData(activeGroupId),
@@ -178,7 +187,6 @@ export const useInitialDataLoadEffect = ({
           if (preferredActive && hasDetailedCloudState) {
             resumeActiveTournament(preferredActive);
           }
-          void prefetchHomeSetupData();
         }
       } catch (error) {
         console.error('Error loading:', error);
@@ -194,4 +202,3 @@ export const useInitialDataLoadEffect = ({
     };
   }, [isAppwriteEnabled, isConfigChecked, requiresAuth, authResolved, groupResolved, activeGroupId, queryClient]);
 };
-

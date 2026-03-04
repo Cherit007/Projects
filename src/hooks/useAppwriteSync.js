@@ -84,7 +84,7 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
       if (includeMeta) {
         tasks.push({
           key: 'meta',
-          promise: appDataService.getAppMeta().catch(() => null),
+          promise: appDataService.getAppMeta({ groupId: resolvedGroupId }).catch(() => null),
         });
       }
 
@@ -208,18 +208,27 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
       case 'meta.members': {
         const members = Array.isArray(payload?.members) ? payload.members : [];
         const memberAccountLinks = payload?.memberAccountLinks;
-        await appDataService.saveAppMeta({
-          members,
-          ...(memberAccountLinks ? { memberAccountLinks } : {}),
-        });
+        await appDataService.saveAppMeta(
+          {
+            members,
+            ...(memberAccountLinks ? { memberAccountLinks } : {}),
+          },
+          { groupId: entryGroupId }
+        );
         return;
       }
       case 'meta.templates': {
-        await appDataService.saveAppMeta({ templates: payload?.templates || [] });
+        await appDataService.saveAppMeta(
+          { templates: payload?.templates || [] },
+          { groupId: entryGroupId }
+        );
         return;
       }
       case 'meta.playerPhotos': {
-        await appDataService.saveAppMeta({ playerPhotos: payload?.playerPhotos || {} });
+        await appDataService.saveAppMeta(
+          { playerPhotos: payload?.playerPhotos || {} },
+          { groupId: entryGroupId }
+        );
         return;
       }
       case 'tournament.sync': {
@@ -346,8 +355,8 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const deleteTournamentMutation = useMutation({
     mutationFn: async (tournamentId) => {
       if (!isAppwriteEnabled) return true;
-      await tournamentService.deleteTournament(tournamentId, resolvedGroupId);
-      return true;
+      const deleted = await tournamentService.deleteTournament(tournamentId, resolvedGroupId);
+      return deleted !== false;
     },
     onSuccess: () => {},
     onError: (error) => {
@@ -402,7 +411,7 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const saveMetaMutation = useMutation({
     mutationFn: async (updates) => {
       if (!isAppwriteEnabled) return updates;
-      return appDataService.saveAppMeta(updates);
+      return appDataService.saveAppMeta(updates, { groupId: resolvedGroupId });
     },
     onSuccess: () => {},
     onError: (error) => {

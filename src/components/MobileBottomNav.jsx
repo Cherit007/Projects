@@ -1,14 +1,14 @@
 import React from 'react';
-import { House, PlayCircle, History, BarChart3, SlidersHorizontal } from 'lucide-react';
+import { House, PlayCircle, BarChart3, UserCircle2, Plus } from 'lucide-react';
 
 const MobileBottomNav = ({
   isVisible = false,
   activeKey = 'home',
   onHome,
   onLive,
-  onHistory,
   onStats,
-  onUtilities,
+  onProfile,
+  onPrimaryAction,
 }) => {
   if (!isVisible) return null;
 
@@ -28,11 +28,12 @@ const MobileBottomNav = ({
       disabled: typeof onLive !== 'function',
     },
     {
-      key: 'history',
-      label: 'History',
-      icon: History,
-      onClick: onHistory,
-      disabled: typeof onHistory !== 'function',
+      key: 'action',
+      label: 'Actions',
+      icon: Plus,
+      onClick: onPrimaryAction,
+      disabled: typeof onPrimaryAction !== 'function',
+      isPrimaryAction: true,
     },
     {
       key: 'stats',
@@ -42,11 +43,11 @@ const MobileBottomNav = ({
       disabled: typeof onStats !== 'function',
     },
     {
-      key: 'utilities',
-      label: 'Tools',
-      icon: SlidersHorizontal,
-      onClick: onUtilities,
-      disabled: typeof onUtilities !== 'function',
+      key: 'profile',
+      label: 'Profile',
+      icon: UserCircle2,
+      onClick: onProfile,
+      disabled: typeof onProfile !== 'function',
     },
   ];
 
@@ -59,7 +60,7 @@ const MobileBottomNav = ({
           <button
             key={item.key}
             type="button"
-            className={`app-mobile-nav-item ${active ? 'is-active' : ''}`}
+            className={`app-mobile-nav-item ${item.isPrimaryAction ? 'app-mobile-nav-item-primary-action' : ''} ${active ? 'is-active' : ''}`}
             onClick={item.onClick}
             disabled={item.disabled}
             aria-current={active ? 'page' : undefined}
