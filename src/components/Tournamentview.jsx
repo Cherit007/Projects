@@ -1723,6 +1723,8 @@ const TournamentView = ({
         photoUrl={selectedPlayerName ? playerPhotos[selectedPlayerName] : ''}
         isLinked={selectedPlayerIsLinked}
         canEditPhoto={selectedPlayerCanEditPhoto}
+        tournamentHistory={tournamentHistory}
+        casualMatches={casualMatches}
         onUpdatePhoto={onUpdatePlayerPhoto}
         onClose={() => setSelectedPlayerName(null)}
       />

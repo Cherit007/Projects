@@ -15,6 +15,7 @@ const INITIAL_MODAL_STATE = {
 export const useModalManager = () => {
   const [modalState, setModalState] = useState(INITIAL_MODAL_STATE);
   const confirmResolverRef = useRef(null);
+  const confirmPromiseRef = useRef(null);
 
   const setModalValue = useCallback((key, nextValue) => {
     setModalState((prev) => ({
@@ -58,20 +59,24 @@ export const useModalManager = () => {
   }, [setModalValue]);
 
   const requestConfirmAction = useCallback((options = {}) => (
-    new Promise((resolve) => {
-      const normalized = typeof options === 'string' ? { message: options } : (options || {});
-      if (typeof confirmResolverRef.current === 'function') {
-        confirmResolverRef.current(false);
-      }
-      confirmResolverRef.current = resolve;
-      setModalValue('confirmDialog', {
-        title: normalized.title || 'Confirm Action',
-        message: normalized.message || 'Are you sure?',
-        confirmLabel: normalized.confirmLabel || 'Confirm',
-        cancelLabel: normalized.cancelLabel || 'Cancel',
-        tone: normalized.tone || 'danger',
-      });
-    })
+    (confirmPromiseRef.current
+      || (() => {
+        const promise = new Promise((resolve) => {
+          const normalized = typeof options === 'string' ? { message: options } : (options || {});
+          confirmResolverRef.current = resolve;
+          setModalValue('confirmDialog', {
+            title: normalized.title || 'Confirm Action',
+            message: normalized.message || 'Are you sure?',
+            confirmLabel: normalized.confirmLabel || 'Confirm',
+            cancelLabel: normalized.cancelLabel || 'Cancel',
+            tone: normalized.tone || 'danger',
+          });
+        }).finally(() => {
+          confirmPromiseRef.current = null;
+        });
+        confirmPromiseRef.current = promise;
+        return promise;
+      })())
   ), [setModalValue]);
 
   useEffect(() => () => {
@@ -79,6 +84,7 @@ export const useModalManager = () => {
       confirmResolverRef.current(false);
       confirmResolverRef.current = null;
     }
+    confirmPromiseRef.current = null;
   }, []);
 
   const setupModals = useMemo(() => ({

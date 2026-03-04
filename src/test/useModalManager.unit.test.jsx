@@ -29,7 +29,7 @@ describe('useModalManager', () => {
     expect(result.current.confirmDialog).toBeNull();
   });
 
-  it('auto-cancels previous confirm request when a new one is opened', async () => {
+  it('reuses in-flight confirm request when duplicate confirm calls happen', async () => {
     const { result } = renderHook(() => useModalManager());
     let firstPromise;
     let secondPromise;
@@ -42,14 +42,15 @@ describe('useModalManager', () => {
       secondPromise = result.current.requestConfirmAction({ message: 'Second confirm' });
     });
 
-    await expect(firstPromise).resolves.toBe(false);
-    expect(result.current.confirmDialog?.message).toBe('Second confirm');
+    expect(firstPromise).toBe(secondPromise);
+    expect(result.current.confirmDialog?.message).toBe('First confirm');
 
     act(() => {
-      result.current.resolveConfirmDialog(false);
+      result.current.resolveConfirmDialog(true);
     });
 
-    await expect(secondPromise).resolves.toBe(false);
+    await expect(firstPromise).resolves.toBe(true);
+    await expect(secondPromise).resolves.toBe(true);
   });
 
   it('resolves in-flight confirm promise as false on unmount', async () => {

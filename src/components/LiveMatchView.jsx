@@ -17,6 +17,7 @@ import MatchPredictionCard from './predictions/MatchPredictionCard';
 import PlayerAvatar from './PlayerAvatar';
 import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
 import { hapticError, hapticSubmit, hapticSuccess, hapticTap } from '../utils/haptics';
+import LiveNarrativePanel from './live/LiveNarrativePanel';
 
 const QUICK_SCORE_MODE_ENABLED = false;
 
@@ -560,12 +561,11 @@ const LiveMatchView = ({
             <MatchPredictionCard match={currentMatch} prediction={currentMatchPrediction} />
           </div>
 
-          {upsetAlert && (
-            <div className="live-upset-shell mt-3 rounded-xl border border-rose-400/35 bg-rose-950/40 p-3">
-              <p className="live-upset-title text-sm font-semibold text-rose-200">⚠️ {upsetAlert.title}</p>
-              <p className="live-upset-copy text-xs sm:text-sm text-rose-100 mt-1">{upsetAlert.message}</p>
-            </div>
-          )}
+          <LiveNarrativePanel
+            prediction={currentMatchPrediction}
+            upsetAlert={upsetAlert}
+            currentMatch={currentMatch}
+          />
         </div>
       </div>
 

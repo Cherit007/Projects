@@ -48,7 +48,8 @@ export const calculatePointsTable = (teams, fixtures) => {
   return table.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     if (b.netMatchRate !== a.netMatchRate) return b.netMatchRate - a.netMatchRate;
-    return b.scoreDiff - a.scoreDiff;
+    if (b.scoreDiff !== a.scoreDiff) return b.scoreDiff - a.scoreDiff;
+    return String(a.name || '').localeCompare(String(b.name || ''));
   });
 };
 
@@ -113,7 +114,14 @@ export const calculatePlayerStats = (teams, fixtures) => {
     }
   });
 
-  return Object.values(playerStats).sort((a, b) => b.matchesWon - a.matchesWon);
+  return Object.values(playerStats).sort((a, b) => {
+    if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
+    const aWinRate = Number(a.winPercentage || 0);
+    const bWinRate = Number(b.winPercentage || 0);
+    if (bWinRate !== aWinRate) return bWinRate - aWinRate;
+    if (b.matchesPlayed !== a.matchesPlayed) return b.matchesPlayed - a.matchesPlayed;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
 };
 
 // Calculate cumulative player stats across all tournaments
@@ -193,7 +201,10 @@ export const calculateCumulativePlayerStats = (tournamentHistory) => {
   return statsArray.sort((a, b) => {
     if (b.championships !== a.championships) return b.championships - a.championships;
     if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
-    return b.winPercentage - a.winPercentage;
+    const winRateDelta = Number(b.winPercentage || 0) - Number(a.winPercentage || 0);
+    if (winRateDelta !== 0) return winRateDelta;
+    if (b.matchesPlayed !== a.matchesPlayed) return b.matchesPlayed - a.matchesPlayed;
+    return String(a.name || '').localeCompare(String(b.name || ''));
   });
 };
 
@@ -353,7 +364,13 @@ export const updatePlayerRatingsAfterMatch = (playerRatings, match) => {
 export const getPlayerLeaderboard = (playerRatings) => {
   return Object.entries(playerRatings)
     .map(([name, data]) => ({ name, ...data }))
-    .sort((a, b) => b.rating - a.rating);
+    .sort((a, b) => {
+      if (b.rating !== a.rating) return b.rating - a.rating;
+      if ((b.matchesPlayed || 0) !== (a.matchesPlayed || 0)) {
+        return (b.matchesPlayed || 0) - (a.matchesPlayed || 0);
+      }
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
 };
 
 const getNextPowerOfTwo = (value) => {

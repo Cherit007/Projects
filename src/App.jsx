@@ -5,6 +5,7 @@ import AppViewRouter from './components/AppViewRouter';
 import MobileBottomNav from './components/MobileBottomNav';
 import Toast from './components/Toast';
 import PwaControls from './components/PwaControls';
+import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import ConfirmActionModal from './components/ConfirmActionModal';
 import { useAppwriteSync } from './hooks/useAppwriteSync';
 import { usePlayerDerivedData } from './hooks/usePlayerDerivedData';
@@ -1325,8 +1326,6 @@ const App = () => {
     }
     setPendingPrefilledTeams(normalizedTeams);
 
-    showToast(`Template "${template.name}" applied`);
-
     const shouldStartNow = await requestConfirmAction({
       title: 'Start Tournament Now?',
       message: 'Template applied. Generate fixtures and start tournament now?',
@@ -1357,6 +1356,7 @@ const App = () => {
     }
     setTeams(normalizedTeams);
     setPendingPrefilledTeams(null);
+    showToast(`Template "${template.name}" applied. Starting now...`);
     generateFixtures({
       teamsOverride: normalizedTeams,
       tournamentFormatOverride: appliedFormat,
@@ -2236,6 +2236,8 @@ const App = () => {
         currentUserAchievements={currentUserAchievements}
         currentUserGamification={currentUserGamification}
         currentUserLeaderboardRank={currentUserLeaderboardRank}
+        tournamentHistory={tournamentHistory}
+        casualMatches={casualMatches}
         authLoading={authLoading}
         onSaveProfileName={handleSaveProfileName}
         onUpdatePlayerPhoto={(playerName, dataUrl) => updatePlayerPhoto(playerName, dataUrl)}
@@ -2316,6 +2318,7 @@ const App = () => {
         onConfirm={() => resolveConfirmDialog(true)}
         onCancel={() => resolveConfirmDialog(false)}
       />
+      <PwaUpdatePrompt showToast={showToast} />
       <Toast message={toast?.message} type={toast?.type} />
 
       {!isMobileViewport && (

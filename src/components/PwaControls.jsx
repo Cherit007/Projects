@@ -392,29 +392,6 @@ const PwaControls = React.memo(function PwaControls({
         </button>
       )}
 
-      {showPwaUpdate && (
-        <div className="pwa-update-banner" role="status" aria-live="polite">
-          <p className="pwa-update-title">New version available</p>
-          <div className="pwa-update-actions">
-            <button
-              type="button"
-              className="pwa-update-refresh-btn"
-              onClick={handleApplyPwaUpdate}
-            >
-              <RefreshCw size={15} />
-              <span>Refresh</span>
-            </button>
-            <button
-              type="button"
-              className="pwa-update-dismiss-btn"
-              onClick={() => setShowPwaUpdate(false)}
-            >
-              Later
-            </button>
-          </div>
-        </div>
-      )}
-
       {queuedWritesCount > 0 && (
         <button
           type="button"

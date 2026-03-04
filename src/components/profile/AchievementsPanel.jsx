@@ -1,12 +1,24 @@
 import React from 'react';
 
 const BadgeItem = ({ badge }) => (
-  <div className={`rounded-xl border p-3 profile-badge-item ${badge.earned ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+  <div
+    className={`rounded-xl border p-3 profile-badge-item ${
+      badge.earned
+        ? 'profile-badge-item-earned bg-emerald-50 border-emerald-200'
+        : 'profile-badge-item-locked bg-gray-50 border-gray-200'
+    }`}
+  >
     <div className="flex items-center justify-between gap-2 mb-1">
       <p className={`text-sm font-semibold ${badge.earned ? 'text-emerald-800' : 'text-gray-800'}`}>
         <span className="mr-1">{badge.icon || '🏅'}</span>{badge.title}
       </p>
-      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${badge.earned ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+      <span
+        className={`text-[11px] font-bold px-2 py-0.5 rounded-full profile-badge-state ${
+          badge.earned
+            ? 'profile-badge-state-earned bg-emerald-600 text-white'
+            : 'profile-badge-state-locked bg-gray-200 text-gray-600'
+        }`}
+      >
         {badge.earned ? 'Unlocked' : 'Locked'}
       </span>
     </div>

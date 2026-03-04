@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { generateFixtures, generateKnockoutBracket } from "../utils/calculations";
+import {
+  calculateCumulativePlayerStats,
+  calculatePlayerStats,
+  generateFixtures,
+  generateKnockoutBracket,
+  getPlayerLeaderboard,
+} from "../utils/calculations";
 
 const createTeams = (count) =>
   Array.from({ length: count }, (_, index) => ({
@@ -135,5 +141,78 @@ describe("generateKnockoutBracket", () => {
     expect(playMatch).toBeTruthy();
     expect(playMatch.team1).toBeTruthy();
     expect(playMatch.team2).toBeTruthy();
+  });
+});
+
+describe("leaderboard/stat sorting stability", () => {
+  it("uses deterministic tie-breaks for ELO leaderboard", () => {
+    const leaderboard = getPlayerLeaderboard({
+      Zara: { rating: 1100, matchesPlayed: 5, history: [] },
+      Amy: { rating: 1100, matchesPlayed: 5, history: [] },
+      Ben: { rating: 1100, matchesPlayed: 6, history: [] },
+    });
+
+    expect(leaderboard.map((entry) => entry.name)).toEqual(["Ben", "Amy", "Zara"]);
+  });
+
+  it("keeps player stats ordering stable on ties", () => {
+    const fixtures = [
+      {
+        completed: true,
+        team1: { id: 1, name: "Team A", emoji: "🏸", player1: "Amy", player2: "Bob" },
+        team2: { id: 2, name: "Team B", emoji: "🏸", player1: "Cara", player2: "Dan" },
+        score1: 21,
+        score2: 18,
+      },
+      {
+        completed: true,
+        team1: { id: 3, name: "Team C", emoji: "🏸", player1: "Eli", player2: "Finn" },
+        team2: { id: 4, name: "Team D", emoji: "🏸", player1: "Gio", player2: "Hana" },
+        score1: 21,
+        score2: 18,
+      },
+    ];
+    const teams = [
+      { id: 1, name: "Team A", emoji: "🏸", player1: "Amy", player2: "Bob" },
+      { id: 2, name: "Team B", emoji: "🏸", player1: "Cara", player2: "Dan" },
+      { id: 3, name: "Team C", emoji: "🏸", player1: "Eli", player2: "Finn" },
+      { id: 4, name: "Team D", emoji: "🏸", player1: "Gio", player2: "Hana" },
+    ];
+
+    const stats = calculatePlayerStats(teams, fixtures);
+    expect(stats[0].name).toBe("Amy");
+    expect(stats[1].name).toBe("Bob");
+  });
+
+  it("keeps cumulative stats ordering stable on full ties", () => {
+    const history = [
+      {
+        id: "t-1",
+        fixtures: [
+          {
+            completed: true,
+            team1: { player1: "Amy", player2: "Bob" },
+            team2: { player1: "Cara", player2: "Dan" },
+            score1: 21,
+            score2: 18,
+          },
+        ],
+      },
+      {
+        id: "t-2",
+        fixtures: [
+          {
+            completed: true,
+            team1: { player1: "Cara", player2: "Dan" },
+            team2: { player1: "Amy", player2: "Bob" },
+            score1: 21,
+            score2: 18,
+          },
+        ],
+      },
+    ];
+
+    const stats = calculateCumulativePlayerStats(history);
+    expect(stats.map((entry) => entry.name).slice(0, 2)).toEqual(["Amy", "Bob"]);
   });
 });

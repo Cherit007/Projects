@@ -18,6 +18,8 @@ const AppModals = ({
   currentUserAchievements,
   currentUserGamification,
   currentUserLeaderboardRank,
+  tournamentHistory = [],
+  casualMatches = [],
   authLoading,
   onSaveProfileName,
   onUpdatePlayerPhoto,
@@ -46,6 +48,8 @@ const AppModals = ({
         achievements={currentUserAchievements}
         gamification={currentUserGamification}
         leaderboardRank={currentUserLeaderboardRank}
+        tournamentHistory={tournamentHistory}
+        casualMatches={casualMatches}
         saving={authLoading}
         onSaveName={onSaveProfileName}
         onSavePhoto={onUpdatePlayerPhoto}

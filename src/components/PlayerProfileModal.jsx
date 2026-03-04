@@ -8,10 +8,98 @@ import PlayerAvatar from './PlayerAvatar';
 import PlayerPhotoEditorModal from './profile/PlayerPhotoEditorModal';
 
 const formatDate = (dateString) => {
-  if (!dateString) return 'Unknown';
+  if (!dateString) return 'Recent';
   const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
+  if (Number.isNaN(date.getTime())) return 'Recent';
   return date.toLocaleString();
+};
+
+const toTimestamp = (value) => {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getTeamPlayers = (team) => [team?.player || team?.player1, team?.player2].filter(Boolean);
+
+const normalizeResult = (value) => {
+  if (value === 'win' || value === 'loss' || value === 'draw') return value;
+  return null;
+};
+
+const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatches = [] }) => {
+  const normalizedName = String(playerName || '').trim().toLowerCase();
+  if (!normalizedName) return [];
+
+  const entries = [];
+  const collectMatch = (match, fallbackDate = null, sourcePrefix = 'match') => {
+    if (!match?.team1 || !match?.team2) return;
+    if (match.completed === false) return;
+
+    const score1 = Number(match?.score1);
+    const score2 = Number(match?.score2);
+    if (!Number.isFinite(score1) || !Number.isFinite(score2)) return;
+
+    const team1Players = getTeamPlayers(match.team1);
+    const team2Players = getTeamPlayers(match.team2);
+    const inTeam1 = team1Players.some((name) => String(name || '').trim().toLowerCase() === normalizedName);
+    const inTeam2 = team2Players.some((name) => String(name || '').trim().toLowerCase() === normalizedName);
+    if (!inTeam1 && !inTeam2) return;
+
+    const opponentPlayers = (inTeam1 ? team2Players : team1Players).filter(Boolean);
+    const result = inTeam1
+      ? (score1 > score2 ? 'win' : score1 < score2 ? 'loss' : 'draw')
+      : (score2 > score1 ? 'win' : score2 < score1 ? 'loss' : 'draw');
+
+    const matchId = String(
+      match.matchId
+      || match.id
+      || match.appwriteId
+      || `${sourcePrefix}-${entries.length + 1}`
+    );
+
+    entries.push({
+      matchId,
+      opponent: opponentPlayers.join(' & ') || 'Match opponent',
+      result,
+      change: Number(match?.change || 0),
+      date: match.completedAt || match.date || fallbackDate || null,
+    });
+  };
+
+  (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((tournament) => {
+    const fallbackDate = tournament?.updatedAt || tournament?.date || tournament?.createdAt || null;
+    (Array.isArray(tournament?.fixtures) ? tournament.fixtures : []).forEach((match) => {
+      collectMatch(match, fallbackDate, `fixture-${tournament?.id || tournament?.appwriteId || 't'}`);
+    });
+    (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+      .flatMap((round) => (Array.isArray(round) ? round : []))
+      .forEach((match) => {
+        collectMatch(match, fallbackDate, `bracket-${tournament?.id || tournament?.appwriteId || 't'}`);
+      });
+    if (tournament?.finalMatch) {
+      collectMatch(tournament.finalMatch, fallbackDate, `final-${tournament?.id || tournament?.appwriteId || 't'}`);
+    }
+  });
+
+  (Array.isArray(casualMatches) ? casualMatches : []).forEach((match) => {
+    collectMatch(match, match?.date || match?.updatedAt || match?.createdAt || null, 'casual');
+  });
+
+  const deduped = new Map();
+  entries.forEach((entry) => {
+    const key = [
+      String(entry.matchId || '').trim(),
+      String(entry.date || '').trim(),
+      String(entry.opponent || '').trim().toLowerCase(),
+      String(entry.result || '').trim().toLowerCase(),
+    ].join('|');
+    if (!deduped.has(key)) {
+      deduped.set(key, entry);
+    }
+  });
+
+  return [...deduped.values()].sort((left, right) => toTimestamp(left?.date) - toTimestamp(right?.date));
 };
 
 const PlayerProfileModal = ({
@@ -25,6 +113,9 @@ const PlayerProfileModal = ({
   photoUrl = '',
   isLinked = false,
   canEditPhoto = true,
+  historyFallback = [],
+  tournamentHistory = [],
+  casualMatches = [],
   onUpdatePhoto,
   onClose
 }) => {
@@ -37,10 +128,25 @@ const PlayerProfileModal = ({
     setShowInsightsPanel(false);
   }, [playerName]);
 
-  const history = Array.isArray(profile?.history) ? profile.history : [];
+  const profileHistory = Array.isArray(profile?.history) ? profile.history : [];
+  const computedFallbackHistory = useMemo(() => {
+    if (Array.isArray(historyFallback) && historyFallback.length > 0) {
+      return historyFallback;
+    }
+    return buildFallbackHistory({
+      playerName,
+      tournamentHistory,
+      casualMatches,
+    });
+  }, [historyFallback, playerName, tournamentHistory, casualMatches]);
+  const history = useMemo(
+    () => (profileHistory.length > 0 ? profileHistory : computedFallbackHistory),
+    [profileHistory, computedFallbackHistory]
+  );
   const unlockedBadges = (achievements?.badges || []).filter(badge => badge.earned);
   const highlightedBadges = unlockedBadges.slice(0, 4);
-  const matchesPlayed = profile?.matchesPlayed || history.length || 0;
+  const featuredBadge = highlightedBadges[0] || null;
+  const matchesPlayed = Math.max(Number(profile?.matchesPlayed || 0), history.length, 0);
   const wins = history.filter(match => match.result === 'win').length;
   const losses = history.filter(match => match.result === 'loss').length;
   const winRate = matchesPlayed > 0 ? ((wins / matchesPlayed) * 100).toFixed(1) : '0.0';
@@ -54,7 +160,12 @@ const PlayerProfileModal = ({
   const orderedMatches = [...sortedHistory].reverse();
   const visibleMatches = showAllHistory ? orderedMatches : orderedMatches.slice(0, 8);
   const recentTen = sortedHistory.slice(-10);
-  const recentTenForm = recentTen.map((entry) => (entry?.result === 'win' ? 'W' : 'L'));
+  const recentTenForm = recentTen.map((entry) => {
+    const result = normalizeResult(entry?.result);
+    if (result === 'win') return 'W';
+    if (result === 'loss') return 'L';
+    return 'D';
+  });
   const recentTenWins = recentTenForm.filter((entry) => entry === 'W').length;
   const recentTenLosses = recentTenForm.filter((entry) => entry === 'L').length;
   const latestHistoryEntry = sortedHistory[sortedHistory.length - 1] || null;
@@ -155,6 +266,11 @@ const PlayerProfileModal = ({
                   <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border border-white/50 bg-white/20 text-white shrink-0">
                     {rankBadgeLabel}
                   </span>
+                  {featuredBadge && (
+                    <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border border-amber-200/85 bg-amber-50 text-amber-800 shrink-0">
+                      {featuredBadge.icon || '🏅'} {featuredBadge.title}
+                    </span>
+                  )}
                   {isLinked ? (
                     <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 shrink-0">
                       <CheckCircle2 size={10} />
@@ -188,7 +304,7 @@ const PlayerProfileModal = ({
                 {gamification.level.icon} {gamification.level.name} • {gamification.totalXp} XP
               </span>
             )}
-            {highlightedBadges.slice(0, 2).map((badge) => (
+            {highlightedBadges.slice(featuredBadge ? 1 : 0, 3).map((badge) => (
               <span
                 key={badge.id}
                 className="inline-flex items-center px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800"
@@ -344,22 +460,36 @@ const PlayerProfileModal = ({
               <>
                 <div className="space-y-2">
                   {visibleMatches.map((match, index) => (
-                    <div key={`${match.matchId}-${index}`} className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 player-profile-history-item">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate player-profile-history-opponent">
-                          vs {match.opponent || 'Unknown opponent'}
-                        </p>
-                        <span className={`text-xs font-bold ${match.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {match.change >= 0 ? '+' : ''}{match.change}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between mt-1 text-[11px] sm:text-xs text-gray-500 player-profile-history-meta">
-                        <span className={match.result === 'win' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
-                          {match.result === 'win' ? 'Win' : 'Loss'}
-                        </span>
-                        <span className="flex items-center gap-1"><Clock size={11} /> {formatDate(match.date)}</span>
-                      </div>
-                    </div>
+                    (() => {
+                      const delta = Number(match?.change);
+                      const safeDelta = Number.isFinite(delta) ? Math.round(delta) : 0;
+                      const result = normalizeResult(match?.result);
+                      const resultLabel = result === 'win' ? 'Win' : result === 'loss' ? 'Loss' : 'Played';
+                      const resultClass = result === 'win'
+                        ? 'text-green-700 font-semibold'
+                        : result === 'loss'
+                          ? 'text-red-700 font-semibold'
+                          : 'text-slate-600 font-semibold';
+                      return (
+                        <div
+                          key={`${String(match?.matchId || match?.date || match?.opponent || 'history')}-${index}`}
+                          className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 player-profile-history-item"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate player-profile-history-opponent">
+                              vs {match?.opponent || 'Match opponent'}
+                            </p>
+                            <span className={`text-xs font-bold ${safeDelta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {safeDelta >= 0 ? '+' : ''}{safeDelta}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-1 text-[11px] sm:text-xs text-gray-500 player-profile-history-meta">
+                            <span className={resultClass}>{resultLabel}</span>
+                            <span className="flex items-center gap-1"><Clock size={11} /> {formatDate(match?.date)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()
                   ))}
                 </div>
                 {orderedMatches.length > 8 && (

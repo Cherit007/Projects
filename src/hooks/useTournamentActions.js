@@ -12,6 +12,7 @@ import { queueLocalStorageJson } from '../services/localStorageWriteService';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
+import { deriveRatingsFromHistory } from '../utils/appHelpers';
 
 export const useTournamentActions = ({
   assertCanOperate,
@@ -1929,123 +1930,11 @@ export const useTournamentActions = ({
     }
   };
 
-  const updatePlayerRatingsAfterMatchStatic = (currentRatings, match) => {
-    if (!match || !match.team1 || !match.team2) return currentRatings;
-
-    const updatedRatings = { ...currentRatings };
-    const team1Players = [match.team1.player || match.team1.player1, match.team1.player2].filter(Boolean);
-    const team2Players = [match.team2.player || match.team2.player1, match.team2.player2].filter(Boolean);
-
-    if (team1Players.length === 0 || team2Players.length === 0) return currentRatings;
-
-    [...team1Players, ...team2Players].forEach((player) => {
-      if (player && !updatedRatings[player]) {
-        updatedRatings[player] = { rating: 1000, matchesPlayed: 0, history: [] };
-      }
-    });
-
-    const team1AvgRating = team1Players.reduce((sum, p) => sum + (updatedRatings[p]?.rating || 1000), 0) / team1Players.length;
-    const team2AvgRating = team2Players.reduce((sum, p) => sum + (updatedRatings[p]?.rating || 1000), 0) / team2Players.length;
-
-    const team1Score = match.score1 > match.score2 ? 1 : 0;
-    const team2Score = match.score2 > match.score1 ? 1 : 0;
-
-    team1Players.forEach((player) => {
-      if (!player || !updatedRatings[player]) return;
-      const oldRating = updatedRatings[player].rating;
-      const expectedScore = 1 / (1 + Math.pow(10, (team2AvgRating - oldRating) / 400));
-      const newRating = Math.round(oldRating + 32 * (team1Score - expectedScore));
-      const change = newRating - oldRating;
-
-      updatedRatings[player] = {
-        rating: newRating,
-        matchesPlayed: (updatedRatings[player].matchesPlayed || 0) + 1,
-        history: [
-          ...(updatedRatings[player].history || []),
-          { matchId: match.id, oldRating, newRating, change, opponent: team2Players.join(' & '), result: team1Score === 1 ? 'win' : 'loss', date: new Date().toISOString() },
-        ],
-      };
-    });
-
-    team2Players.forEach((player) => {
-      if (!player || !updatedRatings[player]) return;
-      const oldRating = updatedRatings[player].rating;
-      const expectedScore = 1 / (1 + Math.pow(10, (team1AvgRating - oldRating) / 400));
-      const newRating = Math.round(oldRating + 32 * (team2Score - expectedScore));
-      const change = newRating - oldRating;
-
-      updatedRatings[player] = {
-        rating: newRating,
-        matchesPlayed: (updatedRatings[player].matchesPlayed || 0) + 1,
-        history: [
-          ...(updatedRatings[player].history || []),
-          { matchId: match.id, oldRating, newRating, change, opponent: team1Players.join(' & '), result: team2Score === 1 ? 'win' : 'loss', date: new Date().toISOString() },
-        ],
-      };
-    });
-
-    return updatedRatings;
-  };
-
   const recalculateEloFromHistory = (history, casualMatchHistory = []) => {
-    let ratings = {};
-    const tournamentHistoryList = Array.isArray(history) ? history : [];
-    const sortedHistory = [...tournamentHistoryList].sort((a, b) => (a.id || 0) - (b.id || 0));
-
-    sortedHistory.forEach((tournament) => {
-      if (!tournament) return;
-
-      const tournamentTeams = tournament.teams || [];
-      tournamentTeams.forEach((team) => {
-        if (!team) return;
-        const players = [team.player || team.player1, team.player2].filter(Boolean);
-        players.forEach((player) => {
-          if (player && !ratings[player]) {
-            ratings[player] = { rating: 1000, matchesPlayed: 0, history: [] };
-          }
-        });
-      });
-
-      const allMatches = [
-        ...(Array.isArray(tournament.fixtures) ? tournament.fixtures : []),
-        ...(tournament.finalMatch ? [tournament.finalMatch] : []),
-      ];
-
-      if (Array.isArray(tournament.bracket)) {
-        tournament.bracket.forEach((round) => {
-          if (Array.isArray(round)) {
-            round.forEach((match) => {
-              if (match && match.completed) allMatches.push(match);
-            });
-          }
-        });
-      }
-
-      allMatches.forEach((match) => {
-        if (match && match.completed && match.team1 && match.team2) {
-          try {
-            ratings = updatePlayerRatingsAfterMatchStatic(ratings, match);
-          } catch (error) {
-            console.error('Error updating ratings for match:', error);
-          }
-        }
-      });
+    return deriveRatingsFromHistory({
+      history: Array.isArray(history) ? history : [],
+      casual: Array.isArray(casualMatchHistory) ? casualMatchHistory : [],
     });
-
-    casualMatchHistory.forEach((match) => {
-      if (!match || !match.team1 || !match.team2) return;
-      const normalizedMatch = {
-        ...match,
-        score1: Number(match.score1),
-        score2: Number(match.score2),
-        completed: true,
-      };
-
-      if (Number.isNaN(normalizedMatch.score1) || Number.isNaN(normalizedMatch.score2)) return;
-      ratings = updatePlayerRatingsAfterMatchStatic(ratings, normalizedMatch);
-    });
-
-    return ratings;
   };
 
   const resetTournament = async (options = {}) => {

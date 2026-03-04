@@ -19,6 +19,8 @@ const UserProfileModal = ({
   achievements,
   gamification,
   leaderboardRank = null,
+  tournamentHistory = [],
+  casualMatches = [],
   onClose,
   onSaveName,
   onSavePhoto,
@@ -252,6 +254,8 @@ const UserProfileModal = ({
           achievements={achievements}
           gamification={gamification}
           leaderboardRank={leaderboardRank}
+          tournamentHistory={tournamentHistory}
+          casualMatches={casualMatches}
           photoUrl={photoUrl}
           isLinked
           canEditPhoto

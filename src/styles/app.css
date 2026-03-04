@@ -1440,6 +1440,16 @@ body[data-theme='light'] .pwa-notify-btn {
   box-shadow: var(--shadow-panel);
 }
 
+.pwa-global-update-banner {
+  left: 50%;
+  right: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  bottom: auto !important;
+  transform: translateX(-50%);
+  width: min(360px, calc(100vw - 1.2rem));
+  z-index: 1280;
+}
+
 .pwa-update-title {
   font-size: var(--font-size-label);
   font-weight: 700;
@@ -1593,6 +1603,12 @@ body[data-theme='light'] .pwa-sync-badge {
 
   body.has-mobile-command-bar .pwa-update-banner {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 14.2rem);
+  }
+
+  body.has-mobile-command-bar .pwa-global-update-banner,
+  body.has-mobile-root-nav .pwa-global-update-banner {
+    bottom: auto !important;
+    top: calc(env(safe-area-inset-top, 0px) + 0.6rem);
   }
 
   body.has-mobile-command-bar .pwa-network-badge {
@@ -3856,6 +3872,26 @@ body[data-theme='light'] .player-profile-history-meta {
   color: #64748b !important;
 }
 
+body[data-theme='dark'] .profile-badge-item-locked {
+  background: linear-gradient(120deg, rgba(31, 46, 70, 0.9), rgba(22, 34, 55, 0.92)) !important;
+  border-color: rgba(135, 157, 194, 0.42) !important;
+}
+
+body[data-theme='light'] .profile-badge-item-locked {
+  background: linear-gradient(120deg, rgba(241, 245, 249, 0.95), rgba(226, 232, 240, 0.9)) !important;
+  border-color: rgba(148, 163, 184, 0.34) !important;
+}
+
+body[data-theme='dark'] .profile-badge-state-locked {
+  background: rgba(79, 109, 152, 0.34) !important;
+  color: #d9e7ff !important;
+}
+
+body[data-theme='light'] .profile-badge-state-locked {
+  background: rgba(203, 213, 225, 0.82) !important;
+  color: #334155 !important;
+}
+
 .player-profile-shell .profile-season-bar {
   transition: transform 140ms ease, opacity 140ms ease;
 }
@@ -5185,6 +5221,126 @@ body[data-theme='light'] .app-screen-home .app-hero-subtitle,
 body[data-theme='light'] .app-screen-live .app-hero-subtitle,
 body[data-theme='light'] .app-screen-final .app-hero-subtitle {
   color: var(--app-copy) !important;
+}
+
+.setup-home-lane {
+  min-height: 100%;
+}
+
+.setup-home-lane-start {
+  align-self: start;
+}
+
+.setup-home-lane-explore {
+  align-self: start;
+}
+
+.setup-home-sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.setup-narrative-shell {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.setup-narrative-heading {
+  color: #334155;
+}
+
+.setup-narrative-subtitle {
+  color: #64748b;
+}
+
+.setup-narrative-card {
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.setup-narrative-item-label {
+  color: #1e293b;
+}
+
+.setup-narrative-item-value {
+  color: #334155;
+}
+
+.setup-narrative-empty {
+  color: #64748b;
+}
+
+.mobile-bottom-sheet-shell {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  max-height: min(88vh, calc(100dvh - env(safe-area-inset-top, 0px) - 0.5rem));
+}
+
+.mobile-bottom-sheet-grab {
+  width: 3rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  margin: 0.6rem auto 0.4rem;
+  background: rgba(148, 163, 184, 0.8);
+}
+
+body[data-theme='dark'] .setup-narrative-shell {
+  border-color: rgba(71, 85, 105, 0.7);
+  background: linear-gradient(165deg, rgba(11, 24, 42, 0.92), rgba(7, 17, 32, 0.96));
+}
+
+body[data-theme='dark'] .setup-narrative-heading {
+  color: #deecff;
+}
+
+body[data-theme='dark'] .setup-narrative-subtitle {
+  color: #a7bfdf;
+}
+
+body[data-theme='dark'] .setup-narrative-card {
+  border-color: rgba(117, 150, 197, 0.38) !important;
+  background: linear-gradient(140deg, rgba(17, 34, 59, 0.9), rgba(12, 26, 47, 0.92)) !important;
+}
+
+body[data-theme='dark'] .setup-narrative-card-streak {
+  border-color: rgba(241, 113, 133, 0.38) !important;
+}
+
+body[data-theme='dark'] .setup-narrative-card-rivalry {
+  border-color: rgba(129, 140, 248, 0.4) !important;
+}
+
+body[data-theme='dark'] .setup-narrative-card-form {
+  border-color: rgba(45, 212, 191, 0.38) !important;
+}
+
+body[data-theme='dark'] .setup-narrative-card-upset {
+  border-color: rgba(251, 191, 36, 0.42) !important;
+}
+
+body[data-theme='dark'] .setup-narrative-item-label {
+  color: #e5efff !important;
+}
+
+body[data-theme='dark'] .setup-narrative-item-value {
+  color: #c7d8f4 !important;
+}
+
+body[data-theme='dark'] .setup-narrative-empty {
+  color: #9fb4d6 !important;
+}
+
+body[data-theme='dark'] .mobile-bottom-sheet-grab {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+body[data-theme='dark'] .mobile-bottom-sheet-shell {
+  background: rgba(7, 17, 30, 0.96) !important;
+  border-color: rgba(71, 85, 105, 0.7) !important;
+}
+
+body[data-theme='light'] .mobile-bottom-sheet-shell {
+  background: rgba(255, 255, 255, 0.98) !important;
 }
 
 @keyframes court-outline-reveal {
