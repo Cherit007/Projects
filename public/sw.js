@@ -1,12 +1,18 @@
-const SW_VERSION = 'v3';
-const STATIC_CACHE = `bfm-static-${SW_VERSION}`;
-const RUNTIME_CACHE = `bfm-runtime-${SW_VERSION}`;
-const OUTBOX_SYNC_TAG = 'bfm-outbox-sync';
-
 const SW_PATH = self.location.pathname;
 const BASE_URL = SW_PATH.endsWith('/sw.js')
   ? SW_PATH.slice(0, -'sw.js'.length)
   : '/';
+
+try {
+  importScripts(`${BASE_URL}sw-build-id.js`);
+} catch {
+  // Optional in development; emitted in production build.
+}
+
+const SW_VERSION = String(self.__SW_BUILD_ID__ || 'dev');
+const STATIC_CACHE = `bfm-static-${SW_VERSION}`;
+const RUNTIME_CACHE = `bfm-runtime-${SW_VERSION}`;
+const OUTBOX_SYNC_TAG = 'bfm-outbox-sync';
 
 const toAbsoluteUrl = (path) => new URL(path, self.location.origin).toString();
 
@@ -78,7 +84,7 @@ const putInCache = async (cacheName, request, response) => {
 const serveNavigation = async (event) => {
   const indexUrl = toAbsoluteUrl(`${BASE_URL}index.html`);
   try {
-    const networkResponse = await fetch(event.request);
+    const networkResponse = await fetch(event.request, { cache: 'no-store' });
     await putInCache(STATIC_CACHE, indexUrl, networkResponse);
     return networkResponse;
   } catch {
