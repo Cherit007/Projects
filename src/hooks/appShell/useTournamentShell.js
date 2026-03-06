@@ -57,6 +57,7 @@ export const useTournamentShell = ({
   handleStartTournament,
   handleEditScheduledTournament,
   handleStartScheduledTournament,
+  onShareScheduledTournament,
   handleResumeActiveTournament,
   handleDeleteActiveTournament,
   handleOpenHistoryModal,
@@ -138,6 +139,7 @@ export const useTournamentShell = ({
       `setup.start-scheduled.${String(tournamentId || '')}`,
       () => handleStartScheduledTournament(tournamentId)
     ),
+    onShareScheduledTournament,
     onResumeActiveTournament: async (tournamentId) => withActionLock(
       `setup.resume-live.${String(tournamentId || 'active')}`,
       () => handleResumeActiveTournament(tournamentId)

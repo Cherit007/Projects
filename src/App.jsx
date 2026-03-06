@@ -2133,6 +2133,67 @@ const App = () => {
     void handleOpenAllTimeStatsModal();
   };
 
+  const handleShareScheduledTournament = useCallback(async (tournament) => {
+    const tournamentLabel = String(tournament?.name || '').trim();
+    if (!tournamentLabel) {
+      showToast('Tournament details unavailable for sharing', 'error');
+      return;
+    }
+
+    const formatValue = normalizeTournamentFormat(tournament?.tournamentFormat || tournament?.format || 'league');
+    const formatLabel = formatValue === 'league'
+      ? 'League'
+      : formatValue === 'semiFinal'
+        ? 'Semi Final'
+        : formatValue === 'fullKnockout'
+          ? 'Full Knockout'
+          : formatValue === 'knockoutByes'
+            ? 'Knockout (Byes)'
+            : formatValue === 'playInFinal'
+              ? 'Play-in + Final'
+              : 'Knockout';
+    const modeLabel = String(tournament?.gameMode || 'doubles').toLowerCase() === 'singles'
+      ? 'Singles'
+      : 'Doubles';
+    const teamsCount = Array.isArray(tournament?.teams)
+      ? tournament.teams.length
+      : Number(tournament?.teamsCount || 0);
+    const dateLabel = String(tournament?.date || '').trim() || 'To be announced';
+    const groupLabel = String(activeGroup?.name || '').trim();
+
+    const messageLines = [
+      '🏸 Tournament Scheduled',
+      `Name: ${tournamentLabel}`,
+      groupLabel ? `Group: ${groupLabel}` : null,
+      `Date: ${dateLabel}`,
+      `Format: ${formatLabel}`,
+      `Mode: ${modeLabel}`,
+      teamsCount > 0 ? `Teams: ${teamsCount}` : null,
+      'Join us on court!'
+    ].filter(Boolean);
+    const message = messageLines.join('\n');
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: `${tournamentLabel} scheduled`,
+          text: message,
+        });
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+      }
+    }
+
+    const whatsAppUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    if (typeof window !== 'undefined') {
+      window.open(whatsAppUrl, '_blank', 'noopener,noreferrer');
+      showToast('Opening WhatsApp share...');
+      return;
+    }
+    showToast('Unable to open WhatsApp from this device', 'error');
+  }, [activeGroup?.name, showToast]);
+
   const {
     viewerDashboardProps,
     setupScreenProps,
@@ -2198,6 +2259,7 @@ const App = () => {
     handleStartTournament,
     handleEditScheduledTournament,
     handleStartScheduledTournament,
+    onShareScheduledTournament: handleShareScheduledTournament,
     handleResumeActiveTournament,
     handleDeleteActiveTournament,
     handleOpenHistoryModal,

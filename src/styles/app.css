@@ -4547,6 +4547,59 @@ body[data-theme='dark'] .setup-live-title {
   color: #8de9c6 !important;
 }
 
+body[data-theme='dark'] .setup-scheduled-title {
+  color: #b7c8ff !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-row {
+  background: rgba(21, 33, 62, 0.88) !important;
+  border-color: rgba(124, 146, 244, 0.42) !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-name {
+  color: #e4edff !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-meta {
+  color: #aebfe6 !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-edit-btn {
+  background: rgba(45, 60, 98, 0.76) !important;
+  color: #d7e4ff !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-edit-btn:hover {
+  background: rgba(56, 74, 118, 0.82) !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-start-btn {
+  background: rgba(83, 103, 210, 0.38) !important;
+  color: #d9e3ff !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-start-btn:hover {
+  background: rgba(99, 121, 236, 0.46) !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-share-btn {
+  background: rgba(48, 152, 125, 0.34) !important;
+  color: #c8f7e8 !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-share-btn:hover {
+  background: rgba(57, 173, 141, 0.4) !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-delete-btn {
+  background: rgba(193, 71, 92, 0.3) !important;
+  color: #ffc0ca !important;
+}
+
+body[data-theme='dark'] .setup-scheduled-delete-btn:hover {
+  background: rgba(219, 84, 107, 0.36) !important;
+}
+
 body[data-theme='dark'] .setup-live-row {
   background: rgba(14, 39, 45, 0.84) !important;
   border-color: rgba(82, 190, 164, 0.36) !important;

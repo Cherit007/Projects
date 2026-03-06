@@ -39,6 +39,7 @@ const baseProps = {
   activeLiveTournaments: [],
   onEditScheduledTournament: vi.fn(),
   onStartScheduledTournament: vi.fn(),
+  onShareScheduledTournament: vi.fn(),
   onResumeActiveTournament: vi.fn(),
   onDeleteActiveTournament: vi.fn(),
   canDeleteLiveTournament: true,
@@ -150,5 +151,33 @@ describe('SetupScreen dashboard metrics and sync status', () => {
 
     const topEloCard = getDashboardCard('Top ELO Pending');
     expect(within(topEloCard).getByText('--')).toBeInTheDocument();
+  });
+
+  it('shows WhatsApp action for scheduled tournaments and triggers share callback', async () => {
+    const user = (await import('@testing-library/user-event')).default.setup();
+    const onShareScheduledTournament = vi.fn();
+
+    render(
+      <SetupScreen
+        {...baseProps}
+        onShareScheduledTournament={onShareScheduledTournament}
+        scheduledTournaments={[
+          {
+            id: 'sched-1',
+            name: 'Friday Club Match',
+            date: '2026-03-06 7:00 PM',
+            teams: [{ id: 1 }, { id: 2 }, { id: 3 }],
+          },
+        ]}
+      />
+    );
+
+    const shareButton = screen.getByRole('button', { name: /whatsapp/i });
+    await user.click(shareButton);
+    expect(onShareScheduledTournament).toHaveBeenCalledTimes(1);
+    expect(onShareScheduledTournament.mock.calls[0][0]).toMatchObject({
+      id: 'sched-1',
+      name: 'Friday Club Match',
+    });
   });
 });

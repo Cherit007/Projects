@@ -9,6 +9,7 @@ import {
   Clock3,
   Play,
   PencilLine,
+  MessageCircle,
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
@@ -88,6 +89,7 @@ const SetupScreen = ({
   activeLiveTournaments = [],
   onEditScheduledTournament,
   onStartScheduledTournament,
+  onShareScheduledTournament,
   onResumeActiveTournament,
   onDeleteActiveTournament,
   canDeleteLiveTournament = false,
@@ -339,7 +341,7 @@ const SetupScreen = ({
 
           {scheduledTournaments.length > 0 && (
             <div className="mb-4 rounded-xl p-4 setup-highlight-card setup-scheduled-card app-surface-card app-card-tier-secondary">
-              <p className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+              <p className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2 setup-scheduled-title">
                 <Clock3 size={16} /> Scheduled Tournaments ({scheduledTournaments.length})
               </p>
               <div className="space-y-2">
@@ -349,11 +351,11 @@ const SetupScreen = ({
                   const startPending = Boolean(tournamentId && isPendingAction(`setup.start-scheduled.${String(tournamentId)}`));
                   const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
                   return (
-                    <div key={tournamentId} className="rounded-lg border border-indigo-200 bg-white px-3 py-2">
+                    <div key={tournamentId} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 setup-scheduled-row">
                       <div className="flex flex-col gap-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{tournament.name}</p>
-                          <p className="text-[11px] text-slate-500 break-words">
+                          <p className="text-sm font-semibold text-slate-800 break-words leading-snug setup-scheduled-name">{tournament.name}</p>
+                          <p className="text-[11px] text-slate-500 break-words setup-scheduled-meta">
                             {tournament.date} • {(
                               Array.isArray(tournament.teams)
                                 ? tournament.teams.length
@@ -366,7 +368,7 @@ const SetupScreen = ({
                             type="button"
                             onClick={() => onEditScheduledTournament?.(tournamentId)}
                             disabled={!tournamentId || editPending || startPending || deletePending}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-edit-btn"
                           >
                             <PencilLine size={11} /> {editPending ? 'Loading...' : 'Edit'}
                           </button>
@@ -374,16 +376,24 @@ const SetupScreen = ({
                             type="button"
                             onClick={() => onStartScheduledTournament?.(tournamentId)}
                             disabled={!tournamentId || startPending || deletePending}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-start-btn"
                           >
                             <Play size={11} /> {startPending ? 'Starting...' : 'Start'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onShareScheduledTournament?.(tournament)}
+                            disabled={startPending || deletePending}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-share-btn"
+                          >
+                            <MessageCircle size={11} /> WhatsApp
                           </button>
                           {canDeleteActions && (
                             <button
                               type="button"
                               onClick={() => onDeleteTournament?.(tournamentId)}
                               disabled={!tournamentId || deletePending || startPending || editPending}
-                              className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed setup-scheduled-delete-btn"
                             >
                               {deletePending ? 'Deleting...' : 'Delete'}
                             </button>
