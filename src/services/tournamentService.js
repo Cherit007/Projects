@@ -1442,14 +1442,36 @@ export const tournamentService = {
       }
     }
 
-    return tournamentDocs.map((doc) => ({
+    const tournamentIds = tournamentDocs.map((doc) => toNonEmptyString(doc?.$id)).filter(Boolean);
+    const teamDocs = tournamentIds.length > 0
+      ? await listByGroupAndValues({
+          collectionId: COLLECTIONS.TOURNAMENT_TEAMS_V2,
+          groupId: effectiveGroupId,
+          key: 'tournamentId',
+          values: tournamentIds,
+        })
+      : [];
+    const teamsByTournament = new Map();
+    teamDocs.forEach((doc) => {
+      const tournamentId = toNonEmptyString(doc?.tournamentId);
+      if (!tournamentId) return;
+      const parsedTeam = parseTeamDocument(doc);
+      const bucket = teamsByTournament.get(tournamentId) || [];
+      bucket.push(parsedTeam);
+      teamsByTournament.set(tournamentId, bucket);
+    });
+
+    return tournamentDocs.map((doc) => {
+      const summaryTeams = teamsByTournament.get(doc.$id) || [];
+      return {
       id: doc.$id,
       appwriteId: doc.$id,
       groupId: doc.groupId,
       legacyTournamentId: doc.legacyTournamentId,
       name: doc.name,
       date: doc.dateLabel,
-      teams: [],
+      teams: summaryTeams,
+      teamsCount: summaryTeams.length,
       fixtures: [],
       bracket: [],
       finalMatch: null,
@@ -1465,7 +1487,8 @@ export const tournamentService = {
       createdAt: doc.sourceCreatedAt || doc.$createdAt,
       updatedAt: doc.sourceUpdatedAt || doc.$updatedAt,
       isSummary: true,
-    }));
+      };
+    });
   },
 
   async getTournamentById(tournamentId, groupId = null) {

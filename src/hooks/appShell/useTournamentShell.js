@@ -57,6 +57,7 @@ export const useTournamentShell = ({
   handleStartTournament,
   handleEditScheduledTournament,
   handleStartScheduledTournament,
+  handleViewScheduledTournament,
   onShareScheduledTournament,
   handleResumeActiveTournament,
   handleDeleteActiveTournament,
@@ -138,6 +139,10 @@ export const useTournamentShell = ({
     onStartScheduledTournament: async (tournamentId) => withActionLock(
       `setup.start-scheduled.${String(tournamentId || '')}`,
       () => handleStartScheduledTournament(tournamentId)
+    ),
+    onViewScheduledTournament: async (tournamentId, fallbackTournament) => withActionLock(
+      `setup.view-scheduled.${String(tournamentId || '')}`,
+      () => handleViewScheduledTournament(tournamentId, fallbackTournament)
     ),
     onShareScheduledTournament,
     onResumeActiveTournament: async (tournamentId) => withActionLock(

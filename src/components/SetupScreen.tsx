@@ -14,6 +14,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
 import PlayerProfileModal from './PlayerProfileModal';
@@ -27,6 +30,10 @@ import MobileBottomSheet from './common/MobileBottomSheet';
 import StartTournamentLane from './home/StartTournamentLane';
 import ExploreDataLane from './home/ExploreDataLane';
 import { buildHomeNarratives } from '../utils/homeNarratives';
+import {
+  formatTournamentDateLabel,
+  isScheduledTournamentAlreadyStarted,
+} from '../utils/appHelpers';
 
 const LoadingRows = ({ rows = 4 }) => (
   <div className="space-y-3 animate-pulse">
@@ -89,6 +96,7 @@ const SetupScreen = ({
   activeLiveTournaments = [],
   onEditScheduledTournament,
   onStartScheduledTournament,
+  onViewScheduledTournament,
   onShareScheduledTournament,
   onResumeActiveTournament,
   onDeleteActiveTournament,
@@ -138,6 +146,9 @@ const SetupScreen = ({
   const [showPowerRankings, setShowPowerRankings] = useState(false);
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
   const [freshnessNow, setFreshnessNow] = useState(() => Date.now());
+  const [scheduledCarouselIndex, setScheduledCarouselIndex] = useState(0);
+  const scheduledCarouselRef = useRef(null);
+  const scheduledCarouselPauseRef = useRef(false);
   const historyCacheRef = useRef(Array.isArray(tournamentHistory) ? tournamentHistory : []);
   const casualCacheRef = useRef(Array.isArray(casualMatches) ? casualMatches : []);
   const allTimeStatsCacheRef = useRef(Array.isArray(allTimeStats) ? allTimeStats : []);
@@ -157,6 +168,88 @@ const SetupScreen = ({
   ));
   const isPendingAction = (actionKey) => Boolean(getActionPending?.(actionKey));
   const startTournamentPending = isPendingAction('setup.start-tournament');
+  const scheduledCards = useMemo(
+    () => (Array.isArray(scheduledTournaments) ? scheduledTournaments.filter(Boolean) : []),
+    [scheduledTournaments]
+  );
+
+  useEffect(() => {
+    if (scheduledCards.length <= 1) {
+      setScheduledCarouselIndex(0);
+      if (scheduledCarouselRef.current) {
+        if (typeof scheduledCarouselRef.current.scrollTo === 'function') {
+          scheduledCarouselRef.current.scrollTo({ left: 0, behavior: 'auto' });
+        } else {
+          scheduledCarouselRef.current.scrollLeft = 0;
+        }
+      }
+      return;
+    }
+    setScheduledCarouselIndex((prev) => Math.min(prev, scheduledCards.length - 1));
+  }, [scheduledCards.length]);
+
+  useEffect(() => {
+    if (scheduledCards.length <= 1) return undefined;
+    const timerId = setInterval(() => {
+      if (scheduledCarouselPauseRef.current) return;
+      setScheduledCarouselIndex((prev) => {
+        const nextIndex = (prev + 1) % scheduledCards.length;
+        const listNode = scheduledCarouselRef.current;
+        if (listNode) {
+          const left = nextIndex * listNode.clientWidth;
+          if (typeof listNode.scrollTo === 'function') {
+            listNode.scrollTo({ left, behavior: 'smooth' });
+          } else {
+            listNode.scrollLeft = left;
+          }
+        }
+        return nextIndex;
+      });
+    }, 5200);
+    return () => clearInterval(timerId);
+  }, [scheduledCards.length]);
+
+  const scrollScheduledToIndex = (targetIndex) => {
+    if (scheduledCards.length <= 1) return;
+    const clamped = Math.max(0, Math.min(targetIndex, scheduledCards.length - 1));
+    const listNode = scheduledCarouselRef.current;
+    if (listNode) {
+      const left = clamped * listNode.clientWidth;
+      if (typeof listNode.scrollTo === 'function') {
+        listNode.scrollTo({ left, behavior: 'smooth' });
+      } else {
+        listNode.scrollLeft = left;
+      }
+    }
+    setScheduledCarouselIndex(clamped);
+  };
+
+  const handleScheduledTrackScroll = () => {
+    const listNode = scheduledCarouselRef.current;
+    if (!listNode) return;
+    const width = Math.max(1, listNode.clientWidth);
+    const nextIndex = Math.max(0, Math.min(
+      Math.round(listNode.scrollLeft / width),
+      Math.max(scheduledCards.length - 1, 0)
+    ));
+    if (nextIndex !== scheduledCarouselIndex) {
+      setScheduledCarouselIndex(nextIndex);
+    }
+  };
+
+  const handleViewScheduledCard = async (tournament) => {
+    if (!tournament) return;
+    const tournamentId = tournament.appwriteId || tournament.id;
+    let resolved = tournament;
+    if (onViewScheduledTournament && tournamentId) {
+      const detailed = await onViewScheduledTournament(tournamentId, tournament);
+      if (detailed && typeof detailed === 'object') {
+        resolved = detailed;
+      }
+    }
+    if (!resolved || typeof resolved !== 'object') return;
+    setSelectedTournament(resolved);
+  };
 
   useEffect(() => {
     if (!isAppwriteEnabled || !lastDataUpdatedAt) return undefined;
@@ -339,35 +432,85 @@ const SetupScreen = ({
             {syncChip}
           </div>
 
-          {scheduledTournaments.length > 0 && (
+          {scheduledCards.length > 0 && (
             <div className="mb-4 rounded-xl p-4 setup-highlight-card setup-scheduled-card app-surface-card app-card-tier-secondary">
-              <p className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2 setup-scheduled-title">
-                <Clock3 size={16} /> Scheduled Tournaments ({scheduledTournaments.length})
-              </p>
-              <div className="space-y-2">
-                {scheduledTournaments.slice(0, 4).map((tournament) => {
-                  const tournamentId = tournament.id || tournament.appwriteId;
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-indigo-900 flex items-center gap-2 setup-scheduled-title">
+                  <Clock3 size={16} /> Scheduled Tournaments ({scheduledCards.length})
+                </p>
+                {scheduledCards.length > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label="Previous scheduled tournament"
+                      onClick={() => scrollScheduledToIndex(scheduledCarouselIndex - 1)}
+                      className="h-7 w-7 rounded-md border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 inline-flex items-center justify-center"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next scheduled tournament"
+                      onClick={() => scrollScheduledToIndex(scheduledCarouselIndex + 1)}
+                      className="h-7 w-7 rounded-md border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 inline-flex items-center justify-center"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div
+                ref={scheduledCarouselRef}
+                className={`flex gap-3 ${scheduledCards.length > 1 ? 'overflow-x-auto snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'overflow-x-hidden'}`}
+                onScroll={handleScheduledTrackScroll}
+                onMouseEnter={() => { scheduledCarouselPauseRef.current = true; }}
+                onMouseLeave={() => { scheduledCarouselPauseRef.current = false; }}
+                onTouchStart={() => { scheduledCarouselPauseRef.current = true; }}
+                onTouchEnd={() => { scheduledCarouselPauseRef.current = false; }}
+              >
+                {scheduledCards.map((tournament) => {
+                  const tournamentId = tournament.appwriteId || tournament.id;
                   const editPending = Boolean(tournamentId && isPendingAction(`setup.edit-scheduled.${String(tournamentId)}`));
                   const startPending = Boolean(tournamentId && isPendingAction(`setup.start-scheduled.${String(tournamentId)}`));
+                  const viewPending = Boolean(tournamentId && isPendingAction(`setup.view-scheduled.${String(tournamentId)}`));
                   const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
+                  const alreadyStarted = isScheduledTournamentAlreadyStarted(tournament, activeLiveTournaments);
+                  const scheduleLabel = formatTournamentDateLabel(tournament.date, 'To be announced');
                   return (
-                    <div key={tournamentId} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 setup-scheduled-row">
+                    <div
+                      key={tournamentId}
+                      className="w-full shrink-0 snap-start rounded-lg border border-indigo-200 bg-white px-3 py-3 setup-scheduled-row"
+                    >
                       <div className="flex flex-col gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-800 break-words leading-snug setup-scheduled-name">{tournament.name}</p>
                           <p className="text-[11px] text-slate-500 break-words setup-scheduled-meta">
-                            {tournament.date} • {(
+                            {scheduleLabel} • {(
                               Array.isArray(tournament.teams)
                                 ? tournament.teams.length
                                 : (typeof tournament.teamsCount === 'number' ? tournament.teamsCount : 0)
                             )} teams
                           </p>
+                          {alreadyStarted && (
+                            <p className="text-[11px] font-medium text-amber-700 mt-1 setup-scheduled-started-note">
+                              Already started. Resume from Live Tournament.
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 flex-wrap">
                           <button
                             type="button"
+                            onClick={() => { void handleViewScheduledCard(tournament); }}
+                            disabled={!tournamentId || viewPending}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-sky-100 text-sky-700 hover:bg-sky-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-view-btn"
+                          >
+                            <Eye size={11} /> {viewPending ? 'Loading...' : 'View'}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => onEditScheduledTournament?.(tournamentId)}
-                            disabled={!tournamentId || editPending || startPending || deletePending}
+                            disabled={!tournamentId || alreadyStarted || editPending || startPending || deletePending || viewPending}
                             className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-edit-btn"
                           >
                             <PencilLine size={11} /> {editPending ? 'Loading...' : 'Edit'}
@@ -375,15 +518,15 @@ const SetupScreen = ({
                           <button
                             type="button"
                             onClick={() => onStartScheduledTournament?.(tournamentId)}
-                            disabled={!tournamentId || startPending || deletePending}
+                            disabled={!tournamentId || alreadyStarted || startPending || deletePending || viewPending}
                             className="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-start-btn"
                           >
-                            <Play size={11} /> {startPending ? 'Starting...' : 'Start'}
+                            <Play size={11} /> {alreadyStarted ? 'Started' : (startPending ? 'Starting...' : 'Start')}
                           </button>
                           <button
                             type="button"
                             onClick={() => onShareScheduledTournament?.(tournament)}
-                            disabled={startPending || deletePending}
+                            disabled={startPending || deletePending || viewPending}
                             className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-share-btn"
                           >
                             <MessageCircle size={11} /> WhatsApp
@@ -392,7 +535,7 @@ const SetupScreen = ({
                             <button
                               type="button"
                               onClick={() => onDeleteTournament?.(tournamentId)}
-                              disabled={!tournamentId || deletePending || startPending || editPending}
+                              disabled={!tournamentId || deletePending || startPending || editPending || viewPending}
                               className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed setup-scheduled-delete-btn"
                             >
                               {deletePending ? 'Deleting...' : 'Delete'}
@@ -404,6 +547,21 @@ const SetupScreen = ({
                   );
                 })}
               </div>
+              {scheduledCards.length > 1 && (
+                <div className="mt-3 flex items-center justify-center gap-1.5">
+                  {scheduledCards.map((tournament, index) => (
+                    <button
+                      key={`scheduled-dot-${tournament?.appwriteId || tournament?.id || index}`}
+                      type="button"
+                      aria-label={`Go to scheduled tournament ${index + 1}`}
+                      onClick={() => scrollScheduledToIndex(index)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        index === scheduledCarouselIndex ? 'w-5 bg-indigo-600' : 'w-2 bg-indigo-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -424,7 +582,7 @@ const SetupScreen = ({
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{tournament.name || 'Live tournament'}</p>
                           <p className="text-[11px] text-slate-500 break-words">
-                            {tournament.date || 'Today'} • {(
+                            {formatTournamentDateLabel(tournament.date, 'Today')} • {(
                               Array.isArray(tournament.teams)
                                 ? tournament.teams.length
                                 : (typeof tournament.teamsCount === 'number' ? tournament.teamsCount : 0)
@@ -538,7 +696,7 @@ const SetupScreen = ({
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
-                            <p className="text-xs text-gray-500">{tournament.date} • {tournament.teams?.length || 0} teams</p>
+                            <p className="text-xs text-gray-500">{formatTournamentDateLabel(tournament.date)} • {tournament.teams?.length || 0} teams</p>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -617,7 +775,7 @@ const SetupScreen = ({
                             <div className="flex items-start justify-between gap-3 mb-3">
                               <div className="flex-1 min-w-0">
                                 <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
-                                <p className="text-xs text-gray-500">{tournament.date} • {tournament.teams?.length || 0} teams</p>
+                                <p className="text-xs text-gray-500">{formatTournamentDateLabel(tournament.date)} • {tournament.teams?.length || 0} teams</p>
                               </div>
                               <div className="flex gap-2">
                                 <button

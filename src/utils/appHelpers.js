@@ -268,6 +268,38 @@ export const upsertTournamentInHistory = (history = [], tournament = null) => {
 
 export const normalizeTournamentName = (value) => String(value || '').trim().toLowerCase();
 
+export const parseTournamentDateMs = (value) => {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const direct = Date.parse(raw);
+  if (Number.isFinite(direct)) return direct;
+
+  const normalized = raw
+    .replace(/,\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const secondary = Date.parse(normalized);
+  if (Number.isFinite(secondary)) return secondary;
+
+  return null;
+};
+
+export const formatTournamentDateLabel = (value, fallback = 'TBA') => {
+  const timestamp = parseTournamentDateMs(value);
+  if (!Number.isFinite(timestamp)) {
+    const raw = String(value || '').trim();
+    return raw || fallback;
+  }
+  return new Date(timestamp).toLocaleString();
+};
+
 export const removeTournamentFromList = (
   source = [],
   { targetIds = [], targetName = '', removeActiveByName = false } = {}
@@ -293,6 +325,33 @@ export const removeTournamentFromList = (
       return false;
     }
     return true;
+  });
+};
+
+export const isScheduledTournamentAlreadyStarted = (
+  scheduledTournament = null,
+  activeTournaments = []
+) => {
+  if (!scheduledTournament) return false;
+  const scheduledIds = getTournamentIdCandidates(scheduledTournament);
+  const scheduledName = normalizeTournamentName(scheduledTournament?.name);
+  const activeList = Array.isArray(activeTournaments) ? activeTournaments : [];
+
+  return activeList.some((activeTournament) => {
+    if (!activeTournament || activeTournament?.status !== 'active' || activeTournament?.champion) {
+      return false;
+    }
+
+    const activeIds = getTournamentIdCandidates(activeTournament);
+    if (
+      scheduledIds.length > 0
+      && activeIds.some((id) => scheduledIds.includes(id))
+    ) {
+      return true;
+    }
+
+    const activeName = normalizeTournamentName(activeTournament?.name);
+    return Boolean(scheduledName && activeName && scheduledName === activeName);
   });
 };
 

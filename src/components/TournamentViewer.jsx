@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Trophy, Users, Calendar } from 'lucide-react';
+import { formatTournamentDateLabel } from '../utils/appHelpers';
 
 const TournamentViewer = ({ tournament, onClose }) => {
   if (!tournament) return null;
@@ -20,7 +21,7 @@ const TournamentViewer = ({ tournament, onClose }) => {
     finalMatch = tournament.finalMatch || null;
     bracket = tournament.bracket || null;
     tournamentName = tournament.name || 'Tournament';
-    tournamentDate = tournament.date || '';
+    tournamentDate = formatTournamentDateLabel(tournament.date, '');
   } catch (error) {
     console.error('Error parsing tournament data:', error);
   }
@@ -32,15 +33,21 @@ const TournamentViewer = ({ tournament, onClose }) => {
 
   // Extract bracket matches if present
   let bracketMatches = [];
+  let scheduledBracketMatches = [];
   try {
     if (bracket && Array.isArray(bracket)) {
       bracket.forEach((round, roundIdx) => {
         if (Array.isArray(round)) {
           round.forEach(match => {
-            if (match && match.completed && match.team1 && match.team2) {
-              const roundName = roundIdx === 0 ? 'Quarter Finals' : 
-                               roundIdx === 1 ? 'Semi Finals' : 'Final';
-              bracketMatches.push({ ...match, roundName });
+            if (match && match.team1 && match.team2) {
+              const roundName = roundIdx === 0 ? 'Quarter Finals' :
+                roundIdx === 1 ? 'Semi Finals' : 'Final';
+              const normalized = { ...match, roundName };
+              if (match.completed) {
+                bracketMatches.push(normalized);
+              } else {
+                scheduledBracketMatches.push(normalized);
+              }
             }
           });
         }
@@ -58,6 +65,21 @@ const TournamentViewer = ({ tournament, onClose }) => {
     typeof m.score1 === 'number' && 
     typeof m.score2 === 'number'
   );
+
+  const scheduledLeagueMatches = allMatches.filter((match) => (
+    match
+    && !match.completed
+    && match.team1
+    && match.team2
+  ));
+
+  const scheduledMatches = [
+    ...scheduledLeagueMatches.map((match) => ({
+      ...match,
+      roundName: match?.id === 'final' ? 'Final' : 'League Match',
+    })),
+    ...scheduledBracketMatches,
+  ];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
@@ -194,8 +216,39 @@ const TournamentViewer = ({ tournament, onClose }) => {
             </div>
           )}
 
+          {scheduledMatches.length > 0 && (
+            <div className={bracketMatches.length > 0 || completedMatches.length > 0 ? 'mt-6' : ''}>
+              <h4 className="font-bold text-base sm:text-lg text-gray-800 mb-3">
+                Scheduled Fixtures ({scheduledMatches.length})
+              </h4>
+              <div className="space-y-3">
+                {scheduledMatches.map((match, idx) => (
+                  <div key={`scheduled-match-${idx}`} className="bg-white border-2 border-indigo-200 rounded-xl p-3 sm:p-4 tournament-viewer-match-card">
+                    <p className="text-xs text-gray-500 mb-2 font-semibold">{match.roundName || 'Match'}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg sm:text-xl">{match?.team1?.emoji || '🏸'}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">{match?.team1?.name || 'Team'}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-slate-400">-</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg sm:text-xl">{match?.team2?.emoji || '🏸'}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">{match?.team2?.name || 'Team'}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-slate-400">-</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Empty state */}
-          {bracketMatches.length === 0 && completedMatches.length === 0 && (
+          {bracketMatches.length === 0 && completedMatches.length === 0 && scheduledMatches.length === 0 && (
             <div className="text-center py-12 text-gray-500 tournament-viewer-empty">
               <Trophy size={48} className="mx-auto mb-4 text-gray-300" />
               <p className="text-sm">No match results available for this tournament</p>

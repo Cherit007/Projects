@@ -180,4 +180,98 @@ describe('SetupScreen dashboard metrics and sync status', () => {
       name: 'Friday Club Match',
     });
   });
+
+  it('shows scheduled carousel controls only when more than one card exists', () => {
+    const { rerender } = render(
+      <SetupScreen
+        {...baseProps}
+        scheduledTournaments={[
+          { id: 'sched-1', name: 'One', date: '2026-03-07T10:00:00.000Z', teams: [{ id: 1 }, { id: 2 }] },
+        ]}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /Previous scheduled tournament/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Next scheduled tournament/i })).not.toBeInTheDocument();
+
+    rerender(
+      <SetupScreen
+        {...baseProps}
+        scheduledTournaments={[
+          { id: 'sched-1', name: 'One', date: '2026-03-07T10:00:00.000Z', teams: [{ id: 1 }, { id: 2 }] },
+          { id: 'sched-2', name: 'Two', date: '2026-03-07T11:00:00.000Z', teams: [{ id: 1 }, { id: 2 }] },
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /Previous scheduled tournament/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Next scheduled tournament/i })).toBeInTheDocument();
+  });
+
+  it('loads scheduled details via view action and opens tournament viewer', async () => {
+    const user = (await import('@testing-library/user-event')).default.setup();
+    const onViewScheduledTournament = vi.fn(async () => ({
+      id: 'sched-view-1',
+      name: 'Viewer Cup',
+      date: '2026-03-07T10:00:00.000Z',
+      teams: [{ name: 'Team A', player: 'Alice' }, { name: 'Team B', player: 'Bob' }],
+      fixtures: [{ id: 1, team1: { name: 'Team A' }, team2: { name: 'Team B' }, completed: false }],
+      bracket: [],
+      champion: null,
+      finalMatch: null,
+    }));
+
+    render(
+      <SetupScreen
+        {...baseProps}
+        onViewScheduledTournament={onViewScheduledTournament}
+        scheduledTournaments={[
+          { id: 'sched-view-1', name: 'Viewer Cup', date: '2026-03-07T10:00:00.000Z', teams: [{ id: 1 }, { id: 2 }] },
+        ]}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /^View$/i }));
+    expect(onViewScheduledTournament).toHaveBeenCalledWith(
+      'sched-view-1',
+      expect.objectContaining({ id: 'sched-view-1', name: 'Viewer Cup' })
+    );
+    expect(await screen.findByTestId('tournament-viewer')).toBeInTheDocument();
+  });
+
+  it('marks scheduled rows as already started when matching live tournament exists', () => {
+    render(
+      <SetupScreen
+        {...baseProps}
+        scheduledTournaments={[
+          {
+            id: 'local-sched-1',
+            appwriteId: 'cloud-sched-1',
+            name: 'Saturday Smash',
+            date: '2026-03-07',
+            teams: [{ id: 1 }, { id: 2 }],
+            status: 'scheduled',
+          },
+        ]}
+        activeLiveTournaments={[
+          {
+            id: 'cloud-sched-1',
+            appwriteId: 'cloud-sched-1',
+            name: 'Saturday Smash',
+            status: 'active',
+            champion: null,
+          },
+        ]}
+      />
+    );
+
+    const row = screen
+      .getAllByText('Saturday Smash')
+      .map((node) => node.closest('.setup-scheduled-row'))
+      .find(Boolean);
+    expect(row).not.toBeNull();
+    expect(within(row).getByText(/Already started\. Resume from Live Tournament\./i)).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: /^Edit$/i })).toBeDisabled();
+    expect(within(row).getByRole('button', { name: /Started/i })).toBeDisabled();
+  });
 });

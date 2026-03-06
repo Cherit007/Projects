@@ -1034,12 +1034,13 @@ export const useTournamentActions = ({
     formatOverride,
     gameModeOverride,
     tournamentNameOverride,
+    existingTournamentId,
     oddPlayerConfig,
     oddPlayerEnabled,
     oddPlayerName,
   } = {}) => {
-    if (!assertCanOperate()) return;
-    if (await blockWhenLiveTournamentExists()) return;
+    if (!assertCanOperate()) return false;
+    if (await blockWhenLiveTournamentExists()) return false;
     const createRunId = createTournamentRunIdRef.current + 1;
     createTournamentRunIdRef.current = createRunId;
     const selectedTeams = teamsOverride || teams;
@@ -1047,6 +1048,7 @@ export const useTournamentActions = ({
     const selectedFormat = formatOverride || format;
     const selectedGameMode = gameModeOverride || gameMode;
     const selectedTournamentName = tournamentNameOverride || tournamentName;
+    const normalizedExistingTournamentId = String(existingTournamentId || '').trim();
     const selectedOddPlayerEnabled = Boolean(
       oddPlayerConfig?.oddPlayerEnabled ?? oddPlayerEnabled
     );
@@ -1099,6 +1101,7 @@ export const useTournamentActions = ({
 
     if (isAppwriteEnabled) {
       const tournamentData = {
+        ...(normalizedExistingTournamentId ? { appwriteId: normalizedExistingTournamentId } : {}),
         name: selectedTournamentName,
         date: new Date().toLocaleDateString(),
         teams: selectedTeams,
@@ -1173,13 +1176,37 @@ export const useTournamentActions = ({
       })();
     }
 
+    if (normalizedExistingTournamentId) {
+      setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+        id: normalizedExistingTournamentId,
+        appwriteId: normalizedExistingTournamentId,
+        name: selectedTournamentName,
+        date: new Date().toLocaleDateString(),
+        teams: selectedTeams,
+        fixtures: newFixtures,
+        bracket: newBracket,
+        champion: null,
+        finalMatch: null,
+        aiSummaries: [],
+        swapHistory: [],
+        format: selectedFormat,
+        gameMode: selectedGameMode,
+        tournamentFormat: selectedTournamentFormat,
+        status: 'active',
+        oddPlayerEnabled: selectedOddPlayerEnabled,
+        oddPlayerName: selectedOddPlayerName,
+      }));
+      setCurrentTournamentId(normalizedExistingTournamentId);
+    }
+
     setStep('tournament');
     setLoading(false);
     if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
       showToast(`Tournament generated with rotating odd player: ${selectedOddPlayerName} 🏸`);
-      return;
+      return true;
     }
     showToast('Tournament generated! 🏸');
+    return true;
   };
 
   const scheduleTournament = async ({
@@ -1212,13 +1239,18 @@ export const useTournamentActions = ({
       return;
     }
 
-    const scheduleLabel = scheduledAt
-      ? new Date(scheduledAt).toLocaleString()
-      : new Date().toLocaleString();
+    const scheduledTimestampMs = scheduledAt
+      ? new Date(scheduledAt).getTime()
+      : Date.now();
+    const normalizedScheduledMs = Number.isFinite(scheduledTimestampMs)
+      ? scheduledTimestampMs
+      : Date.now();
+    const scheduledIso = new Date(normalizedScheduledMs).toISOString();
+    const scheduleLabel = new Date(normalizedScheduledMs).toLocaleString();
 
     const payload = {
       name: selectedTournamentName,
-      date: scheduleLabel,
+      date: scheduledIso,
       teams: selectedTeams,
       fixtures: [],
       bracket: null,
@@ -1232,23 +1264,54 @@ export const useTournamentActions = ({
       oddPlayerName: selectedOddPlayerName,
     };
 
+    const optimisticId = `sched-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const scheduled = {
+      ...payload,
+      id: optimisticId,
+      appwriteId: null,
+      pendingSync: Boolean(isAppwriteEnabled),
+    };
+
     if (isAppwriteEnabled) {
-      const saved = await saveTournamentMutation.mutateAsync(payload);
-      if (saved) {
-        setTournamentHistory((prev) => upsertTournamentHistory(prev, saved));
-      }
-    } else {
-      const scheduled = {
-        ...payload,
-        id: Date.now(),
-        appwriteId: null,
-      };
       setTournamentHistory((prev) => {
-        const next = [scheduled, ...prev];
-        queueLocalStorageJson('badminton_history', next);
-        return next;
+        return upsertTournamentHistory(prev, scheduled);
       });
+      setStep('setup');
+      showToast(`Tournament scheduled for ${scheduleLabel}`);
+
+      void (async () => {
+        try {
+          const saved = await saveTournamentMutation.mutateAsync(payload);
+          if (!saved || typeof saved !== 'object') return;
+
+          const savedId = String(saved.appwriteId || saved.id || '').trim();
+          if (!savedId) return;
+          setTournamentHistory((prev) => {
+            const withoutOptimistic = (Array.isArray(prev) ? prev : []).filter((item) => {
+              const itemId = String(item?.id || '').trim();
+              const itemAppwriteId = String(item?.appwriteId || '').trim();
+              return itemId !== optimisticId && itemAppwriteId !== optimisticId;
+            });
+            return upsertTournamentHistory(withoutOptimistic, {
+              ...saved,
+              id: savedId,
+              appwriteId: savedId,
+              pendingSync: false,
+            });
+          });
+        } catch (error) {
+          console.error('Failed to sync scheduled tournament to cloud:', error);
+          showToast('Scheduled locally; cloud sync pending.', 'error');
+        }
+      })();
+      return;
     }
+
+    setTournamentHistory((prev) => {
+      const next = upsertTournamentHistory(prev, scheduled);
+      queueLocalStorageJson('badminton_history', next);
+      return next;
+    });
 
     showToast(`Tournament scheduled for ${scheduleLabel}`);
     setStep('setup');
@@ -2189,6 +2252,7 @@ export const useTournamentActions = ({
       skipConfirm = false,
       skipProgressToast = false,
       awaitCloudSync = false,
+      silent = false,
     } = options || {};
     if (!assertCanDelete()) return false;
     createTournamentRunIdRef.current += 1;
@@ -2207,7 +2271,7 @@ export const useTournamentActions = ({
       if (!confirmed) return false;
     }
     if (!skipProgressToast) {
-      showToast('Deleting tournament...');
+      if (!silent) showToast('Deleting tournament...');
       await yieldToUi();
     }
 
@@ -2369,26 +2433,26 @@ export const useTournamentActions = ({
     };
 
     if (isAppwriteEnabled) {
-      showToast('Tournament deleted');
+      if (!silent) showToast('Tournament deleted');
       if (awaitCloudSync || targetIsActive) {
         try {
           await persistDeletion();
           return true;
         } catch (error) {
           console.error('Tournament delete cloud sync failed:', error);
-          showToast('Tournament deleted locally, but cloud sync failed.', 'error');
+          if (!silent) showToast('Tournament deleted locally, but cloud sync failed.', 'error');
           return false;
         }
       }
       void persistDeletion().catch((error) => {
         console.error('Tournament delete cloud sync failed:', error);
-        showToast('Tournament deleted locally, but cloud sync failed.', 'error');
+        if (!silent) showToast('Tournament deleted locally, but cloud sync failed.', 'error');
       });
       return true;
     }
 
     await persistDeletion();
-    showToast('Tournament deleted');
+    if (!silent) showToast('Tournament deleted');
     return true;
   };
 

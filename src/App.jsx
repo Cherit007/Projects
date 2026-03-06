@@ -28,6 +28,8 @@ import {
   calculatePointsTable, 
   calculatePlayerStats, 
   getPlayerLeaderboard,
+  generateFixtures as createFixtures,
+  generateKnockoutBracket,
 } from './utils/calculations';
 import { normalizePhotoInput } from './utils/playerPhotos';
 import { playerPhotoStorageService } from './services/playerPhotoStorageService';
@@ -47,8 +49,11 @@ import {
   normalizeTemplateTeams,
   normalizeTournamentFormat,
   normalizeTournamentName,
+  parseTournamentDateMs,
+  formatTournamentDateLabel,
   pickPreferredTournament,
   removeTournamentFromList,
+  isScheduledTournamentAlreadyStarted,
   upsertTournamentInHistory,
 } from './utils/appHelpers';
 
@@ -424,8 +429,8 @@ const App = () => {
     setActionPending(actionKey, true);
     try {
       const result = await actionFn();
-      if (typeof result === 'boolean') return result;
-      return true;
+      if (typeof result === 'undefined') return true;
+      return result;
     } finally {
       setActionPending(actionKey, false);
     }
@@ -1735,6 +1740,15 @@ const App = () => {
       (item) => matchesTournamentId(item, targetId)
     );
     if (!isAppwriteEnabled) return existing || null;
+    if (
+      existing
+      && (
+        existing?.pendingSync
+        || !String(existing?.appwriteId || '').trim()
+      )
+    ) {
+      return existing;
+    }
 
     try {
       if (existing && !existing?.isSummary) {
@@ -1799,12 +1813,77 @@ const App = () => {
     }
   };
 
+  const findScheduledTournamentById = (tournamentId) => {
+    const normalizedTargetId = String(tournamentId || '').trim();
+    if (!normalizedTargetId) return null;
+    return (tournamentHistory || []).find((item) => (
+      item?.status === 'scheduled' && matchesTournamentId(item, normalizedTargetId)
+    )) || null;
+  };
+
+  const toastScheduledAlreadyStarted = (scheduled) => {
+    const label = String(scheduled?.name || '').trim() || 'This scheduled tournament';
+    showToast(`"${label}" is already started. Resume it from Live Tournament.`, 'error');
+  };
+
   const handleEditScheduledTournament = async (tournamentId) => {
-    const scheduled = await ensureTournamentDetailsForId(tournamentId);
+    const scheduledFromHistory = findScheduledTournamentById(tournamentId);
+    if (
+      scheduledFromHistory
+      && isScheduledTournamentAlreadyStarted(scheduledFromHistory, activeLiveTournaments)
+    ) {
+      toastScheduledAlreadyStarted(scheduledFromHistory);
+      return;
+    }
+
+    let scheduled = await ensureTournamentDetailsForId(tournamentId);
     if (!scheduled) return;
+    if (
+      scheduled?.status === 'active'
+      || isScheduledTournamentAlreadyStarted(scheduled, activeLiveTournaments)
+    ) {
+      toastScheduledAlreadyStarted(scheduled);
+      return;
+    }
+
+    const buildNormalizedTeams = (tournament) => {
+      const scheduledGameMode = tournament?.gameMode || 'doubles';
+      return (tournament?.teams || []).map((team, index) => {
+        const player1 = team.player1 || team.player || '';
+        return {
+          ...team,
+          id: index + 1,
+          player1,
+          player: player1,
+          player2: scheduledGameMode === 'singles' ? '' : (team.player2 || ''),
+        };
+      });
+    };
+
+    let normalizedTeams = buildNormalizedTeams(scheduled);
+    if (
+      normalizedTeams.length === 0
+      && isAppwriteEnabled
+      && (scheduled?.appwriteId || scheduled?.id)
+    ) {
+      const refreshId = scheduled.appwriteId || scheduled.id;
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tournamentDetail(activeGroup?.id, String(refreshId || '')),
+      });
+      const refreshed = await ensureTournamentDetailsForId(refreshId);
+      if (refreshed) {
+        scheduled = refreshed;
+        normalizedTeams = buildNormalizedTeams(refreshed);
+      }
+    }
+
+    if (normalizedTeams.length === 0) {
+      showToast('No saved team details found for this scheduled tournament', 'error');
+      return;
+    }
 
     const scheduledGameMode = scheduled.gameMode || 'doubles';
-    const normalizedTeams = (scheduled.teams || []).map((team, index) => {
+    const normalizedTeamsLegacy = normalizedTeams.map((team, index) => {
       const player1 = team.player1 || team.player || '';
       return {
         ...team,
@@ -1819,21 +1898,73 @@ const App = () => {
     setFormat(scheduled.format || '1');
     setGameMode(scheduledGameMode);
     setTournamentFormat(normalizeTournamentFormat(scheduled.tournamentFormat || 'league'));
-    setNumTeams(normalizedTeams.length || 3);
+    setNumTeams(normalizedTeamsLegacy.length || 3);
     setOddPlayerEnabled(Boolean(scheduled.oddPlayerEnabled));
     setOddPlayerName((scheduled.oddPlayerName || '').trim());
-    setTeams(normalizedTeams);
-    setPendingPrefilledTeams(normalizedTeams);
+    setTeams(normalizedTeamsLegacy);
+    setPendingPrefilledTeams(normalizedTeamsLegacy);
     setStep('teams');
     showToast('Scheduled tournament loaded. You can edit teams now.');
   };
 
   const handleStartScheduledTournament = async (tournamentId) => {
-    const scheduled = await ensureTournamentDetailsForId(tournamentId);
+    const scheduledFromHistory = findScheduledTournamentById(tournamentId);
+    if (
+      scheduledFromHistory
+      && isScheduledTournamentAlreadyStarted(scheduledFromHistory, activeLiveTournaments)
+    ) {
+      toastScheduledAlreadyStarted(scheduledFromHistory);
+      return;
+    }
+
+    let scheduled = await ensureTournamentDetailsForId(tournamentId);
     if (!scheduled) return;
+    if (
+      scheduled?.status === 'active'
+      || isScheduledTournamentAlreadyStarted(scheduled, activeLiveTournaments)
+    ) {
+      toastScheduledAlreadyStarted(scheduled);
+      return;
+    }
+
+    const buildNormalizedTeams = (tournament) => {
+      const scheduledGameMode = tournament?.gameMode || 'doubles';
+      return (tournament?.teams || []).map((team, index) => {
+        const player1 = team.player1 || team.player || '';
+        return {
+          ...team,
+          id: index + 1,
+          player1,
+          player: player1,
+          player2: scheduledGameMode === 'singles' ? '' : (team.player2 || ''),
+        };
+      });
+    };
+
+    let normalizedTeams = buildNormalizedTeams(scheduled);
+    if (
+      normalizedTeams.length === 0
+      && isAppwriteEnabled
+      && (scheduled?.appwriteId || scheduled?.id)
+    ) {
+      const refreshId = scheduled.appwriteId || scheduled.id;
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tournamentDetail(activeGroup?.id, String(refreshId || '')),
+      });
+      const refreshed = await ensureTournamentDetailsForId(refreshId);
+      if (refreshed) {
+        scheduled = refreshed;
+        normalizedTeams = buildNormalizedTeams(refreshed);
+      }
+    }
+
+    if (normalizedTeams.length === 0) {
+      showToast('No saved team details found for this scheduled tournament', 'error');
+      return;
+    }
 
     const scheduledGameMode = scheduled.gameMode || 'doubles';
-    const normalizedTeams = (scheduled.teams || []).map((team, index) => {
+    const normalizedTeamsLegacy = normalizedTeams.map((team, index) => {
       const player1 = team.player1 || team.player || '';
       return {
         ...team,
@@ -1848,21 +1979,158 @@ const App = () => {
     setFormat(scheduled.format || '1');
     setGameMode(scheduledGameMode);
     setTournamentFormat(normalizeTournamentFormat(scheduled.tournamentFormat || 'league'));
-    setNumTeams(normalizedTeams.length || 3);
+    setNumTeams(normalizedTeamsLegacy.length || 3);
     setOddPlayerEnabled(Boolean(scheduled.oddPlayerEnabled));
     setOddPlayerName((scheduled.oddPlayerName || '').trim());
-    generateFixtures({
-      teamsOverride: normalizedTeams,
+    await generateFixtures({
+      teamsOverride: normalizedTeamsLegacy,
       tournamentFormatOverride: normalizeTournamentFormat(scheduled.tournamentFormat || 'league'),
       formatOverride: scheduled.format || '1',
       gameModeOverride: scheduledGameMode,
       tournamentNameOverride: scheduled.name || '',
+      existingTournamentId: scheduled.appwriteId || scheduled.id || tournamentId,
       oddPlayerConfig: {
         oddPlayerEnabled: Boolean(scheduled.oddPlayerEnabled),
         oddPlayerName: (scheduled.oddPlayerName || '').trim(),
       },
     });
   };
+
+  const handleViewScheduledTournament = async (tournamentId, fallbackTournament = null) => {
+    const normalizedId = String(tournamentId || '').trim();
+    if (!normalizedId) return fallbackTournament || null;
+
+    let detailed = await ensureTournamentDetailsForId(normalizedId);
+    if (
+      detailed
+      && detailed.isSummary
+      && isAppwriteEnabled
+      && (detailed.appwriteId || detailed.id)
+    ) {
+      const refreshId = detailed.appwriteId || detailed.id;
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tournamentDetail(activeGroup?.id, String(refreshId || '')),
+      });
+      const refreshed = await ensureTournamentDetailsForId(refreshId);
+      if (refreshed) detailed = refreshed;
+    }
+
+    const resolved = detailed || fallbackTournament || null;
+    if (!resolved || typeof resolved !== 'object') return null;
+
+    const hasRenderableFixtures = (tournament) => {
+      const fixtureCount = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
+        .filter((match) => match?.team1 && match?.team2).length;
+      const bracketCount = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+        .flatMap((round) => (Array.isArray(round) ? round : []))
+        .filter((match) => match?.team1 && match?.team2).length;
+      const finalReady = Boolean(tournament?.finalMatch?.team1 && tournament?.finalMatch?.team2);
+      return fixtureCount > 0 || bracketCount > 0 || finalReady;
+    };
+
+    if (hasRenderableFixtures(resolved) || resolved?.status !== 'scheduled') {
+      return resolved;
+    }
+
+    const previewTeams = (Array.isArray(resolved?.teams) ? resolved.teams : [])
+      .map((team, index) => {
+        const player1 = team?.player1 || team?.player || '';
+        return {
+          ...team,
+          id: team?.id ?? (index + 1),
+          player1,
+          player: player1,
+          player2: team?.player2 || '',
+        };
+      })
+      .filter((team) => team?.player1 || team?.player || team?.name);
+
+    if (previewTeams.length < 2) {
+      return resolved;
+    }
+
+    const previewTournamentFormat = normalizeTournamentFormat(
+      resolved?.tournamentFormat || resolved?.format || 'league'
+    );
+    if (previewTournamentFormat === 'league') {
+      return {
+        ...resolved,
+        fixtures: createFixtures(previewTeams, resolved?.format || '1'),
+      };
+    }
+
+    return {
+      ...resolved,
+      bracket: generateKnockoutBracket(previewTeams, previewTournamentFormat),
+    };
+  };
+
+  const autoDeleteScheduledInFlightRef = useRef(new Set());
+  useEffect(() => {
+    if (!canDelete || !Array.isArray(scheduledTournaments) || scheduledTournaments.length === 0) return undefined;
+
+    let disposed = false;
+    const graceMs = 10 * 60 * 1000;
+    const runCleanup = async () => {
+      if (disposed) return;
+      const now = Date.now();
+      const candidates = scheduledTournaments
+        .filter((tournament) => {
+          if (!tournament) return false;
+          if (isScheduledTournamentAlreadyStarted(tournament, activeLiveTournaments)) return false;
+          const tournamentId = String(tournament?.appwriteId || tournament?.id || '').trim();
+          if (!tournamentId) return false;
+          if (autoDeleteScheduledInFlightRef.current.has(tournamentId)) return false;
+          const scheduledAtMs = parseTournamentDateMs(tournament?.date);
+          if (!Number.isFinite(scheduledAtMs)) return false;
+          return now >= (scheduledAtMs + graceMs);
+        });
+
+      for (const tournament of candidates) {
+        const tournamentId = String(tournament?.appwriteId || tournament?.id || '').trim();
+        if (!tournamentId) continue;
+        autoDeleteScheduledInFlightRef.current.add(tournamentId);
+        try {
+          const deleted = await handleDeleteTournamentFromSetup(tournamentId, {
+            skipConfirm: true,
+            skipProgressToast: true,
+            awaitCloudSync: true,
+            silent: true,
+          });
+          if (!deleted) continue;
+          if (isAppwriteEnabled) {
+            pruneTournamentQueryCacheAfterDelete({
+              targetIds: [tournamentId],
+              targetName: normalizeTournamentName(tournament?.name),
+              removeActiveByName: false,
+            });
+          }
+          const label = String(tournament?.name || '').trim() || 'Scheduled tournament';
+          showToast(`Auto-removed expired schedule: ${label}`);
+        } finally {
+          autoDeleteScheduledInFlightRef.current.delete(tournamentId);
+        }
+      }
+    };
+
+    void runCleanup();
+    const timerId = setInterval(() => {
+      void runCleanup();
+    }, 60 * 1000);
+
+    return () => {
+      disposed = true;
+      clearInterval(timerId);
+    };
+  }, [
+    canDelete,
+    scheduledTournaments,
+    activeLiveTournaments,
+    isAppwriteEnabled,
+    handleDeleteTournamentFromSetup,
+    pruneTournamentQueryCacheAfterDelete,
+    showToast,
+  ]);
 
   useEffect(() => {
     if (!isAppwriteEnabled) return;
@@ -2134,13 +2402,33 @@ const App = () => {
   };
 
   const handleShareScheduledTournament = useCallback(async (tournament) => {
-    const tournamentLabel = String(tournament?.name || '').trim();
+    const tournamentId = String(tournament?.appwriteId || tournament?.id || '').trim();
+    const resolvedTournament = tournamentId
+      ? ((await handleViewScheduledTournament(tournamentId, tournament)) || tournament)
+      : tournament;
+    const tournamentLabel = String(resolvedTournament?.name || tournament?.name || '').trim();
     if (!tournamentLabel) {
       showToast('Tournament details unavailable for sharing', 'error');
       return;
     }
 
-    const formatValue = normalizeTournamentFormat(tournament?.tournamentFormat || tournament?.format || 'league');
+    const formatTeamLabel = (team, fallbackIndex = 0) => {
+      if (!team) return `Team ${fallbackIndex + 1}`;
+      if (typeof team === 'string') return team;
+
+      const teamName = String(team?.name || '').trim();
+      const player1 = String(team?.player1 || team?.player || '').trim();
+      const player2 = String(team?.player2 || '').trim();
+      const playerLabel = [player1, player2].filter(Boolean).join(' & ');
+      if (teamName && playerLabel && teamName.toLowerCase() !== playerLabel.toLowerCase()) {
+        return `${teamName} (${playerLabel})`;
+      }
+      return teamName || playerLabel || `Team ${fallbackIndex + 1}`;
+    };
+
+    const formatValue = normalizeTournamentFormat(
+      resolvedTournament?.tournamentFormat || resolvedTournament?.format || 'league'
+    );
     const formatLabel = formatValue === 'league'
       ? 'League'
       : formatValue === 'semiFinal'
@@ -2152,24 +2440,78 @@ const App = () => {
             : formatValue === 'playInFinal'
               ? 'Play-in + Final'
               : 'Knockout';
-    const modeLabel = String(tournament?.gameMode || 'doubles').toLowerCase() === 'singles'
+    const modeLabel = String(resolvedTournament?.gameMode || 'doubles').toLowerCase() === 'singles'
       ? 'Singles'
       : 'Doubles';
-    const teamsCount = Array.isArray(tournament?.teams)
-      ? tournament.teams.length
-      : Number(tournament?.teamsCount || 0);
-    const dateLabel = String(tournament?.date || '').trim() || 'To be announced';
+    const normalizedTeams = Array.isArray(resolvedTournament?.teams) ? resolvedTournament.teams : [];
+    const teamsCount = normalizedTeams.length > 0
+      ? normalizedTeams.length
+      : Number(resolvedTournament?.teamsCount || 0);
+    const dateLabel = formatTournamentDateLabel(resolvedTournament?.date, 'To be announced');
     const groupLabel = String(activeGroup?.name || '').trim();
 
+    const teamLines = normalizedTeams
+      .filter(Boolean)
+      .map((team, index) => `• 🧑‍🤝‍🧑 ${formatTeamLabel(team, index)}`);
+
+    const leagueFixtureLines = (Array.isArray(resolvedTournament?.fixtures) ? resolvedTournament.fixtures : [])
+      .filter((match) => match?.team1 && match?.team2)
+      .map((match, index) => {
+        const roundLabel = Number.isFinite(Number(match?.round)) ? `R${Number(match.round)}` : `M${index + 1}`;
+        return `• 🏸 ${roundLabel}: ${formatTeamLabel(match.team1, index)} vs ${formatTeamLabel(match.team2, index + 1)}`;
+      });
+
+    const bracketFixtureLines = (Array.isArray(resolvedTournament?.bracket) ? resolvedTournament.bracket : [])
+      .flatMap((round, roundIndex) => (Array.isArray(round) ? round : [])
+        .filter((match) => match?.team1 && match?.team2)
+        .map((match, matchIndex) => (
+          `• 🥊 KO R${roundIndex + 1}.${matchIndex + 1}: `
+          + `${formatTeamLabel(match.team1, matchIndex)} vs ${formatTeamLabel(match.team2, matchIndex + 1)}`
+        )));
+
+    const finalMatch = resolvedTournament?.finalMatch;
+    const finalMatchLine = finalMatch?.team1 && finalMatch?.team2
+      ? `• 🏆 Final: ${formatTeamLabel(finalMatch.team1)} vs ${formatTeamLabel(finalMatch.team2)}`
+      : null;
+
+    const fixturesSection = [
+      '📋 *Fixture Details*',
+      ...(leagueFixtureLines.length > 0
+        ? ['🔹 League Fixtures', ...leagueFixtureLines]
+        : []),
+      ...(bracketFixtureLines.length > 0
+        ? ['🔸 Knockout Fixtures', ...bracketFixtureLines]
+        : []),
+      finalMatchLine,
+      leagueFixtureLines.length === 0 && bracketFixtureLines.length === 0 && !finalMatchLine
+        ? '• Fixtures will be generated when the tournament starts.'
+        : null,
+    ].filter(Boolean);
+
+    const baseUrl = typeof window !== 'undefined'
+      ? new URL(import.meta.env.BASE_URL || '/', window.location.origin).toString()
+      : '';
+    const appUrl = baseUrl || '';
+    const posterUrl = baseUrl ? new URL('pwa-512x512.png', baseUrl).toString() : '';
+
     const messageLines = [
-      '🏸 Tournament Scheduled',
-      `Name: ${tournamentLabel}`,
-      groupLabel ? `Group: ${groupLabel}` : null,
-      `Date: ${dateLabel}`,
-      `Format: ${formatLabel}`,
-      `Mode: ${modeLabel}`,
-      teamsCount > 0 ? `Teams: ${teamsCount}` : null,
-      'Join us on court!'
+      '🏸 *Badminton Tournament Invite*',
+      `📛 *${tournamentLabel}*`,
+      groupLabel ? `👥 Group: ${groupLabel}` : null,
+      `🗓️ Date: ${dateLabel}`,
+      `🎯 Format: ${formatLabel}`,
+      `🎮 Mode: ${modeLabel}`,
+      teamsCount > 0 ? `👥 Teams: ${teamsCount}` : null,
+      teamLines.length > 0 ? '' : null,
+      teamLines.length > 0 ? '🧩 *Teams*' : null,
+      ...teamLines,
+      '',
+      ...fixturesSection,
+      appUrl ? '' : null,
+      appUrl ? `📲 Open App: ${appUrl}` : null,
+      posterUrl ? `🖼️ Poster: ${posterUrl}` : null,
+      '',
+      '🔥 See you on court!',
     ].filter(Boolean);
     const message = messageLines.join('\n');
 
@@ -2178,6 +2520,7 @@ const App = () => {
         await navigator.share({
           title: `${tournamentLabel} scheduled`,
           text: message,
+          ...(appUrl ? { url: appUrl } : {}),
         });
         return;
       } catch (error) {
@@ -2188,11 +2531,11 @@ const App = () => {
     const whatsAppUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     if (typeof window !== 'undefined') {
       window.open(whatsAppUrl, '_blank', 'noopener,noreferrer');
-      showToast('Opening WhatsApp share...');
+      showToast('Opening WhatsApp with full fixture invite...');
       return;
     }
     showToast('Unable to open WhatsApp from this device', 'error');
-  }, [activeGroup?.name, showToast]);
+  }, [activeGroup?.name, handleViewScheduledTournament, showToast]);
 
   const {
     viewerDashboardProps,
@@ -2259,6 +2602,7 @@ const App = () => {
     handleStartTournament,
     handleEditScheduledTournament,
     handleStartScheduledTournament,
+    handleViewScheduledTournament,
     onShareScheduledTournament: handleShareScheduledTournament,
     handleResumeActiveTournament,
     handleDeleteActiveTournament,
