@@ -25,13 +25,13 @@ const AuthScreen = ({ onLogin, onRegister, onContinueAsViewer, loading }) => {
         <div className="mt-4 flex gap-2">
           <button
             onClick={() => setMode('login')}
-            className={`auth-mode-btn flex-1 py-2 rounded-xl border ${mode === 'login' ? 'btn-brand border-transparent' : 'bg-white/80 text-slate-700 border-slate-300'}`}
+            className={`auth-mode-btn flex-1 py-2 rounded-xl border ${mode === 'login' ? 'auth-mode-btn-active btn-brand border-transparent' : 'auth-mode-btn-inactive'}`}
           >
             Login
           </button>
           <button
             onClick={() => setMode('register')}
-            className={`auth-mode-btn flex-1 py-2 rounded-xl border ${mode === 'register' ? 'btn-brand border-transparent' : 'bg-white/80 text-slate-700 border-slate-300'}`}
+            className={`auth-mode-btn flex-1 py-2 rounded-xl border ${mode === 'register' ? 'auth-mode-btn-active btn-brand border-transparent' : 'auth-mode-btn-inactive'}`}
           >
             Register
           </button>

@@ -2018,8 +2018,9 @@ export const useTournamentActions = ({
           const remoteActive = await fetchRemoteActiveLiveTournament({ force: true });
           pushUniqueId(cloudDeleteIds, remoteActive?.appwriteId);
           pushUniqueId(cloudDeleteIds, remoteActive?.id);
+          let remoteActiveSummaries = [];
           try {
-            const remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
+            remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
             (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : []).forEach((summary) => {
               const summaryName = String(summary?.name || '').trim().toLowerCase();
               const summaryIds = [summary?.id, summary?.appwriteId]
@@ -2043,11 +2044,24 @@ export const useTournamentActions = ({
               deletedAny = true;
             }
           }
+          const stillHasMatchingActive = (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : [])
+            .some((summary) => {
+              const summaryName = String(summary?.name || '').trim().toLowerCase();
+              const summaryIds = [summary?.id, summary?.appwriteId]
+                .map((value) => String(value || '').trim())
+                .filter(Boolean);
+              const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
+              const nameMatched = normalizedTournamentName && summaryName && summaryName === normalizedTournamentName;
+              return idMatched || nameMatched;
+            });
+          if (!deletedAny && !stillHasMatchingActive) {
+            deletedFromCloud = true;
+          }
           if (!deletedFromCloud) {
             showToast('Failed to delete tournament from cloud. Cleared local state only.', 'error');
           }
 
-          if (deletedAny || cloudDeleteIds.length === 0) {
+          if (deletedAny || cloudDeleteIds.length === 0 || !stillHasMatchingActive) {
             await clearActiveTournamentLockIfMatches({
               tournamentId: cloudDeleteIds[0],
               tournamentName: tournamentName,
@@ -2282,8 +2296,9 @@ export const useTournamentActions = ({
             pushUniqueId(cloudDeleteIds, remoteActive?.id);
           }
         }
+        let remoteActiveSummaries = [];
         try {
-          const remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
+          remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
           (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : []).forEach((summary) => {
             const summaryName = String(summary?.name || '').trim().toLowerCase();
             const summaryIds = [summary?.id, summary?.appwriteId]
@@ -2308,10 +2323,23 @@ export const useTournamentActions = ({
             deletedAny = true;
           }
         }
+        const stillHasMatchingActive = (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : [])
+          .some((summary) => {
+            const summaryName = String(summary?.name || '').trim().toLowerCase();
+            const summaryIds = [summary?.id, summary?.appwriteId]
+              .map((value) => String(value || '').trim())
+              .filter(Boolean);
+            const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
+            const nameMatched = normalizedTargetName && summaryName && summaryName === normalizedTargetName;
+            return idMatched || nameMatched;
+          });
+        if (!deletedAny && !stillHasMatchingActive) {
+          deletedFromCloud = true;
+        }
         if (!deletedFromCloud) {
           throw new Error('Failed to delete tournament from cloud');
         }
-        if (deletedAny || cloudDeleteIds.length === 0) {
+        if (deletedAny || cloudDeleteIds.length === 0 || !stillHasMatchingActive) {
           await clearActiveTournamentLockIfMatches({
             tournamentId: cloudDeleteIds[0],
             tournamentName: tournament?.name,

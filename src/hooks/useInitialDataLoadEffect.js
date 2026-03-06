@@ -88,8 +88,22 @@ export const useInitialDataLoadEffect = ({
         const cachedTournamentHistory = queryClient.getQueryData(queryKeys.tournamentHistory(activeGroupId));
         const cachedTournamentSummaries = queryClient.getQueryData(queryKeys.tournamentSummaries(activeGroupId));
         const cachedCasualMatches = queryClient.getQueryData(queryKeys.casualMatches(activeGroupId));
+        const cachedBootstrapData = queryClient.getQueryData(queryKeys.appwriteData(activeGroupId));
         const hasCachedTournamentHistory = Array.isArray(cachedTournamentHistory);
         const hasCachedCasualMatches = Array.isArray(cachedCasualMatches);
+        const hasCachedLiveSummary = Array.isArray(cachedTournamentSummaries)
+          && cachedTournamentSummaries.some((item) => item?.status === 'active' && !item?.champion);
+        const hasCachedActiveLock = Boolean(
+          cachedBootstrapData
+          && typeof cachedBootstrapData === 'object'
+          && cachedBootstrapData.activeTournament
+          && cachedBootstrapData.activeTournament.status === 'active'
+        );
+        // Force a fresh read when cached data says there is an active tournament.
+        // This prevents stale persisted cache from resurrecting deleted live tournaments across accounts.
+        const liveStateStaleTime = (hasCachedLiveSummary || hasCachedActiveLock)
+          ? 0
+          : (5 * 60 * 1000);
 
         setHistoryHydrated(hasCachedTournamentHistory);
         setCasualHydrated(hasCachedCasualMatches);
@@ -108,13 +122,13 @@ export const useInitialDataLoadEffect = ({
             includeRatings: true,
             includeMeta: true,
           }),
-          staleTime: 5 * 60 * 1000,
+          staleTime: liveStateStaleTime,
         });
 
         const tournamentSummaries = await queryClient.fetchQuery({
           queryKey: queryKeys.tournamentSummaries(activeGroupId),
           queryFn: () => tournamentService.getTournamentSummaries(40, activeGroupId, ['active', 'scheduled']),
-          staleTime: 5 * 60 * 1000,
+          staleTime: liveStateStaleTime,
         });
 
         if (mounted && appwriteData) {

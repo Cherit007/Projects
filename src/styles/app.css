@@ -3573,11 +3573,26 @@ body[data-theme='dark'] .auth-help {
 
 body[data-theme='dark'] .auth-mode-btn {
   border-color: rgba(120, 156, 206, 0.4) !important;
+  color: #d7e6fd !important;
+}
+
+body[data-theme='dark'] .auth-mode-btn-inactive {
+  background: linear-gradient(155deg, rgba(16, 34, 60, 0.9), rgba(11, 24, 44, 0.9)) !important;
+  border-color: rgba(124, 161, 212, 0.42) !important;
+  color: #d7e6fd !important;
+}
+
+body[data-theme='dark'] .auth-mode-btn-inactive:hover {
+  background: linear-gradient(155deg, rgba(22, 43, 74, 0.95), rgba(15, 32, 57, 0.94)) !important;
+}
+
+body[data-theme='dark'] .auth-mode-btn-active {
+  color: #f7fcff !important;
 }
 
 body[data-theme='dark'] .auth-input {
-  background: rgba(8, 22, 41, 0.95) !important;
-  border-color: rgba(119, 156, 208, 0.45) !important;
+  background: rgba(9, 24, 45, 0.96) !important;
+  border-color: rgba(131, 168, 219, 0.55) !important;
   color: #e8f1ff !important;
 }
 
@@ -3610,6 +3625,12 @@ body[data-theme='light'] .auth-card {
 body[data-theme='light'] .auth-subtitle,
 body[data-theme='light'] .auth-help {
   color: #64748b !important;
+}
+
+body[data-theme='light'] .auth-mode-btn-inactive {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.58) !important;
+  color: #334155 !important;
 }
 
 body[data-theme='light'] .auth-input {

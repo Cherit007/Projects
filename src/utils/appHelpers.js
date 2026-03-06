@@ -297,13 +297,19 @@ export const removeTournamentFromList = (
 };
 
 export const getTournamentProgressScore = (tournament) => {
+  const totalFixtures = Array.isArray(tournament?.fixtures) ? tournament.fixtures.length : 0;
+  const totalBracketMatches = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+    .flatMap((round) => (Array.isArray(round) ? round : [])).length;
+  const teamCount = Array.isArray(tournament?.teams) ? tournament.teams.length : 0;
   const completedFixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
     .filter((match) => match?.completed).length;
   const completedBracket = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
     .flatMap((round) => (Array.isArray(round) ? round : []))
     .filter((match) => match?.completed).length;
   const championBonus = tournament?.champion ? 10000 : 0;
-  return championBonus + completedFixtures + completedBracket;
+  const payloadDepth = totalFixtures + totalBracketMatches + teamCount;
+  const summaryPenalty = tournament?.isSummary ? -1 : 0;
+  return championBonus + (completedFixtures * 10) + (completedBracket * 10) + payloadDepth + summaryPenalty;
 };
 
 export const pickPreferredTournament = (primary, secondary) => {

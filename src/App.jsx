@@ -1500,6 +1500,67 @@ const App = () => {
   );
 
   const handleResumeActiveTournament = async (tournamentId) => {
+    const tournamentPayloadDepth = (candidate) => {
+      if (!candidate) return 0;
+      const fixtureCount = Array.isArray(candidate.fixtures) ? candidate.fixtures.length : 0;
+      const bracketCount = Array.isArray(candidate.bracket)
+        ? candidate.bracket.reduce((sum, round) => sum + (Array.isArray(round) ? round.length : 0), 0)
+        : 0;
+      const teamCount = Array.isArray(candidate.teams) ? candidate.teams.length : 0;
+      return fixtureCount + bracketCount + teamCount;
+    };
+    const mergeWithLockIfRicher = (candidate) => {
+      if (!candidate) return candidate;
+      const lockTournament = buildTournamentFromLock(activeTournamentLock);
+      if (!lockTournament) return candidate;
+
+      const candidateIds = getTournamentIdCandidates(candidate);
+      const lockIds = getTournamentIdCandidates(lockTournament);
+      const idMatched = candidateIds.some((value) => lockIds.includes(value));
+      const candidateName = normalizeTournamentName(candidate?.name);
+      const lockName = normalizeTournamentName(lockTournament?.name);
+      const nameMatched = Boolean(candidateName && lockName && candidateName === lockName);
+      if (!idMatched && !nameMatched) return candidate;
+
+      if (tournamentPayloadDepth(lockTournament) <= tournamentPayloadDepth(candidate)) {
+        return candidate;
+      }
+
+      return {
+        ...candidate,
+        ...lockTournament,
+        id: candidate.appwriteId || candidate.id || lockTournament.appwriteId || lockTournament.id || null,
+        appwriteId: candidate.appwriteId || candidate.id || lockTournament.appwriteId || lockTournament.id || null,
+        name: candidate.name || lockTournament.name || 'Live tournament',
+        date: candidate.date || lockTournament.date || '',
+        format: candidate.format || lockTournament.format || '1',
+        gameMode: candidate.gameMode || lockTournament.gameMode || 'doubles',
+        tournamentFormat: normalizeTournamentFormat(
+          candidate.tournamentFormat
+            || lockTournament.tournamentFormat
+            || candidate.format
+            || lockTournament.format
+            || 'league'
+        ),
+        status: candidate.status || lockTournament.status || 'active',
+        teams: Array.isArray(candidate.teams) && candidate.teams.length > 0
+          ? candidate.teams
+          : (Array.isArray(lockTournament.teams) ? lockTournament.teams : []),
+        fixtures: Array.isArray(candidate.fixtures) && candidate.fixtures.length > 0
+          ? candidate.fixtures
+          : (Array.isArray(lockTournament.fixtures) ? lockTournament.fixtures : []),
+        bracket: Array.isArray(candidate.bracket) && candidate.bracket.length > 0
+          ? candidate.bracket
+          : (Array.isArray(lockTournament.bracket) ? lockTournament.bracket : []),
+        aiSummaries: Array.isArray(candidate.aiSummaries) && candidate.aiSummaries.length > 0
+          ? candidate.aiSummaries
+          : (Array.isArray(lockTournament.aiSummaries) ? lockTournament.aiSummaries : []),
+        swapHistory: Array.isArray(candidate.swapHistory) && candidate.swapHistory.length > 0
+          ? candidate.swapHistory
+          : (Array.isArray(lockTournament.swapHistory) ? lockTournament.swapHistory : []),
+      };
+    };
+
     const normalizedTargetId = tournamentId ? String(tournamentId) : '';
     const normalizedLockName = (activeTournamentLock?.name || '').trim().toLowerCase();
     const findLocalActive = () => {
@@ -1552,6 +1613,8 @@ const App = () => {
       }
     }
 
+    active = mergeWithLockIfRicher(active);
+
     if (!active && isAppwriteEnabled) {
       try {
         const activeSummaries = await queryClient.fetchQuery({
@@ -1571,6 +1634,8 @@ const App = () => {
         // Ignore network issues and fallback to the existing local state.
       }
     }
+
+    active = mergeWithLockIfRicher(active);
 
     if (!active || active.status !== 'active' || active.champion) {
       showToast('Live tournament exists but could not be loaded yet. Please refresh once.', 'error');
