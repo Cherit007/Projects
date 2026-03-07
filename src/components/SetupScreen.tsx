@@ -302,8 +302,12 @@ const SetupScreen = ({
 
   const formatCasualTeam = (team) => {
     if (!team) return 'Unknown';
-    if (team.player) return team.player;
-    return [team.player1, team.player2].filter(Boolean).join(' & ');
+    const player1 = String(team.player1 || team.player || '').trim();
+    const player2 = String(team.player2 || '').trim();
+    if (player1 && player2) return `${player1} & ${player2}`;
+    if (player1) return player1;
+    if (player2) return player2;
+    return String(team.name || 'Unknown').trim() || 'Unknown';
   };
 
   const selectedPlayerProfile = selectedPlayerName ? playerRatings?.[selectedPlayerName] : null;
@@ -862,7 +866,7 @@ const SetupScreen = ({
                             <p className="text-xs text-gray-500 mb-1 casual-history-meta">
                               {match.matchType === 'doubles' ? '👥 Doubles' : '🎯 Singles'} • {new Date(match.date || match.createdAt || Date.now()).toLocaleString()}
                             </p>
-                            <p className="font-semibold text-gray-800 truncate">
+                            <p className="font-semibold text-gray-800 overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] leading-snug break-words">
                               <span className={isTeam1Winner ? 'text-green-700' : ''}>{team1Name}</span> vs <span className={!isTeam1Winner ? 'text-green-700' : ''}>{team2Name}</span>
                             </p>
                             <p className="text-sm text-gray-700 mt-1 casual-history-score">Score: {score1} - {score2}</p>
@@ -928,7 +932,7 @@ const SetupScreen = ({
                                 <p className="text-xs text-gray-500 mb-1 casual-history-meta">
                                   {match.matchType === 'doubles' ? '👥 Doubles' : '🎯 Singles'} • {new Date(match.date || match.createdAt || Date.now()).toLocaleString()}
                                 </p>
-                                <p className="font-semibold text-gray-800 truncate">
+                                <p className="font-semibold text-gray-800 overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] leading-snug break-words">
                                   <span className={isTeam1Winner ? 'text-green-700' : ''}>{team1Name}</span> vs <span className={!isTeam1Winner ? 'text-green-700' : ''}>{team2Name}</span>
                                 </p>
                                 <p className="text-sm text-gray-700 mt-1 casual-history-score">Score: {score1} - {score2}</p>

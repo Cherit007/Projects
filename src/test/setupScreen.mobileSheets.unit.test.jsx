@@ -98,13 +98,22 @@ describe('SetupScreen mobile bottom sheets', () => {
       <SetupScreen
         {...baseProps}
         showCasualHistory
-        casualMatches={[{ id: 'c1', team1: { player: 'A' }, team2: { player: 'B' }, score1: 21, score2: 18 }]}
+        casualMatches={[{
+          id: 'c1',
+          matchType: 'doubles',
+          team1: { player1: 'A', player2: 'B', player: 'A' },
+          team2: { player1: 'C', player2: 'D', player: 'C' },
+          score1: 21,
+          score2: 18,
+        }]}
       />
     );
 
     const dialog = screen.getByRole('dialog', { name: /Casual Match History/i });
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveClass('mobile-bottom-sheet-shell');
+    expect(screen.getByText('A & B')).toBeInTheDocument();
+    expect(screen.getByText('C & D')).toBeInTheDocument();
   });
 
   it('renders elo leaderboard as explicit bottom sheet on mobile', () => {
@@ -121,4 +130,3 @@ describe('SetupScreen mobile bottom sheets', () => {
     expect(dialog).toHaveClass('mobile-bottom-sheet-shell');
   });
 });
-
