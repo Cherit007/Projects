@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { tournamentService } from '../services/tournamentService';
+import { dedupeLiveTournaments, dedupeTournamentHistory } from '../utils/appHelpers';
 
 export const useInitialDataLoadEffect = ({
   isConfigChecked,
@@ -73,12 +74,16 @@ export const useInitialDataLoadEffect = ({
             setPlayerDatabase(localPlayers);
             setPlayerRatings(localRatings);
             markRatingsPersisted(localRatings || {});
-            setTournamentHistory(localHistory);
+            setTournamentHistory(dedupeTournamentHistory(localHistory));
             setCasualMatches(localCasualMatches);
             setHistoryHydrated(true);
             setCasualHydrated(true);
-            const localActive = findActiveTournament(localHistory);
-            resumeActiveTournament(localActive);
+            const localActiveTournaments = dedupeLiveTournaments(
+              dedupeTournamentHistory(localHistory)
+            );
+            if (localActiveTournaments.length === 1) {
+              resumeActiveTournament(localActiveTournaments[0]);
+            }
           }
 
           return;
@@ -107,10 +112,13 @@ export const useInitialDataLoadEffect = ({
 
         setHistoryHydrated(hasCachedTournamentHistory);
         setCasualHydrated(hasCachedCasualMatches);
-        setTournamentHistory(
+        const normalizedCachedHistory = dedupeTournamentHistory(
           hasCachedTournamentHistory
             ? cachedTournamentHistory
             : (Array.isArray(cachedTournamentSummaries) ? cachedTournamentSummaries : [])
+        );
+        setTournamentHistory(
+          normalizedCachedHistory
         );
         setCasualMatches(hasCachedCasualMatches ? cachedCasualMatches : []);
 
@@ -132,7 +140,7 @@ export const useInitialDataLoadEffect = ({
         });
 
         if (mounted && appwriteData) {
-          const appwriteTournaments = tournamentSummaries || [];
+          const appwriteTournaments = dedupeTournamentHistory(tournamentSummaries || []);
           setTournamentHistory(appwriteTournaments);
           setPlayerDatabase(appwriteData.playerDatabase || []);
           setPlayerRatings(appwriteData.playerRatings || {});
@@ -231,6 +239,11 @@ export const useInitialDataLoadEffect = ({
           const preferredActive = activeFromCloud && lockCandidate
             ? (scoreTournament(lockCandidate) > scoreTournament(activeFromCloud) ? lockCandidate : activeFromCloud)
             : (activeFromCloud || lockCandidate);
+          const dedupedLiveTournaments = dedupeLiveTournaments([
+            ...(Array.isArray(appwriteTournaments) ? appwriteTournaments : []),
+            ...(lockCandidate ? [lockCandidate] : []),
+          ]);
+          const hasMultipleLiveTournaments = dedupedLiveTournaments.length > 1;
           const hasDetailedCloudState = Boolean(
             preferredActive
             && (
@@ -239,7 +252,7 @@ export const useInitialDataLoadEffect = ({
               || (Array.isArray(preferredActive.teams) && preferredActive.teams.length > 0 && !preferredActive.isSummary)
             )
           );
-          if (preferredActive && hasDetailedCloudState) {
+          if (preferredActive && hasDetailedCloudState && !hasMultipleLiveTournaments) {
             resumeActiveTournament(preferredActive);
           }
         }

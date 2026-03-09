@@ -175,4 +175,24 @@ describe('Score submission guard behavior', () => {
       expect(screen.getByRole('button', { name: /Declare Champion/i })).toBeInTheDocument();
     });
   });
+
+  it('does not auto-move focus from final score 1 while typing', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <FinalMatchCard
+        finalists={[teamA, teamB]}
+        onSave={vi.fn(async () => true)}
+        playerRatings={{}}
+      />
+    );
+
+    const [score1Input, score2Input] = screen.getAllByPlaceholderText('0');
+    await user.click(score1Input);
+    await user.type(score1Input, '21');
+
+    expect(score1Input).toHaveValue('21');
+    expect(score2Input).toHaveValue('');
+    expect(document.activeElement).toBe(score1Input);
+  });
 });

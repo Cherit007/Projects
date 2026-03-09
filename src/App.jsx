@@ -52,6 +52,7 @@ import {
   parseTournamentDateMs,
   formatTournamentDateLabel,
   pickPreferredTournament,
+  dedupeLiveTournaments,
   removeTournamentFromList,
   isScheduledTournamentAlreadyStarted,
   upsertTournamentInHistory,
@@ -79,6 +80,15 @@ const App = () => {
     }
   }, [themeMode]);
 
+  const cloneSerializable = (value) => {
+    if (value === null || value === undefined) return value;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return value;
+    }
+  };
+
   const resumeActiveTournament = (activeTournament) => {
     if (!activeTournament) return false;
 
@@ -86,12 +96,12 @@ const App = () => {
     setFormat(activeTournament.format || '1');
     setGameMode(activeTournament.gameMode || 'doubles');
     setTournamentFormat(normalizeTournamentFormat(activeTournament.tournamentFormat || activeTournament.format || 'league'));
-    setTeams(activeTournament.teams || []);
-    setFixtures(activeTournament.fixtures || []);
-    setBracket(activeTournament.bracket || []);
-    setChampion(activeTournament.champion || null);
-    setAiMatchSummaries(activeTournament.aiSummaries || []);
-    setSwapHistory(activeTournament.swapHistory || []);
+    setTeams(cloneSerializable(activeTournament.teams || []));
+    setFixtures(cloneSerializable(activeTournament.fixtures || []));
+    setBracket(cloneSerializable(activeTournament.bracket || []));
+    setChampion(cloneSerializable(activeTournament.champion || null));
+    setAiMatchSummaries(cloneSerializable(activeTournament.aiSummaries || []));
+    setSwapHistory(cloneSerializable(activeTournament.swapHistory || []));
     setCurrentTournamentId(activeTournament.appwriteId || activeTournament.id || null);
     setStep('tournament');
     return true;
@@ -1456,6 +1466,7 @@ const App = () => {
     eloLeaderboard,
   } = useDashboardDerivedData({
     tournamentHistory,
+    casualMatches,
     playerRatings,
   });
   const currentUserLeaderboardRank = useMemo(() => {
@@ -1474,32 +1485,11 @@ const App = () => {
 
   const activeLiveTournaments = useMemo(
     () => {
-      const fromHistoryRaw = (tournamentHistory || []).filter((item) => item?.status === 'active' && !item?.champion);
-      const byName = new Map();
-      fromHistoryRaw.forEach((item) => {
-        const fallbackId = getTournamentIdCandidates(item)[0] || '';
-        const key = (item?.name || '').trim().toLowerCase()
-          || fallbackId;
-        if (!key) return;
-        const existing = byName.get(key);
-        byName.set(key, existing ? pickPreferredTournament(existing, item) : item);
-      });
-      const fromHistory = Array.from(byName.values());
+      const fromHistory = dedupeLiveTournaments(tournamentHistory || []);
       const lockTournament = buildTournamentFromLock(activeTournamentLock);
       if (!lockTournament) return fromHistory;
 
-      const lockId = lockTournament.id || lockTournament.appwriteId;
-      const lockName = (lockTournament.name || '').trim().toLowerCase();
-      const matchIndex = fromHistory.findIndex((item) => {
-        if (lockId && matchesTournamentId(item, lockId)) return true;
-        return lockName && (item?.name || '').trim().toLowerCase() === lockName;
-      });
-      if (matchIndex === -1) {
-        return [...fromHistory, lockTournament];
-      }
-      const merged = [...fromHistory];
-      merged[matchIndex] = pickPreferredTournament(fromHistory[matchIndex], lockTournament);
-      return merged;
+      return dedupeLiveTournaments([...fromHistory, lockTournament]);
     },
     [tournamentHistory, activeTournamentLock]
   );

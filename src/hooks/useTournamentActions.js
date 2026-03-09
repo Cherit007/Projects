@@ -12,7 +12,7 @@ import { queueLocalStorageJson } from '../services/localStorageWriteService';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
-import { deriveRatingsFromHistory } from '../utils/appHelpers';
+import { dedupeTournamentHistory, deriveRatingsFromHistory } from '../utils/appHelpers';
 
 export const useTournamentActions = ({
   assertCanOperate,
@@ -364,35 +364,9 @@ export const useTournamentActions = ({
   };
 
   const upsertTournamentHistory = (history, tournament) => {
-    const incomingIds = Array.from(new Set(
-      [tournament?.appwriteId, tournament?.id]
-        .map((value) => String(value || '').trim())
-        .filter(Boolean)
-    ));
-    const matchesId = (item, targetId) => {
-      const normalizedTarget = String(targetId || '').trim();
-      if (!normalizedTarget) return false;
-      const ids = [item?.appwriteId, item?.id]
-        .map((value) => String(value || '').trim())
-        .filter(Boolean);
-      return ids.includes(normalizedTarget);
-    };
-    const normalizeName = (value) => String(value || '').trim().toLowerCase();
-    const incomingName = normalizeName(tournament?.name);
-    const incomingIsLive = tournament?.status === 'active' && !tournament?.champion;
-    const existingIndex = history.findIndex((t) => (
-      incomingIds.some((candidateId) => matchesId(t, candidateId))
-      || (
-        incomingIsLive
-        && t?.status === 'active'
-        && !t?.champion
-        && incomingName
-        && normalizeName(t?.name) === incomingName
-      )
-    ));
-    return existingIndex >= 0
-      ? history.map((t, index) => (index === existingIndex ? tournament : t))
-      : [tournament, ...history];
+    const list = Array.isArray(history) ? history : [];
+    if (!tournament) return dedupeTournamentHistory(list);
+    return dedupeTournamentHistory([tournament, ...list]);
   };
 
   const getPlayersFromMatch = (match) => {
@@ -473,13 +447,6 @@ export const useTournamentActions = ({
     }
     return null;
   };
-
-  const getActiveLiveTournament = () => (
-    (Array.isArray(tournamentHistory) ? tournamentHistory : []).find((item) => (
-      item?.status === 'active'
-      && !item?.champion
-    )) || null
-  );
 
   const setRemoteActiveCache = (value) => {
     remoteActiveCacheRef.current = {
@@ -962,32 +929,8 @@ export const useTournamentActions = ({
     return false;
   };
 
-  const blockWhenLiveTournamentExists = async () => {
-    const activeLive = getActiveLiveTournament();
-    if (activeLive) {
-      showToast(`"${activeLive.name || 'Live tournament'}" is already in progress. Complete it before starting another.`, 'error');
-      return true;
-    }
-
-    const remoteActive = await fetchRemoteActiveLiveTournament();
-    if (remoteActive) {
-      if (Array.isArray(remoteActive.teams) || Array.isArray(remoteActive.fixtures)) {
-        setTournamentHistory((prev) => upsertTournamentHistory(prev, remoteActive));
-      }
-      showToast(`"${remoteActive.name || 'Live tournament'}" is already in progress. Complete it before starting another.`, 'error');
-      return true;
-    }
-    return false;
-  };
-
-
   const handleStartTournament = async (rawNumTeamsInput) => {
     if (!assertCanOperate()) return;
-    const activeLive = getActiveLiveTournament();
-    if (activeLive) {
-      showToast(`"${activeLive.name || 'Live tournament'}" is already in progress. Complete it before starting another.`, 'error');
-      return;
-    }
     if (!tournamentName.trim()) {
       showToast('Please enter tournament name', 'error');
       return;
@@ -1040,7 +983,6 @@ export const useTournamentActions = ({
     oddPlayerName,
   } = {}) => {
     if (!assertCanOperate()) return false;
-    if (await blockWhenLiveTournamentExists()) return false;
     const createRunId = createTournamentRunIdRef.current + 1;
     createTournamentRunIdRef.current = createRunId;
     const selectedTeams = teamsOverride || teams;
@@ -1221,7 +1163,6 @@ export const useTournamentActions = ({
     scheduledAt,
   } = {}) => {
     if (!assertCanOperate()) return;
-    if (await blockWhenLiveTournamentExists()) return;
     const selectedTeams = teamsOverride || teams;
     const selectedTournamentFormat = tournamentFormatOverride || tournamentFormat;
     const selectedFormat = formatOverride || format;
@@ -1706,18 +1647,62 @@ export const useTournamentActions = ({
     return true;
   };
 
+  const normalizeCloudTournamentId = (value) => {
+    const normalized = String(value || '').trim();
+    return normalized || null;
+  };
+
+  const isLikelyLocalTournamentId = (value) => {
+    const normalized = normalizeCloudTournamentId(value);
+    if (!normalized) return false;
+    if (/^\d{10,}$/.test(normalized)) return true;
+    return normalized.startsWith('sched-local-') || normalized.startsWith('local-');
+  };
+
+  const resolveTournamentIdForCompletion = async (fallbackId = null) => {
+    const explicit = normalizeCloudTournamentId(fallbackId);
+    if (!isAppwriteEnabled) return explicit;
+    if (explicit && !isLikelyLocalTournamentId(explicit)) return explicit;
+    return normalizeCloudTournamentId(await resolveSyncTournamentIdForWrite());
+  };
+
   const saveTournamentHistory = async (tournament) => {
-    const updatedHistory = upsertTournamentHistory(tournamentHistory, tournament);
+    const resolvedCompletionId = await resolveTournamentIdForCompletion(
+      tournament?.appwriteId || currentTournamentId
+    );
+    const normalizedTournament = {
+      ...(tournament || {}),
+      ...(resolvedCompletionId ? { id: resolvedCompletionId, appwriteId: resolvedCompletionId } : {}),
+      status: 'completed',
+    };
+    const updatedHistory = upsertTournamentHistory(tournamentHistory, normalizedTournament);
     setTournamentHistory(updatedHistory);
 
-    if (isAppwriteEnabled && tournament.appwriteId) {
-      await saveTournamentMutation.mutateAsync({
-        ...tournament,
+    if (isAppwriteEnabled && resolvedCompletionId) {
+      const saved = await saveTournamentMutation.mutateAsync({
+        ...normalizedTournament,
         status: 'completed',
       });
+      const savedId = normalizeCloudTournamentId(
+        saved?.appwriteId || saved?.id || resolvedCompletionId
+      );
+      if (savedId) {
+        setCurrentTournamentId(savedId);
+        setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+          ...normalizedTournament,
+          id: savedId,
+          appwriteId: savedId,
+          status: 'completed',
+        }));
+      }
       await clearActiveTournamentLockIfMatches({
-        tournamentId: tournament.appwriteId || tournament.id,
-        tournamentName: tournament.name,
+        tournamentId: savedId || normalizedTournament.appwriteId || normalizedTournament.id,
+        tournamentName: normalizedTournament.name,
+      });
+    } else if (isAppwriteEnabled) {
+      await clearActiveTournamentLockIfMatches({
+        tournamentId: normalizedTournament.appwriteId || normalizedTournament.id,
+        tournamentName: normalizedTournament.name,
       });
     } else {
       queueLocalStorageJson('badminton_history', updatedHistory);
@@ -1793,20 +1778,23 @@ export const useTournamentActions = ({
       if (finalMatch.completed) {
         const winner = finalMatch.score1 > finalMatch.score2 ? finalMatch.team1 : finalMatch.team2;
         setChampion(winner);
-        const tournamentId = currentTournamentId || Date.now();
+        const resolvedTournamentId = await resolveTournamentIdForCompletion(currentTournamentId);
+        const tournamentId = resolvedTournamentId || currentTournamentId || Date.now();
         setCurrentTournamentId(tournamentId);
 
         const tournament = {
           id: tournamentId,
-          appwriteId: currentTournamentId,
+          appwriteId: resolvedTournamentId || null,
           name: tournamentName,
           date: new Date().toLocaleDateString(),
           teams,
           bracket: updatedBracket,
           champion: winner,
-          format: tournamentFormat,
+          format,
           gameMode,
+          tournamentFormat,
           swapHistory,
+          status: 'completed',
         };
         const historyAfter = upsertTournamentHistory(tournamentHistory, tournament);
         const finalBadgeUnlocks = getBadgeUnlocksForMatch({
@@ -1909,12 +1897,13 @@ export const useTournamentActions = ({
     const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, finalMatch);
     setPlayerRatings(updatedRatings);
     setChampion(winner);
-    const tournamentId = currentTournamentId || Date.now();
+    const resolvedTournamentId = await resolveTournamentIdForCompletion(currentTournamentId);
+    const tournamentId = resolvedTournamentId || currentTournamentId || Date.now();
     setCurrentTournamentId(tournamentId);
 
     const tournament = {
       id: tournamentId,
-      appwriteId: currentTournamentId,
+      appwriteId: resolvedTournamentId || null,
       name: tournamentName,
       date: new Date().toLocaleDateString(),
       teams,
@@ -1923,7 +1912,9 @@ export const useTournamentActions = ({
       champion: winner,
       format,
       gameMode,
+      tournamentFormat,
       swapHistory,
+      status: 'completed',
     };
     const historyAfter = upsertTournamentHistory(tournamentHistory, tournament);
     const badgeUnlocks = getBadgeUnlocksForMatch({
@@ -2210,11 +2201,18 @@ export const useTournamentActions = ({
     setCurrentTournamentId(null);
   };
 
-  const startNextTournament = ({ editTeams = false, tournamentNameOverride = '' } = {}) => {
-    if (!assertCanOperate()) return;
+  const startNextTournament = async ({ editTeams = false, tournamentNameOverride = '' } = {}) => {
+    if (!assertCanOperate()) return false;
     if (!Array.isArray(teams) || teams.length === 0) {
       showToast('No teams available to continue. Please create teams first.', 'error');
-      return;
+      return false;
+    }
+
+    createTournamentRunIdRef.current += 1;
+    pendingTournamentSyncRef.current = null;
+    if (tournamentSyncTimerRef.current) {
+      clearTimeout(tournamentSyncTimerRef.current);
+      tournamentSyncTimerRef.current = null;
     }
 
     const customName = String(tournamentNameOverride || '').trim();
@@ -2224,6 +2222,16 @@ export const useTournamentActions = ({
     setAiMatchSummaries([]);
     setSwapHistory([]);
     setCurrentTournamentId(null);
+    setActiveTournamentLock?.(null);
+    cloudIdWarningShownRef.current = false;
+
+    if (isAppwriteEnabled) {
+      void clearActiveTournamentLockIfMatches({
+        tournamentId: currentTournamentId,
+        tournamentName,
+        force: true,
+      });
+    }
 
     if (editTeams) {
       setFixtures([]);
@@ -2231,20 +2239,16 @@ export const useTournamentActions = ({
       setNumTeams(teams.length);
       setStep('teams');
       showToast('Next tournament loaded. Edit teams and generate fixtures.');
-      return;
+      return true;
     }
 
-    setFixtures([]);
-    setBracket([]);
-    if (tournamentFormat === 'league') {
-      const newFixtures = createFixtures(teams, format);
-      setFixtures(newFixtures);
-    } else {
-      const newBracket = generateKnockoutBracket(teams, tournamentFormat);
-      setBracket(newBracket);
-    }
-    setStep('tournament');
-    showToast('Next tournament started with same teams.');
+    return generateFixtures({
+      teamsOverride: teams,
+      tournamentFormatOverride: tournamentFormat,
+      formatOverride: format,
+      gameModeOverride: gameMode,
+      tournamentNameOverride: nextName,
+    });
   };
 
   const handleDeleteTournamentFromSetup = async (id, options = {}) => {

@@ -274,4 +274,27 @@ describe('SetupScreen dashboard metrics and sync status', () => {
     expect(within(row).getByRole('button', { name: /^Edit$/i })).toBeDisabled();
     expect(within(row).getByRole('button', { name: /Started/i })).toBeDisabled();
   });
+
+  it('renders resume rows for all live tournaments on home', () => {
+    const onResumeActiveTournament = vi.fn();
+    render(
+      <SetupScreen
+        {...baseProps}
+        onResumeActiveTournament={onResumeActiveTournament}
+        activeLiveTournaments={[
+          { id: 'live-1', name: 'Live One', date: '2026-03-07', teams: [{ id: 1 }, { id: 2 }], status: 'active' },
+          { id: 'live-2', name: 'Live Two', date: '2026-03-07', teams: [{ id: 1 }, { id: 2 }], status: 'active' },
+          { id: 'live-3', name: 'Live Three', date: '2026-03-07', teams: [{ id: 1 }, { id: 2 }], status: 'active' },
+          { id: 'live-4', name: 'Live Four', date: '2026-03-07', teams: [{ id: 1 }, { id: 2 }], status: 'active' },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('Live Tournaments (4)')).toBeInTheDocument();
+    expect(screen.getByText('Live One')).toBeInTheDocument();
+    expect(screen.getByText('Live Two')).toBeInTheDocument();
+    expect(screen.getByText('Live Three')).toBeInTheDocument();
+    expect(screen.getByText('Live Four')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Resume/i })).toHaveLength(4);
+  });
 });

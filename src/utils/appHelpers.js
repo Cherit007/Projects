@@ -255,15 +255,9 @@ export const matchesTournamentId = (tournament, targetId) => {
 };
 
 export const upsertTournamentInHistory = (history = [], tournament = null) => {
-  if (!tournament) return history;
-  const incomingIds = getTournamentIdCandidates(tournament);
-  if (incomingIds.length === 0) return [tournament, ...(Array.isArray(history) ? history : [])];
   const list = Array.isArray(history) ? history : [];
-  const index = list.findIndex((item) => (
-    incomingIds.some((candidateId) => matchesTournamentId(item, candidateId))
-  ));
-  if (index < 0) return [tournament, ...list];
-  return list.map((item, idx) => (idx === index ? tournament : item));
+  if (!tournament) return dedupeTournamentHistory(list);
+  return dedupeTournamentHistory([tournament, ...list]);
 };
 
 export const normalizeTournamentName = (value) => String(value || '').trim().toLowerCase();
@@ -374,9 +368,313 @@ export const getTournamentProgressScore = (tournament) => {
 export const pickPreferredTournament = (primary, secondary) => {
   if (!primary) return secondary || null;
   if (!secondary) return primary;
-  return getTournamentProgressScore(secondary) > getTournamentProgressScore(primary)
-    ? secondary
-    : primary;
+  const primaryScore = getTournamentProgressScore(primary);
+  const secondaryScore = getTournamentProgressScore(secondary);
+  if (secondaryScore > primaryScore) return secondary;
+  if (secondaryScore < primaryScore) return primary;
+
+  const primaryAppwriteId = String(primary?.appwriteId || '').trim();
+  const secondaryAppwriteId = String(secondary?.appwriteId || '').trim();
+  if (!primaryAppwriteId && secondaryAppwriteId) return secondary;
+  if (primaryAppwriteId && !secondaryAppwriteId) return primary;
+
+  if (primary?.isSummary && !secondary?.isSummary) return secondary;
+  if (!primary?.isSummary && secondary?.isSummary) return primary;
+
+  return primary;
+};
+
+const getTournamentTeamsCount = (tournament) => {
+  if (Array.isArray(tournament?.teams)) return tournament.teams.length;
+  const count = Number(tournament?.teamsCount);
+  return Number.isFinite(count) ? count : 0;
+};
+
+const getTournamentTeamSignature = (tournament) => {
+  const teams = Array.isArray(tournament?.teams) ? tournament.teams : [];
+  if (teams.length === 0) return '';
+  return teams
+    .map((team) => {
+      const name = normalizeTournamentName(team?.name);
+      const player1 = normalizeTournamentName(team?.player || team?.player1);
+      const player2 = normalizeTournamentName(team?.player2);
+      return `${name}|${player1}|${player2}`;
+    })
+    .sort()
+    .join('||');
+};
+
+const getTournamentAppwriteId = (tournament) => String(tournament?.appwriteId || '').trim();
+
+const getTournamentMatchPayloadCount = (tournament) => {
+  const fixtureCount = Array.isArray(tournament?.fixtures) ? tournament.fixtures.length : 0;
+  const bracketCount = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+    .reduce((sum, round) => sum + (Array.isArray(round) ? round.length : 0), 0);
+  const finalCount = tournament?.finalMatch ? 1 : 0;
+  return fixtureCount + bracketCount + finalCount;
+};
+
+const cloneDeep = (value) => {
+  if (value === null || value === undefined) return value;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value;
+  }
+};
+
+const cloneTournamentRecord = (item = {}) => ({
+  ...(item && typeof item === 'object' ? item : {}),
+  teams: cloneDeep(Array.isArray(item?.teams) ? item.teams : []),
+  fixtures: cloneDeep(Array.isArray(item?.fixtures) ? item.fixtures : []),
+  bracket: cloneDeep(Array.isArray(item?.bracket) ? item.bracket : []),
+  finalMatch: cloneDeep(item?.finalMatch || null),
+  champion: cloneDeep(item?.champion || null),
+  aiSummaries: cloneDeep(Array.isArray(item?.aiSummaries) ? item.aiSummaries : []),
+  swapHistory: cloneDeep(Array.isArray(item?.swapHistory) ? item.swapHistory : []),
+});
+
+const isSameCalendarDay = (left, right) => {
+  const leftMs = parseTournamentDateMs(left?.date);
+  const rightMs = parseTournamentDateMs(right?.date);
+  if (!Number.isFinite(leftMs) || !Number.isFinite(rightMs)) return false;
+  return new Date(leftMs).toDateString() === new Date(rightMs).toDateString();
+};
+
+const isLikelySameLiveTournament = (left, right) => {
+  if (!left || !right) return false;
+
+  const leftIds = getTournamentIdCandidates(left);
+  const rightIds = getTournamentIdCandidates(right);
+  if (leftIds.some((id) => rightIds.includes(id))) return true;
+
+  const leftName = normalizeTournamentName(left?.name);
+  const rightName = normalizeTournamentName(right?.name);
+  if (!leftName || leftName !== rightName) return false;
+
+  const leftFormat = normalizeTournamentFormat(left?.tournamentFormat || left?.format || 'league');
+  const rightFormat = normalizeTournamentFormat(right?.tournamentFormat || right?.format || 'league');
+  if (leftFormat !== rightFormat) return false;
+
+  const leftTeams = getTournamentTeamsCount(left);
+  const rightTeams = getTournamentTeamsCount(right);
+  if (leftTeams > 0 && rightTeams > 0 && leftTeams !== rightTeams) return false;
+
+  const leftTeamSignature = getTournamentTeamSignature(left);
+  const rightTeamSignature = getTournamentTeamSignature(right);
+  if (leftTeamSignature && rightTeamSignature && leftTeamSignature !== rightTeamSignature) return false;
+
+  const leftMatches = getTournamentMatchPayloadCount(left);
+  const rightMatches = getTournamentMatchPayloadCount(right);
+
+  const leftHasStableAppwriteId = Boolean(getTournamentAppwriteId(left));
+  const rightHasStableAppwriteId = Boolean(getTournamentAppwriteId(right));
+  const leftIsUnstableIdentity = !leftHasStableAppwriteId || Boolean(left?._fromLock || left?.isSummary);
+  const rightIsUnstableIdentity = !rightHasStableAppwriteId || Boolean(right?._fromLock || right?.isSummary);
+
+  if (isSameCalendarDay(left, right)) return true;
+
+  if (leftMatches === 0 || rightMatches === 0) {
+    return leftIsUnstableIdentity || rightIsUnstableIdentity;
+  }
+
+  return leftIsUnstableIdentity || rightIsUnstableIdentity;
+};
+
+const hasStableAppwriteId = (tournament) => Boolean(getTournamentAppwriteId(tournament));
+const isCompletedTournament = (tournament) => (
+  Boolean(tournament?.champion) || String(tournament?.status || '').trim().toLowerCase() === 'completed'
+);
+
+const normalizeTournamentStatus = (tournament) => {
+  const normalized = String(tournament?.status || '').trim().toLowerCase();
+  if (normalized) return normalized;
+  if (tournament?.champion) return 'completed';
+  return 'active';
+};
+
+const areStatusesCompatibleForDedupe = (left, right) => {
+  const leftStatus = normalizeTournamentStatus(left);
+  const rightStatus = normalizeTournamentStatus(right);
+  if (leftStatus === rightStatus) return true;
+  return (
+    (leftStatus === 'active' && rightStatus === 'completed')
+    || (leftStatus === 'completed' && rightStatus === 'active')
+  );
+};
+
+const isLikelySameHistoryTournament = (left, right) => {
+  if (!left || !right) return false;
+
+  const leftIds = getTournamentIdCandidates(left);
+  const rightIds = getTournamentIdCandidates(right);
+  if (leftIds.some((id) => rightIds.includes(id))) return true;
+
+  const leftName = normalizeTournamentName(left?.name);
+  const rightName = normalizeTournamentName(right?.name);
+  if (!leftName || leftName !== rightName) return false;
+
+  if (!areStatusesCompatibleForDedupe(left, right)) return false;
+
+  const leftFormat = normalizeTournamentFormat(left?.tournamentFormat || left?.format || 'league');
+  const rightFormat = normalizeTournamentFormat(right?.tournamentFormat || right?.format || 'league');
+  if (leftFormat !== rightFormat) return false;
+
+  const leftHasStableId = hasStableAppwriteId(left);
+  const rightHasStableId = hasStableAppwriteId(right);
+  if (
+    leftHasStableId
+    && rightHasStableId
+    && getTournamentAppwriteId(left) !== getTournamentAppwriteId(right)
+  ) {
+    return false;
+  }
+
+  const leftTeams = getTournamentTeamsCount(left);
+  const rightTeams = getTournamentTeamsCount(right);
+  if (leftTeams > 0 && rightTeams > 0 && leftTeams !== rightTeams) return false;
+
+  const leftTeamSignature = getTournamentTeamSignature(left);
+  const rightTeamSignature = getTournamentTeamSignature(right);
+  if (leftTeamSignature && rightTeamSignature && leftTeamSignature !== rightTeamSignature) return false;
+  if (leftTeamSignature && rightTeamSignature) return true;
+
+  if (isSameCalendarDay(left, right)) return true;
+
+  const leftMatches = getTournamentMatchPayloadCount(left);
+  const rightMatches = getTournamentMatchPayloadCount(right);
+  if (leftMatches === 0 || rightMatches === 0) {
+    return !leftHasStableId || !rightHasStableId;
+  }
+
+  return !leftHasStableId || !rightHasStableId;
+};
+
+const pickArrayPayload = (preferred, fallback) => {
+  if (Array.isArray(preferred) && preferred.length > 0) return cloneDeep(preferred);
+  if (Array.isArray(fallback) && fallback.length > 0) return cloneDeep(fallback);
+  return [];
+};
+
+const mergeTournamentRecords = (left, right) => {
+  const leftCompleted = isCompletedTournament(left);
+  const rightCompleted = isCompletedTournament(right);
+  let preferred = pickPreferredTournament(left, right);
+  if (leftCompleted !== rightCompleted) {
+    preferred = leftCompleted ? left : right;
+  }
+  const fallback = preferred === left ? right : left;
+  const completed = leftCompleted || rightCompleted;
+
+  return cloneTournamentRecord({
+    ...fallback,
+    ...preferred,
+    id: preferred?.id || preferred?.appwriteId || fallback?.id || fallback?.appwriteId || null,
+    appwriteId: preferred?.appwriteId || fallback?.appwriteId || null,
+    name: preferred?.name || fallback?.name || '',
+    date: preferred?.date || fallback?.date || '',
+    teams: pickArrayPayload(preferred?.teams, fallback?.teams),
+    fixtures: pickArrayPayload(preferred?.fixtures, fallback?.fixtures),
+    bracket: pickArrayPayload(preferred?.bracket, fallback?.bracket),
+    finalMatch: cloneDeep(preferred?.finalMatch || fallback?.finalMatch || null),
+    champion: cloneDeep(preferred?.champion || fallback?.champion || null),
+    aiSummaries: pickArrayPayload(preferred?.aiSummaries, fallback?.aiSummaries),
+    swapHistory: pickArrayPayload(preferred?.swapHistory, fallback?.swapHistory),
+    format: preferred?.format || fallback?.format || '1',
+    gameMode: preferred?.gameMode || fallback?.gameMode || 'doubles',
+    tournamentFormat: normalizeTournamentFormat(
+      preferred?.tournamentFormat || preferred?.format || fallback?.tournamentFormat || fallback?.format || 'league'
+    ),
+    status: completed ? 'completed' : normalizeTournamentStatus(preferred),
+    teamsCount: getTournamentTeamsCount(preferred) || getTournamentTeamsCount(fallback) || 0,
+    pendingSync: Boolean(preferred?.pendingSync || fallback?.pendingSync),
+    createdAt: preferred?.createdAt || fallback?.createdAt || null,
+    updatedAt: preferred?.updatedAt || fallback?.updatedAt || null,
+  });
+};
+
+export const dedupeTournamentHistory = (entries = []) => {
+  const source = (Array.isArray(entries) ? entries : []).filter(Boolean);
+  const merged = [];
+
+  source.forEach((item) => {
+    const normalizedItem = cloneTournamentRecord({
+      ...item,
+      status: normalizeTournamentStatus(item),
+      tournamentFormat: normalizeTournamentFormat(item?.tournamentFormat || item?.format || 'league'),
+    });
+    const existingIndex = merged.findIndex((existing) => (
+      isLikelySameHistoryTournament(existing, normalizedItem)
+    ));
+    if (existingIndex < 0) {
+      merged.push(normalizedItem);
+      return;
+    }
+    merged[existingIndex] = mergeTournamentRecords(merged[existingIndex], normalizedItem);
+  });
+
+  return merged;
+};
+
+const isLikelyCompletedVersionOfActive = (activeTournament, completedTournament) => {
+  if (!activeTournament || !completedTournament) return false;
+  if (!isCompletedTournament(completedTournament)) return false;
+
+  const activeIds = getTournamentIdCandidates(activeTournament);
+  const completedIds = getTournamentIdCandidates(completedTournament);
+  if (activeIds.some((id) => completedIds.includes(id))) return true;
+
+  const activeName = normalizeTournamentName(activeTournament?.name);
+  const completedName = normalizeTournamentName(completedTournament?.name);
+  if (!activeName || activeName !== completedName) return false;
+
+  const activeFormat = normalizeTournamentFormat(
+    activeTournament?.tournamentFormat || activeTournament?.format || 'league'
+  );
+  const completedFormat = normalizeTournamentFormat(
+    completedTournament?.tournamentFormat || completedTournament?.format || 'league'
+  );
+  if (activeFormat !== completedFormat) return false;
+
+  const activeTeams = getTournamentTeamsCount(activeTournament);
+  const completedTeams = getTournamentTeamsCount(completedTournament);
+  if (activeTeams > 0 && completedTeams > 0 && activeTeams !== completedTeams) return false;
+
+  const activeTeamSignature = getTournamentTeamSignature(activeTournament);
+  const completedTeamSignature = getTournamentTeamSignature(completedTournament);
+  if (activeTeamSignature && completedTeamSignature && activeTeamSignature !== completedTeamSignature) {
+    return false;
+  }
+  if (activeTeamSignature && completedTeamSignature) return true;
+
+  const sameDay = isSameCalendarDay(activeTournament, completedTournament);
+  if (sameDay && (!hasStableAppwriteId(activeTournament) || !hasStableAppwriteId(completedTournament))) {
+    return true;
+  }
+
+  return !hasStableAppwriteId(activeTournament) && sameDay;
+};
+
+export const dedupeLiveTournaments = (candidates = []) => {
+  const source = dedupeTournamentHistory(candidates);
+  const completedEntries = source.filter((item) => isCompletedTournament(item));
+  const list = source
+    .filter((item) => item?.status === 'active' && !item?.champion)
+    .filter((item) => !completedEntries.some((completed) => (
+      isLikelyCompletedVersionOfActive(item, completed)
+    )));
+
+  const merged = [];
+  list.forEach((item) => {
+    const existingIndex = merged.findIndex((entry) => isLikelySameLiveTournament(entry, item));
+    if (existingIndex < 0) {
+      merged.push(item);
+      return;
+    }
+    merged[existingIndex] = pickPreferredTournament(merged[existingIndex], item);
+  });
+
+  return merged;
 };
 
 export const buildTournamentFromLock = (lock) => {

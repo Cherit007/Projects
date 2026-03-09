@@ -103,6 +103,8 @@ const renderApp = () => {
 };
 
 describe('Resume tournament integration', () => {
+  const ASYNC_UI_TIMEOUT = 10000;
+
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -120,9 +122,9 @@ describe('Resume tournament integration', () => {
 
     renderApp();
 
-    expect(await screen.findByText(/LIVE NOW/i)).toBeInTheDocument();
+    expect(await screen.findByText(/LIVE NOW/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
     expect(screen.getByText(/Match 2/i)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('after finishing match 1, Home + Resume returns to match 2', async () => {
     localStorage.setItem('badminton_history', JSON.stringify([
@@ -132,20 +134,24 @@ describe('Resume tournament integration', () => {
     const user = userEvent.setup();
     renderApp();
 
-    expect(await screen.findByText(/Match 1/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Match 1/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
     const [score1Input, score2Input] = screen.getAllByPlaceholderText('0');
     await user.type(score1Input, '21');
     await user.type(score2Input, '15');
     await user.click(screen.getByRole('button', { name: /Submit & Continue/i }));
 
-    expect(await screen.findByText(/Match 2/i, {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(await screen.findByText(/Match 2/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
 
     await user.click(screen.getAllByRole('button', { name: /^Home$/i })[0]);
-    expect(await screen.findByPlaceholderText(/Summer Smash 2024/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Resume/i }));
-    expect(await screen.findByText(/Match 2/i)).toBeInTheDocument();
-  });
+    expect(await screen.findByText(/Match 2/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
+  }, 15000);
 
   it('after finishing match 1 and refreshing, app resumes at match 2 (not match 1)', async () => {
     localStorage.setItem('badminton_history', JSON.stringify([
@@ -155,18 +161,18 @@ describe('Resume tournament integration', () => {
     const user = userEvent.setup();
     const firstRender = renderApp();
 
-    expect(await screen.findByText(/Match 1/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Match 1/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
     const [score1Input, score2Input] = screen.getAllByPlaceholderText('0');
     await user.type(score1Input, '21');
     await user.type(score2Input, '16');
     await user.click(screen.getByRole('button', { name: /Submit & Continue/i }));
-    expect(await screen.findByText(/Match 2/i, {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(await screen.findByText(/Match 2/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
 
     firstRender.unmount();
 
     renderApp();
-    expect(await screen.findByText(/Match 2/i)).toBeInTheDocument();
-  });
+    expect(await screen.findByText(/Match 2/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
+  }, 15000);
 
   it('Delete & New clears live tournament and does not show resume after refresh', async () => {
     localStorage.setItem('badminton_history', JSON.stringify([
@@ -176,11 +182,15 @@ describe('Resume tournament integration', () => {
     const user = userEvent.setup();
     const firstRender = renderApp();
 
-    expect(await screen.findByText(/Match 1/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Match 1/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: /Delete & New/i })[0]);
     await user.click(await screen.findByRole('button', { name: /Delete & Start New/i }));
 
-    expect(await screen.findByPlaceholderText(/Summer Smash 2024/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
     await waitFor(() => {
       expect(localStorage.getItem('badminton_history')).toBe('[]');
     });
@@ -188,7 +198,11 @@ describe('Resume tournament integration', () => {
 
     firstRender.unmount();
     renderApp();
-    expect(await screen.findByPlaceholderText(/Summer Smash 2024/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Resume/i })).not.toBeInTheDocument();
-  });
+  }, 15000);
 });

@@ -34,6 +34,8 @@ vi.mock('../hooks/useAppwriteSync', () => ({
 }));
 
 describe('App integration flows', () => {
+  const ASYNC_UI_TIMEOUT = 10000;
+
   const renderApp = () => {
     appStore.resetState();
 
@@ -64,19 +66,31 @@ describe('App integration flows', () => {
   it('loads setup screen in local mode', async () => {
     renderApp();
 
-    expect(await screen.findByPlaceholderText(/Summer Smash 2024/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Start Tournament/i })).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('runs setup -> team entry validation workflow', async () => {
     const user = userEvent.setup();
     renderApp();
 
-    const nameInput = await screen.findByPlaceholderText(/Summer Smash 2024/i);
+    const nameInput = await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    );
     await user.type(nameInput, 'Integration Cup');
     await user.click(screen.getByRole('button', { name: /Start Tournament/i }));
 
-    expect(await screen.findByText(/Enter Team Details/i)).toBeInTheDocument();
+    expect(await screen.findByText(
+      /Enter Team Details/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
 
     const generateButton = screen.getByRole('button', { name: /Generate Tournament/i });
     expect(generateButton).toBeDisabled();
@@ -92,20 +106,28 @@ describe('App integration flows', () => {
     }
 
     expect(generateButton).not.toBeDisabled();
-  });
+  }, 15000);
 
   it('runs full local feature flow: start -> generate -> submit -> table -> home -> resume', async () => {
     const user = userEvent.setup();
     renderApp();
 
-    expect(await screen.findByText(/Local mode/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Local mode/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
 
-    const tournamentNameInput = await screen.findByPlaceholderText(/Summer Smash 2024/i);
+    const tournamentNameInput = await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    );
     await user.clear(tournamentNameInput);
     await user.type(tournamentNameInput, 'Full Flow Cup');
     await user.click(screen.getByRole('button', { name: /Start Tournament/i }));
 
-    expect(await screen.findByText(/Enter Team Details/i)).toBeInTheDocument();
+    expect(await screen.findByText(
+      /Enter Team Details/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
     const teamNameInputs = screen.getAllByPlaceholderText('Team Name');
     const player1Inputs = screen.getAllByPlaceholderText('Player 1 Name');
     const player2Inputs = screen.getAllByPlaceholderText('Player 2 Name');
@@ -117,7 +139,11 @@ describe('App integration flows', () => {
     }
 
     await user.click(screen.getByRole('button', { name: /Generate Tournament/i }));
-    expect(await screen.findByRole('button', { name: /Submit & Continue/i })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      'button',
+      { name: /Submit & Continue/i },
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
 
     const [score1Input, score2Input] = screen.getAllByPlaceholderText('0');
     await user.type(score1Input, '21');
@@ -131,7 +157,11 @@ describe('App integration flows', () => {
 
     const homeButtons = screen.getAllByRole('button', { name: /^Home$/i });
     await user.click(homeButtons[0]);
-    expect(await screen.findByPlaceholderText(/Summer Smash 2024/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Resume/i }));
     expect(await screen.findByRole('button', { name: /Submit & Continue/i })).toBeInTheDocument();

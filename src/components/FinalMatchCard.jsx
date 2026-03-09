@@ -157,17 +157,6 @@ const FinalMatchCard = ({ finalists, onSave, playerRatings = {}, syncState = nul
                     const value = e.target.value;
                     if (value === '' || /^\d+$/.test(value)) {
                       setScore1(value);
-                      if (value !== '' && score2 === '') {
-                        requestAnimationFrame(() => {
-                          score2Ref.current?.focus();
-                        });
-                      }
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      score2Ref.current?.focus();
                     }
                   }}
                   placeholder="0"

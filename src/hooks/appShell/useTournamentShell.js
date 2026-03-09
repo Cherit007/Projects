@@ -1,3 +1,61 @@
+const normalizeName = (value) => String(value || '').trim();
+const normalizeKey = (value) => normalizeName(value).toLowerCase();
+
+export const buildSuggestionPlayerDatabase = ({
+  members = [],
+  teams = [],
+  tournamentHistory = [],
+  casualMatches = [],
+  playerDatabase = [],
+} = {}) => {
+  const playerSuggestionsMap = new Map();
+
+  const addPlayerSuggestion = (value) => {
+    const normalized = normalizeName(value);
+    const key = normalizeKey(normalized);
+    if (!normalized || !key) return;
+    if (!playerSuggestionsMap.has(key)) {
+      playerSuggestionsMap.set(key, normalized);
+    }
+  };
+
+  const addTeamPlayers = (team) => {
+    addPlayerSuggestion(team?.player || team?.player1);
+    addPlayerSuggestion(team?.player2);
+  };
+
+  const addMatchPlayers = (match) => {
+    addTeamPlayers(match?.team1);
+    addTeamPlayers(match?.team2);
+  };
+
+  (Array.isArray(members) ? members : []).forEach((member) => addPlayerSuggestion(member?.name));
+  (Array.isArray(teams) ? teams : []).forEach(addTeamPlayers);
+  (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((tournament) => {
+    (Array.isArray(tournament?.teams) ? tournament.teams : []).forEach(addTeamPlayers);
+    (Array.isArray(tournament?.fixtures) ? tournament.fixtures : []).forEach(addMatchPlayers);
+    (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+      .flatMap((round) => (Array.isArray(round) ? round : []))
+      .forEach(addMatchPlayers);
+    if (tournament?.finalMatch) addMatchPlayers(tournament.finalMatch);
+    if (tournament?.champion) addTeamPlayers(tournament.champion);
+  });
+  (Array.isArray(casualMatches) ? casualMatches : []).forEach(addMatchPlayers);
+
+  // Keep original casing from the persisted database for already-recorded players only.
+  (Array.isArray(playerDatabase) ? playerDatabase : []).forEach((name) => {
+    const normalized = normalizeName(name);
+    const key = normalizeKey(normalized);
+    if (!normalized || !key) return;
+    if (playerSuggestionsMap.has(key)) {
+      playerSuggestionsMap.set(key, normalized);
+    }
+  });
+
+  return Array.from(playerSuggestionsMap.values())
+    .sort((left, right) => left.localeCompare(right));
+};
+
 export const useTournamentShell = ({
   step,
   tournamentName,
@@ -89,6 +147,14 @@ export const useTournamentShell = ({
   setShowCasualMatch,
   activeGroup,
 }) => {
+  const suggestionPlayerDatabase = buildSuggestionPlayerDatabase({
+    members,
+    teams,
+    tournamentHistory,
+    casualMatches,
+    playerDatabase,
+  });
+
   const {
     showHistory = false,
     setShowHistory = () => {},
@@ -156,7 +222,7 @@ export const useTournamentShell = ({
     canDeleteLiveTournament: canDelete,
     canDeleteActions: canDelete,
     casualMatches,
-    playerDatabase,
+    playerDatabase: suggestionPlayerDatabase,
     teamNameDatabase,
     showHistory,
     setShowHistory: (value) => {
@@ -231,7 +297,7 @@ export const useTournamentShell = ({
     teams,
     setTeams,
     gameMode,
-    playerDatabase,
+    playerDatabase: suggestionPlayerDatabase,
     teamNameDatabase,
     onGenerate: async (params) => withActionLock(
       'teams.generate',
@@ -261,7 +327,7 @@ export const useTournamentShell = ({
     teams,
     champion,
     members,
-    playerDatabase,
+    playerDatabase: suggestionPlayerDatabase,
     playerRatings,
     gameMode,
     tournamentHistory,
@@ -307,7 +373,7 @@ export const useTournamentShell = ({
   };
 
   const casualMatchProps = {
-    playerDatabase,
+    playerDatabase: suggestionPlayerDatabase,
     playerRatings,
     onSaveMatch: saveCasualMatch,
     onAddPlayer: updatePlayerDatabase,

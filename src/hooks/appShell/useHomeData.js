@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { casualMatchService } from '../../services/casualmatchservice';
 import { tournamentService } from '../../services/tournamentService';
 import { queryKeys } from '../../config/queryKeys';
-import { removeTournamentFromList } from '../../utils/appHelpers';
+import { dedupeTournamentHistory, removeTournamentFromList } from '../../utils/appHelpers';
 import { useSetupPrefetchEffect } from '../useSetupPrefetchEffect';
 
 export const useHomeData = ({
@@ -27,6 +27,15 @@ export const useHomeData = ({
   const historyHydrationVersionRef = useRef(0);
   const casualHydrationVersionRef = useRef(0);
   const normalizeName = (value) => String(value || '').trim().toLowerCase();
+  const normalizeFormat = (value) => normalizeName(value || 'league');
+  const normalizeStatus = (value) => normalizeName(value);
+  const parseDateKey = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed)) return new Date(parsed).toDateString();
+    return raw.toLowerCase();
+  };
   const getTournamentIds = (item) => Array.from(new Set(
     [item?.id, item?.appwriteId]
       .map((value) => String(value || '').trim())
@@ -38,6 +47,57 @@ export const useHomeData = ({
     if (leftIds.length === 0 || rightIds.length === 0) return false;
     return leftIds.some((id) => rightIds.includes(id));
   };
+  const getTeamsCount = (item) => {
+    if (Array.isArray(item?.teams)) return item.teams.length;
+    const count = Number(item?.teamsCount);
+    return Number.isFinite(count) ? count : 0;
+  };
+  const getTeamSignature = (item) => {
+    const teams = Array.isArray(item?.teams) ? item.teams : [];
+    if (teams.length === 0) return '';
+    return teams
+      .map((team) => {
+        const teamName = normalizeName(team?.name);
+        const player1 = normalizeName(team?.player || team?.player1);
+        const player2 = normalizeName(team?.player2);
+        return `${teamName}|${player1}|${player2}`;
+      })
+      .sort()
+      .join('||');
+  };
+  const hasStableCloudId = (item) => Boolean(String(item?.appwriteId || '').trim());
+  const isCompletedTournament = (item) => (
+    Boolean(item?.champion) || normalizeStatus(item?.status) === 'completed'
+  );
+  const isLikelySameTournament = (localItem, remoteItem) => {
+    if (!localItem || !remoteItem) return false;
+    if (hasIdOverlap(localItem, remoteItem)) return true;
+
+    const localName = normalizeName(localItem?.name);
+    const remoteName = normalizeName(remoteItem?.name);
+    if (!localName || !remoteName || localName !== remoteName) return false;
+
+    const localFormat = normalizeFormat(localItem?.tournamentFormat || localItem?.format || 'league');
+    const remoteFormat = normalizeFormat(remoteItem?.tournamentFormat || remoteItem?.format || 'league');
+    if (localFormat !== remoteFormat) return false;
+
+    const localTeamsCount = getTeamsCount(localItem);
+    const remoteTeamsCount = getTeamsCount(remoteItem);
+    if (localTeamsCount > 0 && remoteTeamsCount > 0 && localTeamsCount !== remoteTeamsCount) return false;
+
+    const localSignature = getTeamSignature(localItem);
+    const remoteSignature = getTeamSignature(remoteItem);
+    if (localSignature && remoteSignature && localSignature !== remoteSignature) return false;
+    if (localSignature && remoteSignature) return true;
+
+    const localDate = parseDateKey(localItem?.date);
+    const remoteDate = parseDateKey(remoteItem?.date);
+    if (localDate && remoteDate) return localDate === remoteDate;
+
+    if (isCompletedTournament(remoteItem)) return true;
+
+    return !hasStableCloudId(localItem) || !hasStableCloudId(remoteItem);
+  };
   const isActiveLiveTournament = (item) => item?.status === 'active' && !item?.champion;
   const mergeHydratedHistoryWithLocalLive = (remoteHistory = [], localHistory = []) => {
     const remote = Array.isArray(remoteHistory) ? remoteHistory : [];
@@ -45,18 +105,12 @@ export const useHomeData = ({
     const localActive = local.filter((item) => isActiveLiveTournament(item));
     if (localActive.length === 0) return remote;
 
-    const preservedLocalActive = localActive.filter((localItem) => {
-      const localName = normalizeName(localItem?.name);
-      return !remote.some((remoteItem) => {
-        if (hasIdOverlap(localItem, remoteItem)) return true;
-        if (!isActiveLiveTournament(remoteItem)) return false;
-        const remoteName = normalizeName(remoteItem?.name);
-        return Boolean(localName && remoteName && localName === remoteName);
-      });
-    });
+    const preservedLocalActive = localActive.filter(
+      (localItem) => !remote.some((remoteItem) => isLikelySameTournament(localItem, remoteItem))
+    );
 
-    if (preservedLocalActive.length === 0) return remote;
-    return [...preservedLocalActive, ...remote];
+    if (preservedLocalActive.length === 0) return dedupeTournamentHistory(remote);
+    return dedupeTournamentHistory([...preservedLocalActive, ...remote]);
   };
 
   const invalidateHydrationRequests = () => {
@@ -126,10 +180,10 @@ export const useHomeData = ({
           queryFn: () => tournamentService.getAllTournaments(100, activeGroupId),
           staleTime: 5 * 60 * 1000,
         });
-        const mergedHistory = mergeHydratedHistoryWithLocalLive(
+        const mergedHistory = dedupeTournamentHistory(mergeHydratedHistoryWithLocalLive(
           history || [],
           tournamentHistory || []
-        );
+        ));
         if (historyHydrationVersionRef.current !== requestVersion) {
           return tournamentHistory || [];
         }

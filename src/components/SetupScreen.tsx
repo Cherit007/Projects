@@ -572,10 +572,10 @@ const SetupScreen = ({
           {activeLiveTournaments.length > 0 && (
             <div className="mb-4 rounded-xl p-4 setup-highlight-card setup-live-card app-surface-card app-card-tier-secondary">
               <p className="text-sm font-semibold text-emerald-900 mb-3 flex items-center gap-2 setup-live-title">
-                <Play size={16} /> Live Tournament ({activeLiveTournaments.length})
+                <Play size={16} /> Live Tournaments ({activeLiveTournaments.length})
               </p>
               <div className="space-y-2">
-                {activeLiveTournaments.slice(0, 3).map((tournament, index) => {
+                {activeLiveTournaments.map((tournament, index) => {
                   const tournamentId = tournament.id || tournament.appwriteId;
                   const rowKey = tournamentId || `${tournament.name || 'live'}-${index}`;
                   const resumePending = Boolean(isPendingAction(`setup.resume-live.${String(tournamentId || 'active')}`));
