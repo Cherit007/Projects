@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
@@ -49,12 +49,18 @@ const buildFixture = ({ id, team1, team2, completed = false, score1 = null, scor
   round,
 });
 
-const buildActiveTournament = ({ firstMatchCompleted = false } = {}) => {
-  const teams = buildTeams();
+const buildActiveTournament = ({
+  firstMatchCompleted = false,
+  id = 101,
+  name = 'Resume Cup',
+  date = '2026-03-01',
+  teamsOverride = null,
+} = {}) => {
+  const teams = teamsOverride || buildTeams();
   return {
-    id: 101,
-    name: 'Resume Cup',
-    date: '2026-03-01',
+    id,
+    name,
+    date,
     teams,
     fixtures: [
       buildFixture({
@@ -204,5 +210,100 @@ describe('Resume tournament integration', () => {
       { timeout: ASYNC_UI_TIMEOUT }
     )).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Resume/i })).not.toBeInTheDocument();
+  }, 15000);
+
+  it('resumes the selected live tournament when multiple resume rows are shown on home', async () => {
+    localStorage.setItem('badminton_history', JSON.stringify([
+      buildActiveTournament({
+        id: 101,
+        name: 'Morning Cup',
+        date: '2026-03-01',
+        firstMatchCompleted: false,
+      }),
+      buildActiveTournament({
+        id: 202,
+        name: 'Evening Cup',
+        date: '2026-03-02',
+        firstMatchCompleted: true,
+      }),
+    ]));
+
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
+
+    const liveRows = screen.getAllByText(/Cup/i)
+      .map((node) => node.closest('.setup-live-row'))
+      .filter(Boolean);
+    expect(liveRows).toHaveLength(2);
+
+    const eveningRow = liveRows.find((row) => within(row).queryByText('Evening Cup'));
+    expect(eveningRow).not.toBeNull();
+
+    await user.click(within(eveningRow).getByRole('button', { name: /Resume/i }));
+
+    expect(await screen.findByRole(
+      'heading',
+      { name: /Evening Cup/i, level: 1 },
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
+    expect(screen.getByText(/Match 2/i)).toBeInTheDocument();
+  }, 15000);
+
+  it('deleting one live tournament row should not remove another active tournament with the same name', async () => {
+    localStorage.setItem('badminton_history', JSON.stringify([
+      buildActiveTournament({
+        id: 301,
+        name: 'Night Cup',
+        date: '2026-03-01',
+        firstMatchCompleted: false,
+        teamsOverride: buildTeams().slice(0, 3),
+      }),
+      buildActiveTournament({
+        id: 302,
+        name: 'Night Cup',
+        date: '2026-03-02',
+        firstMatchCompleted: true,
+        teamsOverride: [
+          ...buildTeams(),
+          { id: 4, emoji: '🦁', name: 'Lions', player1: 'D1', player: 'D1', player2: 'D2' },
+        ],
+      }),
+    ]));
+
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByPlaceholderText(
+      /Summer Smash 2024/i,
+      {},
+      { timeout: ASYNC_UI_TIMEOUT }
+    )).toBeInTheDocument();
+
+    const liveRows = screen.getAllByText('Night Cup')
+      .map((node) => node.closest('.setup-live-row'))
+      .filter(Boolean);
+    expect(liveRows).toHaveLength(2);
+
+    const fourTeamRow = liveRows.find((row) => within(row).queryByText(/4 teams/i));
+    expect(fourTeamRow).not.toBeNull();
+
+    await user.click(within(fourTeamRow).getByRole('button', { name: /^Delete$/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Delete Tournament/i });
+    await user.click(within(dialog).getByRole('button', { name: /^Delete$/i }));
+
+    await waitFor(() => {
+      const history = JSON.parse(localStorage.getItem('badminton_history') || '[]');
+      expect(history).toHaveLength(1);
+      expect(history[0]?.id).toBe(301);
+    });
+
+    expect(screen.getAllByRole('button', { name: /Resume/i })).toHaveLength(1);
   }, 15000);
 });

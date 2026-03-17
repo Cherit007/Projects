@@ -2,7 +2,13 @@ import { useRef } from 'react';
 import { casualMatchService } from '../../services/casualmatchservice';
 import { tournamentService } from '../../services/tournamentService';
 import { queryKeys } from '../../config/queryKeys';
-import { dedupeTournamentHistory, removeTournamentFromList } from '../../utils/appHelpers';
+import {
+  backfillCasualMatchesCompletedAt,
+  backfillTournamentHistoryCompletedAt,
+  dedupeTournamentHistory,
+  removeTournamentFromList,
+  sortTournamentHistoryByRecent,
+} from '../../utils/appHelpers';
 import { useSetupPrefetchEffect } from '../useSetupPrefetchEffect';
 
 export const useHomeData = ({
@@ -37,7 +43,7 @@ export const useHomeData = ({
     return raw.toLowerCase();
   };
   const getTournamentIds = (item) => Array.from(new Set(
-    [item?.id, item?.appwriteId]
+    [item?.id, item?.appwriteId, item?.legacyTournamentId]
       .map((value) => String(value || '').trim())
       .filter(Boolean)
   ));
@@ -65,7 +71,26 @@ export const useHomeData = ({
       .sort()
       .join('||');
   };
-  const hasStableCloudId = (item) => Boolean(String(item?.appwriteId || '').trim());
+  const isLocalTournamentId = (value) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return false;
+    if (/^\d{10,}$/.test(normalized)) return true;
+    return normalized.startsWith('sched-local-') || normalized.startsWith('local-');
+  };
+  const getStableId = (item) => {
+    const appwriteId = String(item?.appwriteId || '').trim();
+    if (appwriteId) return appwriteId;
+    const legacyId = String(item?.legacyTournamentId || '').trim();
+    if (legacyId) return legacyId;
+    const localId = String(item?.id || '').trim();
+    return isLocalTournamentId(localId) ? localId : '';
+  };
+  const hasStableId = (item) => {
+    const appwriteId = String(item?.appwriteId || '').trim();
+    const legacyId = String(item?.legacyTournamentId || '').trim();
+    const localId = String(item?.id || '').trim();
+    return Boolean(appwriteId || legacyId || (localId && isLocalTournamentId(localId)));
+  };
   const isCompletedTournament = (item) => (
     Boolean(item?.champion) || normalizeStatus(item?.status) === 'completed'
   );
@@ -90,13 +115,17 @@ export const useHomeData = ({
     if (localSignature && remoteSignature && localSignature !== remoteSignature) return false;
     if (localSignature && remoteSignature) return true;
 
+    const localStableId = getStableId(localItem);
+    const remoteStableId = getStableId(remoteItem);
+    if (localStableId && remoteStableId && localStableId !== remoteStableId) return false;
+
     const localDate = parseDateKey(localItem?.date);
     const remoteDate = parseDateKey(remoteItem?.date);
     if (localDate && remoteDate) return localDate === remoteDate;
 
     if (isCompletedTournament(remoteItem)) return true;
 
-    return !hasStableCloudId(localItem) || !hasStableCloudId(remoteItem);
+    return !hasStableId(localItem) || !hasStableId(remoteItem);
   };
   const isActiveLiveTournament = (item) => item?.status === 'active' && !item?.champion;
   const mergeHydratedHistoryWithLocalLive = (remoteHistory = [], localHistory = []) => {
@@ -184,16 +213,22 @@ export const useHomeData = ({
           history || [],
           tournamentHistory || []
         ));
+        const backfilledHistory = backfillTournamentHistoryCompletedAt(mergedHistory);
         if (historyHydrationVersionRef.current !== requestVersion) {
           return tournamentHistory || [];
         }
-        setTournamentHistory(mergedHistory);
+        const sortedHistory = sortTournamentHistoryByRecent(backfilledHistory.history);
+        queryClient.setQueryData(
+          queryKeys.tournamentHistory(activeGroupId),
+          sortedHistory
+        );
+        setTournamentHistory(sortedHistory);
         recoverRatingsIfMissing({
-          history: mergedHistory,
+          history: sortedHistory,
           casual: casualMatches || [],
         });
         setHistoryHydrated(true);
-        return mergedHistory;
+        return sortedHistory;
       } catch (error) {
         console.error('Failed to load tournament history:', error);
         if (!silent) {
@@ -234,16 +269,21 @@ export const useHomeData = ({
           queryFn: () => casualMatchService.getAllCasualMatches(100, activeGroupId),
           staleTime: 5 * 60 * 1000,
         });
+        const backfilledMatches = backfillCasualMatchesCompletedAt(matches || []);
         if (casualHydrationVersionRef.current !== requestVersion) {
           return casualMatches || [];
         }
-        setCasualMatches(matches || []);
+        queryClient.setQueryData(
+          queryKeys.casualMatches(activeGroupId),
+          backfilledMatches.matches
+        );
+        setCasualMatches(backfilledMatches.matches);
         recoverRatingsIfMissing({
           history: tournamentHistory || [],
-          casual: matches || [],
+          casual: backfilledMatches.matches,
         });
         setCasualHydrated(true);
-        return matches || [];
+        return backfilledMatches.matches;
       } catch (error) {
         console.error('Failed to load casual match history:', error);
         if (!silent) {

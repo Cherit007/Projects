@@ -43,7 +43,7 @@ export default defineConfig({
       VITE_APPWRITE_COLLECTION_GROUP_INVITES: 'e2e_group_invites',
       VITE_APPWRITE_COLLECTION_GROUP_JOIN_REQUESTS: 'e2e_group_join_requests',
       VITE_APPWRITE_COLLECTION_APP_META: '',
-      VITE_APPWRITE_COLLECTION_GROUP_ACTIVE_LOCKS: '',
+      VITE_APPWRITE_COLLECTION_GROUP_ACTIVE_LOCKS: 'e2e_group_active_locks',
     },
   },
 });

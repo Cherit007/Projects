@@ -30,6 +30,7 @@ const matchPatchSchema = z.object({
   score1: z.union([z.string(), z.number(), z.null()]).optional(),
   score2: z.union([z.string(), z.number(), z.null()]).optional(),
   completed: z.union([z.boolean(), z.string(), z.number()]).optional(),
+  completedAt: z.union([z.string(), z.number(), z.null()]).optional(),
   roundLabel: z.union([z.string(), z.number()]).optional(),
   round: z.union([z.string(), z.number()]).optional(),
   roundNo: z.union([z.string(), z.number()]).optional(),
@@ -82,6 +83,7 @@ const tournamentMatchDocSchema = z.object({
   score1: z.union([z.string(), z.number(), z.null()]).optional(),
   score2: z.union([z.string(), z.number(), z.null()]).optional(),
   completed: z.union([z.boolean(), z.string(), z.number()]).optional(),
+  completedAt: z.string().optional(),
   winnerSide: z.string().optional(),
 }).passthrough();
 
@@ -542,6 +544,7 @@ const parseMatchDocument = ({ doc, teamByRowId, participantsByMatchId }) => {
     score1,
     score2,
     completed: parseBoolean(doc.completed),
+    completedAt: toNonEmptyString(doc.completedAt),
     round: parseMaybeNumeric(doc.roundNo || doc.roundLabel),
     nextMatchId: parseMaybeNumeric(doc.nextLegacyMatchId),
     upsetAlert: null,
@@ -853,6 +856,11 @@ const buildMatchAndParticipantRows = ({
     const score1 = toNumericString(match?.score1);
     const score2 = toNumericString(match?.score2);
 
+    const completedValue = getMatchCompleted(match, score1, score2);
+    const completedAt = completedValue
+      ? (toNonEmptyString(match?.completedAt) || toNonEmptyString(existing?.completedAt))
+      : '';
+
     matchRows.push({
       id,
       data: {
@@ -873,7 +881,8 @@ const buildMatchAndParticipantRows = ({
         team2Name: toNonEmptyString(match?.team2?.name),
         score1,
         score2,
-        completed: toBooleanString(getMatchCompleted(match, score1, score2)),
+        completed: toBooleanString(completedValue),
+        completedAt,
         winnerSide: getWinnerSide(score1, score2),
         sourceCreatedAt: toNonEmptyString(existing?.sourceCreatedAt) || now,
         migratedAt: now,
@@ -1715,6 +1724,14 @@ export const tournamentService = {
       const completed = Object.prototype.hasOwnProperty.call(patch, 'completed')
         ? toBooleanString(patch.completed)
         : toBooleanString(getMatchCompleted({ completed: parseBoolean(row.completed) }, score1, score2));
+      const existingCompletedAt = toNonEmptyString(row?.completedAt);
+      const patchCompletedAt = Object.prototype.hasOwnProperty.call(patch, 'completedAt')
+        ? toNonEmptyString(patch.completedAt)
+        : '';
+      const resolvedCompletedAt = patchCompletedAt || existingCompletedAt;
+      const completedAt = completed === 'true'
+        ? (resolvedCompletedAt || now)
+        : '';
       const winnerSide = toNonEmptyString(patch?.winnerSide)
         || getWinnerSide(score1, score2)
         || toNonEmptyString(row?.winnerSide);
@@ -1749,6 +1766,7 @@ export const tournamentService = {
         score1,
         score2,
         completed,
+        completedAt,
         winnerSide,
         sourceCreatedAt: toNonEmptyString(row?.sourceCreatedAt) || now,
         migratedAt: now,

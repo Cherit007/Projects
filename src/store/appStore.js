@@ -1,5 +1,5 @@
 import { useRef, useSyncExternalStore } from 'react';
-import { dedupeTournamentHistory } from '../utils/appHelpers';
+import { dedupeTournamentHistory, sortTournamentHistoryByRecent } from '../utils/appHelpers';
 
 const createAppStore = () => {
   const initialState = {
@@ -93,8 +93,9 @@ const createAppStore = () => {
       const nextValue = typeof value === 'function'
         ? value(prev.tournamentHistory)
         : value;
+      const deduped = dedupeTournamentHistory(nextValue);
       return {
-        tournamentHistory: dedupeTournamentHistory(nextValue),
+        tournamentHistory: sortTournamentHistoryByRecent(deduped),
       };
     }),
     setCasualMatches: (value) => setField('casualMatches', value),

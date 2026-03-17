@@ -51,7 +51,7 @@ const collectPlayerMatchOutcomes = ({ playerName, tournamentHistory = [], casual
     const upset = Boolean(match.upsetAlert);
 
     outcomes.push({
-      date: context.date || match.date || null,
+      date: match.completedAt || match.date || context.date || null,
       won,
       isFinal,
       upset,
@@ -61,7 +61,7 @@ const collectPlayerMatchOutcomes = ({ playerName, tournamentHistory = [], casual
 
   tournamentHistory.forEach((tournament) => {
     if (!tournament) return;
-    const fallbackDate = tournament.updatedAt || tournament.date || tournament.createdAt || null;
+    const fallbackDate = tournament.date || tournament.createdAt || tournament.updatedAt || null;
 
     (tournament.fixtures || []).forEach(match => collectMatch(match, { phase: 'league', date: fallbackDate }));
     if (tournament.finalMatch) {
@@ -80,7 +80,7 @@ const collectPlayerMatchOutcomes = ({ playerName, tournamentHistory = [], casual
   });
 
   casualMatches.forEach((match) => {
-    collectMatch(match, { phase: 'casual', date: match.date || match.createdAt || null });
+    collectMatch(match, { phase: 'casual', date: match.completedAt || match.date || match.createdAt || null });
   });
 
   return sortByDate(outcomes);

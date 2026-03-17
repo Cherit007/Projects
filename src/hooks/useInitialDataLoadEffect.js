@@ -1,6 +1,19 @@
 import { useEffect } from 'react';
 import { tournamentService } from '../services/tournamentService';
-import { dedupeLiveTournaments, dedupeTournamentHistory } from '../utils/appHelpers';
+import {
+  backfillCasualMatchesCompletedAt,
+  backfillTournamentHistoryCompletedAt,
+  dedupeLiveTournaments,
+  dedupeTournamentHistory,
+  sortTournamentHistoryByRecent,
+} from '../utils/appHelpers';
+import {
+  clearAutoResumeSuppressedTournamentId,
+  getAutoResumeSuppressedTournamentId,
+  tournamentMatchesAutoResumeSuppression,
+} from '../utils/autoResumePreference';
+
+const ACTIVE_TOURNAMENT_CACHE_KEY = 'bfm:appwrite-active-tournament';
 
 export const useInitialDataLoadEffect = ({
   isConfigChecked,
@@ -54,6 +67,14 @@ export const useInitialDataLoadEffect = ({
           const localRatings = JSON.parse(localStorage.getItem('badminton_ratings') || '{}');
           const localHistory = JSON.parse(localStorage.getItem('badminton_history') || '[]');
           const localCasualMatches = JSON.parse(localStorage.getItem('badminton_casual_matches') || '[]');
+          const backfilledLocalHistory = backfillTournamentHistoryCompletedAt(localHistory);
+          const backfilledLocalCasual = backfillCasualMatchesCompletedAt(localCasualMatches);
+          if (backfilledLocalHistory.changed) {
+            localStorage.setItem('badminton_history', JSON.stringify(backfilledLocalHistory.history));
+          }
+          if (backfilledLocalCasual.changed) {
+            localStorage.setItem('badminton_casual_matches', JSON.stringify(backfilledLocalCasual.matches));
+          }
 
           if (mounted) {
             setMembers(localMembers);
@@ -74,14 +95,29 @@ export const useInitialDataLoadEffect = ({
             setPlayerDatabase(localPlayers);
             setPlayerRatings(localRatings);
             markRatingsPersisted(localRatings || {});
-            setTournamentHistory(dedupeTournamentHistory(localHistory));
-            setCasualMatches(localCasualMatches);
+            setTournamentHistory(sortTournamentHistoryByRecent(
+              dedupeTournamentHistory(backfilledLocalHistory.history)
+            ));
+            setCasualMatches(backfilledLocalCasual.matches);
             setHistoryHydrated(true);
             setCasualHydrated(true);
             const localActiveTournaments = dedupeLiveTournaments(
-              dedupeTournamentHistory(localHistory)
+              dedupeTournamentHistory(backfilledLocalHistory.history)
             );
-            if (localActiveTournaments.length === 1) {
+            const suppressedTournamentId = getAutoResumeSuppressedTournamentId();
+            const hasSuppressedActiveTournament = localActiveTournaments.some((tournament) => (
+              tournamentMatchesAutoResumeSuppression(tournament, suppressedTournamentId)
+            ));
+            if (suppressedTournamentId && !hasSuppressedActiveTournament) {
+              clearAutoResumeSuppressedTournamentId();
+            }
+            if (
+              localActiveTournaments.length === 1
+              && !tournamentMatchesAutoResumeSuppression(
+                localActiveTournaments[0],
+                suppressedTournamentId
+              )
+            ) {
               resumeActiveTournament(localActiveTournaments[0]);
             }
           }
@@ -117,10 +153,12 @@ export const useInitialDataLoadEffect = ({
             ? cachedTournamentHistory
             : (Array.isArray(cachedTournamentSummaries) ? cachedTournamentSummaries : [])
         );
-        setTournamentHistory(
-          normalizedCachedHistory
+        const backfilledCachedHistory = backfillTournamentHistoryCompletedAt(normalizedCachedHistory);
+        const backfilledCachedCasual = backfillCasualMatchesCompletedAt(
+          hasCachedCasualMatches ? cachedCasualMatches : []
         );
-        setCasualMatches(hasCachedCasualMatches ? cachedCasualMatches : []);
+        setTournamentHistory(sortTournamentHistoryByRecent(backfilledCachedHistory.history));
+        setCasualMatches(backfilledCachedCasual.matches);
 
         const appwriteData = await queryClient.fetchQuery({
           queryKey: queryKeys.appwriteData(activeGroupId),
@@ -141,7 +179,8 @@ export const useInitialDataLoadEffect = ({
 
         if (mounted && appwriteData) {
           const appwriteTournaments = dedupeTournamentHistory(tournamentSummaries || []);
-          setTournamentHistory(appwriteTournaments);
+          const backfilledAppwriteHistory = backfillTournamentHistoryCompletedAt(appwriteTournaments);
+          const activeFromCloud = findActiveTournament(appwriteTournaments);
           setPlayerDatabase(appwriteData.playerDatabase || []);
           setPlayerRatings(appwriteData.playerRatings || {});
           markRatingsPersisted(appwriteData.playerRatings || {});
@@ -169,7 +208,6 @@ export const useInitialDataLoadEffect = ({
           );
           setHistoryHydrated(false);
           setActiveTournamentLock(appwriteData.activeTournament || null);
-          const activeFromCloud = findActiveTournament(appwriteTournaments);
           const lock = appwriteData.activeTournament;
           let lockCandidate = (lock && lock.status === 'active') ? {
             id: lock.id || null,
@@ -187,14 +225,24 @@ export const useInitialDataLoadEffect = ({
             tournamentFormat: normalizeTournamentFormat(lock.tournamentFormat || 'league'),
             status: 'active',
           } : null;
-          if (lockCandidate && !activeFromCloud) {
+          if (lockCandidate) {
             const lockId = String(lockCandidate.id || lockCandidate.appwriteId || '').trim();
             const lockName = String(lockCandidate.name || '').trim().toLowerCase();
+            const lockHasPayload = (
+              (Array.isArray(lockCandidate.teams) && lockCandidate.teams.length > 0)
+              || (Array.isArray(lockCandidate.fixtures) && lockCandidate.fixtures.length > 0)
+              || (
+                Array.isArray(lockCandidate.bracket)
+                && lockCandidate.bracket.some((round) => Array.isArray(round) && round.length > 0)
+              )
+            );
             const lockMatchesSummary = (appwriteTournaments || []).some((item) => {
               const summaryId = String(item?.id || item?.appwriteId || '').trim();
               const summaryName = String(item?.name || '').trim().toLowerCase();
               if (item?.status !== 'active' || item?.champion) return false;
-              if (lockId && summaryId && lockId === summaryId) return true;
+              if (lockId) {
+                return Boolean(summaryId && lockId === summaryId);
+              }
               return Boolean(lockName && summaryName && lockName === summaryName);
             });
 
@@ -210,7 +258,7 @@ export const useInitialDataLoadEffect = ({
                 } catch {
                   lockCandidate = null;
                 }
-              } else {
+              } else if (!lockHasPayload) {
                 lockCandidate = null;
               }
             }
@@ -228,6 +276,52 @@ export const useInitialDataLoadEffect = ({
               }
             );
           }
+          const shouldUseLocalActiveCache = Boolean(isAppwriteEnabled);
+          let mergedHistory = backfilledAppwriteHistory.history;
+          if (shouldUseLocalActiveCache && !activeFromCloud && !lockCandidate) {
+            let cachedActive = null;
+            try {
+              const raw = localStorage.getItem(ACTIVE_TOURNAMENT_CACHE_KEY);
+              cachedActive = raw ? JSON.parse(raw) : null;
+            } catch {
+              cachedActive = null;
+            }
+            if (cachedActive) {
+              const cachedGroupId = String(cachedActive?._cacheGroupId || cachedActive?.groupId || '').trim();
+              if (cachedGroupId && activeGroupId && cachedGroupId !== String(activeGroupId)) {
+                cachedActive = null;
+              }
+              const cachedAtMs = Date.parse(String(cachedActive?._cachedAt || ''));
+              if (Number.isFinite(cachedAtMs) && Date.now() - cachedAtMs > 7 * 24 * 60 * 60 * 1000) {
+                cachedActive = null;
+              }
+            }
+            const { _cacheGroupId, _cachedAt, ...cacheTournament } = cachedActive || {};
+            const cacheHasPayload = Boolean(
+              cacheTournament
+              && (
+                (Array.isArray(cacheTournament.teams) && cacheTournament.teams.length > 0)
+                || (Array.isArray(cacheTournament.fixtures) && cacheTournament.fixtures.length > 0)
+                || (Array.isArray(cacheTournament.bracket) && cacheTournament.bracket.length > 0)
+              )
+            );
+            if (
+              cacheTournament
+              && cacheTournament.status === 'active'
+              && !cacheTournament.champion
+              && cacheHasPayload
+            ) {
+              const normalizedCache = {
+                ...cacheTournament,
+                tournamentFormat: normalizeTournamentFormat(
+                  cacheTournament.tournamentFormat || cacheTournament.format || 'league'
+                ),
+                status: 'active',
+              };
+              mergedHistory = dedupeTournamentHistory([normalizedCache, ...mergedHistory]);
+            }
+          }
+          setTournamentHistory(sortTournamentHistoryByRecent(mergedHistory));
           const scoreTournament = (tournament) => {
             const completedFixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
               .filter((match) => match?.completed).length;

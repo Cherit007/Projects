@@ -8,11 +8,21 @@ import {
 } from '../utils/calculations';
 import { appDataService } from '../services/appDataService';
 import { tournamentService } from '../services/tournamentService';
-import { queueLocalStorageJson } from '../services/localStorageWriteService';
+import { queueLocalStorageJson, queueLocalStorageValue } from '../services/localStorageWriteService';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
-import { dedupeTournamentHistory, deriveRatingsFromHistory } from '../utils/appHelpers';
+import {
+  dedupeTournamentHistory,
+  deriveRatingsFromHistory,
+  getTournamentIdCandidates,
+  matchesTournamentId,
+  normalizeTournamentName,
+} from '../utils/appHelpers';
+import {
+  clearAutoResumeSuppressedTournamentId,
+  setAutoResumeSuppressedTournamentId,
+} from '../utils/autoResumePreference';
 
 export const useTournamentActions = ({
   assertCanOperate,
@@ -74,11 +84,34 @@ export const useTournamentActions = ({
   const pendingTournamentSyncRef = useRef(null);
   const tournamentSyncInFlightRef = useRef(false);
   const createTournamentRunIdRef = useRef(0);
+  const pendingCreateRef = useRef(null);
+  const localTournamentIdRef = useRef(null);
   const remoteActiveCacheRef = useRef({
     hasValue: false,
     value: null,
     cachedAt: 0,
   });
+  const ACTIVE_TOURNAMENT_CACHE_KEY = 'bfm:appwrite-active-tournament';
+  const shouldPersistActiveCache = Boolean(isAppwriteEnabled);
+
+  const persistActiveTournamentCache = (snapshot) => {
+    if (!shouldPersistActiveCache) return;
+    if (!snapshot) {
+      queueLocalStorageValue(ACTIVE_TOURNAMENT_CACHE_KEY, null);
+      return;
+    }
+    const payload = {
+      ...snapshot,
+      _cacheGroupId: activeGroup?.id || null,
+      _cachedAt: new Date().toISOString(),
+    };
+    queueLocalStorageJson(ACTIVE_TOURNAMENT_CACHE_KEY, payload);
+  };
+
+  const clearActiveTournamentCache = () => {
+    if (!shouldPersistActiveCache) return;
+    queueLocalStorageValue(ACTIVE_TOURNAMENT_CACHE_KEY, null);
+  };
 
   const yieldToUi = () => new Promise((resolve) => {
     if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
@@ -97,6 +130,25 @@ export const useTournamentActions = ({
     }
   };
 
+  const normalizeTournamentId = (value) => String(value || '').trim();
+  const hasTournamentIds = (tournament) => getTournamentIdCandidates(tournament).length > 0;
+  const isIdlessActiveTournamentNameMatch = (tournament, normalizedTargetName) => (
+    Boolean(
+      normalizedTargetName
+      && tournament?.status === 'active'
+      && !tournament?.champion
+      && !hasTournamentIds(tournament)
+      && normalizeTournamentName(tournament?.name) === normalizedTargetName
+    )
+  );
+  const isLikelyLocalTournamentId = (value) => {
+    const normalized = normalizeTournamentId(value);
+    if (!normalized) return false;
+    if (/^\d{10,}$/.test(normalized)) return true;
+    return normalized.startsWith('sched-local-') || normalized.startsWith('local-');
+  };
+  const createLocalTournamentId = () => `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
   useEffect(() => () => {
     if (activeLockTimerRef.current) {
       clearTimeout(activeLockTimerRef.current);
@@ -107,6 +159,38 @@ export const useTournamentActions = ({
       tournamentSyncTimerRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    const normalizedCurrentId = normalizeTournamentId(currentTournamentId);
+    const normalizedName = normalizeTournamentId(tournamentName);
+    if (!normalizedCurrentId && !normalizedName) {
+      localTournamentIdRef.current = null;
+      return;
+    }
+    const historyList = Array.isArray(tournamentHistory) ? tournamentHistory : [];
+    let match = null;
+    if (normalizedCurrentId) {
+      match = historyList.find((item) => matchesTournamentId(item, normalizedCurrentId));
+    }
+    if (!match) {
+      const normalizedNameLower = normalizedName.toLowerCase();
+      if (normalizedNameLower) {
+        const activeMatches = historyList.filter((item) => (
+          item?.status === 'active'
+          && !item?.champion
+          && normalizeTournamentId(item?.name).toLowerCase() === normalizedNameLower
+        ));
+        if (activeMatches.length === 1) {
+          match = activeMatches[0];
+        }
+      }
+    }
+    const legacyId = normalizeTournamentId(match?.legacyTournamentId);
+    const nextLocalId = legacyId || normalizedCurrentId || '';
+    if (nextLocalId && localTournamentIdRef.current !== nextLocalId) {
+      localTournamentIdRef.current = nextLocalId;
+    }
+  }, [currentTournamentId, tournamentName, tournamentHistory]);
 
   const getOrdinalSuffix = (value) => {
     const num = Number(value);
@@ -369,6 +453,52 @@ export const useTournamentActions = ({
     return dedupeTournamentHistory([tournament, ...list]);
   };
 
+  const persistActiveTournamentSnapshot = ({
+    teamsSnapshot = teams,
+    fixturesSnapshot = fixtures,
+    bracketSnapshot = bracket,
+    championSnapshot = champion,
+    aiSummariesSnapshot = aiMatchSummaries,
+    swapHistorySnapshot = swapHistory,
+  } = {}) => {
+    const localTournamentId = resolveLocalTournamentId();
+    const normalizedCurrentId = normalizeTournamentId(currentTournamentId);
+    const appwriteId = (
+      isAppwriteEnabled
+      && normalizedCurrentId
+      && !isLikelyLocalTournamentId(normalizedCurrentId)
+    ) ? normalizedCurrentId : null;
+
+    const snapshot = {
+      id: localTournamentId || appwriteId || normalizedCurrentId || Date.now(),
+      legacyTournamentId: localTournamentId || null,
+      appwriteId,
+      name: tournamentName,
+      date: new Date().toLocaleDateString(),
+      teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
+      fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
+      bracket: Array.isArray(bracketSnapshot) ? bracketSnapshot : [],
+      champion: championSnapshot || null,
+      format,
+      gameMode,
+      tournamentFormat,
+      aiSummaries: Array.isArray(aiSummariesSnapshot) ? aiSummariesSnapshot : [],
+      swapHistory: Array.isArray(swapHistorySnapshot) ? swapHistorySnapshot : [],
+      status: championSnapshot ? 'completed' : 'active',
+    };
+
+    persistActiveTournamentCache(snapshot);
+
+    setTournamentHistory((prev) => {
+      const next = upsertTournamentHistory(prev, snapshot);
+      if (!isAppwriteEnabled) {
+        queueLocalStorageJson('badminton_history', next);
+      }
+      return next;
+    });
+    return snapshot;
+  };
+
   const getPlayersFromMatch = (match) => {
     if (!match?.team1 || !match?.team2) return [];
     const players = [
@@ -547,23 +677,41 @@ export const useTournamentActions = ({
     formatSnapshot = format,
     gameModeSnapshot = gameMode,
     tournamentFormatSnapshot = tournamentFormat,
-  } = {}) => ({
-    id: id || currentTournamentId || null,
-    appwriteId: id || currentTournamentId || null,
-    name: name || 'Live tournament',
-    status: championSnapshot ? 'completed' : 'active',
-    updatedAt: new Date().toISOString(),
-    teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
-    fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
-    bracket: Array.isArray(bracketSnapshot) ? bracketSnapshot : [],
-    champion: championSnapshot || null,
-    aiSummaries: Array.isArray(aiSummariesSnapshot) ? aiSummariesSnapshot : [],
-    swapHistory: Array.isArray(swapHistorySnapshot) ? swapHistorySnapshot : [],
-    format: formatSnapshot || '1',
-    gameMode: gameModeSnapshot || 'doubles',
-    tournamentFormat: tournamentFormatSnapshot || 'league',
-    date: new Date().toLocaleDateString(),
-  });
+    allowLocalId = !isAppwriteEnabled,
+  } = {}) => {
+    const localTournamentId = normalizeTournamentId(localTournamentIdRef.current);
+    const normalizedCurrentId = normalizeTournamentId(currentTournamentId);
+    const currentIsRemote = normalizedCurrentId && !isLikelyLocalTournamentId(normalizedCurrentId);
+    const resolvedId = (() => {
+      if (id !== undefined) return id;
+      if (currentIsRemote) return normalizedCurrentId;
+      if (allowLocalId) return localTournamentId || normalizedCurrentId || null;
+      return null;
+    })();
+    const resolvedAppwriteId = (() => {
+      if (id !== undefined) return id;
+      if (currentIsRemote) return normalizedCurrentId;
+      return null;
+    })();
+    return ({
+      id: resolvedId,
+      appwriteId: resolvedAppwriteId,
+      legacyTournamentId: localTournamentId || null,
+      name: name || 'Live tournament',
+      status: championSnapshot ? 'completed' : 'active',
+      updatedAt: new Date().toISOString(),
+      teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
+      fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
+      bracket: Array.isArray(bracketSnapshot) ? bracketSnapshot : [],
+      champion: championSnapshot || null,
+      aiSummaries: Array.isArray(aiSummariesSnapshot) ? aiSummariesSnapshot : [],
+      swapHistory: Array.isArray(swapHistorySnapshot) ? swapHistorySnapshot : [],
+      format: formatSnapshot || '1',
+      gameMode: gameModeSnapshot || 'doubles',
+      tournamentFormat: tournamentFormatSnapshot || 'league',
+      date: new Date().toLocaleDateString(),
+    });
+  };
 
   const buildCloudTournamentPayload = ({
     teamsSnapshot = teams,
@@ -572,41 +720,118 @@ export const useTournamentActions = ({
     championSnapshot = champion,
     aiSummariesSnapshot = aiMatchSummaries,
     swapHistorySnapshot = swapHistory,
-  } = {}) => ({
-    name: tournamentName,
-    date: new Date().toLocaleDateString(),
-    teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
-    fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
-    bracket: Array.isArray(bracketSnapshot) && bracketSnapshot.length > 0 ? bracketSnapshot : null,
-    champion: championSnapshot || null,
-    finalMatch: null,
-    format,
-    gameMode,
-    tournamentFormat,
-    aiSummaries: Array.isArray(aiSummariesSnapshot) ? aiSummariesSnapshot : [],
-    swapHistory: Array.isArray(swapHistorySnapshot) ? swapHistorySnapshot : [],
-    status: championSnapshot ? 'completed' : 'active',
-  });
+  } = {}) => {
+    const localTournamentId = normalizeTournamentId(localTournamentIdRef.current);
+    return ({
+      legacyTournamentId: localTournamentId || null,
+      name: tournamentName,
+      date: new Date().toLocaleDateString(),
+      teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
+      fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
+      bracket: Array.isArray(bracketSnapshot) && bracketSnapshot.length > 0 ? bracketSnapshot : null,
+      champion: championSnapshot || null,
+      finalMatch: null,
+      format,
+      gameMode,
+      tournamentFormat,
+      aiSummaries: Array.isArray(aiSummariesSnapshot) ? aiSummariesSnapshot : [],
+      swapHistory: Array.isArray(swapHistorySnapshot) ? swapHistorySnapshot : [],
+      status: championSnapshot ? 'completed' : 'active',
+    });
+  };
+
+  const resolveLocalTournamentId = () => {
+    const fromRef = normalizeTournamentId(localTournamentIdRef.current);
+    if (fromRef) return fromRef;
+    const fromCurrent = normalizeTournamentId(currentTournamentId);
+    if (fromCurrent) return fromCurrent;
+    const normalizedName = normalizeTournamentId(tournamentName).toLowerCase();
+    if (!normalizedName) return null;
+    const activeMatches = (Array.isArray(tournamentHistory) ? tournamentHistory : [])
+      .filter((item) => (
+        item?.status === 'active'
+        && !item?.champion
+        && normalizeTournamentId(item?.name).toLowerCase() === normalizedName
+      ));
+    if (activeMatches.length !== 1) return null;
+    const candidate = activeMatches[0];
+    return normalizeTournamentId(candidate?.legacyTournamentId || candidate?.id || candidate?.appwriteId);
+  };
 
   const resolveSyncTournamentId = () => {
-    if (currentTournamentId) {
-      if (!isAppwriteEnabled) return currentTournamentId;
-      if (typeof currentTournamentId === 'string' && currentTournamentId.trim()) return currentTournamentId;
+    if (!isAppwriteEnabled) {
+      return resolveLocalTournamentId();
     }
-    const activeByName = (Array.isArray(tournamentHistory) ? tournamentHistory : []).find((item) => (
-      item?.status === 'active'
-      && !item?.champion
-      && (item?.name || '').trim().toLowerCase() === (tournamentName || '').trim().toLowerCase()
+    const currentId = normalizeTournamentId(currentTournamentId);
+    if (currentId && !isLikelyLocalTournamentId(currentId)) {
+      return currentId;
+    }
+
+    const localId = normalizeTournamentId(localTournamentIdRef.current) || currentId;
+    if (localId) {
+      const historyMatch = (Array.isArray(tournamentHistory) ? tournamentHistory : [])
+        .find((item) => matchesTournamentId(item, localId));
+      const matchAppwriteId = normalizeTournamentId(historyMatch?.appwriteId);
+      if (matchAppwriteId) return matchAppwriteId;
+    }
+
+    const normalizedName = normalizeTournamentId(tournamentName).toLowerCase();
+    if (!normalizedName) return null;
+    const activeByName = (Array.isArray(tournamentHistory) ? tournamentHistory : [])
+      .filter((item) => (
+        item?.status === 'active'
+        && !item?.champion
+        && normalizeTournamentId(item?.name).toLowerCase() === normalizedName
+        && normalizeTournamentId(item?.appwriteId)
+      ));
+    const uniqueIds = Array.from(new Set(
+      activeByName
+        .map((item) => normalizeTournamentId(item?.appwriteId))
+        .filter(Boolean)
     ));
-    if (!activeByName) return null;
-    if (!isAppwriteEnabled) return activeByName?.appwriteId || activeByName?.id || null;
-    if (typeof activeByName?.appwriteId === 'string' && activeByName.appwriteId.trim()) {
-      return activeByName.appwriteId;
-    }
-    if (typeof activeByName?.id === 'string' && activeByName.id.trim()) {
-      return activeByName.id;
+    if (uniqueIds.length === 1) {
+      return uniqueIds[0];
     }
     return null;
+  };
+
+  const waitForPendingCreateResolution = async ({
+    targetLegacyId = resolveLocalTournamentId(),
+    timeoutMs = 8000,
+  } = {}) => {
+    const pending = pendingCreateRef.current;
+    if (!pending?.promise) return null;
+
+    const pendingLegacy = normalizeTournamentId(pending.legacyId);
+    const desiredLegacy = normalizeTournamentId(targetLegacyId || pendingLegacy);
+    if (!pendingLegacy || !desiredLegacy || pendingLegacy !== desiredLegacy) {
+      return null;
+    }
+
+    try {
+      const saved = timeoutMs > 0
+        ? await Promise.race([
+            pending.promise,
+            new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+          ])
+        : await pending.promise;
+      if (!saved) return null;
+
+      const savedId = normalizeTournamentId(saved?.appwriteId || saved?.id);
+      if (!savedId) return null;
+
+      setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+        ...saved,
+        id: desiredLegacy,
+        legacyTournamentId: desiredLegacy,
+        appwriteId: savedId,
+      }));
+      setCurrentTournamentId(savedId);
+      cloudIdWarningShownRef.current = false;
+      return savedId;
+    } catch {
+      return null;
+    }
   };
 
   const flushQueuedTournamentSync = async () => {
@@ -822,9 +1047,17 @@ export const useTournamentActions = ({
     if (localResolved) return localResolved;
     if (!isAppwriteEnabled) return null;
 
+    const pendingCreateId = await waitForPendingCreateResolution();
+    if (pendingCreateId) return pendingCreateId;
+
     const remoteActive = await fetchRemoteActiveLiveTournament();
     const remoteId = remoteActive?.appwriteId || remoteActive?.id || null;
-    if (typeof remoteId === 'string' && remoteId.trim()) return remoteId;
+    if (typeof remoteId === 'string' && remoteId.trim()) {
+      const localId = resolveLocalTournamentId();
+      if (localId && matchesTournamentId(remoteActive, localId)) {
+        return remoteId;
+      }
+    }
     return null;
   };
 
@@ -840,6 +1073,21 @@ export const useTournamentActions = ({
     cloudIdRecoveryInFlightRef.current = true;
 
     try {
+      const localId = resolveLocalTournamentId();
+      if (localId) {
+        const existing = (Array.isArray(tournamentHistory) ? tournamentHistory : [])
+          .find((item) => matchesTournamentId(item, localId) && item?.appwriteId);
+        const existingId = normalizeTournamentId(existing?.appwriteId);
+        if (existingId) {
+          setCurrentTournamentId(existingId);
+          cloudIdWarningShownRef.current = false;
+          return existingId;
+        }
+      }
+
+      const pendingCreateId = await waitForPendingCreateResolution({ targetLegacyId: localId });
+      if (pendingCreateId) return pendingCreateId;
+
       let recoveredId = await resolveSyncTournamentIdForWrite();
 
       if (!recoveredId) {
@@ -855,9 +1103,11 @@ export const useTournamentActions = ({
         recoveredId = saved?.appwriteId || saved?.id || null;
 
         if (typeof recoveredId === 'string' && recoveredId.trim()) {
+          const localId = resolveLocalTournamentId();
           setTournamentHistory((prev) => upsertTournamentHistory(prev, {
             ...payload,
-            id: recoveredId,
+            id: localId || recoveredId,
+            legacyTournamentId: localId || payload?.legacyTournamentId || null,
             appwriteId: recoveredId,
           }));
         }
@@ -983,6 +1233,7 @@ export const useTournamentActions = ({
     oddPlayerName,
   } = {}) => {
     if (!assertCanOperate()) return false;
+    clearAutoResumeSuppressedTournamentId();
     const createRunId = createTournamentRunIdRef.current + 1;
     createTournamentRunIdRef.current = createRunId;
     const selectedTeams = teamsOverride || teams;
@@ -997,6 +1248,16 @@ export const useTournamentActions = ({
     const selectedOddPlayerName = (
       oddPlayerConfig?.oddPlayerName ?? oddPlayerName ?? ''
     ).trim();
+    const nowIso = new Date().toISOString();
+    const historyList = Array.isArray(tournamentHistory) ? tournamentHistory : [];
+    const localTournamentId = normalizedExistingTournamentId
+      || localTournamentIdRef.current
+      || createLocalTournamentId();
+    const existingEntry = historyList.find((item) => matchesTournamentId(item, localTournamentId));
+    const legacyTournamentId = normalizeTournamentId(existingEntry?.legacyTournamentId) || localTournamentId;
+    const createdAt = normalizeTournamentId(existingEntry?.createdAt) || nowIso;
+    localTournamentIdRef.current = legacyTournamentId;
+    setCurrentTournamentId(normalizedExistingTournamentId || legacyTournamentId);
 
     setLoading(true);
     const updatedRatings = { ...playerRatings };
@@ -1041,9 +1302,42 @@ export const useTournamentActions = ({
     cloudIdWarningShownRef.current = false;
     cloudIdRecoveryInFlightRef.current = false;
 
+    const localTournamentSnapshot = {
+      id: legacyTournamentId,
+      legacyTournamentId,
+      appwriteId: normalizedExistingTournamentId || existingEntry?.appwriteId || null,
+      name: selectedTournamentName,
+      date: new Date().toLocaleDateString(),
+      createdAt,
+      updatedAt: nowIso,
+      teams: selectedTeams,
+      fixtures: newFixtures,
+      bracket: newBracket,
+      champion: null,
+      finalMatch: null,
+      aiSummaries: [],
+      swapHistory: [],
+      format: selectedFormat,
+      gameMode: selectedGameMode,
+      tournamentFormat: selectedTournamentFormat,
+      status: 'active',
+      oddPlayerEnabled: selectedOddPlayerEnabled,
+      oddPlayerName: selectedOddPlayerName,
+      pendingSync: Boolean(isAppwriteEnabled && !normalizedExistingTournamentId),
+    };
+    setTournamentHistory((prev) => {
+      const next = upsertTournamentHistory(prev, localTournamentSnapshot);
+      if (!isAppwriteEnabled) {
+        queueLocalStorageJson('badminton_history', next);
+      }
+      return next;
+    });
+    persistActiveTournamentCache(localTournamentSnapshot);
+
     if (isAppwriteEnabled) {
       const tournamentData = {
         ...(normalizedExistingTournamentId ? { appwriteId: normalizedExistingTournamentId } : {}),
+        legacyTournamentId,
         name: selectedTournamentName,
         date: new Date().toLocaleDateString(),
         teams: selectedTeams,
@@ -1058,10 +1352,16 @@ export const useTournamentActions = ({
         oddPlayerEnabled: selectedOddPlayerEnabled,
         oddPlayerName: selectedOddPlayerName,
       };
+      const createPromise = saveTournamentMutation.mutateAsync(tournamentData);
+      pendingCreateRef.current = {
+        runId: createRunId,
+        legacyId: legacyTournamentId,
+        promise: createPromise,
+      };
 
       void (async () => {
         try {
-          const saved = await saveTournamentMutation.mutateAsync(tournamentData);
+          const saved = await createPromise;
           if (!saved) return;
           const savedId = saved.appwriteId || saved.id || await resolveSyncTournamentIdForWrite();
           const isStaleCreate = createRunId !== createTournamentRunIdRef.current;
@@ -1083,7 +1383,8 @@ export const useTournamentActions = ({
           if (savedId) setCurrentTournamentId(savedId);
           setTournamentHistory((prev) => upsertTournamentHistory(prev, {
             ...saved,
-            id: savedId || saved.id || Date.now(),
+            id: legacyTournamentId,
+            legacyTournamentId,
             appwriteId: savedId || saved.appwriteId || null,
             status: 'active',
             teams: selectedTeams,
@@ -1097,6 +1398,8 @@ export const useTournamentActions = ({
             tournamentFormat: selectedTournamentFormat,
             oddPlayerEnabled: selectedOddPlayerEnabled,
             oddPlayerName: selectedOddPlayerName,
+            createdAt,
+            updatedAt: new Date().toISOString(),
           }));
           await updateActiveTournamentLock(buildActiveTournamentSnapshot({
             id: savedId || null,
@@ -1114,31 +1417,12 @@ export const useTournamentActions = ({
         } catch (error) {
           console.error('Failed to sync new tournament to cloud:', error);
           showToast('Tournament started locally; cloud sync failed.', 'error');
+        } finally {
+          if (pendingCreateRef.current?.runId === createRunId) {
+            pendingCreateRef.current = null;
+          }
         }
       })();
-    }
-
-    if (normalizedExistingTournamentId) {
-      setTournamentHistory((prev) => upsertTournamentHistory(prev, {
-        id: normalizedExistingTournamentId,
-        appwriteId: normalizedExistingTournamentId,
-        name: selectedTournamentName,
-        date: new Date().toLocaleDateString(),
-        teams: selectedTeams,
-        fixtures: newFixtures,
-        bracket: newBracket,
-        champion: null,
-        finalMatch: null,
-        aiSummaries: [],
-        swapHistory: [],
-        format: selectedFormat,
-        gameMode: selectedGameMode,
-        tournamentFormat: selectedTournamentFormat,
-        status: 'active',
-        oddPlayerEnabled: selectedOddPlayerEnabled,
-        oddPlayerName: selectedOddPlayerName,
-      }));
-      setCurrentTournamentId(normalizedExistingTournamentId);
     }
 
     setStep('tournament');
@@ -1209,6 +1493,7 @@ export const useTournamentActions = ({
     const scheduled = {
       ...payload,
       id: optimisticId,
+      legacyTournamentId: optimisticId,
       appwriteId: null,
       pendingSync: Boolean(isAppwriteEnabled),
     };
@@ -1229,8 +1514,8 @@ export const useTournamentActions = ({
           if (!savedId) return;
           setTournamentHistory((prev) => {
             const withoutOptimistic = (Array.isArray(prev) ? prev : []).filter((item) => {
-              const itemId = String(item?.id || '').trim();
-              const itemAppwriteId = String(item?.appwriteId || '').trim();
+              const itemId = normalizeTournamentId(item?.id);
+              const itemAppwriteId = normalizeTournamentId(item?.appwriteId);
               return itemId !== optimisticId && itemAppwriteId !== optimisticId;
             });
             return upsertTournamentHistory(withoutOptimistic, {
@@ -1264,7 +1549,11 @@ export const useTournamentActions = ({
       showToast('Invalid scores', 'error');
       return false;
     }
-    const syncTournamentId = resolveSyncTournamentId();
+    const localTournamentId = resolveLocalTournamentId();
+    let syncTournamentId = resolveSyncTournamentId();
+    if (isAppwriteEnabled && !syncTournamentId) {
+      syncTournamentId = await resolveSyncTournamentIdForWrite();
+    }
     const missingCloudId = Boolean(isAppwriteEnabled && !syncTournamentId);
 
     const match = fixtures.find((m) => m.id === matchId);
@@ -1285,6 +1574,7 @@ export const useTournamentActions = ({
       team1Name: match?.team1?.name,
       team2Name: match?.team2?.name,
     });
+    const completedAt = match?.completedAt || new Date().toISOString();
     const completedMatch = {
       ...match,
       score1: parseInt(score1, 10),
@@ -1292,6 +1582,7 @@ export const useTournamentActions = ({
       completed: true,
       upsetAlert,
       preMatchPrediction: prediction,
+      completedAt,
     };
 
     const ratingsBefore = playerRatings;
@@ -1321,30 +1612,32 @@ export const useTournamentActions = ({
       isFinal: false,
     }));
 
+    const activeSnapshot = {
+      id: localTournamentId || currentTournamentId || Date.now(),
+      legacyTournamentId: localTournamentId || null,
+      appwriteId: isAppwriteEnabled ? (syncTournamentId || null) : null,
+      name: tournamentName,
+      date: new Date().toLocaleDateString(),
+      teams,
+      fixtures: updatedFixtures,
+      bracket,
+      champion,
+      format,
+      gameMode,
+      tournamentFormat,
+      aiSummaries: nextSummaries,
+      swapHistory,
+      status: champion ? 'completed' : 'active',
+    };
+
     setTournamentHistory((prev) => {
-      const updatedHistory = upsertTournamentHistory(prev, {
-        id: syncTournamentId || currentTournamentId || Date.now(),
-        appwriteId: isAppwriteEnabled
-          ? (syncTournamentId || currentTournamentId || null)
-          : null,
-        name: tournamentName,
-        date: new Date().toLocaleDateString(),
-        teams,
-        fixtures: updatedFixtures,
-        bracket,
-        champion,
-        format,
-        gameMode,
-        tournamentFormat,
-        aiSummaries: nextSummaries,
-        swapHistory,
-        status: champion ? 'completed' : 'active',
-      });
+      const updatedHistory = upsertTournamentHistory(prev, activeSnapshot);
       if (!isAppwriteEnabled) {
         queueLocalStorageJson('badminton_history', updatedHistory);
       }
       return updatedHistory;
     });
+    persistActiveTournamentCache(activeSnapshot);
 
     if (isAppwriteEnabled) {
       if (syncTournamentId) {
@@ -1374,21 +1667,21 @@ export const useTournamentActions = ({
             },
             requireDurableSync: true,
           });
-          updateActiveTournamentLock(activeLockSnapshot);
+          await updateActiveTournamentLock(activeLockSnapshot, { immediate: true });
         } catch (error) {
           console.error('Failed to sync match result to cloud:', error);
           showToast('Result saved locally; cloud sync failed. Avoid refresh and try again.', 'error');
         }
       } else {
         try {
-          updateActiveTournamentLock(buildActiveTournamentSnapshot({
+          await updateActiveTournamentLock(buildActiveTournamentSnapshot({
             id: null,
             fixturesSnapshot: updatedFixtures,
             bracketSnapshot: bracket,
             championSnapshot: champion,
             aiSummariesSnapshot: nextSummaries,
             swapHistorySnapshot: swapHistory,
-          }));
+          }), { immediate: true });
         } catch {
           // Keep running even if lock update fails.
         }
@@ -1432,7 +1725,7 @@ export const useTournamentActions = ({
                 },
                 requireDurableSync: true,
               });
-              updateActiveTournamentLock(recoveredLockSnapshot);
+              await updateActiveTournamentLock(recoveredLockSnapshot, { immediate: true });
               setTournamentHistory((prev) => upsertTournamentHistory(prev, {
                 id: recoveredId,
                 appwriteId: recoveredId,
@@ -1475,7 +1768,16 @@ export const useTournamentActions = ({
     const reordered = [...fixtures];
     [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
     setFixtures(reordered);
+    persistActiveTournamentSnapshot({ fixturesSnapshot: reordered });
     const syncTournamentId = resolveSyncTournamentId();
+    const reorderedLockSnapshot = buildActiveTournamentSnapshot({
+      id: syncTournamentId || null,
+      fixturesSnapshot: reordered,
+      bracketSnapshot: bracket,
+      championSnapshot: champion,
+      aiSummariesSnapshot: aiMatchSummaries,
+      swapHistorySnapshot: swapHistory,
+    });
     if (isAppwriteEnabled && syncTournamentId) {
       if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
       queueTournamentSync({
@@ -1490,14 +1792,9 @@ export const useTournamentActions = ({
         swapHistory,
         },
       });
-      updateActiveTournamentLock(buildActiveTournamentSnapshot({
-        id: syncTournamentId,
-        fixturesSnapshot: reordered,
-        bracketSnapshot: bracket,
-        championSnapshot: champion,
-        aiSummariesSnapshot: aiMatchSummaries,
-        swapHistorySnapshot: swapHistory,
-      }));
+    }
+    if (isAppwriteEnabled) {
+      void updateActiveTournamentLock(reorderedLockSnapshot, { immediate: true });
     }
     showToast('Match moved to LIVE NOW');
   };
@@ -1615,8 +1912,23 @@ export const useTournamentActions = ({
     };
     const updatedSwapHistory = [...swapHistory, swapEntry];
     setSwapHistory(updatedSwapHistory);
+    persistActiveTournamentSnapshot({
+      teamsSnapshot: updatedTeams,
+      fixturesSnapshot: updatedFixtures,
+      bracketSnapshot: updatedBracket,
+      swapHistorySnapshot: updatedSwapHistory,
+    });
 
     const syncTournamentId = resolveSyncTournamentId();
+    const swapLockSnapshot = buildActiveTournamentSnapshot({
+      id: syncTournamentId || null,
+      teamsSnapshot: updatedTeams,
+      fixturesSnapshot: updatedFixtures,
+      bracketSnapshot: updatedBracket,
+      championSnapshot: champion,
+      aiSummariesSnapshot: aiMatchSummaries,
+      swapHistorySnapshot: updatedSwapHistory,
+    });
     if (isAppwriteEnabled && syncTournamentId) {
       if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
       queueTournamentSync({
@@ -1632,15 +1944,9 @@ export const useTournamentActions = ({
         swapHistory: updatedSwapHistory,
         },
       });
-      updateActiveTournamentLock(buildActiveTournamentSnapshot({
-        id: syncTournamentId,
-        teamsSnapshot: updatedTeams,
-        fixturesSnapshot: updatedFixtures,
-        bracketSnapshot: updatedBracket,
-        championSnapshot: champion,
-        aiSummariesSnapshot: aiMatchSummaries,
-        swapHistorySnapshot: updatedSwapHistory,
-      }));
+    }
+    if (isAppwriteEnabled) {
+      void updateActiveTournamentLock(swapLockSnapshot, { immediate: true });
     }
 
     showToast(`Updated ${targetTeam.name}: ${outgoingPlayer} → ${replacement}`);
@@ -1648,15 +1954,8 @@ export const useTournamentActions = ({
   };
 
   const normalizeCloudTournamentId = (value) => {
-    const normalized = String(value || '').trim();
+    const normalized = normalizeTournamentId(value);
     return normalized || null;
-  };
-
-  const isLikelyLocalTournamentId = (value) => {
-    const normalized = normalizeCloudTournamentId(value);
-    if (!normalized) return false;
-    if (/^\d{10,}$/.test(normalized)) return true;
-    return normalized.startsWith('sched-local-') || normalized.startsWith('local-');
   };
 
   const resolveTournamentIdForCompletion = async (fallbackId = null) => {
@@ -1670,13 +1969,19 @@ export const useTournamentActions = ({
     const resolvedCompletionId = await resolveTournamentIdForCompletion(
       tournament?.appwriteId || currentTournamentId
     );
+    const fallbackLocalId = normalizeTournamentId(
+      tournament?.legacyTournamentId || tournament?.id || localTournamentIdRef.current || currentTournamentId
+    );
     const normalizedTournament = {
       ...(tournament || {}),
-      ...(resolvedCompletionId ? { id: resolvedCompletionId, appwriteId: resolvedCompletionId } : {}),
+      ...(fallbackLocalId ? { id: fallbackLocalId } : {}),
+      legacyTournamentId: normalizeTournamentId(tournament?.legacyTournamentId) || fallbackLocalId || null,
+      appwriteId: resolvedCompletionId || tournament?.appwriteId || null,
       status: 'completed',
     };
     const updatedHistory = upsertTournamentHistory(tournamentHistory, normalizedTournament);
     setTournamentHistory(updatedHistory);
+    clearActiveTournamentCache();
 
     if (isAppwriteEnabled && resolvedCompletionId) {
       const saved = await saveTournamentMutation.mutateAsync({
@@ -1690,7 +1995,8 @@ export const useTournamentActions = ({
         setCurrentTournamentId(savedId);
         setTournamentHistory((prev) => upsertTournamentHistory(prev, {
           ...normalizedTournament,
-          id: savedId,
+          id: normalizedTournament.id || fallbackLocalId || savedId,
+          legacyTournamentId: normalizedTournament.legacyTournamentId || fallbackLocalId || null,
           appwriteId: savedId,
           status: 'completed',
         }));
@@ -1712,6 +2018,7 @@ export const useTournamentActions = ({
 
   const saveBracketMatchResult = async (matchId, score1, score2) => {
     if (!assertCanOperate()) return false;
+    const localTournamentId = resolveLocalTournamentId();
     const sourceMatch = bracket.flat().find((m) => m.id === matchId);
     const prediction = predictMatchOutcome({
       match: sourceMatch,
@@ -1728,11 +2035,19 @@ export const useTournamentActions = ({
     });
 
     const rawBracket = updateBracket(bracket, matchId, score1, score2);
-    const updatedBracket = rawBracket.map((round) => round.map((match) => (
-      match.id === matchId
-        ? { ...match, upsetAlert, preMatchPrediction: prediction }
-        : match
-    )));
+    const bracketCompletedAt = new Date().toISOString();
+    const updatedBracket = rawBracket.map((round) => round.map((match) => {
+      if (match.id !== matchId) return match;
+      const completedAt = match.completed
+        ? (match.completedAt || bracketCompletedAt)
+        : match.completedAt;
+      return {
+        ...match,
+        upsetAlert,
+        preMatchPrediction: prediction,
+        ...(completedAt ? { completedAt } : {}),
+      };
+    }));
     const changedBracketMatchPatches = getChangedBracketMatchPatches({
       previousBracket: bracket,
       nextBracket: updatedBracket,
@@ -1779,11 +2094,12 @@ export const useTournamentActions = ({
         const winner = finalMatch.score1 > finalMatch.score2 ? finalMatch.team1 : finalMatch.team2;
         setChampion(winner);
         const resolvedTournamentId = await resolveTournamentIdForCompletion(currentTournamentId);
-        const tournamentId = resolvedTournamentId || currentTournamentId || Date.now();
-        setCurrentTournamentId(tournamentId);
+        const tournamentId = localTournamentId || currentTournamentId || Date.now();
+        setCurrentTournamentId(resolvedTournamentId || currentTournamentId || tournamentId);
 
         const tournament = {
           id: tournamentId,
+          legacyTournamentId: localTournamentId || null,
           appwriteId: resolvedTournamentId || null,
           name: tournamentName,
           date: new Date().toLocaleDateString(),
@@ -1822,6 +2138,12 @@ export const useTournamentActions = ({
         await saveTournamentHistory(tournament);
       } else {
         setAiMatchSummaries(nextSummaries);
+        persistActiveTournamentSnapshot({
+          fixturesSnapshot: fixtures,
+          bracketSnapshot: updatedBracket,
+          aiSummariesSnapshot: nextSummaries,
+          swapHistorySnapshot: swapHistory,
+        });
         const syncTournamentId = resolveSyncTournamentId();
         if (isAppwriteEnabled && syncTournamentId) {
           if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
@@ -1847,7 +2169,21 @@ export const useTournamentActions = ({
             },
             requireDurableSync: true,
           });
-          updateActiveTournamentLock(activeLockSnapshot);
+          await updateActiveTournamentLock(activeLockSnapshot, { immediate: true });
+        } else if (isAppwriteEnabled) {
+          try {
+            const activeLockSnapshot = buildActiveTournamentSnapshot({
+              id: null,
+              fixturesSnapshot: fixtures,
+              bracketSnapshot: updatedBracket,
+              championSnapshot: null,
+              aiSummariesSnapshot: nextSummaries,
+              swapHistorySnapshot: swapHistory,
+            });
+            await updateActiveTournamentLock(activeLockSnapshot, { immediate: true });
+          } catch {
+            // Keep running even if lock update fails.
+          }
         }
       }
     }
@@ -1858,6 +2194,7 @@ export const useTournamentActions = ({
 
   const saveFinalResult = async (score1, score2, finalistsOverride = null) => {
     if (!assertCanOperate()) return false;
+    const localTournamentId = resolveLocalTournamentId();
     if (score1 === '' || score2 === '' || score1 === score2) {
       showToast('Invalid scores', 'error');
       return false;
@@ -1891,6 +2228,7 @@ export const useTournamentActions = ({
       completed: true,
       upsetAlert,
       preMatchPrediction: prediction,
+      completedAt: new Date().toISOString(),
     };
 
     const ratingsBefore = playerRatings;
@@ -1898,11 +2236,12 @@ export const useTournamentActions = ({
     setPlayerRatings(updatedRatings);
     setChampion(winner);
     const resolvedTournamentId = await resolveTournamentIdForCompletion(currentTournamentId);
-    const tournamentId = resolvedTournamentId || currentTournamentId || Date.now();
-    setCurrentTournamentId(tournamentId);
+    const tournamentId = localTournamentId || currentTournamentId || Date.now();
+    setCurrentTournamentId(resolvedTournamentId || currentTournamentId || tournamentId);
 
     const tournament = {
       id: tournamentId,
+      legacyTournamentId: localTournamentId || null,
       appwriteId: resolvedTournamentId || null,
       name: tournamentName,
       date: new Date().toLocaleDateString(),
@@ -1944,7 +2283,8 @@ export const useTournamentActions = ({
     if (!assertCanOperate()) return;
     try {
       const winner = matchData.score1 > matchData.score2 ? 'team1' : 'team2';
-      const matchWithWinner = { ...matchData, winner };
+      const completedAt = new Date().toISOString();
+      const matchWithWinner = { ...matchData, winner, completedAt };
 
       const match = {
         id: `casual-${Date.now()}`,
@@ -1953,6 +2293,7 @@ export const useTournamentActions = ({
         score1: matchData.score1,
         score2: matchData.score2,
         completed: true,
+        completedAt,
       };
 
       const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, match);
@@ -2008,11 +2349,11 @@ export const useTournamentActions = ({
 
     try {
       const pushUniqueId = (list, value) => {
-        const normalized = typeof value === 'string' ? value.trim() : '';
+        const normalized = normalizeTournamentId(value);
         if (!normalized) return;
         if (!list.includes(normalized)) list.push(normalized);
       };
-      const normalizedTournamentName = (tournamentName || '').trim().toLowerCase();
+      const normalizedTournamentName = normalizeTournamentName(tournamentName);
       const deleteCandidateIds = [];
       pushUniqueId(deleteCandidateIds, currentTournamentId);
 
@@ -2021,10 +2362,8 @@ export const useTournamentActions = ({
         const itemAppwriteId = item?.appwriteId;
         const isSameCurrent = String(itemId || '') === String(currentTournamentId || '')
           || String(itemAppwriteId || '') === String(currentTournamentId || '');
-        const isActive = item?.status === 'active' && !item?.champion;
-        const isSameName = normalizedTournamentName
-          && (item?.name || '').trim().toLowerCase() === normalizedTournamentName;
-        if (isSameCurrent || isActive || isSameName) {
+        const isSameNameDuplicate = isIdlessActiveTournamentNameMatch(item, normalizedTournamentName);
+        if (isSameCurrent || isSameNameDuplicate) {
           pushUniqueId(deleteCandidateIds, itemAppwriteId);
           pushUniqueId(deleteCandidateIds, itemId);
         }
@@ -2036,18 +2375,17 @@ export const useTournamentActions = ({
       };
 
       const updatedHistory = tournamentHistory.filter((t) => {
-        const tId = typeof t?.id === 'string' ? t.id.trim() : '';
-        const tAppwriteId = typeof t?.appwriteId === 'string' ? t.appwriteId.trim() : '';
+        const tId = normalizeTournamentId(t?.id);
+        const tAppwriteId = normalizeTournamentId(t?.appwriteId);
         if (deleteCandidateIds.includes(tId) || deleteCandidateIds.includes(tAppwriteId)) return false;
-        if (!deleteCandidateIds.length && normalizedTournamentName) {
-          const isActive = t?.status === 'active' && !t?.champion;
-          const sameName = (t?.name || '').trim().toLowerCase() === normalizedTournamentName;
-          if (isActive && sameName) return false;
+        if (!deleteCandidateIds.length && isIdlessActiveTournamentNameMatch(t, normalizedTournamentName)) {
+          return false;
         }
         return true;
       });
 
       setTournamentHistory(updatedHistory);
+      clearActiveTournamentCache();
       const recalculatedRatings = recalculateEloFromHistory(updatedHistory, casualMatches);
       const recalculatedRatingsDelta = typeof buildRatingsDelta === 'function'
         ? buildRatingsDelta(playerRatings || {}, recalculatedRatings || {})
@@ -2076,12 +2414,17 @@ export const useTournamentActions = ({
           try {
             remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
             (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : []).forEach((summary) => {
-              const summaryName = String(summary?.name || '').trim().toLowerCase();
+              const summaryName = normalizeTournamentName(summary?.name);
               const summaryIds = [summary?.id, summary?.appwriteId]
                 .map((value) => String(value || '').trim())
                 .filter(Boolean);
               const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
-              const nameMatched = normalizedTournamentName && summaryName && summaryName === normalizedTournamentName;
+              const nameMatched = Boolean(
+                summaryIds.length === 0
+                && normalizedTournamentName
+                && summaryName
+                && summaryName === normalizedTournamentName
+              );
               if (!idMatched && !nameMatched) return;
               summaryIds.forEach((value) => pushUniqueId(cloudDeleteIds, value));
             });
@@ -2100,12 +2443,17 @@ export const useTournamentActions = ({
           }
           const stillHasMatchingActive = (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : [])
             .some((summary) => {
-              const summaryName = String(summary?.name || '').trim().toLowerCase();
+              const summaryName = normalizeTournamentName(summary?.name);
               const summaryIds = [summary?.id, summary?.appwriteId]
                 .map((value) => String(value || '').trim())
                 .filter(Boolean);
               const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
-              const nameMatched = normalizedTournamentName && summaryName && summaryName === normalizedTournamentName;
+              const nameMatched = Boolean(
+                summaryIds.length === 0
+                && normalizedTournamentName
+                && summaryName
+                && summaryName === normalizedTournamentName
+              );
               return idMatched || nameMatched;
             });
           if (!deletedAny && !stillHasMatchingActive) {
@@ -2189,6 +2537,7 @@ export const useTournamentActions = ({
   };
 
   const goHome = () => {
+    setAutoResumeSuppressedTournamentId(localTournamentIdRef.current || currentTournamentId);
     setStep('setup');
     setTournamentName('');
     setNumTeams(3);
@@ -2199,6 +2548,7 @@ export const useTournamentActions = ({
     setAiMatchSummaries([]);
     setSwapHistory([]);
     setCurrentTournamentId(null);
+    localTournamentIdRef.current = null;
   };
 
   const startNextTournament = async ({ editTeams = false, tournamentNameOverride = '' } = {}) => {
@@ -2208,6 +2558,7 @@ export const useTournamentActions = ({
       return false;
     }
 
+    clearAutoResumeSuppressedTournamentId();
     createTournamentRunIdRef.current += 1;
     pendingTournamentSyncRef.current = null;
     if (tournamentSyncTimerRef.current) {
@@ -2222,6 +2573,7 @@ export const useTournamentActions = ({
     setAiMatchSummaries([]);
     setSwapHistory([]);
     setCurrentTournamentId(null);
+    localTournamentIdRef.current = null;
     setActiveTournamentLock?.(null);
     cloudIdWarningShownRef.current = false;
 
@@ -2290,12 +2642,12 @@ export const useTournamentActions = ({
     }
 
     const pushUniqueId = (list, value) => {
-      const normalized = typeof value === 'string' ? value.trim() : '';
+      const normalized = normalizeTournamentId(value);
       if (!normalized) return;
       if (!list.includes(normalized)) list.push(normalized);
     };
 
-    const normalizedTargetName = (tournament?.name || '').trim().toLowerCase();
+    const normalizedTargetName = normalizeTournamentName(tournament?.name);
     const targetIsActive = tournament?.status === 'active' && !tournament?.champion;
     const deleteCandidateIds = [];
     pushUniqueId(deleteCandidateIds, String(deleteId));
@@ -2305,13 +2657,10 @@ export const useTournamentActions = ({
 
     if (targetIsActive) {
       (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((item) => {
-        const itemId = String(item?.id || '').trim();
-        const itemAppwriteId = String(item?.appwriteId || '').trim();
+        const itemId = normalizeTournamentId(item?.id);
+        const itemAppwriteId = normalizeTournamentId(item?.appwriteId);
         const isSameCurrent = deleteCandidateIds.includes(itemId) || deleteCandidateIds.includes(itemAppwriteId);
-        const isSameActiveByName = normalizedTargetName
-          && item?.status === 'active'
-          && !item?.champion
-          && (item?.name || '').trim().toLowerCase() === normalizedTargetName;
+        const isSameActiveByName = isIdlessActiveTournamentNameMatch(item, normalizedTargetName);
         if (isSameCurrent || isSameActiveByName) {
           pushUniqueId(deleteCandidateIds, itemId);
           pushUniqueId(deleteCandidateIds, itemAppwriteId);
@@ -2320,15 +2669,12 @@ export const useTournamentActions = ({
     }
 
     const updatedHistory = tournamentHistory.filter((item) => {
-      const itemId = String(item?.id || '').trim();
-      const itemAppwriteId = String(item?.appwriteId || '').trim();
+      const itemId = normalizeTournamentId(item?.id);
+      const itemAppwriteId = normalizeTournamentId(item?.appwriteId);
       if (deleteCandidateIds.includes(itemId) || deleteCandidateIds.includes(itemAppwriteId)) return false;
       if (
         targetIsActive
-        && normalizedTargetName
-        && item?.status === 'active'
-        && !item?.champion
-        && (item?.name || '').trim().toLowerCase() === normalizedTargetName
+        && isIdlessActiveTournamentNameMatch(item, normalizedTargetName)
       ) {
         return false;
       }
@@ -2353,34 +2699,6 @@ export const useTournamentActions = ({
     const persistDeletion = async () => {
       if (isAppwriteEnabled && deleteId) {
         const cloudDeleteIds = deleteCandidateIds.length > 0 ? [...deleteCandidateIds] : [deleteId];
-        const remoteActive = await fetchRemoteActiveLiveTournament({ force: true });
-        pushUniqueId(cloudDeleteIds, remoteActive?.appwriteId);
-        pushUniqueId(cloudDeleteIds, remoteActive?.id);
-
-        if (normalizedTargetName) {
-          const remoteName = String(remoteActive?.name || '').trim().toLowerCase();
-          if (remoteName && remoteName === normalizedTargetName) {
-            pushUniqueId(cloudDeleteIds, remoteActive?.appwriteId);
-            pushUniqueId(cloudDeleteIds, remoteActive?.id);
-          }
-        }
-        let remoteActiveSummaries = [];
-        try {
-          remoteActiveSummaries = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
-          (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : []).forEach((summary) => {
-            const summaryName = String(summary?.name || '').trim().toLowerCase();
-            const summaryIds = [summary?.id, summary?.appwriteId]
-              .map((value) => String(value || '').trim())
-              .filter(Boolean);
-            const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
-            const nameMatched = normalizedTargetName && summaryName && summaryName === normalizedTargetName;
-            if (!idMatched && !nameMatched) return;
-            summaryIds.forEach((value) => pushUniqueId(cloudDeleteIds, value));
-          });
-        } catch {
-          // Ignore remote summary read errors and continue with collected ids.
-        }
-
         let deletedFromCloud = false;
         let deletedAny = false;
         for (const candidateId of cloudDeleteIds) {
@@ -2391,27 +2709,17 @@ export const useTournamentActions = ({
             deletedAny = true;
           }
         }
-        const stillHasMatchingActive = (Array.isArray(remoteActiveSummaries) ? remoteActiveSummaries : [])
-          .some((summary) => {
-            const summaryName = String(summary?.name || '').trim().toLowerCase();
-            const summaryIds = [summary?.id, summary?.appwriteId]
-              .map((value) => String(value || '').trim())
-              .filter(Boolean);
-            const idMatched = summaryIds.some((value) => cloudDeleteIds.includes(value));
-            const nameMatched = normalizedTargetName && summaryName && summaryName === normalizedTargetName;
-            return idMatched || nameMatched;
-          });
-        if (!deletedAny && !stillHasMatchingActive) {
+        if (!deletedAny) {
           deletedFromCloud = true;
         }
         if (!deletedFromCloud) {
           throw new Error('Failed to delete tournament from cloud');
         }
-        if (deletedAny || cloudDeleteIds.length === 0 || !stillHasMatchingActive) {
+        if (targetIsActive || !hasActiveRemaining) {
           await clearActiveTournamentLockIfMatches({
             tournamentId: cloudDeleteIds[0],
             tournamentName: tournament?.name,
-            force: targetIsActive || !hasActiveRemaining,
+            force: true,
           });
         }
         await saveRatingsMutation.mutateAsync(recalculatedRatingsDelta);

@@ -251,6 +251,7 @@ const assertRequiredAttributes = async ({ config, normalized }) => {
       'score1',
       'score2',
       'completed',
+      'completedAt',
       'winnerSide',
       'sourceCreatedAt',
       'migratedAt',
@@ -483,6 +484,9 @@ const run = async () => {
       const score2Number = Number(score2);
       const hasNumericScores = Number.isFinite(score1Number) && Number.isFinite(score2Number);
       const completed = Boolean(match?.completed) || (hasNumericScores && score1 !== '' && score2 !== '');
+      const completedAt = completed
+        ? (toNonEmptyString(match?.completedAt) || toNonEmptyString(match?.date) || '')
+        : '';
 
       let winnerSide = '';
       if (hasNumericScores && score1Number !== score2Number) {
@@ -510,6 +514,7 @@ const run = async () => {
           score1,
           score2,
           completed: String(completed),
+          completedAt,
           winnerSide,
           sourceCreatedAt: tournament.createdAt,
           migratedAt: nowIso(),
@@ -561,6 +566,9 @@ const run = async () => {
     const rowId = makeDeterministicId('mch', `${groupId}|casual|${match.legacyId}|${index}`);
     const score1 = toNonEmptyString(match.score1);
     const score2 = toNonEmptyString(match.score2);
+    const completedAt = toNonEmptyString(match?.completedAt)
+      || toNonEmptyString(match?.date)
+      || toNonEmptyString(match?.createdAt);
     matchRows.push({
       id: rowId,
       data: {
@@ -582,6 +590,7 @@ const run = async () => {
         score1,
         score2,
         completed: String(true),
+        completedAt,
         winnerSide: toNonEmptyString(match.winner) === 'team1' ? '1' : (toNonEmptyString(match.winner) === 'team2' ? '2' : ''),
         sourceCreatedAt: match.createdAt,
         migratedAt: nowIso(),

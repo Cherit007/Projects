@@ -282,6 +282,7 @@ const parseCasualMatch = ({ matchDoc, participantRows }) => {
     appwriteId: matchDoc.$id,
     matchType: inferMatchType(team1, team2, matchDoc.roundLabel),
     date: matchDoc.sourceCreatedAt || matchDoc.$createdAt,
+    completedAt: toNonEmptyString(matchDoc.completedAt),
     team1,
     team2,
     score1,
@@ -321,6 +322,10 @@ export const casualMatchService = {
       ? '1'
       : (winner === 'team2' ? '2' : (Number(score1) > Number(score2) ? '1' : '2'));
 
+    const completedAt = toNonEmptyString(matchData?.completedAt)
+      || toNonEmptyString(matchData?.date)
+      || now;
+
     const matchDoc = await databases.createDocument(
       DATABASE_ID,
       COLLECTIONS.MATCHES_V2,
@@ -344,6 +349,7 @@ export const casualMatchService = {
         score1,
         score2,
         completed: 'true',
+        completedAt,
         winnerSide,
         sourceCreatedAt: toNonEmptyString(matchData?.date) || now,
         migratedAt: now,
@@ -381,6 +387,7 @@ export const casualMatchService = {
       appwriteId: matchDoc.$id,
       matchType,
       date: matchDoc.sourceCreatedAt || matchDoc.$createdAt,
+      completedAt: toNonEmptyString(matchDoc.completedAt),
       team1,
       team2,
       score1: parseScore(score1),

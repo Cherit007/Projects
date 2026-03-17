@@ -142,7 +142,7 @@ describe('dedupeLiveTournaments', () => {
     expect(deduped).toHaveLength(2);
   });
 
-  it('collapses cloud + local draft duplicates with same metadata', () => {
+  it('keeps cloud + local draft separate when stable ids differ', () => {
     const localDraft = {
       id: '1711111111111',
       appwriteId: '',
@@ -173,8 +173,9 @@ describe('dedupeLiveTournaments', () => {
     };
 
     const deduped = dedupeLiveTournaments([localDraft, cloud]);
-    expect(deduped).toHaveLength(1);
-    expect(deduped[0].appwriteId).toBe('cloud-night-1');
+    expect(deduped).toHaveLength(2);
+    expect(deduped.some((item) => item?.appwriteId === 'cloud-night-1')).toBe(true);
+    expect(deduped.some((item) => item?.id === '1711111111111')).toBe(true);
   });
 
   it('ignores stale active copy when completed version exists', () => {
@@ -214,7 +215,7 @@ describe('dedupeLiveTournaments', () => {
 });
 
 describe('dedupeTournamentHistory', () => {
-  it('collapses active + completed duplicates into one completed record', () => {
+  it('keeps active + completed separate when stable ids differ', () => {
     const active = {
       id: '1711111111111',
       appwriteId: '',
@@ -244,9 +245,8 @@ describe('dedupeTournamentHistory', () => {
     };
 
     const deduped = dedupeTournamentHistory([active, completed]);
-    expect(deduped).toHaveLength(1);
-    expect(deduped[0].status).toBe('completed');
-    expect(deduped[0].champion?.name).toBe('Falcons');
+    expect(deduped).toHaveLength(2);
+    expect(deduped.some((item) => item?.status === 'completed')).toBe(true);
   });
 
   it('keeps stable-id tournaments separate even with same name/date', () => {
@@ -334,7 +334,7 @@ describe('dedupeTournamentHistory', () => {
 });
 
 describe('upsertTournamentInHistory', () => {
-  it('replaces duplicate identity records instead of appending', () => {
+  it('keeps duplicate identity records separate when stable ids differ', () => {
     const history = [
       {
         id: '1711111111111',
@@ -365,9 +365,9 @@ describe('upsertTournamentInHistory', () => {
 
     const next = upsertTournamentInHistory(history, incoming);
     const springRows = next.filter((item) => item?.name === 'Spring Open');
-    expect(springRows).toHaveLength(1);
-    expect(springRows[0].status).toBe('completed');
-    expect(next).toHaveLength(2);
+    expect(springRows).toHaveLength(2);
+    expect(springRows.some((item) => item?.status === 'completed')).toBe(true);
+    expect(next).toHaveLength(3);
   });
 
   it('stores a cloned snapshot of incoming tournament', () => {

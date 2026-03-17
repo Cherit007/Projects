@@ -127,61 +127,91 @@ export const calculatePlayerStats = (teams, fixtures) => {
 // Calculate cumulative player stats across all tournaments
 export const calculateCumulativePlayerStats = (tournamentHistory) => {
   const cumulativeStats = {};
+  const normalizeCompletedMatch = (match) => {
+    if (!match?.team1 || !match?.team2 || !match?.completed) return null;
+    const score1 = Number(match?.score1);
+    const score2 = Number(match?.score2);
+    if (!Number.isFinite(score1) || !Number.isFinite(score2) || score1 === score2) return null;
+    return {
+      ...match,
+      score1,
+      score2,
+      completed: true,
+    };
+  };
+  const getTeamPlayers = (team) => (
+    [team?.player || team?.player1, team?.player2].filter(Boolean)
+  );
+  const ensurePlayer = (player) => {
+    if (!player) return null;
+    if (!cumulativeStats[player]) {
+      cumulativeStats[player] = {
+        name: player,
+        tournamentsPlayed: new Set(),
+        matchesPlayed: 0,
+        matchesWon: 0,
+        totalScored: 0,
+        totalConceded: 0,
+        championships: 0,
+      };
+    }
+    return cumulativeStats[player];
+  };
+  const addMatchToStats = (match, tournamentKey) => {
+    const team1Won = match.score1 > match.score2;
+    const team1Players = getTeamPlayers(match.team1);
+    const team2Players = getTeamPlayers(match.team2);
 
-  tournamentHistory.forEach(tournament => {
-    tournament.fixtures?.forEach(match => {
-      if (match.completed) {
-        const team1Won = match.score1 > match.score2;
-        
-        [match.team1.player1, match.team1.player2].forEach(player => {
-          if (player) {
-            if (!cumulativeStats[player]) {
-              cumulativeStats[player] = {
-                name: player,
-                tournamentsPlayed: new Set(),
-                matchesPlayed: 0,
-                matchesWon: 0,
-                totalScored: 0,
-                totalConceded: 0,
-                championships: 0,
-              };
-            }
-            cumulativeStats[player].tournamentsPlayed.add(tournament.id);
-            cumulativeStats[player].matchesPlayed++;
-            cumulativeStats[player].totalScored += match.score1;
-            cumulativeStats[player].totalConceded += match.score2;
-            if (team1Won) cumulativeStats[player].matchesWon++;
-          }
-        });
-
-        [match.team2.player1, match.team2.player2].forEach(player => {
-          if (player) {
-            if (!cumulativeStats[player]) {
-              cumulativeStats[player] = {
-                name: player,
-                tournamentsPlayed: new Set(),
-                matchesPlayed: 0,
-                matchesWon: 0,
-                totalScored: 0,
-                totalConceded: 0,
-                championships: 0,
-              };
-            }
-            cumulativeStats[player].tournamentsPlayed.add(tournament.id);
-            cumulativeStats[player].matchesPlayed++;
-            cumulativeStats[player].totalScored += match.score2;
-            cumulativeStats[player].totalConceded += match.score1;
-            if (!team1Won) cumulativeStats[player].matchesWon++;
-          }
-        });
-      }
+    team1Players.forEach((player) => {
+      const entry = ensurePlayer(player);
+      if (!entry) return;
+      if (tournamentKey) entry.tournamentsPlayed.add(tournamentKey);
+      entry.matchesPlayed += 1;
+      entry.totalScored += match.score1;
+      entry.totalConceded += match.score2;
+      if (team1Won) entry.matchesWon += 1;
     });
 
+    team2Players.forEach((player) => {
+      const entry = ensurePlayer(player);
+      if (!entry) return;
+      if (tournamentKey) entry.tournamentsPlayed.add(tournamentKey);
+      entry.matchesPlayed += 1;
+      entry.totalScored += match.score2;
+      entry.totalConceded += match.score1;
+      if (!team1Won) entry.matchesWon += 1;
+    });
+  };
+
+  (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((tournament) => {
+    const tournamentKey = String(
+      tournament?.id
+      || tournament?.appwriteId
+      || tournament?.legacyTournamentId
+      || (tournament?.name && tournament?.date ? `${tournament.name}-${tournament.date}` : tournament?.name || '')
+    ).trim();
+
+    (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
+      .map(normalizeCompletedMatch)
+      .filter(Boolean)
+      .forEach((match) => addMatchToStats(match, tournamentKey));
+
+    (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+      .flatMap((round) => (Array.isArray(round) ? round : []))
+      .map(normalizeCompletedMatch)
+      .filter(Boolean)
+      .forEach((match) => addMatchToStats(match, tournamentKey));
+
+    const finalMatch = normalizeCompletedMatch(tournament?.finalMatch);
+    if (finalMatch) {
+      addMatchToStats(finalMatch, tournamentKey);
+    }
+
     if (tournament.champion) {
-      [tournament.champion.player1, tournament.champion.player2].forEach(player => {
-        if (player && cumulativeStats[player]) {
-          cumulativeStats[player].championships++;
-        }
+      const championPlayers = getTeamPlayers(tournament.champion);
+      championPlayers.forEach((player) => {
+        const entry = ensurePlayer(player);
+        if (entry) entry.championships += 1;
       });
     }
   });
@@ -285,6 +315,51 @@ export const calculateNewElo = (currentRating, opponentRating, actualScore) => {
 
 export const updatePlayerRatingsAfterMatch = (playerRatings, match) => {
   const updatedRatings = { ...playerRatings };
+  const prefersDayFirst = (() => {
+    try {
+      const sample = new Intl.DateTimeFormat().formatToParts(new Date(2000, 0, 2));
+      const order = sample
+        .filter((part) => part.type === 'day' || part.type === 'month')
+        .map((part) => part.type);
+      return order[0] === 'day';
+    } catch {
+      return false;
+    }
+  })();
+  const parseLooseDate = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const matchPattern = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (!matchPattern) return null;
+    const first = Number(matchPattern[1]);
+    const second = Number(matchPattern[2]);
+    const year = Number(matchPattern[3]);
+    if (!Number.isFinite(first) || !Number.isFinite(second) || !Number.isFinite(year)) return null;
+    let month = first;
+    let day = second;
+    if (first > 12 && second <= 12) {
+      day = first;
+      month = second;
+    } else if (second > 12 && first <= 12) {
+      month = first;
+      day = second;
+    } else if (prefersDayFirst) {
+      day = first;
+      month = second;
+    }
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  };
+  const normalizeMatchDate = (value) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+    return parseLooseDate(value);
+  };
+  const matchDate = normalizeMatchDate(match?.completedAt)
+    || normalizeMatchDate(match?.date)
+    || new Date().toISOString();
   
   const players = [
     match.team1.player || match.team1.player1,
@@ -326,7 +401,7 @@ export const updatePlayerRatingsAfterMatch = (playerRatings, match) => {
             change,
             opponent: team2Players.join(' & '),
             result: team1Score === 1 ? 'win' : 'loss',
-            date: new Date().toISOString()
+            date: matchDate
           }
         ]
       };
@@ -351,7 +426,7 @@ export const updatePlayerRatingsAfterMatch = (playerRatings, match) => {
             change,
             opponent: team1Players.join(' & '),
             result: team2Score === 1 ? 'win' : 'loss',
-            date: new Date().toISOString()
+            date: matchDate
           }
         ]
       };

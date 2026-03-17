@@ -187,11 +187,15 @@ export const deriveRatingsFromHistory = ({ history = [], casual = [] } = {}) => 
   let rebuilt = {};
 
   sortByTimeAscending(Array.isArray(history) ? history : []).forEach((tournament) => {
+    const fallbackCompletedAt = tournament?.createdAt || tournament?.date || tournament?.updatedAt || null;
     (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
       .map(normalizeCompletedMatch)
       .filter(Boolean)
       .forEach((match) => {
-        rebuilt = updatePlayerRatingsAfterMatch(rebuilt, match);
+        const matchWithDate = match?.completedAt
+          ? match
+          : { ...match, completedAt: fallbackCompletedAt };
+        rebuilt = updatePlayerRatingsAfterMatch(rebuilt, matchWithDate);
       });
 
     (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
@@ -199,12 +203,18 @@ export const deriveRatingsFromHistory = ({ history = [], casual = [] } = {}) => 
       .map(normalizeCompletedMatch)
       .filter(Boolean)
       .forEach((match) => {
-        rebuilt = updatePlayerRatingsAfterMatch(rebuilt, match);
+        const matchWithDate = match?.completedAt
+          ? match
+          : { ...match, completedAt: fallbackCompletedAt };
+        rebuilt = updatePlayerRatingsAfterMatch(rebuilt, matchWithDate);
       });
 
     const finalMatch = normalizeCompletedMatch(tournament?.finalMatch);
     if (finalMatch) {
-      rebuilt = updatePlayerRatingsAfterMatch(rebuilt, finalMatch);
+      const matchWithDate = finalMatch?.completedAt
+        ? finalMatch
+        : { ...finalMatch, completedAt: fallbackCompletedAt };
+      rebuilt = updatePlayerRatingsAfterMatch(rebuilt, matchWithDate);
     }
   });
 
@@ -212,10 +222,131 @@ export const deriveRatingsFromHistory = ({ history = [], casual = [] } = {}) => 
     .map(normalizeCompletedMatch)
     .filter(Boolean)
     .forEach((match) => {
-      rebuilt = updatePlayerRatingsAfterMatch(rebuilt, match);
+      const fallbackCompletedAt = match?.completedAt
+        || match?.date
+        || match?.createdAt
+        || match?.updatedAt
+        || null;
+      const matchWithDate = match?.completedAt
+        ? match
+        : { ...match, completedAt: fallbackCompletedAt };
+      rebuilt = updatePlayerRatingsAfterMatch(rebuilt, matchWithDate);
     });
 
   return rebuilt;
+};
+
+const prefersDayFirst = (() => {
+  try {
+    const sample = new Intl.DateTimeFormat().formatToParts(new Date(2000, 0, 2));
+    const order = sample
+      .filter((part) => part.type === 'day' || part.type === 'month')
+      .map((part) => part.type);
+    return order[0] === 'day';
+  } catch {
+    return false;
+  }
+})();
+
+const parseLooseDate = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const match = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (!match) return null;
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  const year = Number(match[3]);
+  if (!Number.isFinite(first) || !Number.isFinite(second) || !Number.isFinite(year)) return null;
+  let month = first;
+  let day = second;
+  if (first > 12 && second <= 12) {
+    day = first;
+    month = second;
+  } else if (second > 12 && first <= 12) {
+    month = first;
+    day = second;
+  } else if (prefersDayFirst) {
+    day = first;
+    month = second;
+  }
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+};
+
+const normalizeCompletedAtValue = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  return parseLooseDate(value);
+};
+
+const backfillCompletedAtForMatch = (match, fallbackCompletedAt) => {
+  if (!match || match.completed !== true) return match;
+  if (match.completedAt) return match;
+  const completedAt = normalizeCompletedAtValue(match?.date) || fallbackCompletedAt || null;
+  if (!completedAt) return match;
+  return { ...match, completedAt };
+};
+
+export const backfillTournamentHistoryCompletedAt = (history = []) => {
+  const list = Array.isArray(history) ? history : [];
+  let changed = false;
+  const next = list.map((tournament) => {
+    if (!tournament || typeof tournament !== 'object') return tournament;
+    const fallbackCompletedAt = normalizeCompletedAtValue(
+      tournament?.date || tournament?.createdAt || tournament?.updatedAt || null
+    );
+    let updated = false;
+
+    const fixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : []).map((match) => {
+      const nextMatch = backfillCompletedAtForMatch(match, fallbackCompletedAt);
+      if (nextMatch !== match) updated = true;
+      return nextMatch;
+    });
+
+    const bracket = (Array.isArray(tournament?.bracket) ? tournament.bracket : []).map((round) => {
+      if (!Array.isArray(round)) return round;
+      let roundUpdated = false;
+      const nextRound = round.map((match) => {
+        const nextMatch = backfillCompletedAtForMatch(match, fallbackCompletedAt);
+        if (nextMatch !== match) roundUpdated = true;
+        return nextMatch;
+      });
+      if (roundUpdated) updated = true;
+      return roundUpdated ? nextRound : round;
+    });
+
+    const finalMatch = backfillCompletedAtForMatch(tournament?.finalMatch, fallbackCompletedAt);
+    if (finalMatch !== tournament?.finalMatch) updated = true;
+
+    if (!updated) return tournament;
+    changed = true;
+    return {
+      ...tournament,
+      fixtures,
+      bracket,
+      finalMatch,
+    };
+  });
+
+  return { history: next, changed };
+};
+
+export const backfillCasualMatchesCompletedAt = (casualMatches = []) => {
+  const list = Array.isArray(casualMatches) ? casualMatches : [];
+  let changed = false;
+  const next = list.map((match) => {
+    if (!match || match.completed === false || match.completedAt) return match;
+    const fallbackCompletedAt = normalizeCompletedAtValue(
+      match?.date || match?.createdAt || match?.updatedAt || null
+    );
+    if (!fallbackCompletedAt) return match;
+    changed = true;
+    return { ...match, completedAt: fallbackCompletedAt };
+  });
+
+  return { matches: next, changed };
 };
 
 export const cloneRatingsSnapshot = (ratings = {}) => (
@@ -243,7 +374,7 @@ export const buildRatingsDelta = (previousRatings = {}, nextRatings = {}) => {
 };
 
 export const getTournamentIdCandidates = (tournament) => Array.from(new Set(
-  [tournament?.appwriteId, tournament?.id]
+  [tournament?.appwriteId, tournament?.id, tournament?.legacyTournamentId]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
 ));
@@ -256,8 +387,8 @@ export const matchesTournamentId = (tournament, targetId) => {
 
 export const upsertTournamentInHistory = (history = [], tournament = null) => {
   const list = Array.isArray(history) ? history : [];
-  if (!tournament) return dedupeTournamentHistory(list);
-  return dedupeTournamentHistory([tournament, ...list]);
+  const next = tournament ? [tournament, ...list] : list;
+  return sortTournamentHistoryByRecent(dedupeTournamentHistory(next));
 };
 
 export const normalizeTournamentName = (value) => String(value || '').trim().toLowerCase();
@@ -275,6 +406,10 @@ export const parseTournamentDateMs = (value) => {
   const direct = Date.parse(raw);
   if (Number.isFinite(direct)) return direct;
 
+  const scrubbed = raw.replace(/(\d+)(st|nd|rd|th)\b/gi, '$1');
+  const scrubbedDirect = Date.parse(scrubbed);
+  if (Number.isFinite(scrubbedDirect)) return scrubbedDirect;
+
   const normalized = raw
     .replace(/,\s*/g, ' ')
     .replace(/\s+/g, ' ')
@@ -282,7 +417,48 @@ export const parseTournamentDateMs = (value) => {
   const secondary = Date.parse(normalized);
   if (Number.isFinite(secondary)) return secondary;
 
+  const normalizedScrubbed = scrubbed
+    .replace(/,\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const tertiary = Date.parse(normalizedScrubbed);
+  if (Number.isFinite(tertiary)) return tertiary;
+
   return null;
+};
+
+export const sortTournamentHistoryByRecent = (entries = []) => {
+  const list = Array.isArray(entries) ? entries : [];
+  const toMs = (value) => {
+    const parsed = parseTournamentDateMs(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const toFallbackMs = (item) => {
+    const updated = Date.parse(String(item?.updatedAt || ''));
+    if (Number.isFinite(updated)) return updated;
+    const created = Date.parse(String(item?.createdAt || ''));
+    if (Number.isFinite(created)) return created;
+    return 0;
+  };
+  const toSortMs = (item) => {
+    const dateMs = toMs(item?.dateLabel || item?.date);
+    if (Number.isFinite(dateMs)) return dateMs;
+    const created = Date.parse(String(item?.createdAt || ''));
+    if (Number.isFinite(created)) return created;
+    return 0;
+  };
+
+  return [...list].sort((a, b) => {
+    const aTime = toSortMs(a);
+    const bTime = toSortMs(b);
+    if (aTime !== bTime) return bTime - aTime;
+    const aFallback = toFallbackMs(a);
+    const bFallback = toFallbackMs(b);
+    if (aFallback !== bFallback) return bFallback - aFallback;
+    const aId = String(a?.id || a?.appwriteId || a?.legacyTournamentId || '');
+    const bId = String(b?.id || b?.appwriteId || b?.legacyTournamentId || '');
+    return bId.localeCompare(aId);
+  });
 };
 
 export const formatTournamentDateLabel = (value, fallback = 'TBA') => {
@@ -314,6 +490,7 @@ export const removeTournamentFromList = (
       && normalizedName
       && item?.status === 'active'
       && !item?.champion
+      && itemIds.length === 0
       && normalizeTournamentName(item?.name) === normalizedName
     ) {
       return false;
@@ -405,6 +582,18 @@ const getTournamentTeamSignature = (tournament) => {
 };
 
 const getTournamentAppwriteId = (tournament) => String(tournament?.appwriteId || '').trim();
+const getTournamentLegacyId = (tournament) => String(tournament?.legacyTournamentId || '').trim();
+const isLocalTournamentId = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return false;
+  if (/^\d{10,}$/.test(normalized)) return true;
+  return normalized.startsWith('sched-local-') || normalized.startsWith('local-');
+};
+const getTournamentStableId = (tournament) => (
+  getTournamentAppwriteId(tournament)
+  || getTournamentLegacyId(tournament)
+  || (isLocalTournamentId(tournament?.id) ? String(tournament?.id || '').trim() : '')
+);
 
 const getTournamentMatchPayloadCount = (tournament) => {
   const fixtureCount = Array.isArray(tournament?.fixtures) ? tournament.fixtures.length : 0;
@@ -467,10 +656,16 @@ const isLikelySameLiveTournament = (left, right) => {
   const leftMatches = getTournamentMatchPayloadCount(left);
   const rightMatches = getTournamentMatchPayloadCount(right);
 
-  const leftHasStableAppwriteId = Boolean(getTournamentAppwriteId(left));
-  const rightHasStableAppwriteId = Boolean(getTournamentAppwriteId(right));
-  const leftIsUnstableIdentity = !leftHasStableAppwriteId || Boolean(left?._fromLock || left?.isSummary);
-  const rightIsUnstableIdentity = !rightHasStableAppwriteId || Boolean(right?._fromLock || right?.isSummary);
+  const leftStableId = getTournamentStableId(left);
+  const rightStableId = getTournamentStableId(right);
+  const leftHasStableId = Boolean(leftStableId);
+  const rightHasStableId = Boolean(rightStableId);
+  const leftIsUnstableIdentity = !leftHasStableId || Boolean(left?._fromLock || left?.isSummary);
+  const rightIsUnstableIdentity = !rightHasStableId || Boolean(right?._fromLock || right?.isSummary);
+
+  if (leftHasStableId && rightHasStableId && leftStableId !== rightStableId) {
+    return false;
+  }
 
   if (isSameCalendarDay(left, right)) return true;
 
@@ -481,7 +676,7 @@ const isLikelySameLiveTournament = (left, right) => {
   return leftIsUnstableIdentity || rightIsUnstableIdentity;
 };
 
-const hasStableAppwriteId = (tournament) => Boolean(getTournamentAppwriteId(tournament));
+const hasStableTournamentId = (tournament) => Boolean(getTournamentStableId(tournament));
 const isCompletedTournament = (tournament) => (
   Boolean(tournament?.champion) || String(tournament?.status || '').trim().toLowerCase() === 'completed'
 );
@@ -520,13 +715,11 @@ const isLikelySameHistoryTournament = (left, right) => {
   const rightFormat = normalizeTournamentFormat(right?.tournamentFormat || right?.format || 'league');
   if (leftFormat !== rightFormat) return false;
 
-  const leftHasStableId = hasStableAppwriteId(left);
-  const rightHasStableId = hasStableAppwriteId(right);
-  if (
-    leftHasStableId
-    && rightHasStableId
-    && getTournamentAppwriteId(left) !== getTournamentAppwriteId(right)
-  ) {
+  const leftStableId = getTournamentStableId(left);
+  const rightStableId = getTournamentStableId(right);
+  const leftHasStableId = Boolean(leftStableId);
+  const rightHasStableId = Boolean(rightStableId);
+  if (leftHasStableId && rightHasStableId && leftStableId !== rightStableId) {
     return false;
   }
 
@@ -624,6 +817,12 @@ const isLikelyCompletedVersionOfActive = (activeTournament, completedTournament)
   const completedIds = getTournamentIdCandidates(completedTournament);
   if (activeIds.some((id) => completedIds.includes(id))) return true;
 
+  const activeStableId = getTournamentStableId(activeTournament);
+  const completedStableId = getTournamentStableId(completedTournament);
+  if (activeStableId && completedStableId && activeStableId !== completedStableId) {
+    return false;
+  }
+
   const activeName = normalizeTournamentName(activeTournament?.name);
   const completedName = normalizeTournamentName(completedTournament?.name);
   if (!activeName || activeName !== completedName) return false;
@@ -648,11 +847,11 @@ const isLikelyCompletedVersionOfActive = (activeTournament, completedTournament)
   if (activeTeamSignature && completedTeamSignature) return true;
 
   const sameDay = isSameCalendarDay(activeTournament, completedTournament);
-  if (sameDay && (!hasStableAppwriteId(activeTournament) || !hasStableAppwriteId(completedTournament))) {
+  if (sameDay && (!hasStableTournamentId(activeTournament) || !hasStableTournamentId(completedTournament))) {
     return true;
   }
 
-  return !hasStableAppwriteId(activeTournament) && sameDay;
+  return !hasStableTournamentId(activeTournament) && sameDay;
 };
 
 export const dedupeLiveTournaments = (candidates = []) => {
@@ -682,6 +881,7 @@ export const buildTournamentFromLock = (lock) => {
   return {
     id: lock.id || null,
     appwriteId: lock.id || null,
+    legacyTournamentId: lock.legacyTournamentId || null,
     name: lock.name || 'Live tournament',
     date: lock.updatedAt
       ? new Date(lock.updatedAt).toLocaleDateString()

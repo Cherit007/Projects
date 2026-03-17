@@ -72,7 +72,12 @@ const buildTournamentMatchRecords = (tournamentHistory = []) => {
       records.push({
         ...baseContext,
         matchId: match.id,
-        date: match.completedAt || tournament.updatedAt || tournament.date || tournament.createdAt || null,
+        date: match.completedAt
+          || match.date
+          || tournament.date
+          || tournament.createdAt
+          || tournament.updatedAt
+          || null,
         phase,
         gameMode: baseContext.gameMode || inferGameMode(team1Players, team2Players),
         team1Players,
@@ -111,7 +116,7 @@ const buildCasualMatchRecords = (casualMatches = []) => {
     records.push({
       source: 'casual',
       matchId: match.id || match.appwriteId,
-      date: match.date || match.createdAt || null,
+      date: match.completedAt || match.date || match.createdAt || null,
       venue: match.venue || match.location || 'Casual Court',
       tournamentFormat: 'casual',
       phase: 'casual',

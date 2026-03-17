@@ -148,7 +148,6 @@ const SetupScreen = ({
   const [freshnessNow, setFreshnessNow] = useState(() => Date.now());
   const [scheduledCarouselIndex, setScheduledCarouselIndex] = useState(0);
   const scheduledCarouselRef = useRef(null);
-  const scheduledCarouselPauseRef = useRef(false);
   const historyCacheRef = useRef(Array.isArray(tournamentHistory) ? tournamentHistory : []);
   const casualCacheRef = useRef(Array.isArray(casualMatches) ? casualMatches : []);
   const allTimeStatsCacheRef = useRef(Array.isArray(allTimeStats) ? allTimeStats : []);
@@ -186,27 +185,6 @@ const SetupScreen = ({
       return;
     }
     setScheduledCarouselIndex((prev) => Math.min(prev, scheduledCards.length - 1));
-  }, [scheduledCards.length]);
-
-  useEffect(() => {
-    if (scheduledCards.length <= 1) return undefined;
-    const timerId = setInterval(() => {
-      if (scheduledCarouselPauseRef.current) return;
-      setScheduledCarouselIndex((prev) => {
-        const nextIndex = (prev + 1) % scheduledCards.length;
-        const listNode = scheduledCarouselRef.current;
-        if (listNode) {
-          const left = nextIndex * listNode.clientWidth;
-          if (typeof listNode.scrollTo === 'function') {
-            listNode.scrollTo({ left, behavior: 'smooth' });
-          } else {
-            listNode.scrollLeft = left;
-          }
-        }
-        return nextIndex;
-      });
-    }, 5200);
-    return () => clearInterval(timerId);
   }, [scheduledCards.length]);
 
   const scrollScheduledToIndex = (targetIndex) => {
@@ -468,10 +446,6 @@ const SetupScreen = ({
                 ref={scheduledCarouselRef}
                 className={`flex gap-3 ${scheduledCards.length > 1 ? 'overflow-x-auto snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'overflow-x-hidden'}`}
                 onScroll={handleScheduledTrackScroll}
-                onMouseEnter={() => { scheduledCarouselPauseRef.current = true; }}
-                onMouseLeave={() => { scheduledCarouselPauseRef.current = false; }}
-                onTouchStart={() => { scheduledCarouselPauseRef.current = true; }}
-                onTouchEnd={() => { scheduledCarouselPauseRef.current = false; }}
               >
                 {scheduledCards.map((tournament) => {
                   const tournamentId = tournament.appwriteId || tournament.id;

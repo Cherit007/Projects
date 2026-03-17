@@ -4,6 +4,8 @@ import { queryKeys } from '../config/queryKeys';
 import { tournamentService } from '../services/tournamentService';
 import { casualMatchService } from '../services/casualmatchservice';
 import {
+  backfillCasualMatchesCompletedAt,
+  backfillTournamentHistoryCompletedAt,
   normalizeTournamentName,
   removeTournamentFromList,
   upsertTournamentInHistory,
@@ -130,18 +132,20 @@ export const useRealtimeCacheSync = ({
 
     const patchTournamentCaches = (tournament) => {
       if (!tournament || typeof tournament !== 'object') return;
+      const backfilled = backfillTournamentHistoryCompletedAt([tournament]);
+      const nextTournament = backfilled.history[0] || tournament;
       const targetId = toText(tournament.appwriteId || tournament.id);
       if (!targetId) return;
-      queryClient.setQueryData(queryKeys.tournamentDetail(activeGroupId, targetId), tournament);
+      queryClient.setQueryData(queryKeys.tournamentDetail(activeGroupId, targetId), nextTournament);
       queryClient.setQueryData(
         queryKeys.tournamentSummaries(activeGroupId),
-        (cached) => upsertTournamentInHistory(cached, tournament)
+        (cached) => upsertTournamentInHistory(cached, nextTournament)
       );
       queryClient.setQueryData(
         queryKeys.tournamentHistory(activeGroupId),
-        (cached) => upsertTournamentInHistory(cached, tournament)
+        (cached) => upsertTournamentInHistory(cached, nextTournament)
       );
-      setTournamentHistory((prev) => upsertTournamentInHistory(prev, tournament));
+      setTournamentHistory((prev) => upsertTournamentInHistory(prev, nextTournament));
       if (mountedRef.current) {
         setLastCachePatchAt(Date.now());
       }
@@ -186,8 +190,9 @@ export const useRealtimeCacheSync = ({
           const matches = await casualMatchService.getAllCasualMatches(100, activeGroupId);
           if (!mountedRef.current) return;
           const nextMatches = Array.isArray(matches) ? matches : [];
-          queryClient.setQueryData(queryKeys.casualMatches(activeGroupId), nextMatches);
-          setCasualMatches(nextMatches);
+          const backfilled = backfillCasualMatchesCompletedAt(nextMatches);
+          queryClient.setQueryData(queryKeys.casualMatches(activeGroupId), backfilled.matches);
+          setCasualMatches(backfilled.matches);
           setLastCachePatchAt(Date.now());
         } catch (error) {
           if (!mountedRef.current) return;

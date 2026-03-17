@@ -9,6 +9,14 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+const buildNarrativeKey = (prefix, entry, index, fields = []) => {
+  const parts = fields
+    .map((field) => String(entry?.[field] ?? '').trim())
+    .filter(Boolean);
+  const base = parts.length > 0 ? parts.join('|') : 'item';
+  return `${prefix}-${base}-${index}`;
+};
+
 const SportsNarrativePanel = ({ narratives = {} }) => {
   const streakLeaders = Array.isArray(narratives?.streakLeaders) ? narratives.streakLeaders : [];
   const rivalries = Array.isArray(narratives?.rivalries) ? narratives.rivalries : [];
@@ -30,8 +38,11 @@ const SportsNarrativePanel = ({ narratives = {} }) => {
             <p className="mt-1 text-[11px] text-slate-500 setup-narrative-empty">Play more matches to reveal streaks.</p>
           ) : (
             <div className="mt-1.5 space-y-1">
-              {streakLeaders.map((entry) => (
-                <div key={`streak-${entry.name}`} className="flex items-center justify-between gap-2 text-xs">
+              {streakLeaders.map((entry, index) => (
+                <div
+                  key={buildNarrativeKey('streak', entry, index, ['name', 'type', 'count'])}
+                  className="flex items-center justify-between gap-2 text-xs"
+                >
                   <span className="truncate text-slate-700 setup-narrative-item-label">{entry.name}</span>
                   <span className={`font-bold ${entry.type === 'win' ? 'text-emerald-700' : 'text-amber-700'}`}>
                     {entry.count} {entry.type === 'win' ? 'W' : 'L'}
@@ -50,8 +61,11 @@ const SportsNarrativePanel = ({ narratives = {} }) => {
             <p className="mt-1 text-[11px] text-slate-500 setup-narrative-empty">No repeated head-to-head yet.</p>
           ) : (
             <div className="mt-1.5 space-y-1">
-              {rivalries.map((entry) => (
-                <div key={`rivalry-${entry.teamA}-${entry.teamB}`} className="text-xs">
+              {rivalries.map((entry, index) => (
+                <div
+                  key={buildNarrativeKey('rivalry', entry, index, ['teamA', 'teamB', 'games'])}
+                  className="text-xs"
+                >
                   <p className="text-slate-700 truncate setup-narrative-item-label">{entry.teamA} vs {entry.teamB}</p>
                   <p className="text-indigo-600 font-semibold setup-narrative-item-value">{entry.games} meetings</p>
                 </div>
@@ -68,8 +82,11 @@ const SportsNarrativePanel = ({ narratives = {} }) => {
             <p className="mt-1 text-[11px] text-slate-500 setup-narrative-empty">Form data appears after ELO updates.</p>
           ) : (
             <div className="mt-1.5 space-y-1">
-              {formWatch.map((entry) => (
-                <div key={`form-${entry.name}`} className="flex items-center justify-between gap-2 text-xs">
+              {formWatch.map((entry, index) => (
+                <div
+                  key={buildNarrativeKey('form', entry, index, ['name', 'tone', 'delta'])}
+                  className="flex items-center justify-between gap-2 text-xs"
+                >
                   <span className="truncate text-slate-700 setup-narrative-item-label">{entry.name}</span>
                   <span className={`inline-flex items-center gap-0.5 font-bold ${
                     entry.tone === 'up'
@@ -97,8 +114,11 @@ const SportsNarrativePanel = ({ narratives = {} }) => {
             <p className="mt-1 text-[11px] text-slate-500 setup-narrative-empty">No high-risk upsets detected now.</p>
           ) : (
             <div className="mt-1.5 space-y-1">
-              {upsetWatch.map((entry) => (
-                <div key={`upset-${entry.matchup}`} className="text-xs">
+              {upsetWatch.map((entry, index) => (
+                <div
+                  key={buildNarrativeKey('upset', entry, index, ['matchup', 'underdog', 'underdogProbability'])}
+                  className="text-xs"
+                >
                   <p className="truncate text-slate-700 setup-narrative-item-label">{entry.matchup}</p>
                   <p className="font-semibold text-amber-700 setup-narrative-item-value">
                     {entry.underdog} at {(entry.underdogProbability * 100).toFixed(0)}%

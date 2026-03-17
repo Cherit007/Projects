@@ -27,6 +27,51 @@ const normalizeResult = (value) => {
   return null;
 };
 
+const buildHistoryKey = (entry) => {
+  const matchId = String(entry?.matchId || '').trim();
+  const opponent = String(entry?.opponent || '').trim().toLowerCase();
+  const result = normalizeResult(entry?.result) || '';
+  if (!matchId && !opponent && !result) return '';
+  return `${matchId}|${opponent}|${result}`;
+};
+
+const mergeHistoryDates = (profileHistory = [], fallbackHistory = []) => {
+  if (!Array.isArray(profileHistory) || profileHistory.length === 0) return fallbackHistory;
+  if (!Array.isArray(fallbackHistory) || fallbackHistory.length === 0) return profileHistory;
+
+  const timestamps = profileHistory
+    .map((entry) => toTimestamp(entry?.date))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const minTime = timestamps.length > 0 ? Math.min(...timestamps) : null;
+  const maxTime = timestamps.length > 0 ? Math.max(...timestamps) : null;
+  const isSuspiciousCluster = timestamps.length >= 3
+    && Number.isFinite(minTime)
+    && Number.isFinite(maxTime)
+    && maxTime - minTime < 5 * 60 * 1000;
+
+  const fallbackBuckets = new Map();
+  fallbackHistory.forEach((entry) => {
+    const key = buildHistoryKey(entry);
+    if (!key) return;
+    if (!fallbackBuckets.has(key)) fallbackBuckets.set(key, []);
+    fallbackBuckets.get(key).push(entry);
+  });
+  fallbackBuckets.forEach((bucket) => bucket.sort((a, b) => toTimestamp(a?.date) - toTimestamp(b?.date)));
+
+  return profileHistory.map((entry) => {
+    if (!entry) return entry;
+    const needsFallback = !entry.date || isSuspiciousCluster;
+    if (!needsFallback) return entry;
+    const key = buildHistoryKey(entry);
+    if (!key) return entry;
+    const bucket = fallbackBuckets.get(key);
+    if (!bucket || bucket.length === 0) return entry;
+    const fallback = bucket.shift();
+    if (!fallback?.date) return entry;
+    return { ...entry, date: fallback.date };
+  });
+};
+
 const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatches = [] }) => {
   const normalizedName = String(playerName || '').trim().toLowerCase();
   if (!normalizedName) return [];
@@ -68,7 +113,7 @@ const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatche
   };
 
   (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((tournament) => {
-    const fallbackDate = tournament?.updatedAt || tournament?.date || tournament?.createdAt || null;
+    const fallbackDate = tournament?.date || tournament?.createdAt || tournament?.updatedAt || null;
     (Array.isArray(tournament?.fixtures) ? tournament.fixtures : []).forEach((match) => {
       collectMatch(match, fallbackDate, `fixture-${tournament?.id || tournament?.appwriteId || 't'}`);
     });
@@ -83,7 +128,11 @@ const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatche
   });
 
   (Array.isArray(casualMatches) ? casualMatches : []).forEach((match) => {
-    collectMatch(match, match?.date || match?.updatedAt || match?.createdAt || null, 'casual');
+    collectMatch(
+      match,
+      match?.completedAt || match?.date || match?.createdAt || match?.updatedAt || null,
+      'casual'
+    );
   });
 
   const deduped = new Map();
@@ -140,7 +189,7 @@ const PlayerProfileModal = ({
     });
   }, [historyFallback, playerName, tournamentHistory, casualMatches]);
   const history = useMemo(
-    () => (profileHistory.length > 0 ? profileHistory : computedFallbackHistory),
+    () => mergeHistoryDates(profileHistory, computedFallbackHistory),
     [profileHistory, computedFallbackHistory]
   );
   const unlockedBadges = (achievements?.badges || []).filter(badge => badge.earned);

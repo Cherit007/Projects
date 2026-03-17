@@ -108,7 +108,6 @@ const TournamentView = ({
     handleContentTouchMove,
     handleContentTouchEnd,
   } = useTournamentViewState({
-    tournamentFormat,
     onRefreshTournament,
   });
   const [isEditingName, setIsEditingName] = useState(false);
@@ -842,6 +841,7 @@ const TournamentView = ({
       tournamentNameOverride: normalizedName || getSuggestedNextTournamentName(tournamentName),
     }));
     if (started !== false) {
+      setActiveTab('fixtures');
       setShowNextTournamentModal(false);
     }
   };

@@ -57,6 +57,7 @@ import {
   isScheduledTournamentAlreadyStarted,
   upsertTournamentInHistory,
 } from './utils/appHelpers';
+import { clearAutoResumeSuppressedTournamentId } from './utils/autoResumePreference';
 
 const AppModals = lazy(() => import('./components/AppModals'));
 
@@ -92,6 +93,7 @@ const App = () => {
   const resumeActiveTournament = (activeTournament) => {
     if (!activeTournament) return false;
 
+    clearAutoResumeSuppressedTournamentId();
     setTournamentName(activeTournament.name || '');
     setFormat(activeTournament.format || '1');
     setGameMode(activeTournament.gameMode || 'doubles');
@@ -380,13 +382,39 @@ const App = () => {
     return { urls, refs };
   };
 
-  const recoverRatingsIfMissing = ({ history = tournamentHistory, casual = casualMatches } = {}) => {
+  const recoverRatingsIfMissing = ({ history = tournamentHistory, casual = casualMatches, force = false } = {}) => {
     const current = playerRatings && typeof playerRatings === 'object' ? playerRatings : {};
-    if (Object.keys(current).length > 0) return current;
+    const currentNames = Object.keys(current);
+    const hasMeaningfulHistory = (snapshot) => (
+      Array.isArray(snapshot?.history)
+      && snapshot.history.some((entry) => {
+        const matchId = String(entry?.matchId || '').trim();
+        return matchId && matchId !== 'v2-snapshot';
+      })
+    );
+    const playersMissingHistory = currentNames.filter((name) => !hasMeaningfulHistory(current[name]));
+    const shouldRebuild = force
+      || currentNames.length === 0
+      || playersMissingHistory.length === currentNames.length;
+    if (!shouldRebuild && playersMissingHistory.length === 0) return current;
+
     const rebuilt = deriveRatingsFromHistory({ history, casual });
     if (Object.keys(rebuilt).length === 0) return current;
-    setPlayerRatings(rebuilt);
-    return rebuilt;
+
+    const merged = { ...rebuilt };
+    currentNames.forEach((name) => {
+      const snapshot = current[name];
+      if (hasMeaningfulHistory(snapshot)) {
+        merged[name] = snapshot;
+        return;
+      }
+      if (!merged[name]) {
+        merged[name] = snapshot;
+      }
+    });
+
+    setPlayerRatings(merged);
+    return merged;
   };
 
   const markRatingsPersisted = (ratings = {}) => {
@@ -2289,7 +2317,6 @@ const App = () => {
     const fallbackDeleteIds = Array.from(new Set([
       String(currentTournamentId || '').trim(),
       String(activeTournamentLock?.id || '').trim(),
-      ...activeLiveTournaments.flatMap((item) => getTournamentIdCandidates(item)),
     ].map((value) => String(value || '').trim()).filter(Boolean)));
     const fallbackTargetName = normalizeTournamentName(tournamentName || activeTournamentLock?.name || '');
 

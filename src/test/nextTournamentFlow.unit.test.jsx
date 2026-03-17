@@ -198,7 +198,7 @@ describe('Next tournament flow', () => {
     expect(h.state.champion).toBe(null);
     expect(h.state.aiMatchSummaries).toEqual([]);
     expect(h.state.swapHistory).toEqual([]);
-    expect(h.state.currentTournamentId).toBe(null);
+    expect(h.state.currentTournamentId).toMatch(/^local-/);
     expect(h.state.fixtures.length).toBeGreaterThan(0);
     expect(h.state.fixtures.every((match) => match.completed === false)).toBe(true);
     expect(h.setStep).toHaveBeenCalledWith('tournament');
@@ -349,5 +349,42 @@ describe('Next tournament flow', () => {
     expect(h.state.tournamentHistory).toHaveLength(1);
     expect(h.state.tournamentHistory[0].teams[0].name).toBe('Falcons');
     expect(h.state.tournamentHistory[0].champion?.name).toBe('Falcons');
+  });
+
+  it('waits for the pending cloud create instead of creating a duplicate', async () => {
+    let resolveCreate = null;
+    const createPromise = new Promise((resolve) => {
+      resolveCreate = resolve;
+    });
+    const h = createHarness({
+      isAppwriteEnabled: true,
+      saveTournamentResult: createPromise,
+    });
+
+    await act(async () => {
+      const started = await h.result.current.startNextTournament({
+        tournamentNameOverride: 'League Night 2nd Tournament',
+      });
+      expect(started).toBe(true);
+    });
+    h.sync();
+
+    const firstMatch = h.state.fixtures.find((match) => !match.completed);
+    expect(firstMatch).toBeTruthy();
+
+    const savePromise = act(async () => {
+      const saved = await h.result.current.saveMatchResult(firstMatch.id, 21, 18);
+      expect(saved).toBe(true);
+    });
+
+    resolveCreate({ id: 'cloud-live-1', appwriteId: 'cloud-live-1' });
+    await savePromise;
+    h.sync();
+
+    await waitFor(() => {
+      expect(h.saveTournamentMutation.mutateAsync).toHaveBeenCalledTimes(1);
+    });
+    expect(h.state.tournamentHistory).toHaveLength(1);
+    expect(h.state.tournamentHistory[0].appwriteId).toBe('cloud-live-1');
   });
 });

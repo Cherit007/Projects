@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const useTournamentViewState = ({
-  tournamentFormat,
   onRefreshTournament,
 }) => {
   const [activeTab, setActiveTab] = useState('fixtures');
@@ -10,17 +9,8 @@ export const useTournamentViewState = ({
   const [pullDistance, setPullDistance] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
 
-  const gestureStartRef = useRef({ x: 0, y: 0, active: false, swipeUsed: false, pullReady: false });
+  const gestureStartRef = useRef({ x: 0, y: 0, active: false, pullReady: false });
   const resetPullTimerRef = useRef(null);
-
-  const swipeTabOrder = useMemo(() => {
-    const order = ['fixtures'];
-    if (tournamentFormat === 'league') {
-      order.push('table', 'stats');
-    }
-    order.push('elo', 'final');
-    return order;
-  }, [tournamentFormat]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
@@ -70,14 +60,6 @@ export const useTournamentViewState = ({
     }
   }, []);
 
-  const swipeToAdjacentTab = useCallback((direction) => {
-    const currentIndex = swipeTabOrder.indexOf(activeTab);
-    if (currentIndex < 0) return;
-    const offset = direction === 'left' ? 1 : -1;
-    const nextTab = swipeTabOrder[currentIndex + offset];
-    if (nextTab) setActiveTab(nextTab);
-  }, [activeTab, swipeTabOrder]);
-
   const triggerPullRefresh = useCallback(async () => {
     if (isPullRefreshing || typeof onRefreshTournament !== 'function') return;
     setIsPullRefreshing(true);
@@ -109,7 +91,6 @@ export const useTournamentViewState = ({
       x: touch.clientX,
       y: touch.clientY,
       active: true,
-      swipeUsed: false,
       pullReady: window.scrollY <= 0,
     };
   }, [isMobileViewport, isPullRefreshing]);
@@ -124,24 +105,18 @@ export const useTournamentViewState = ({
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
 
-    if (!state.swipeUsed && absX > 52 && absX > absY + 12) {
-      state.swipeUsed = true;
-      swipeToAdjacentTab(deltaX < 0 ? 'left' : 'right');
-      return;
-    }
-
     if (!state.pullReady || deltaY <= 0 || absY < absX + 10) return;
     const nextPull = Math.min(96, Math.max(0, deltaY * 0.5));
     setPullDistance(nextPull);
     if (event.cancelable) {
       event.preventDefault();
     }
-  }, [swipeToAdjacentTab]);
+  }, []);
 
   const handleContentTouchEnd = useCallback(() => {
     const state = gestureStartRef.current;
-    gestureStartRef.current = { x: 0, y: 0, active: false, swipeUsed: false, pullReady: false };
-    if (!state.active || state.swipeUsed || pullDistance <= 0) {
+    gestureStartRef.current = { x: 0, y: 0, active: false, pullReady: false };
+    if (!state.active || pullDistance <= 0) {
       setPullDistance(0);
       return;
     }
