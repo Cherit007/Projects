@@ -518,6 +518,7 @@ const App = () => {
     handleRejectRequest,
     handlePromoteMemberToAdmin,
     handleRemoveMember,
+    handleDeleteGroup,
     handleOpenRequestCenter,
     handleContinueAsViewer,
     handleSelectGroup,
@@ -2786,6 +2787,7 @@ const App = () => {
         onRejectRequest={handleRejectRequest}
         onPromoteMemberToAdmin={handlePromoteMemberToAdmin}
         onRemoveGroupMember={handleRemoveMember}
+        onDeleteGroup={handleDeleteGroup}
         onConfirmAction={requestConfirmAction}
         viewerDashboardProps={viewerDashboardProps}
         setupScreenProps={setupScreenProps}

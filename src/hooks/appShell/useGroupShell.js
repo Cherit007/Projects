@@ -101,6 +101,12 @@ export const useGroupShell = ({
       adminUserId,
     }),
   });
+  const deleteGroupMutation = useMutation({
+    mutationFn: ({ groupId, adminUserId }) => groupService.deleteGroup({
+      groupId,
+      adminUserId,
+    }),
+  });
 
   const fetchCurrentUser = async () => queryClient.fetchQuery({
     queryKey: queryKeys.authCurrentUser,
@@ -152,6 +158,7 @@ export const useGroupShell = ({
     rejectJoinMutation,
     updateGroupMemberRoleMutation,
     removeGroupMemberMutation,
+    deleteGroupMutation,
     setAuthLoading,
     setIsGuestViewer,
     setCurrentUser,

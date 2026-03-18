@@ -22,6 +22,7 @@ const GroupRequestsCenter = ({
   onRejectRequest,
   onPromoteMemberToAdmin,
   onRemoveMember,
+  onDeleteGroup,
   onConfirmAction,
   onBack,
   loading,
@@ -53,6 +54,23 @@ const GroupRequestsCenter = ({
     if (!member || member.userId === currentUserId) return false;
     if (member.role !== 'admin') return true;
     return adminCount > 1;
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!onDeleteGroup) return;
+    if (typeof onConfirmAction !== 'function') {
+      onDeleteGroup();
+      return;
+    }
+    const confirmed = await Promise.resolve(onConfirmAction({
+      title: 'Delete Group',
+      message: `Delete "${group?.name || 'this group'}"? This removes all members, invites, and requests. This cannot be undone.`,
+      confirmLabel: 'Delete group',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    }));
+    if (!confirmed) return;
+    onDeleteGroup();
   };
 
   return (
@@ -197,6 +215,20 @@ const GroupRequestsCenter = ({
               ))}
             </div>
           )}
+        </section>
+
+        <section className="theme-card request-center-danger rounded-2xl p-5 sm:p-6 border border-rose-200 bg-rose-50/40">
+          <h2 className="text-lg font-semibold text-rose-900">Danger Zone</h2>
+          <p className="mt-2 text-sm text-rose-700">Deleting a group removes its members, invites, and pending requests permanently.</p>
+          <div className="mt-4">
+            <button
+              onClick={handleDeleteGroup}
+              disabled={loading}
+              className="request-center-danger-btn px-4 py-2 rounded-xl border border-rose-300 text-sm font-semibold text-rose-700 bg-rose-100 hover:bg-rose-200 disabled:opacity-50"
+            >
+              Delete Group
+            </button>
+          </div>
         </section>
       </div>
     </div>

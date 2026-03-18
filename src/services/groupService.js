@@ -336,6 +336,31 @@ const legacyGroupService = {
     };
   },
 
+  async deleteGroup({ groupId, adminUserId }) {
+    const meta = await getMetaWithDefaults();
+    const adminMembership = meta.groupMembers.find(
+      item => item.groupId === groupId && item.userId === adminUserId && item.role === 'admin'
+    );
+    if (!adminMembership) throw new Error('Only admin can delete group');
+
+    const existingGroup = meta.groups.find(item => item.id === groupId);
+    if (!existingGroup) throw new Error('Group not found');
+
+    const nextGroups = meta.groups.filter(item => item.id !== groupId);
+    const nextMembers = meta.groupMembers.filter(item => item.groupId !== groupId);
+    const nextInvites = meta.groupInvites.filter(item => item.groupId !== groupId);
+    const nextRequests = meta.groupJoinRequests.filter(item => item.groupId !== groupId);
+
+    await saveMeta({
+      groups: nextGroups,
+      groupMembers: nextMembers,
+      groupInvites: nextInvites,
+      groupJoinRequests: nextRequests,
+    });
+
+    return { status: 'deleted', groupId };
+  },
+
   async approveJoinRequest({ requestId, adminUserId }) {
     const meta = await getMetaWithDefaults();
     const request = meta.groupJoinRequests.find(item => item.id === requestId);
@@ -426,6 +451,7 @@ const GROUP_SERVICE_METHODS = [
   'getGroupMembersForAdmin',
   'updateGroupMemberRole',
   'removeGroupMember',
+  'deleteGroup',
   'approveJoinRequest',
   'rejectJoinRequest',
 ];

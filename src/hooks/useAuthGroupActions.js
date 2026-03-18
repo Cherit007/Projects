@@ -21,6 +21,7 @@ export const useAuthGroupActions = ({
   rejectJoinMutation,
   updateGroupMemberRoleMutation,
   removeGroupMemberMutation,
+  deleteGroupMutation,
   setAuthLoading,
   setIsGuestViewer,
   setCurrentUser,
@@ -300,6 +301,35 @@ export const useAuthGroupActions = ({
     }
   };
 
+  const handleDeleteGroup = async () => {
+    if (!currentUser || !activeGroup || groupRole !== 'admin') return;
+    setInviteLoading(true);
+    try {
+      await deleteGroupMutation.mutateAsync({
+        groupId: activeGroup.id,
+        adminUserId: currentUser.$id,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.userGroups(currentUser.$id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.publicGroups });
+      await refreshGroups(currentUser);
+      await refreshPublicGroups();
+      setPendingJoinRequests([]);
+      setRecentJoinReviews([]);
+      setAdminAccounts([]);
+      setShowRequestCenter(false);
+      setActiveGroup(null);
+      setGroupRole(null);
+      setStep('setup');
+      clearPersistedQueryCache();
+      showToast('Group deleted');
+    } catch (error) {
+      console.error('Delete group failed:', error);
+      showToast(error?.message || 'Failed to delete group', 'error');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   const handleOpenRequestCenter = () => {
     setShowRequestCenter(true);
     setSeenPendingRequestIds(prev => {
@@ -336,6 +366,7 @@ export const useAuthGroupActions = ({
     handleRejectRequest,
     handlePromoteMemberToAdmin,
     handleRemoveMember,
+    handleDeleteGroup,
     handleOpenRequestCenter,
     handleContinueAsViewer,
     handleSelectGroup,

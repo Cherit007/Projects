@@ -616,6 +616,41 @@ export const groupCollectionsService = {
 
     return { status: 'rejected' };
   },
+
+  async deleteGroup({ groupId, adminUserId }) {
+    const normalizedGroupId = toNonEmptyString(groupId);
+    const normalizedAdminId = toNonEmptyString(adminUserId);
+    if (!normalizedGroupId) throw new Error('Group not found');
+    if (!normalizedAdminId) throw new Error('Admin user is required');
+
+    await assertAdminMembership({
+      groupId: normalizedGroupId,
+      userId: normalizedAdminId,
+      message: 'Only admin can delete group',
+    });
+
+    const deleteDocs = async (collectionId, docs = []) => {
+      for (const doc of docs) {
+        const id = toNonEmptyString(doc?.$id);
+        if (!id) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await databases.deleteDocument(DATABASE_ID, collectionId, id);
+      }
+    };
+
+    const [memberDocs, inviteDocs, requestDocs] = await Promise.all([
+      listByField(COLLECTIONS.GROUP_MEMBERS, 'groupId', normalizedGroupId),
+      listByField(COLLECTIONS.GROUP_INVITES, 'groupId', normalizedGroupId),
+      listByField(COLLECTIONS.GROUP_JOIN_REQUESTS, 'groupId', normalizedGroupId),
+    ]);
+
+    await deleteDocs(COLLECTIONS.GROUP_MEMBERS, memberDocs);
+    await deleteDocs(COLLECTIONS.GROUP_INVITES, inviteDocs);
+    await deleteDocs(COLLECTIONS.GROUP_JOIN_REQUESTS, requestDocs);
+    await databases.deleteDocument(DATABASE_ID, COLLECTIONS.GROUPS, normalizedGroupId);
+
+    return { status: 'deleted', groupId: normalizedGroupId };
+  },
 };
 
 export { isNormalizedGroupCollectionsEnabled };
