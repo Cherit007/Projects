@@ -461,7 +461,7 @@ export const useTournamentActions = ({
     aiSummariesSnapshot = aiMatchSummaries,
     swapHistorySnapshot = swapHistory,
   } = {}) => {
-    const localTournamentId = resolveLocalTournamentId();
+    const localTournamentId = ensureLocalTournamentId();
     const normalizedCurrentId = normalizeTournamentId(currentTournamentId);
     const appwriteId = (
       isAppwriteEnabled
@@ -756,6 +756,17 @@ export const useTournamentActions = ({
     if (activeMatches.length !== 1) return null;
     const candidate = activeMatches[0];
     return normalizeTournamentId(candidate?.legacyTournamentId || candidate?.id || candidate?.appwriteId);
+  };
+
+  const ensureLocalTournamentId = () => {
+    const resolved = resolveLocalTournamentId();
+    if (resolved) return resolved;
+    const created = createLocalTournamentId();
+    localTournamentIdRef.current = created;
+    if (!currentTournamentId) {
+      setCurrentTournamentId(created);
+    }
+    return created;
   };
 
   const resolveSyncTournamentId = () => {
@@ -1549,7 +1560,7 @@ export const useTournamentActions = ({
       showToast('Invalid scores', 'error');
       return false;
     }
-    const localTournamentId = resolveLocalTournamentId();
+    const localTournamentId = ensureLocalTournamentId();
     let syncTournamentId = resolveSyncTournamentId();
     if (isAppwriteEnabled && !syncTournamentId) {
       syncTournamentId = await resolveSyncTournamentIdForWrite();
@@ -2018,7 +2029,7 @@ export const useTournamentActions = ({
 
   const saveBracketMatchResult = async (matchId, score1, score2) => {
     if (!assertCanOperate()) return false;
-    const localTournamentId = resolveLocalTournamentId();
+    const localTournamentId = ensureLocalTournamentId();
     const sourceMatch = bracket.flat().find((m) => m.id === matchId);
     const prediction = predictMatchOutcome({
       match: sourceMatch,
@@ -2194,7 +2205,7 @@ export const useTournamentActions = ({
 
   const saveFinalResult = async (score1, score2, finalistsOverride = null) => {
     if (!assertCanOperate()) return false;
-    const localTournamentId = resolveLocalTournamentId();
+    const localTournamentId = ensureLocalTournamentId();
     if (score1 === '' || score2 === '' || score1 === score2) {
       showToast('Invalid scores', 'error');
       return false;

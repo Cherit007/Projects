@@ -142,7 +142,7 @@ describe('dedupeLiveTournaments', () => {
     expect(deduped).toHaveLength(2);
   });
 
-  it('keeps cloud + local draft separate when stable ids differ', () => {
+  it('collapses cloud + local draft when team signatures match', () => {
     const localDraft = {
       id: '1711111111111',
       appwriteId: '',
@@ -173,9 +173,8 @@ describe('dedupeLiveTournaments', () => {
     };
 
     const deduped = dedupeLiveTournaments([localDraft, cloud]);
-    expect(deduped).toHaveLength(2);
-    expect(deduped.some((item) => item?.appwriteId === 'cloud-night-1')).toBe(true);
-    expect(deduped.some((item) => item?.id === '1711111111111')).toBe(true);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].appwriteId).toBe('cloud-night-1');
   });
 
   it('ignores stale active copy when completed version exists', () => {

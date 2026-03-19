@@ -209,9 +209,11 @@ export const useInitialDataLoadEffect = ({
           setHistoryHydrated(false);
           setActiveTournamentLock(appwriteData.activeTournament || null);
           const lock = appwriteData.activeTournament;
+          const lockResolvedId = lock?.appwriteId || lock?.id || null;
           let lockCandidate = (lock && lock.status === 'active') ? {
-            id: lock.id || null,
-            appwriteId: lock.id || null,
+            id: lockResolvedId,
+            appwriteId: lockResolvedId,
+            legacyTournamentId: lock?.legacyTournamentId || null,
             name: lock.name || 'Live tournament',
             date: lock.updatedAt ? new Date(lock.updatedAt).toLocaleDateString() : '',
             teams: Array.isArray(lock.teams) ? lock.teams : [],

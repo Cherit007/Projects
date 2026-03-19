@@ -664,7 +664,12 @@ const isLikelySameLiveTournament = (left, right) => {
   const rightIsUnstableIdentity = !rightHasStableId || Boolean(right?._fromLock || right?.isSummary);
 
   if (leftHasStableId && rightHasStableId && leftStableId !== rightStableId) {
-    return false;
+    const hasTeamSignatureMatch = Boolean(
+      leftTeamSignature && rightTeamSignature && leftTeamSignature === rightTeamSignature
+    );
+    if (!hasTeamSignatureMatch && !leftIsUnstableIdentity && !rightIsUnstableIdentity) {
+      return false;
+    }
   }
 
   if (isSameCalendarDay(left, right)) return true;
@@ -878,9 +883,10 @@ export const dedupeLiveTournaments = (candidates = []) => {
 
 export const buildTournamentFromLock = (lock) => {
   if (!lock || lock.status !== 'active') return null;
+  const resolvedId = lock.appwriteId || lock.id || null;
   return {
-    id: lock.id || null,
-    appwriteId: lock.id || null,
+    id: resolvedId,
+    appwriteId: resolvedId,
     legacyTournamentId: lock.legacyTournamentId || null,
     name: lock.name || 'Live tournament',
     date: lock.updatedAt

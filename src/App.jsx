@@ -104,7 +104,12 @@ const App = () => {
     setChampion(cloneSerializable(activeTournament.champion || null));
     setAiMatchSummaries(cloneSerializable(activeTournament.aiSummaries || []));
     setSwapHistory(cloneSerializable(activeTournament.swapHistory || []));
-    setCurrentTournamentId(activeTournament.appwriteId || activeTournament.id || null);
+    setCurrentTournamentId(
+      activeTournament.appwriteId
+      || activeTournament.id
+      || activeTournament.legacyTournamentId
+      || null
+    );
     setStep('tournament');
     return true;
   };
