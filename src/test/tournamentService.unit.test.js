@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { databasesMock } = vi.hoisted(() => ({
@@ -35,6 +36,7 @@ import { tournamentService } from '../services/tournamentService';
 describe('tournamentService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    databasesMock.listDocuments.mockResolvedValue({ documents: [] });
   });
 
   it('maps v2 tournament summaries', async () => {

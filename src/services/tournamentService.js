@@ -351,6 +351,64 @@ const listByGroupAndValues = async ({ collectionId, groupId, key, values }) => {
   return byGroup.filter((doc) => allowed.has(toNonEmptyString(doc?.[key])));
 };
 
+const toDocumentTimestamp = (doc) => {
+  const updated = Date.parse(toNonEmptyString(doc?.sourceUpdatedAt) || toNonEmptyString(doc?.$updatedAt));
+  if (Number.isFinite(updated)) return updated;
+  const created = Date.parse(toNonEmptyString(doc?.sourceCreatedAt) || toNonEmptyString(doc?.$createdAt));
+  return Number.isFinite(created) ? created : 0;
+};
+
+const getTournamentDocPriority = (doc) => {
+  const normalizedStatus = normalizeTournamentStatusValue({ status: doc?.status });
+  if (normalizedStatus === 'completed') return 3;
+  if (normalizedStatus === 'active') return 2;
+  if (normalizedStatus === 'scheduled') return 1;
+  return 0;
+};
+
+const pickCanonicalTournamentDoc = (docs = []) => (
+  [...docs].sort((left, right) => {
+    const priorityDiff = getTournamentDocPriority(right) - getTournamentDocPriority(left);
+    if (priorityDiff !== 0) return priorityDiff;
+    const timeDiff = toDocumentTimestamp(right) - toDocumentTimestamp(left);
+    if (timeDiff !== 0) return timeDiff;
+    return toNonEmptyString(right?.$id).localeCompare(toNonEmptyString(left?.$id));
+  })[0] || null
+);
+
+const findExistingTournamentDocForCreate = async ({ groupId, payload }) => {
+  const explicitAppwriteId = toNonEmptyString(payload?.appwriteId);
+  if (explicitAppwriteId) {
+    try {
+      const doc = await databases.getDocument(
+        DATABASE_ID,
+        COLLECTIONS.TOURNAMENTS_V2,
+        explicitAppwriteId
+      );
+      if (
+        toNonEmptyString(doc?.groupId) === groupId
+        && !isDeletedTournamentDoc(doc)
+      ) {
+        return doc;
+      }
+    } catch (error) {
+      if (error?.code !== 404) throw error;
+    }
+  }
+
+  const legacyTournamentId = toNonEmptyString(payload?.legacyTournamentId) || toNonEmptyString(payload?.id);
+  if (!legacyTournamentId) return null;
+
+  const docs = await listByGroupAndValues({
+    collectionId: COLLECTIONS.TOURNAMENTS_V2,
+    groupId,
+    key: 'legacyTournamentId',
+    values: [legacyTournamentId],
+  });
+  const candidates = docs.filter((doc) => !isDeletedTournamentDoc(doc));
+  return pickCanonicalTournamentDoc(candidates);
+};
+
 const getWinnerSide = (score1, score2) => {
   if (score1 === '' || score2 === '') return '';
   const s1 = Number(score1);
@@ -365,6 +423,47 @@ const getMatchCompleted = (match, score1, score2) => {
   const s1 = Number(score1);
   const s2 = Number(score2);
   return Number.isFinite(s1) && Number.isFinite(s2);
+};
+
+const getCompletedMatchWinner = (match) => {
+  if (!match) return null;
+  const score1 = parseScore(match?.score1);
+  const score2 = parseScore(match?.score2);
+  if (!getMatchCompleted(match, score1, score2)) return null;
+  if (!Number.isFinite(score1) || !Number.isFinite(score2) || score1 === score2) return null;
+  return score1 > score2 ? (match?.team1 || null) : (match?.team2 || null);
+};
+
+const inferTournamentChampionFromState = ({
+  champion = null,
+  finalMatch = null,
+  bracket = [],
+} = {}) => {
+  if (champion) return champion;
+
+  const finalWinner = getCompletedMatchWinner(finalMatch);
+  if (finalWinner) return finalWinner;
+
+  const finalRound = Array.isArray(bracket) && bracket.length > 0 ? bracket[bracket.length - 1] : [];
+  const bracketFinal = Array.isArray(finalRound) && finalRound.length > 0 ? finalRound[0] : null;
+  return getCompletedMatchWinner(bracketFinal);
+};
+
+const normalizeTournamentStatusValue = ({
+  status,
+  champion = null,
+  finalMatch = null,
+  bracket = [],
+} = {}) => {
+  const normalized = toNonEmptyString(status).toLowerCase();
+  if (normalized === TOURNAMENT_DELETED_STATUS || normalized === 'scheduled') {
+    return normalized;
+  }
+  if (inferTournamentChampionFromState({ champion, finalMatch, bracket })) {
+    return 'completed';
+  }
+  if (normalized === 'completed') return 'completed';
+  return normalized || 'active';
 };
 
 const collectPlayersFromTeam = (team) => (
@@ -647,25 +746,17 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
         .map((entry) => entry.parsed)
     ));
 
-  const findChampion = () => {
-    if (finalMatch?.completed) {
-      if (finalMatch.score1 > finalMatch.score2) return finalMatch.team1;
-      if (finalMatch.score2 > finalMatch.score1) return finalMatch.team2;
-    }
-
-    const finalRound = bracket.length > 0 ? bracket[bracket.length - 1] : [];
-    const bracketFinal = finalRound.length > 0 ? finalRound[0] : null;
-    if (bracketFinal?.completed) {
-      if (bracketFinal.score1 > bracketFinal.score2) return bracketFinal.team1;
-      if (bracketFinal.score2 > bracketFinal.score1) return bracketFinal.team2;
-    }
-
-    return null;
-  };
-
-  const champion = toNonEmptyString(safeTournamentDoc?.status).toLowerCase() === 'completed'
-    ? findChampion()
-    : null;
+  const champion = inferTournamentChampionFromState({
+    champion: null,
+    finalMatch,
+    bracket,
+  });
+  const normalizedStatus = normalizeTournamentStatusValue({
+    status: safeTournamentDoc?.status,
+    champion,
+    finalMatch,
+    bracket,
+  });
 
   return {
     id: safeTournamentDoc.$id,
@@ -684,7 +775,7 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
     format: safeTournamentDoc.format || '1',
     gameMode: safeTournamentDoc.gameMode || 'doubles',
     tournamentFormat: safeTournamentDoc.tournamentFormat || 'league',
-    status: safeTournamentDoc.status || (champion ? 'completed' : 'active'),
+    status: normalizedStatus,
     oddPlayerEnabled: parseBoolean(safeTournamentDoc.oddPlayerEnabled),
     oddPlayerName: toNonEmptyString(safeTournamentDoc.oddPlayerName),
     createdAt: safeTournamentDoc.sourceCreatedAt || safeTournamentDoc.$createdAt,
@@ -702,6 +793,12 @@ const buildTournamentDocument = ({
   const now = new Date().toISOString();
   const oddPlayerName = toNonEmptyString(payload.oddPlayerName ?? existing?.oddPlayerName);
   const resolvedOddPlayerId = resolvePlayerId(oddPlayerName, playerByNormalized);
+  const normalizedStatus = normalizeTournamentStatusValue({
+    status: payload.status ?? existing?.status,
+    champion: payload.champion,
+    finalMatch: payload.finalMatch,
+    bracket: payload.bracket,
+  });
 
   return {
     groupId,
@@ -711,7 +808,7 @@ const buildTournamentDocument = ({
       || tournamentId,
     name: toNonEmptyString(payload.name) || toNonEmptyString(existing?.name) || 'Untitled Tournament',
     dateLabel: toNonEmptyString(payload.date) || toNonEmptyString(existing?.dateLabel),
-    status: toNonEmptyString(payload.status) || toNonEmptyString(existing?.status) || 'active',
+    status: normalizedStatus,
     gameMode: toNonEmptyString(payload.gameMode) || toNonEmptyString(existing?.gameMode) || 'doubles',
     tournamentFormat: toNonEmptyString(payload.tournamentFormat) || toNonEmptyString(existing?.tournamentFormat) || 'league',
     format: toNonEmptyString(payload.format) || toNonEmptyString(existing?.format) || '1',
@@ -1128,23 +1225,33 @@ const syncTournamentChildren = async ({
   });
 };
 
-const mergeTournamentState = (existing, updates = {}) => ({
-  name: updates.name ?? existing?.name ?? 'Untitled Tournament',
-  date: updates.date ?? existing?.date ?? '',
-  teams: updates.teams ?? existing?.teams ?? [],
-  fixtures: updates.fixtures ?? existing?.fixtures ?? [],
-  bracket: updates.bracket ?? existing?.bracket ?? [],
-  finalMatch: updates.finalMatch !== undefined ? updates.finalMatch : (existing?.finalMatch ?? null),
-  champion: updates.champion !== undefined ? updates.champion : (existing?.champion ?? null),
-  format: updates.format ?? existing?.format ?? '1',
-  gameMode: updates.gameMode ?? existing?.gameMode ?? 'doubles',
-  tournamentFormat: updates.tournamentFormat ?? existing?.tournamentFormat ?? 'league',
-  status: updates.status ?? existing?.status ?? 'active',
-  oddPlayerEnabled: updates.oddPlayerEnabled ?? existing?.oddPlayerEnabled ?? false,
-  oddPlayerName: updates.oddPlayerName ?? existing?.oddPlayerName ?? '',
-  aiSummaries: updates.aiSummaries ?? existing?.aiSummaries ?? [],
-  swapHistory: updates.swapHistory ?? existing?.swapHistory ?? [],
-});
+const mergeTournamentState = (existing, updates = {}) => {
+  const merged = {
+    id: updates.id ?? existing?.id ?? null,
+    appwriteId: updates.appwriteId ?? existing?.appwriteId ?? null,
+    legacyTournamentId: updates.legacyTournamentId ?? existing?.legacyTournamentId ?? null,
+    name: updates.name ?? existing?.name ?? 'Untitled Tournament',
+    date: updates.date ?? existing?.date ?? '',
+    teams: updates.teams ?? existing?.teams ?? [],
+    fixtures: updates.fixtures ?? existing?.fixtures ?? [],
+    bracket: updates.bracket ?? existing?.bracket ?? [],
+    finalMatch: updates.finalMatch !== undefined ? updates.finalMatch : (existing?.finalMatch ?? null),
+    champion: updates.champion !== undefined ? updates.champion : (existing?.champion ?? null),
+    format: updates.format ?? existing?.format ?? '1',
+    gameMode: updates.gameMode ?? existing?.gameMode ?? 'doubles',
+    tournamentFormat: updates.tournamentFormat ?? existing?.tournamentFormat ?? 'league',
+    status: updates.status ?? existing?.status ?? 'active',
+    oddPlayerEnabled: updates.oddPlayerEnabled ?? existing?.oddPlayerEnabled ?? false,
+    oddPlayerName: updates.oddPlayerName ?? existing?.oddPlayerName ?? '',
+    aiSummaries: updates.aiSummaries ?? existing?.aiSummaries ?? [],
+    swapHistory: updates.swapHistory ?? existing?.swapHistory ?? [],
+  };
+
+  return {
+    ...merged,
+    status: normalizeTournamentStatusValue(merged),
+  };
+};
 
 const collectTournamentPlayers = (payload = {}) => {
   const names = new Set();
@@ -1188,6 +1295,10 @@ export const tournamentService = {
     ensureV2Configured();
     const resolvedGroupId = toGroupId(groupId);
     const merged = mergeTournamentState(null, tournamentData || {});
+    const existingDoc = await findExistingTournamentDocForCreate({
+      groupId: resolvedGroupId,
+      payload: merged,
+    });
     const players = collectTournamentPlayers(merged);
     const playerByNormalized = await ensurePlayersExist({
       groupId: resolvedGroupId,
@@ -1195,12 +1306,12 @@ export const tournamentService = {
       source: 'runtime.tournament-create',
     });
 
-    const tournamentId = ID.unique();
+    const tournamentId = toNonEmptyString(existingDoc?.$id) || ID.unique();
     const document = buildTournamentDocument({
       tournamentId,
       groupId: resolvedGroupId,
       payload: merged,
-      existing: null,
+      existing: existingDoc,
       playerByNormalized,
     });
 
@@ -1388,13 +1499,6 @@ export const tournamentService = {
       )
     );
 
-    const matchesStatusFilter = (doc) => {
-      if (isDeletedTournamentDoc(doc)) return false;
-      if (normalizedStatuses.length === 0) return true;
-      const status = toNonEmptyString(doc?.status).toLowerCase();
-      return normalizedStatuses.includes(status);
-    };
-
     let tournamentDocs = [];
     try {
       const response = await databases.listDocuments(
@@ -1402,14 +1506,12 @@ export const tournamentService = {
         COLLECTIONS.TOURNAMENTS_V2,
         [
           Query.equal('groupId', resolvedGroupId),
-          ...(normalizedStatuses.length > 0 ? [Query.equal('status', normalizedStatuses)] : []),
           Query.orderDesc('$updatedAt'),
           Query.limit(Math.max(limit, 200)),
         ]
       );
       tournamentDocs = (response?.documents || [])
-        .filter(matchesStatusFilter)
-        .slice(0, limit);
+        .filter((doc) => !isDeletedTournamentDoc(doc));
     } catch (error) {
       if (!isIndexConstraintError(error)) throw error;
       const unfiltered = await databases.listDocuments(
@@ -1422,8 +1524,7 @@ export const tournamentService = {
       );
       tournamentDocs = (unfiltered?.documents || [])
         .filter((doc) => toNonEmptyString(doc?.groupId) === resolvedGroupId)
-        .filter(matchesStatusFilter)
-        .slice(0, limit);
+        .filter((doc) => !isDeletedTournamentDoc(doc));
     }
 
     if (tournamentDocs.length === 0 && resolvedGroupId) {
@@ -1446,58 +1547,84 @@ export const tournamentService = {
         effectiveGroupId = discoveredGroups[0];
         tournamentDocs = docs
           .filter((doc) => toNonEmptyString(doc?.groupId) === effectiveGroupId)
-          .filter(matchesStatusFilter)
-          .slice(0, limit);
+          .filter((doc) => !isDeletedTournamentDoc(doc));
       }
     }
 
     const tournamentIds = tournamentDocs.map((doc) => toNonEmptyString(doc?.$id)).filter(Boolean);
-    const teamDocs = tournamentIds.length > 0
-      ? await listByGroupAndValues({
-          collectionId: COLLECTIONS.TOURNAMENT_TEAMS_V2,
-          groupId: effectiveGroupId,
-          key: 'tournamentId',
-          values: tournamentIds,
-        })
-      : [];
+    if (tournamentIds.length === 0) return [];
+
+    const [teamDocs, matchDocs] = await Promise.all([
+      listByGroupAndValues({
+        collectionId: COLLECTIONS.TOURNAMENT_TEAMS_V2,
+        groupId: effectiveGroupId,
+        key: 'tournamentId',
+        values: tournamentIds,
+      }),
+      listByGroupAndValues({
+        collectionId: COLLECTIONS.MATCHES_V2,
+        groupId: effectiveGroupId,
+        key: 'tournamentId',
+        values: tournamentIds,
+      }),
+    ]);
+
     const teamsByTournament = new Map();
     teamDocs.forEach((doc) => {
       const tournamentId = toNonEmptyString(doc?.tournamentId);
       if (!tournamentId) return;
-      const parsedTeam = parseTeamDocument(doc);
       const bucket = teamsByTournament.get(tournamentId) || [];
-      bucket.push(parsedTeam);
+      bucket.push(doc);
       teamsByTournament.set(tournamentId, bucket);
     });
 
-    return tournamentDocs.map((doc) => {
-      const summaryTeams = teamsByTournament.get(doc.$id) || [];
-      return {
-      id: doc.$id,
-      appwriteId: doc.$id,
-      groupId: doc.groupId,
-      legacyTournamentId: doc.legacyTournamentId,
-      name: doc.name,
-      date: doc.dateLabel,
-      teams: summaryTeams,
-      teamsCount: summaryTeams.length,
-      fixtures: [],
-      bracket: [],
-      finalMatch: null,
-      champion: null,
-      aiSummaries: [],
-      swapHistory: [],
-      format: doc.format || '1',
-      gameMode: doc.gameMode || 'doubles',
-      tournamentFormat: doc.tournamentFormat || 'league',
-      status: doc.status || 'active',
-      oddPlayerEnabled: parseBoolean(doc.oddPlayerEnabled),
-      oddPlayerName: toNonEmptyString(doc.oddPlayerName),
-      createdAt: doc.sourceCreatedAt || doc.$createdAt,
-      updatedAt: doc.sourceUpdatedAt || doc.$updatedAt,
-      isSummary: true,
-      };
+    const matchesByTournament = new Map();
+    matchDocs.forEach((doc) => {
+      const tournamentId = toNonEmptyString(doc?.tournamentId);
+      if (!tournamentId) return;
+      const bucket = matchesByTournament.get(tournamentId) || [];
+      bucket.push(doc);
+      matchesByTournament.set(tournamentId, bucket);
     });
+
+    const hydrated = tournamentDocs.map((doc) => hydrateTournament({
+      tournamentDoc: doc,
+      teamDocs: teamsByTournament.get(doc.$id) || [],
+      matchDocs: matchesByTournament.get(doc.$id) || [],
+      matchPlayerDocs: [],
+    }));
+
+    return hydrated
+      .filter((item) => (
+        normalizedStatuses.length === 0
+        || normalizedStatuses.includes(toNonEmptyString(item?.status).toLowerCase())
+      ))
+      .slice(0, limit)
+      .map((item) => ({
+        id: item.id,
+        appwriteId: item.appwriteId,
+        groupId: item.groupId,
+        legacyTournamentId: item.legacyTournamentId,
+        name: item.name,
+        date: item.date,
+        teams: Array.isArray(item.teams) ? item.teams : [],
+        teamsCount: Array.isArray(item.teams) ? item.teams.length : 0,
+        fixtures: [],
+        bracket: [],
+        finalMatch: null,
+        champion: item.champion || null,
+        aiSummaries: [],
+        swapHistory: [],
+        format: item.format || '1',
+        gameMode: item.gameMode || 'doubles',
+        tournamentFormat: item.tournamentFormat || 'league',
+        status: item.status || 'active',
+        oddPlayerEnabled: Boolean(item.oddPlayerEnabled),
+        oddPlayerName: toNonEmptyString(item.oddPlayerName),
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        isSummary: true,
+      }));
   },
 
   async getTournamentById(tournamentId, groupId = null) {

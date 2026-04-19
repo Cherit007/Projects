@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -152,6 +153,139 @@ import { tournamentService } from '../services/tournamentService';
 describe('tournamentService patch + delete edge cases', () => {
   beforeEach(() => {
     resetState();
+  });
+
+  it('reuses an existing tournament document when the legacy tournament id already exists', async () => {
+    state.tournaments.push({
+      $id: 't-existing',
+      groupId: 'g-1',
+      legacyTournamentId: 'legacy-1',
+      name: 'Legacy Cup',
+      dateLabel: '2026-03-03',
+      status: 'active',
+      gameMode: 'doubles',
+      tournamentFormat: 'league',
+      format: '1',
+      oddPlayerEnabled: 'false',
+      oddPlayerName: '',
+      sourceCreatedAt: '2026-03-03T10:00:00.000Z',
+      sourceUpdatedAt: '2026-03-03T10:05:00.000Z',
+      $createdAt: '2026-03-03T10:00:00.000Z',
+      $updatedAt: '2026-03-03T10:05:00.000Z',
+    });
+
+    const result = await tournamentService.createTournament({
+      legacyTournamentId: 'legacy-1',
+      name: 'Legacy Cup',
+      date: '2026-03-03',
+      teams: [],
+      fixtures: [],
+      bracket: [],
+      finalMatch: null,
+      champion: null,
+      aiSummaries: [],
+      swapHistory: [],
+      format: '1',
+      gameMode: 'doubles',
+      tournamentFormat: 'league',
+      status: 'completed',
+    }, 'g-1');
+
+    expect(result.id).toBe('t-existing');
+    expect(result.appwriteId).toBe('t-existing');
+    expect(state.tournaments).toHaveLength(1);
+    expect(state.tournaments[0].status).toBe('completed');
+    expect(databasesMock.upsertDocument).toHaveBeenCalledWith(
+      'db1',
+      'v2_tournaments',
+      't-existing',
+      expect.objectContaining({
+        legacyTournamentId: 'legacy-1',
+        status: 'completed',
+      })
+    );
+  });
+
+  it('derives completed summaries from the final match even when the tournament doc status is stale', async () => {
+    state.tournaments.push({
+      $id: 't-final',
+      groupId: 'g-1',
+      legacyTournamentId: 'legacy-final',
+      name: 'Night Finals',
+      dateLabel: '2026-03-10',
+      status: 'active',
+      gameMode: 'doubles',
+      tournamentFormat: 'league',
+      format: '1',
+      oddPlayerEnabled: 'false',
+      oddPlayerName: '',
+      sourceCreatedAt: '2026-03-10T10:00:00.000Z',
+      sourceUpdatedAt: '2026-03-10T18:15:00.000Z',
+      $createdAt: '2026-03-10T10:00:00.000Z',
+      $updatedAt: '2026-03-10T18:15:00.000Z',
+    });
+    state.teams.push(
+      {
+        $id: 'team-1',
+        groupId: 'g-1',
+        tournamentId: 't-final',
+        legacyTournamentId: 'legacy-final',
+        legacyTeamId: '1',
+        teamNo: '1',
+        teamName: 'Falcons',
+        emoji: '🏸',
+        player1Name: 'A1',
+        player2Name: 'A2',
+      },
+      {
+        $id: 'team-2',
+        groupId: 'g-1',
+        tournamentId: 't-final',
+        legacyTournamentId: 'legacy-final',
+        legacyTeamId: '2',
+        teamNo: '2',
+        teamName: 'Tigers',
+        emoji: '🏸',
+        player1Name: 'B1',
+        player2Name: 'B2',
+      }
+    );
+    state.matches.push({
+      $id: 'match-final',
+      groupId: 'g-1',
+      tournamentId: 't-final',
+      legacyTournamentId: 'legacy-final',
+      legacyMatchId: 'final-1',
+      matchKind: 'final',
+      bracketRoundIndex: '',
+      bracketMatchIndex: '',
+      roundLabel: 'Final',
+      roundNo: 'Final',
+      sequenceNo: '4',
+      nextLegacyMatchId: '',
+      team1Id: 'team-1',
+      team2Id: 'team-2',
+      team1Name: 'Falcons',
+      team2Name: 'Tigers',
+      score1: '21',
+      score2: '16',
+      completed: 'true',
+      completedAt: '2026-03-10T18:00:00.000Z',
+      winnerSide: '1',
+    });
+
+    const completedSummaries = await tournamentService.getTournamentSummaries(20, 'g-1', ['completed']);
+    const activeSummaries = await tournamentService.getTournamentSummaries(20, 'g-1', ['active']);
+
+    expect(completedSummaries).toHaveLength(1);
+    expect(completedSummaries[0]).toMatchObject({
+      id: 't-final',
+      status: 'completed',
+      champion: expect.objectContaining({
+        name: 'Falcons',
+      }),
+    });
+    expect(activeSummaries).toHaveLength(0);
   });
 
   it('returns missingMatches when requested patch target is not found', async () => {

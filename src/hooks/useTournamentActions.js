@@ -586,21 +586,130 @@ export const useTournamentActions = ({
     };
   };
 
-  const fetchRemoteActiveLiveTournament = async ({ force = false } = {}) => {
+  const normalizeTournamentFormatKey = (value) => (
+    normalizeTournamentName(value || 'league')
+  );
+
+  const buildTournamentTeamSignature = (teamsList = []) => {
+    if (!Array.isArray(teamsList) || teamsList.length === 0) return '';
+    return teamsList
+      .map((team) => (
+        [
+          normalizeTournamentName(team?.name),
+          normalizeTournamentName(team?.player || team?.player1),
+          normalizeTournamentName(team?.player2),
+        ].join('|')
+      ))
+      .sort()
+      .join('||');
+  };
+
+  const getTournamentTeamsCount = (tournament) => {
+    if (Array.isArray(tournament?.teams)) return tournament.teams.length;
+    const count = Number(tournament?.teamsCount);
+    return Number.isFinite(count) ? count : 0;
+  };
+
+  const matchesRemoteTournamentContext = (
+    tournament,
+    {
+      targetId = null,
+      targetName = tournamentName,
+      targetTeams = teams,
+      targetFormat = tournamentFormat,
+    } = {}
+  ) => {
+    if (!tournament || tournament?.status !== 'active' || tournament?.champion) return false;
+
+    const normalizedTargetId = normalizeTournamentId(targetId);
+    if (normalizedTargetId && matchesTournamentId(tournament, normalizedTargetId)) {
+      return true;
+    }
+
+    const normalizedTargetName = normalizeTournamentName(targetName);
+    const normalizedCandidateName = normalizeTournamentName(tournament?.name);
+    if (!normalizedTargetName || !normalizedCandidateName || normalizedCandidateName !== normalizedTargetName) {
+      return false;
+    }
+
+    const normalizedTargetFormat = normalizeTournamentFormatKey(targetFormat);
+    const normalizedCandidateFormat = normalizeTournamentFormatKey(
+      tournament?.tournamentFormat || tournament?.format || 'league'
+    );
+    if (normalizedTargetFormat !== normalizedCandidateFormat) {
+      return false;
+    }
+
+    const targetTeamsCount = Array.isArray(targetTeams) ? targetTeams.length : 0;
+    const candidateTeamsCount = getTournamentTeamsCount(tournament);
+    if (targetTeamsCount > 0 && candidateTeamsCount > 0 && targetTeamsCount !== candidateTeamsCount) {
+      return false;
+    }
+
+    const targetSignature = buildTournamentTeamSignature(targetTeams);
+    const candidateSignature = buildTournamentTeamSignature(tournament?.teams);
+    if (targetSignature && candidateSignature) {
+      return targetSignature === candidateSignature;
+    }
+
+    return targetTeamsCount > 0 && candidateTeamsCount > 0;
+  };
+
+  const pickMatchingRemoteActiveTournament = (candidates = [], context = {}) => {
+    const activeCandidates = (Array.isArray(candidates) ? candidates : []).filter((item) => (
+      item?.status === 'active' && !item?.champion
+    ));
+    if (activeCandidates.length === 0) return null;
+
+    const normalizedTargetId = normalizeTournamentId(context?.targetId);
+    if (normalizedTargetId) {
+      const idMatch = activeCandidates.find((item) => matchesTournamentId(item, normalizedTargetId));
+      if (idMatch) return idMatch;
+    }
+
+    const contextMatches = activeCandidates.filter((item) => matchesRemoteTournamentContext(item, context));
+    if (contextMatches.length === 0) return null;
+    if (contextMatches.length === 1) return contextMatches[0];
+
+    const detailedMatch = contextMatches.find((item) => buildTournamentTeamSignature(item?.teams));
+    return detailedMatch || contextMatches[0];
+  };
+
+  const fetchRemoteActiveLiveTournament = async ({
+    force = false,
+    targetId = null,
+    targetName = tournamentName,
+    targetTeams = teams,
+    targetFormat = tournamentFormat,
+    requireMatch = false,
+  } = {}) => {
     if (!isAppwriteEnabled) return null;
+    const matchContext = {
+      targetId,
+      targetName,
+      targetTeams,
+      targetFormat,
+    };
     const cache = remoteActiveCacheRef.current;
     if (
       !force
       && cache?.hasValue
       && Date.now() - Number(cache.cachedAt || 0) < 15 * 1000
     ) {
-      return cache.value || null;
+      const cachedLock = cache.value || null;
+      if (!requireMatch || matchesRemoteTournamentContext(cachedLock, matchContext)) {
+        return cachedLock;
+      }
     }
 
     try {
       const meta = await appDataService.getAppMeta({ groupId: activeGroup?.id });
       const lock = meta?.activeTournament;
-      if (lock && lock.status === 'active') {
+      if (
+        lock
+        && lock.status === 'active'
+        && (!requireMatch || matchesRemoteTournamentContext(lock, matchContext))
+      ) {
         setRemoteActiveCache(lock);
         return lock;
       }
@@ -610,9 +719,13 @@ export const useTournamentActions = ({
 
     try {
       const tournaments = await tournamentService.getTournamentSummaries(20, activeGroup?.id, ['active']);
-      const active = (Array.isArray(tournaments) ? tournaments : []).find((item) => (
+      const activeCandidates = (Array.isArray(tournaments) ? tournaments : []).filter((item) => (
         item?.status === 'active' && !item?.champion
-      )) || null;
+      ));
+      const matchedActive = pickMatchingRemoteActiveTournament(activeCandidates, matchContext);
+      const active = requireMatch
+        ? (matchedActive || null)
+        : (matchedActive || activeCandidates[0] || null);
       setRemoteActiveCache(active);
       return active;
     } catch {
@@ -1061,13 +1174,17 @@ export const useTournamentActions = ({
     const pendingCreateId = await waitForPendingCreateResolution();
     if (pendingCreateId) return pendingCreateId;
 
-    const remoteActive = await fetchRemoteActiveLiveTournament();
+    const localId = resolveLocalTournamentId();
+    const remoteActive = await fetchRemoteActiveLiveTournament({
+      targetId: localId || currentTournamentId,
+      targetName: tournamentName,
+      targetTeams: teams,
+      targetFormat: tournamentFormat,
+      requireMatch: true,
+    });
     const remoteId = remoteActive?.appwriteId || remoteActive?.id || null;
     if (typeof remoteId === 'string' && remoteId.trim()) {
-      const localId = resolveLocalTournamentId();
-      if (localId && matchesTournamentId(remoteActive, localId)) {
-        return remoteId;
-      }
+      return remoteId;
     }
     return null;
   };
@@ -1484,7 +1601,9 @@ export const useTournamentActions = ({
     const scheduledIso = new Date(normalizedScheduledMs).toISOString();
     const scheduleLabel = new Date(normalizedScheduledMs).toLocaleString();
 
+    const optimisticId = `sched-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const payload = {
+      legacyTournamentId: optimisticId,
       name: selectedTournamentName,
       date: scheduledIso,
       teams: selectedTeams,
@@ -1499,8 +1618,6 @@ export const useTournamentActions = ({
       oddPlayerEnabled: selectedOddPlayerEnabled,
       oddPlayerName: selectedOddPlayerName,
     };
-
-    const optimisticId = `sched-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const scheduled = {
       ...payload,
       id: optimisticId,
@@ -2589,7 +2706,7 @@ export const useTournamentActions = ({
     cloudIdWarningShownRef.current = false;
 
     if (isAppwriteEnabled) {
-      void clearActiveTournamentLockIfMatches({
+      await clearActiveTournamentLockIfMatches({
         tournamentId: currentTournamentId,
         tournamentName,
         force: true,

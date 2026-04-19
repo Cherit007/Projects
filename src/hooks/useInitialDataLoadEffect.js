@@ -173,7 +173,11 @@ export const useInitialDataLoadEffect = ({
 
         const tournamentSummaries = await queryClient.fetchQuery({
           queryKey: queryKeys.tournamentSummaries(activeGroupId),
-          queryFn: () => tournamentService.getTournamentSummaries(40, activeGroupId, ['active', 'scheduled']),
+          queryFn: () => tournamentService.getTournamentSummaries(
+            40,
+            activeGroupId,
+            ['active', 'scheduled', 'completed']
+          ),
           staleTime: liveStateStaleTime,
         });
 

@@ -1,4 +1,23 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, vi } from 'vitest';
+
+const appDataServiceMock = vi.hoisted(() => ({
+  getAppMeta: vi.fn(async () => ({ activeTournament: null })),
+  saveAppMeta: vi.fn(async () => ({})),
+}));
+
+const tournamentServiceMock = vi.hoisted(() => ({
+  getTournamentSummaries: vi.fn(async () => []),
+}));
+
+vi.mock('../services/appDataService', () => ({
+  appDataService: appDataServiceMock,
+}));
+
+vi.mock('../services/tournamentService', () => ({
+  tournamentService: tournamentServiceMock,
+}));
+
 import { useTournamentActions } from '../hooks/useTournamentActions';
 
 const makeTeams = () => ([
@@ -40,6 +59,7 @@ const makeCompletedFixtures = (teams) => ([
 const createHarness = ({
   isAppwriteEnabled = false,
   saveTournamentResult = null,
+  activeGroup = null,
 } = {}) => {
   const teams = makeTeams();
   const state = {
@@ -113,7 +133,7 @@ const createHarness = ({
     confirmAction: vi.fn(async () => true),
     showToast,
     isAppwriteEnabled,
-    activeGroup: null,
+    activeGroup,
     updatePlayerDatabase: vi.fn(),
     tournamentName: state.tournamentName,
     setTournamentName,
@@ -183,6 +203,17 @@ const createHarness = ({
 };
 
 describe('Next tournament flow', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    appDataServiceMock.getAppMeta.mockReset();
+    appDataServiceMock.saveAppMeta.mockReset();
+    tournamentServiceMock.getTournamentSummaries.mockReset();
+    appDataServiceMock.getAppMeta.mockResolvedValue({ activeTournament: null });
+    appDataServiceMock.saveAppMeta.mockResolvedValue({});
+    tournamentServiceMock.getTournamentSummaries.mockResolvedValue([]);
+  });
+
   it('resets completed state and generates a fresh fixture list', async () => {
     const h = createHarness();
 
@@ -255,6 +286,126 @@ describe('Next tournament flow', () => {
     expect(Array.isArray(payload.fixtures)).toBe(true);
     expect(payload.fixtures.every((match) => match.completed === false)).toBe(true);
     expect(h.setActiveTournamentLock).toHaveBeenCalledWith(null);
+  });
+
+  it('waits for the previous cloud lock clear before creating the next tournament', async () => {
+    let resolveClearLock = null;
+    const clearLockPromise = new Promise((resolve) => {
+      resolveClearLock = resolve;
+    });
+    appDataServiceMock.saveAppMeta
+      .mockImplementationOnce(() => clearLockPromise)
+      .mockResolvedValue({});
+
+    const h = createHarness({
+      isAppwriteEnabled: true,
+      activeGroup: { id: 'group-1', name: 'Open Club' },
+      saveTournamentResult: {
+        id: 'new-tournament-id',
+        appwriteId: 'new-tournament-id',
+      },
+    });
+
+    let startPromise = null;
+    await act(async () => {
+      startPromise = h.result.current.startNextTournament({
+        tournamentNameOverride: 'League Night 2nd Tournament',
+      });
+    });
+
+    expect(appDataServiceMock.saveAppMeta).toHaveBeenCalledWith(
+      { activeTournament: null },
+      { groupId: 'group-1' }
+    );
+    expect(h.saveTournamentMutation.mutateAsync).not.toHaveBeenCalled();
+
+    resolveClearLock({});
+
+    await act(async () => {
+      await startPromise;
+    });
+    h.sync();
+
+    await waitFor(() => {
+      expect(h.saveTournamentMutation.mutateAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('resolves the resumed tournament cloud id by name and teams before completion', async () => {
+    const h = createHarness({
+      isAppwriteEnabled: true,
+      activeGroup: { id: 'group-1', name: 'Open Club' },
+      saveTournamentResult: {
+        id: 'cloud-live-2',
+        appwriteId: 'cloud-live-2',
+      },
+    });
+    h.state.tournamentName = 'League Night 2nd Tournament';
+    h.state.currentTournamentId = 'local-2';
+    h.state.champion = null;
+    h.state.tournamentHistory = [
+      {
+        id: 'local-2',
+        legacyTournamentId: 'local-2',
+        appwriteId: null,
+        name: 'League Night 2nd Tournament',
+        date: '2026-03-09T10:00:00.000Z',
+        teams: h.state.teams,
+        fixtures: h.state.fixtures,
+        bracket: [],
+        champion: null,
+        format: '1',
+        gameMode: 'doubles',
+        tournamentFormat: 'league',
+        status: 'active',
+      },
+    ];
+    tournamentServiceMock.getTournamentSummaries.mockResolvedValue([
+      {
+        id: 'cloud-live-2',
+        appwriteId: 'cloud-live-2',
+        legacyTournamentId: '',
+        name: 'League Night 2nd Tournament',
+        date: '2026-03-09T10:05:00.000Z',
+        teams: h.state.teams,
+        teamsCount: h.state.teams.length,
+        fixtures: [],
+        bracket: [],
+        finalMatch: null,
+        champion: null,
+        aiSummaries: [],
+        swapHistory: [],
+        format: '1',
+        gameMode: 'doubles',
+        tournamentFormat: 'league',
+        status: 'active',
+        isSummary: true,
+      },
+    ]);
+    h.sync();
+
+    await act(async () => {
+      const saved = await h.result.current.saveFinalResult(
+        21,
+        18,
+        [h.state.teams[0], h.state.teams[1]]
+      );
+      expect(saved).toBe(true);
+    });
+    h.sync();
+
+    await waitFor(() => {
+      expect(h.saveTournamentMutation.mutateAsync).toHaveBeenCalled();
+    });
+
+    const payload = h.saveTournamentMutation.mutateAsync.mock.calls.at(-1)[0];
+    expect(payload.appwriteId).toBe('cloud-live-2');
+
+    const matchingByName = h.state.tournamentHistory.filter(
+      (entry) => entry?.name === 'League Night 2nd Tournament'
+    );
+    expect(matchingByName).toHaveLength(1);
+    expect(matchingByName[0].status).toBe('completed');
   });
 
   it('finalizing uses the existing cloud id and replaces active history entry', async () => {

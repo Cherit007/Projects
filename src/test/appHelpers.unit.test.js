@@ -214,10 +214,10 @@ describe('dedupeLiveTournaments', () => {
 });
 
 describe('dedupeTournamentHistory', () => {
-  it('keeps active + completed separate when stable ids differ', () => {
+  it('keeps cloud active + completed separate when payloads differ', () => {
     const active = {
-      id: '1711111111111',
-      appwriteId: '',
+      id: 'cloud-grand-live',
+      appwriteId: 'cloud-grand-live',
       name: 'Grand Slam',
       status: 'active',
       tournamentFormat: 'league',
@@ -330,14 +330,70 @@ describe('dedupeTournamentHistory', () => {
     expect(deduped[0].status).toBe('completed');
     expect(deduped[0].champion?.name).toBe('Falcons');
   });
+
+  it('collapses identical cloud duplicates with different ids when payload matches', () => {
+    const first = {
+      id: 'cloud-city-1',
+      appwriteId: 'cloud-city-1',
+      name: 'City Cup',
+      status: 'completed',
+      tournamentFormat: 'league',
+      date: '2026-03-09T10:00:00.000Z',
+      teams: [
+        { id: 1, name: 'Falcons', player1: 'A1', player2: 'A2' },
+        { id: 2, name: 'Tigers', player1: 'B1', player2: 'B2' },
+      ],
+      fixtures: [
+        {
+          id: 'm1-a',
+          completed: true,
+          team1: { name: 'Falcons', player1: 'A1', player2: 'A2' },
+          team2: { name: 'Tigers', player1: 'B1', player2: 'B2' },
+          team1Score: 21,
+          team2Score: 18,
+          winner: { name: 'Falcons', player1: 'A1', player2: 'A2' },
+        },
+      ],
+      champion: { id: 1, name: 'Falcons', player1: 'A1', player2: 'A2' },
+    };
+    const second = {
+      id: 'cloud-city-2',
+      appwriteId: 'cloud-city-2',
+      name: 'City Cup',
+      status: 'completed',
+      tournamentFormat: 'league',
+      date: '2026-03-09T10:20:00.000Z',
+      teams: [
+        { id: 11, name: 'Falcons', player1: 'A1', player2: 'A2' },
+        { id: 22, name: 'Tigers', player1: 'B1', player2: 'B2' },
+      ],
+      fixtures: [
+        {
+          id: 'm1-b',
+          completed: true,
+          team1: { name: 'Falcons', player1: 'A1', player2: 'A2' },
+          team2: { name: 'Tigers', player1: 'B1', player2: 'B2' },
+          team1Score: 21,
+          team2Score: 18,
+          winner: { name: 'Falcons', player1: 'A1', player2: 'A2' },
+        },
+      ],
+      champion: { id: 99, name: 'Falcons', player1: 'A1', player2: 'A2' },
+    };
+
+    const deduped = dedupeTournamentHistory([first, second]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].status).toBe('completed');
+    expect(deduped[0].champion?.name).toBe('Falcons');
+  });
 });
 
 describe('upsertTournamentInHistory', () => {
-  it('keeps duplicate identity records separate when stable ids differ', () => {
+  it('keeps cloud identity records separate when payloads differ', () => {
     const history = [
       {
-        id: '1711111111111',
-        appwriteId: '',
+        id: 'cloud-spring-live',
+        appwriteId: 'cloud-spring-live',
         name: 'Spring Open',
         status: 'active',
         tournamentFormat: 'league',
