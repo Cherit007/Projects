@@ -1,5 +1,4 @@
 import React from 'react';
-import { Trophy } from 'lucide-react';
 
 const BracketView = ({ bracket, onMatchClick }) => {
   const getRoundName = (roundIndex) => {
@@ -9,97 +8,79 @@ const BracketView = ({ bracket, onMatchClick }) => {
     if (firstRoundType === 'playin' && roundIndex === 0) return 'Play-in Match';
 
     const roundsFromFinal = totalRounds - roundIndex;
-    if (roundsFromFinal === 1) return 'Final';
-    if (roundsFromFinal === 2) return 'Semi Finals';
-    if (roundsFromFinal === 3) return 'Quarter Finals';
-    if (roundsFromFinal === 4) return 'Round of 16';
+    if (roundsFromFinal === 1) return 'Grand final';
+    if (roundsFromFinal === 2) return 'Semi-finals';
+    if (roundsFromFinal === 3) return 'Quarter-finals';
     return `Round ${roundIndex + 1}`;
   };
 
-  const renderMatch = (match, roundIndex, matchIndex) => {
-    if (!match) return null;
-    
+  const renderPending = (match, key) => (
+    <button
+      type="button"
+      key={key}
+      onClick={() => onMatchClick(match)}
+      className="variant-a-pending-box"
+    >
+      <p className="variant-a-pending-label">{match?.team1 && match?.team2 ? 'Awaiting result' : 'Waiting for teams'}</p>
+      <p className="variant-a-pending-matchup">
+        {match?.team1?.name || 'TBD'} vs {match?.team2?.name || 'TBD'}
+      </p>
+      <p className="variant-a-meta-copy">Match {match?.id || '-'}</p>
+    </button>
+  );
+
+  const renderMatch = (match, key) => {
+    if (!match) return renderPending(match, key);
     const isCompleted = match.completed;
-    const winner = isCompleted && match.score1 !== null && match.score2 !== null
-      ? (match.score1 > match.score2 ? match.team1 : match.team2)
+    const winnerId = isCompleted && match.score1 !== null && match.score2 !== null
+      ? (match.score1 > match.score2 ? match.team1?.id : match.team2?.id)
       : null;
 
+    if (!isCompleted) {
+      return renderPending(match, key);
+    }
+
     return (
-      <div
-        key={`${roundIndex}-${matchIndex}`}
-        className={`bg-white rounded-lg shadow-md p-2 sm:p-3 mb-3 sm:mb-4 cursor-pointer border-2 transition-all ${
-          isCompleted ? 'border-green-400' : 'border-gray-200 hover:border-blue-400'
-        }`}
+      <button
+        type="button"
+        key={key}
         onClick={() => onMatchClick(match)}
+        className="variant-a-bracket-match"
       >
-        <div className="text-[11px] sm:text-xs text-gray-500 mb-2 font-semibold">
-          Match {match.id}
-        </div>
-        
-        {/* Team 1 */}
-        <div className={`flex items-center justify-between p-2 rounded mb-1 ${
-          winner?.id === match.team1?.id ? 'bg-green-50 border border-green-300' : 'bg-gray-50'
-        }`}>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="text-lg">{match.team1?.emoji || '❓'}</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm font-semibold truncate">{match.team1?.name || 'TBD'}</p>
-              {match.team1 && (
-                <p className="text-[11px] sm:text-xs text-gray-600 truncate">
-                  {match.team1.player || match.team1.player1}{match.team1.player2 && ` & ${match.team1.player2}`}
-                </p>
-              )}
-            </div>
+        <div className={`variant-a-bracket-row ${winnerId === match.team1?.id ? 'variant-a-bracket-row-winner' : ''}`}>
+          <div className="variant-a-bracket-team">
+            <span className="variant-a-team-dot">{match.team1?.emoji || '🏸'}</span>
+            <span className="variant-a-bracket-name">{match.team1?.name || 'TBD'}</span>
           </div>
-          {isCompleted && (
-            <span className="font-bold text-lg ml-2">{match.score1}</span>
-          )}
+          <span className={`variant-a-bracket-score ${winnerId === match.team1?.id ? 'variant-a-bracket-score-winner' : ''}`}>
+            {match.score1}
+          </span>
         </div>
-
-        {/* Team 2 */}
-        <div className={`flex items-center justify-between p-2 rounded ${
-          winner?.id === match.team2?.id ? 'bg-green-50 border border-green-300' : 'bg-gray-50'
-        }`}>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="text-lg">{match.team2?.emoji || '❓'}</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm font-semibold truncate">{match.team2?.name || 'TBD'}</p>
-              {match.team2 && (
-                <p className="text-[11px] sm:text-xs text-gray-600 truncate">
-                  {match.team2.player || match.team2.player1}{match.team2.player2 && ` & ${match.team2.player2}`}
-                </p>
-              )}
-            </div>
+        <div className={`variant-a-bracket-row ${winnerId === match.team2?.id ? 'variant-a-bracket-row-winner' : ''}`}>
+          <div className="variant-a-bracket-team">
+            <span className="variant-a-team-dot">{match.team2?.emoji || '🏸'}</span>
+            <span className="variant-a-bracket-name">{match.team2?.name || 'TBD'}</span>
           </div>
-          {isCompleted && (
-            <span className="font-bold text-lg ml-2">{match.score2}</span>
-          )}
+          <span className={`variant-a-bracket-score ${winnerId === match.team2?.id ? 'variant-a-bracket-score-winner' : ''}`}>
+            {match.score2}
+          </span>
         </div>
-      </div>
-    );
-  };
-
-  const renderRound = (round, roundIndex) => {
-    return (
-      <div key={roundIndex} className="flex-1 min-w-[220px] sm:min-w-[280px]">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 sm:px-4 py-2 rounded-t-lg font-bold text-center text-sm sm:text-base">
-          {getRoundName(roundIndex)}
-        </div>
-        <div className="bg-gray-50 p-2 sm:p-4 rounded-b-lg min-h-[180px] sm:min-h-[200px]">
-          {round.map((match, matchIndex) => renderMatch(match, roundIndex, matchIndex))}
-        </div>
-      </div>
+      </button>
     );
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 overflow-x-auto">
-      <div className="flex items-center gap-2 mb-4 sm:mb-6">
-        <Trophy size={24} className="text-yellow-600" />
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Knockout Bracket</h2>
-      </div>
-      <div className="flex gap-3 sm:gap-4">
-        {bracket.map((round, roundIndex) => renderRound(round, roundIndex))}
+    <div className="variant-a-card">
+      <p className="variant-a-section-label">Final bracket</p>
+      <div className="variant-a-bracket-stack">
+        {bracket.map((round, roundIndex) => (
+          <div key={`round-${roundIndex}`} className="space-y-2">
+            <p className="variant-a-bracket-label">{getRoundName(roundIndex)}</p>
+            {(Array.isArray(round) ? round : []).map((match, matchIndex) => (
+              renderMatch(match, `${roundIndex}-${matchIndex}`)
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );

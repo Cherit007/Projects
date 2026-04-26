@@ -289,7 +289,7 @@ const TeamEntry = ({
               </label>
               <p className="odd-rotation-note mt-1 text-xs text-slate-600">
                 Use this when you have one extra doubles player (example: 7 players for 3 teams).
-                The odd player rotates into matches so everyone gets balanced play time.
+                Each league round shuffles the six team players, forms fresh pairs, then swaps the extra player into one random active slot.
               </p>
               {oddPlayerEnabled && (
                 <div className="mt-3">

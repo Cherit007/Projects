@@ -337,6 +337,8 @@ export const useTournamentShell = ({
     oddPlayerEnabled,
     oddPlayerName,
     playerPhotos,
+    allTimeStats: cumulativeAllTimeStats,
+    eloLeaderboard,
     onUpdatePlayerPhoto: updatePlayerPhoto,
     canEditPlayerPhoto: canEditOwnProfile,
     onSaveMatchResult: async (matchId, score1, score2) => withActionLock(

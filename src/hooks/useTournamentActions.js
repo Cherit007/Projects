@@ -12,6 +12,7 @@ import { queueLocalStorageJson, queueLocalStorageValue } from '../services/local
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
+import { applyRandomOddPlayerSwapToLeagueFixtures } from '../utils/draft';
 import {
   dedupeTournamentHistory,
   deriveRatingsFromHistory,
@@ -66,6 +67,7 @@ export const useTournamentActions = ({
   setActiveTournamentLock,
   syncCurrentTournament,
   patchTournamentMatches,
+  saveTournamentTransactionToAppwrite,
   markRatingsPersisted,
   buildRatingsDelta,
   saveTournamentMutation,
@@ -322,9 +324,22 @@ export const useTournamentActions = ({
     return rebuilt;
   };
 
-  const injectRotatingOddPlayer = ({ fixtures: baseFixtures = [], oddPlayerName = '' }) => {
+  const injectRotatingOddPlayer = ({
+    fixtures: baseFixtures = [],
+    oddPlayerName = '',
+    teams: baseTeams = teams,
+  }) => {
     const oddName = (oddPlayerName || '').trim();
     if (!oddName) return baseFixtures;
+
+    const randomOddPlayerAssignments = applyRandomOddPlayerSwapToLeagueFixtures({
+      fixtures: baseFixtures,
+      teams: baseTeams,
+      oddPlayerName: oddName,
+    });
+    if (randomOddPlayerAssignments.ok) {
+      return randomOddPlayerAssignments.fixtures;
+    }
 
     const playCount = {};
     const allPlayers = new Set([oddName]);
@@ -853,6 +868,37 @@ export const useTournamentActions = ({
     });
   };
 
+  const buildRatingsDeltaPayload = (beforeRatings = {}, afterRatings = {}) => {
+    if (typeof buildRatingsDelta === 'function') {
+      return buildRatingsDelta(beforeRatings || {}, afterRatings || {});
+    }
+    return {
+      changedRatings: {},
+      deletedPlayerNames: [],
+    };
+  };
+
+  const buildCloudSyncPayload = ({
+    teamsSnapshot = teams,
+    fixturesSnapshot = fixtures,
+    bracketSnapshot = bracket,
+    championSnapshot = champion,
+    aiSummariesSnapshot = aiMatchSummaries,
+    swapHistorySnapshot = swapHistory,
+    updatedAt = new Date().toISOString(),
+  } = {}) => ({
+    ...buildCloudTournamentPayload({
+      teamsSnapshot,
+      fixturesSnapshot,
+      bracketSnapshot,
+      championSnapshot,
+      aiSummariesSnapshot,
+      swapHistorySnapshot,
+    }),
+    updatedAt,
+    sourceUpdatedAt: updatedAt,
+  });
+
   const resolveLocalTournamentId = () => {
     const fromRef = normalizeTournamentId(localTournamentIdRef.current);
     if (fromRef) return fromRef;
@@ -1034,12 +1080,14 @@ export const useTournamentActions = ({
   const buildLeagueMatchPatch = (match) => ({
     matchKind: 'league',
     id: String(match?.id ?? '').trim(),
-    legacyMatchId: String(match?.id ?? '').trim(),
+    legacyMatchId: String(match?.legacyMatchId ?? match?.immutableMatchId ?? match?.id ?? match?.appwriteId ?? '').trim(),
     team1: match?.team1 || null,
     team2: match?.team2 || null,
     score1: match?.score1 ?? '',
     score2: match?.score2 ?? '',
     completed: Boolean(match?.completed),
+    completedAt: match?.completedAt || '',
+    sourceUpdatedAt: match?.optimisticVersion || match?.updatedAt || match?.completedAt || new Date().toISOString(),
     roundLabel: match?.round ?? '',
     roundNo: match?.round ?? '',
     nextLegacyMatchId: match?.nextMatchId ?? '',
@@ -1051,7 +1099,7 @@ export const useTournamentActions = ({
     return {
       matchKind: normalizedRound === 'final' ? 'final' : 'knockout',
       id: String(match?.id ?? '').trim(),
-      legacyMatchId: String(match?.id ?? '').trim(),
+      legacyMatchId: String(match?.legacyMatchId ?? match?.immutableMatchId ?? match?.id ?? match?.appwriteId ?? '').trim(),
       bracketRoundIndex: roundIndex + 1,
       bracketMatchIndex: matchIndex + 1,
       team1: match?.team1 || null,
@@ -1059,6 +1107,8 @@ export const useTournamentActions = ({
       score1: match?.score1 ?? '',
       score2: match?.score2 ?? '',
       completed: Boolean(match?.completed),
+      completedAt: match?.completedAt || '',
+      sourceUpdatedAt: match?.optimisticVersion || match?.updatedAt || match?.completedAt || new Date().toISOString(),
       roundLabel,
       roundNo: match?.round ?? '',
       nextLegacyMatchId: match?.nextMatchId ?? '',
@@ -1417,6 +1467,7 @@ export const useTournamentActions = ({
       if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
         newFixtures = injectRotatingOddPlayer({
           fixtures: newFixtures,
+          teams: selectedTeams,
           oddPlayerName: selectedOddPlayerName,
         });
       }
@@ -1556,7 +1607,7 @@ export const useTournamentActions = ({
     setStep('tournament');
     setLoading(false);
     if (selectedGameMode !== 'singles' && selectedOddPlayerEnabled && selectedOddPlayerName) {
-      showToast(`Tournament generated with rotating odd player: ${selectedOddPlayerName} 🏸`);
+      showToast(`Tournament generated with random odd-player swap mode: ${selectedOddPlayerName} 🏸`);
       return true;
     }
     showToast('Tournament generated! 🏸');
@@ -1780,22 +1831,44 @@ export const useTournamentActions = ({
             aiSummariesSnapshot: nextSummaries,
             swapHistorySnapshot: swapHistory,
           });
-          await patchTournamentMatchesWithFallback({
-            tournamentId: syncTournamentId,
-            matchPatches: changedLeagueMatchPatches,
-            fallbackDelayMs: 450,
-            fallbackTournamentData: {
-              teams,
-              fixtures: updatedFixtures,
-              bracket,
-              champion,
-              finalMatch: null,
-              aiSummaries: nextSummaries,
-              swapHistory,
-            },
-            requireDurableSync: true,
-          });
-          await updateActiveTournamentLock(activeLockSnapshot, { immediate: true });
+          if (typeof saveTournamentTransactionToAppwrite === 'function') {
+            await saveTournamentTransactionToAppwrite({
+              tournamentId: syncTournamentId,
+              tournamentData: buildCloudSyncPayload({
+                teamsSnapshot: teams,
+                fixturesSnapshot: updatedFixtures,
+                bracketSnapshot: bracket,
+                championSnapshot: champion,
+                aiSummariesSnapshot: nextSummaries,
+                swapHistorySnapshot: swapHistory,
+                updatedAt: activeLockSnapshot.updatedAt,
+              }),
+              ratingsDelta: buildRatingsDeltaPayload(ratingsBefore, updatedRatings),
+              activeTournament: activeLockSnapshot,
+            });
+            setRemoteActiveCache(activeLockSnapshot);
+            setActiveTournamentLock?.(activeLockSnapshot);
+            if (typeof markRatingsPersisted === 'function') {
+              markRatingsPersisted(updatedRatings);
+            }
+          } else {
+            await patchTournamentMatchesWithFallback({
+              tournamentId: syncTournamentId,
+              matchPatches: changedLeagueMatchPatches,
+              fallbackDelayMs: 450,
+              fallbackTournamentData: {
+                teams,
+                fixtures: updatedFixtures,
+                bracket,
+                champion,
+                finalMatch: null,
+                aiSummaries: nextSummaries,
+                swapHistory,
+              },
+              requireDurableSync: true,
+            });
+            await updateActiveTournamentLock(activeLockSnapshot, { immediate: true });
+          }
         } catch (error) {
           console.error('Failed to sync match result to cloud:', error);
           showToast('Result saved locally; cloud sync failed. Avoid refresh and try again.', 'error');
@@ -1838,22 +1911,44 @@ export const useTournamentActions = ({
                 aiSummariesSnapshot: nextSummaries,
                 swapHistorySnapshot: swapHistory,
               });
-              await patchTournamentMatchesWithFallback({
-                tournamentId: recoveredId,
-                matchPatches: changedLeagueMatchPatches,
-                fallbackImmediate: true,
-                fallbackTournamentData: {
-                  teams,
-                  fixtures: updatedFixtures,
-                  bracket,
-                  champion,
-                  finalMatch: null,
-                  aiSummaries: nextSummaries,
-                  swapHistory,
-                },
-                requireDurableSync: true,
-              });
-              await updateActiveTournamentLock(recoveredLockSnapshot, { immediate: true });
+              if (typeof saveTournamentTransactionToAppwrite === 'function') {
+                await saveTournamentTransactionToAppwrite({
+                  tournamentId: recoveredId,
+                  tournamentData: buildCloudSyncPayload({
+                    teamsSnapshot: teams,
+                    fixturesSnapshot: updatedFixtures,
+                    bracketSnapshot: bracket,
+                    championSnapshot: champion,
+                    aiSummariesSnapshot: nextSummaries,
+                    swapHistorySnapshot: swapHistory,
+                    updatedAt: recoveredLockSnapshot.updatedAt,
+                  }),
+                  ratingsDelta: buildRatingsDeltaPayload(ratingsBefore, updatedRatings),
+                  activeTournament: recoveredLockSnapshot,
+                });
+                setRemoteActiveCache(recoveredLockSnapshot);
+                setActiveTournamentLock?.(recoveredLockSnapshot);
+                if (typeof markRatingsPersisted === 'function') {
+                  markRatingsPersisted(updatedRatings);
+                }
+              } else {
+                await patchTournamentMatchesWithFallback({
+                  tournamentId: recoveredId,
+                  matchPatches: changedLeagueMatchPatches,
+                  fallbackImmediate: true,
+                  fallbackTournamentData: {
+                    teams,
+                    fixtures: updatedFixtures,
+                    bracket,
+                    champion,
+                    finalMatch: null,
+                    aiSummaries: nextSummaries,
+                    swapHistory,
+                  },
+                  requireDurableSync: true,
+                });
+                await updateActiveTournamentLock(recoveredLockSnapshot, { immediate: true });
+              }
               setTournamentHistory((prev) => upsertTournamentHistory(prev, {
                 id: recoveredId,
                 appwriteId: recoveredId,
@@ -2093,7 +2188,11 @@ export const useTournamentActions = ({
     return normalizeCloudTournamentId(await resolveSyncTournamentIdForWrite());
   };
 
-  const saveTournamentHistory = async (tournament) => {
+  const saveTournamentHistory = async (tournament, options = {}) => {
+    const {
+      ratingsAfter = null,
+      ratingsDelta = null,
+    } = options || {};
     const resolvedCompletionId = await resolveTournamentIdForCompletion(
       tournament?.appwriteId || currentTournamentId
     );
@@ -2112,13 +2211,41 @@ export const useTournamentActions = ({
     clearActiveTournamentCache();
 
     if (isAppwriteEnabled && resolvedCompletionId) {
-      const saved = await saveTournamentMutation.mutateAsync({
-        ...normalizedTournament,
-        status: 'completed',
-      });
-      const savedId = normalizeCloudTournamentId(
-        saved?.appwriteId || saved?.id || resolvedCompletionId
-      );
+      const completionUpdatedAt = new Date().toISOString();
+      let savedId = resolvedCompletionId;
+      if (typeof saveTournamentTransactionToAppwrite === 'function') {
+        const transactionResult = await saveTournamentTransactionToAppwrite({
+          tournamentId: resolvedCompletionId,
+          tournamentData: {
+            ...normalizedTournament,
+            status: 'completed',
+            updatedAt: completionUpdatedAt,
+            sourceUpdatedAt: completionUpdatedAt,
+          },
+          ratingsDelta,
+          activeTournament: null,
+        });
+        savedId = normalizeCloudTournamentId(
+          transactionResult?.tournament?.appwriteId
+          || transactionResult?.tournament?.id
+          || resolvedCompletionId
+        );
+        setRemoteActiveCache(null);
+        setActiveTournamentLock?.(null);
+        if (ratingsAfter && typeof markRatingsPersisted === 'function') {
+          markRatingsPersisted(ratingsAfter || {});
+        }
+      } else {
+        const saved = await saveTournamentMutation.mutateAsync({
+          ...normalizedTournament,
+          status: 'completed',
+          updatedAt: completionUpdatedAt,
+          sourceUpdatedAt: completionUpdatedAt,
+        });
+        savedId = normalizeCloudTournamentId(
+          saved?.appwriteId || saved?.id || resolvedCompletionId
+        );
+      }
       if (savedId) {
         setCurrentTournamentId(savedId);
         setTournamentHistory((prev) => upsertTournamentHistory(prev, {
@@ -2129,10 +2256,12 @@ export const useTournamentActions = ({
           status: 'completed',
         }));
       }
-      await clearActiveTournamentLockIfMatches({
-        tournamentId: savedId || normalizedTournament.appwriteId || normalizedTournament.id,
-        tournamentName: normalizedTournament.name,
-      });
+      if (typeof saveTournamentTransactionToAppwrite !== 'function') {
+        await clearActiveTournamentLockIfMatches({
+          tournamentId: savedId || normalizedTournament.appwriteId || normalizedTournament.id,
+          tournamentName: normalizedTournament.name,
+        });
+      }
     } else if (isAppwriteEnabled) {
       await clearActiveTournamentLockIfMatches({
         tournamentId: normalizedTournament.appwriteId || normalizedTournament.id,
@@ -2263,7 +2392,10 @@ export const useTournamentActions = ({
         }
         setAiMatchSummaries(nextSummaries);
         tournament.aiSummaries = nextSummaries;
-        await saveTournamentHistory(tournament);
+        await saveTournamentHistory(tournament, {
+          ratingsAfter: updatedRatings,
+          ratingsDelta: buildRatingsDeltaPayload(ratingsBefore, updatedRatings),
+        });
       } else {
         setAiMatchSummaries(nextSummaries);
         persistActiveTournamentSnapshot({
@@ -2283,21 +2415,43 @@ export const useTournamentActions = ({
             aiSummariesSnapshot: nextSummaries,
             swapHistorySnapshot: swapHistory,
           });
-          await patchTournamentMatchesWithFallback({
-            tournamentId: syncTournamentId,
-            matchPatches: changedBracketMatchPatches,
-            fallbackDelayMs: 900,
-            fallbackTournamentData: {
-              fixtures,
-              bracket: updatedBracket,
-              champion: null,
-              finalMatch: null,
-              aiSummaries: nextSummaries,
-              swapHistory,
-            },
-            requireDurableSync: true,
-          });
-          await updateActiveTournamentLock(activeLockSnapshot, { immediate: true });
+          if (typeof saveTournamentTransactionToAppwrite === 'function') {
+            await saveTournamentTransactionToAppwrite({
+              tournamentId: syncTournamentId,
+              tournamentData: buildCloudSyncPayload({
+                teamsSnapshot: teams,
+                fixturesSnapshot: fixtures,
+                bracketSnapshot: updatedBracket,
+                championSnapshot: null,
+                aiSummariesSnapshot: nextSummaries,
+                swapHistorySnapshot: swapHistory,
+                updatedAt: activeLockSnapshot.updatedAt,
+              }),
+              ratingsDelta: buildRatingsDeltaPayload(ratingsBefore, updatedRatings),
+              activeTournament: activeLockSnapshot,
+            });
+            setRemoteActiveCache(activeLockSnapshot);
+            setActiveTournamentLock?.(activeLockSnapshot);
+            if (typeof markRatingsPersisted === 'function') {
+              markRatingsPersisted(updatedRatings);
+            }
+          } else {
+            await patchTournamentMatchesWithFallback({
+              tournamentId: syncTournamentId,
+              matchPatches: changedBracketMatchPatches,
+              fallbackDelayMs: 900,
+              fallbackTournamentData: {
+                fixtures,
+                bracket: updatedBracket,
+                champion: null,
+                finalMatch: null,
+                aiSummaries: nextSummaries,
+                swapHistory,
+              },
+              requireDurableSync: true,
+            });
+            await updateActiveTournamentLock(activeLockSnapshot, { immediate: true });
+          }
         } else if (isAppwriteEnabled) {
           try {
             const activeLockSnapshot = buildActiveTournamentSnapshot({
@@ -2402,7 +2556,10 @@ export const useTournamentActions = ({
       isFinal: true,
     }));
     tournament.aiSummaries = nextSummaries;
-    await saveTournamentHistory(tournament);
+    await saveTournamentHistory(tournament, {
+      ratingsAfter: updatedRatings,
+      ratingsDelta: buildRatingsDeltaPayload(ratingsBefore, updatedRatings),
+    });
     showToast(`🎉 ${winner.name} are the champions!`);
     return true;
   };

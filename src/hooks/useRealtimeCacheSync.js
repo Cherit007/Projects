@@ -13,6 +13,7 @@ import {
 
 const TOURNAMENT_PATCH_DEBOUNCE_MS = 280;
 const CASUAL_PATCH_DEBOUNCE_MS = 420;
+const AUXILIARY_STATE_PATCH_DEBOUNCE_MS = 320;
 
 const toText = (value) => String(value || '').trim();
 
@@ -44,12 +45,14 @@ export const useRealtimeCacheSync = ({
   queryClient,
   setTournamentHistory,
   setCasualMatches,
+  reloadAuxiliaryState = null,
 }) => {
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [lastRealtimeEventAt, setLastRealtimeEventAt] = useState(0);
   const [lastCachePatchAt, setLastCachePatchAt] = useState(0);
   const tournamentPatchTimersRef = useRef(new Map());
   const casualPatchTimerRef = useRef(null);
+  const auxiliaryPatchTimerRef = useRef(null);
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -72,6 +75,10 @@ export const useRealtimeCacheSync = ({
       clearTimeout(casualPatchTimerRef.current);
       casualPatchTimerRef.current = null;
     }
+    if (auxiliaryPatchTimerRef.current) {
+      clearTimeout(auxiliaryPatchTimerRef.current);
+      auxiliaryPatchTimerRef.current = null;
+    }
 
     if (!enabled || !activeGroupId || !queryClient || !DATABASE_ID) {
       deferConnectionState(false);
@@ -80,12 +87,28 @@ export const useRealtimeCacheSync = ({
 
     const tournamentCollectionId = toText(COLLECTIONS.TOURNAMENTS_V2);
     const matchesCollectionId = toText(COLLECTIONS.MATCHES_V2);
+    const playersCollectionId = toText(COLLECTIONS.PLAYERS_V2);
+    const ratingsCollectionId = toText(COLLECTIONS.RATINGS_CURRENT_V2);
+    const metaCollectionId = toText(COLLECTIONS.APP_META);
+    const activeLockCollectionId = toText(COLLECTIONS.GROUP_ACTIVE_LOCKS);
     const channels = [];
     if (tournamentCollectionId) {
       channels.push(`databases.${DATABASE_ID}.collections.${tournamentCollectionId}.documents`);
     }
     if (matchesCollectionId) {
       channels.push(`databases.${DATABASE_ID}.collections.${matchesCollectionId}.documents`);
+    }
+    if (playersCollectionId) {
+      channels.push(`databases.${DATABASE_ID}.collections.${playersCollectionId}.documents`);
+    }
+    if (ratingsCollectionId) {
+      channels.push(`databases.${DATABASE_ID}.collections.${ratingsCollectionId}.documents`);
+    }
+    if (metaCollectionId) {
+      channels.push(`databases.${DATABASE_ID}.collections.${metaCollectionId}.documents`);
+    }
+    if (activeLockCollectionId) {
+      channels.push(`databases.${DATABASE_ID}.collections.${activeLockCollectionId}.documents`);
     }
     if (channels.length === 0) {
       deferConnectionState(false);
@@ -201,6 +224,24 @@ export const useRealtimeCacheSync = ({
       }, CASUAL_PATCH_DEBOUNCE_MS);
     };
 
+    const scheduleAuxiliaryReload = () => {
+      if (typeof reloadAuxiliaryState !== 'function') return;
+      if (auxiliaryPatchTimerRef.current) {
+        clearTimeout(auxiliaryPatchTimerRef.current);
+      }
+      auxiliaryPatchTimerRef.current = setTimeout(async () => {
+        auxiliaryPatchTimerRef.current = null;
+        try {
+          const didRefresh = await reloadAuxiliaryState();
+          if (!mountedRef.current || !didRefresh) return;
+          setLastCachePatchAt(Date.now());
+        } catch (error) {
+          if (!mountedRef.current) return;
+          console.error('Realtime patch failed for auxiliary cloud state:', error);
+        }
+      }, AUXILIARY_STATE_PATCH_DEBOUNCE_MS);
+    };
+
     let unsubscribe = null;
     try {
       unsubscribe = client.subscribe(channels, (message) => {
@@ -231,15 +272,23 @@ export const useRealtimeCacheSync = ({
         }
 
         const isMatchEvent = hasCollectionMarker(markers, matchesCollectionId);
-        if (!isMatchEvent) return;
-
-        const matchKind = toText(payload?.matchKind).toLowerCase();
-        const matchTournamentId = toText(payload?.tournamentId);
-        if (matchKind === 'casual' || (!matchKind && !matchTournamentId)) {
-          scheduleCasualPatch();
+        if (isMatchEvent) {
+          const matchKind = toText(payload?.matchKind).toLowerCase();
+          const matchTournamentId = toText(payload?.tournamentId);
+          if (matchKind === 'casual' || (!matchKind && !matchTournamentId)) {
+            scheduleCasualPatch();
+          }
+          if (matchTournamentId) {
+            scheduleTournamentPatch(matchTournamentId);
+          }
         }
-        if (matchTournamentId) {
-          scheduleTournamentPatch(matchTournamentId);
+
+        const isAuxiliaryEvent = hasCollectionMarker(markers, playersCollectionId)
+          || hasCollectionMarker(markers, ratingsCollectionId)
+          || hasCollectionMarker(markers, metaCollectionId)
+          || hasCollectionMarker(markers, activeLockCollectionId);
+        if (isAuxiliaryEvent) {
+          scheduleAuxiliaryReload();
         }
       });
       deferConnectionState(true);
@@ -256,6 +305,10 @@ export const useRealtimeCacheSync = ({
         clearTimeout(casualPatchTimerRef.current);
         casualPatchTimerRef.current = null;
       }
+      if (auxiliaryPatchTimerRef.current) {
+        clearTimeout(auxiliaryPatchTimerRef.current);
+        auxiliaryPatchTimerRef.current = null;
+      }
       if (typeof unsubscribe === 'function') {
         unsubscribe();
       }
@@ -264,6 +317,7 @@ export const useRealtimeCacheSync = ({
     enabled,
     activeGroupId,
     queryClient,
+    reloadAuxiliaryState,
     setTournamentHistory,
     setCasualMatches,
   ]);

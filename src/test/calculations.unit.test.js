@@ -215,4 +215,48 @@ describe("leaderboard/stat sorting stability", () => {
     const stats = calculateCumulativePlayerStats(history);
     expect(stats.map((entry) => entry.name).slice(0, 2)).toEqual(["Amy", "Bob"]);
   });
+
+  it("includes casual matches in cumulative all-time stats without inflating tournament counts", () => {
+    const stats = calculateCumulativePlayerStats({
+      tournamentHistory: [
+        {
+          id: "t-1",
+          fixtures: [
+            {
+              completed: true,
+              team1: { player1: "Amy", player2: "Bob" },
+              team2: { player1: "Cara", player2: "Dan" },
+              score1: 21,
+              score2: 18,
+            },
+          ],
+          bracket: [],
+          finalMatch: null,
+        },
+      ],
+      casualMatches: [
+        {
+          completed: true,
+          team1: { player1: "Amy", player2: "" },
+          team2: { player1: "Eli", player2: "" },
+          score1: 21,
+          score2: 16,
+        },
+      ],
+    });
+
+    const amy = stats.find((entry) => entry.name === "Amy");
+    const eli = stats.find((entry) => entry.name === "Eli");
+
+    expect(amy).toMatchObject({
+      matchesPlayed: 2,
+      matchesWon: 2,
+      tournamentsPlayed: 1,
+    });
+    expect(eli).toMatchObject({
+      matchesPlayed: 1,
+      matchesWon: 0,
+      tournamentsPlayed: 0,
+    });
+  });
 });

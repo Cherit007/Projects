@@ -174,6 +174,8 @@ const App = () => {
     setShowAllTimeStats,
     showEloLeaderboard,
     setShowEloLeaderboard,
+    mobileSetupView,
+    setMobileSetupView,
     pendingLinkPrompt,
     setPendingLinkPrompt,
     showProfileModal,
@@ -368,7 +370,7 @@ const App = () => {
     setShowUtilityDrawer(false);
   }, [step]);
 
-  const hydratePlayerPhotos = (rawPhotos = {}) => {
+  const hydratePlayerPhotos = useCallback((rawPhotos = {}) => {
     const urls = {};
     const refs = {};
     Object.entries(rawPhotos || {}).forEach(([name, value]) => {
@@ -385,7 +387,7 @@ const App = () => {
       }
     });
     return { urls, refs };
-  };
+  }, []);
 
   const recoverRatingsIfMissing = ({ history = tournamentHistory, casual = casualMatches, force = false } = {}) => {
     const current = playerRatings && typeof playerRatings === 'object' ? playerRatings : {};
@@ -422,7 +424,7 @@ const App = () => {
     return merged;
   };
 
-  const markRatingsPersisted = (ratings = {}) => {
+  const markRatingsPersisted = useCallback((ratings = {}) => {
     const snapshot = ratings && typeof ratings === 'object' ? ratings : {};
     if (ratingsAutosaveTimerRef.current) {
       clearTimeout(ratingsAutosaveTimerRef.current);
@@ -430,7 +432,7 @@ const App = () => {
     }
     lastRatingsPersistedSignatureRef.current = JSON.stringify(snapshot);
     lastPersistedRatingsRef.current = cloneRatingsSnapshot(snapshot);
-  };
+  }, []);
 
   const showToast = useCallback((message, type = 'success') => {
     if (toastTimerRef.current) {
@@ -498,8 +500,9 @@ const App = () => {
     deleteCasualMatchFromAppwrite,
     syncCurrentTournament,
     patchTournamentMatches,
+    saveTournamentTransactionToAppwrite = null,
     flushOfflineOutbox,
-  } = useAppwriteSync(showToast, activeGroup?.id);
+  } = useAppwriteSync(showToast, activeGroup?.id, queryClient);
   const {
     requiresAuth,
     canDelete,
@@ -556,6 +559,72 @@ const App = () => {
     setAdminAccounts,
     setStep,
   });
+  const refreshCloudAuxiliaryState = useCallback(async () => {
+    if (!isAppwriteEnabled || !activeGroup?.id) return false;
+    try {
+      const appwriteData = await queryClient.fetchQuery({
+        queryKey: queryKeys.appwriteData(activeGroup.id),
+        queryFn: () => loadFromAppwrite({
+          includeTournaments: false,
+          includePlayerDatabase: true,
+          includeRatings: true,
+          includeMeta: true,
+        }),
+        staleTime: 0,
+      });
+      if (!appwriteData) return false;
+
+      const nextPlayerDatabase = Array.isArray(appwriteData.playerDatabase)
+        ? appwriteData.playerDatabase
+        : [];
+      const nextRatings = appwriteData.playerRatings && typeof appwriteData.playerRatings === 'object'
+        ? appwriteData.playerRatings
+        : {};
+      const nextMembersRaw = Array.isArray(appwriteData.members) ? appwriteData.members : [];
+      const nextMembers = applyMemberAccountLinks(
+        mergeMemberLinks(nextMembersRaw, members),
+        appwriteData.memberAccountLinks
+      );
+      const nextTemplates = (Array.isArray(appwriteData.templates) ? appwriteData.templates : []).map((template) => ({
+        ...template,
+        tournamentFormat: normalizeTournamentFormat(template.tournamentFormat || 'league'),
+        teams: normalizeTemplateTeams(
+          template.teams || [],
+          template.gameMode || 'doubles',
+          template.numTeams || 3
+        ),
+      }));
+      const { urls, refs } = hydratePlayerPhotos(appwriteData.playerPhotos || {});
+
+      setPlayerDatabase(nextPlayerDatabase);
+      setPlayerRatings(nextRatings);
+      markRatingsPersisted(nextRatings);
+      setMembers(nextMembers);
+      setTournamentTemplates(nextTemplates);
+      setPlayerPhotos(urls);
+      setPlayerPhotoRefs(refs);
+      setActiveTournamentLock(appwriteData.activeTournament || null);
+      return true;
+    } catch (error) {
+      console.error('Failed to refresh cloud auxiliary state:', error);
+      return false;
+    }
+  }, [
+    activeGroup?.id,
+    hydratePlayerPhotos,
+    isAppwriteEnabled,
+    loadFromAppwrite,
+    markRatingsPersisted,
+    members,
+    queryClient,
+    setActiveTournamentLock,
+    setMembers,
+    setPlayerDatabase,
+    setPlayerPhotoRefs,
+    setPlayerPhotos,
+    setPlayerRatings,
+    setTournamentTemplates,
+  ]);
   const {
     realtimeConnected,
     lastCachePatchAt,
@@ -569,6 +638,7 @@ const App = () => {
     queryClient,
     setTournamentHistory,
     setCasualMatches,
+    reloadAuxiliaryState: refreshCloudAuxiliaryState,
   });
   const pendingActionCount = useMemo(
     () => Object.keys(pendingActions || {}).length,
@@ -1485,6 +1555,7 @@ const App = () => {
     setActiveTournamentLock,
     syncCurrentTournament,
     patchTournamentMatches,
+    saveTournamentTransactionToAppwrite,
     markRatingsPersisted,
     buildRatingsDelta,
     saveTournamentMutation,
@@ -2365,6 +2436,7 @@ const App = () => {
   };
 
   const handleMobileGoHome = () => {
+    setMobileSetupView('home');
     setShowHistory(false);
     setShowCasualHistory(false);
     setShowAllTimeStats(false);
@@ -2393,19 +2465,15 @@ const App = () => {
 
   const handleMobileGoLive = async () => {
     setShowUtilityDrawer(false);
+    setShowHistory(false);
+    setShowCasualHistory(false);
+    setShowAllTimeStats(false);
+    setShowEloLeaderboard(false);
     if (step === 'tournament') return;
-
-    const liveTournament = activeLiveTournaments[0] || null;
-    if (!liveTournament) {
-      showToast('No live tournament to resume yet', 'error');
-      return;
+    if (step !== 'setup' || showRequestCenter) {
+      handleHeaderGoHome();
     }
-
-    const targetId = liveTournament.id || liveTournament.appwriteId || null;
-    await withActionLock(
-      `setup.resume-live.${String(targetId || 'active')}`,
-      () => handleResumeActiveTournament(targetId)
-    );
+    setMobileSetupView('live');
   };
 
   const handleMobileOpenHistory = () => {
@@ -2418,10 +2486,26 @@ const App = () => {
 
   const handleMobileOpenStats = () => {
     setShowUtilityDrawer(false);
+    setShowHistory(false);
+    setShowCasualHistory(false);
+    setShowAllTimeStats(false);
+    setShowEloLeaderboard(false);
     if (step !== 'setup' || showRequestCenter) {
       handleHeaderGoHome();
     }
-    void handleOpenAllTimeStatsModal();
+    setMobileSetupView('stats');
+  };
+
+  const handleMobileOpenCreate = () => {
+    setShowUtilityDrawer(false);
+    setShowHistory(false);
+    setShowCasualHistory(false);
+    setShowAllTimeStats(false);
+    setShowEloLeaderboard(false);
+    if (step !== 'setup' || showRequestCenter) {
+      handleHeaderGoHome();
+    }
+    setMobileSetupView('create');
   };
 
   const handleShareScheduledTournament = useCallback(async (tournament) => {
@@ -2664,6 +2748,12 @@ const App = () => {
     calculatePlayerStats,
     getPlayerLeaderboard,
   };
+  const enhancedSetupScreenProps = {
+    ...setupScreenProps,
+    mobileSetupView,
+    setMobileSetupView,
+    onOpenUtilityDrawer: () => setShowUtilityDrawer(true),
+  };
 
   const canRenderWorkspace = !requiresAuth || Boolean(activeGroup);
   const shouldShowMobileBottomNav = Boolean(
@@ -2677,13 +2767,21 @@ const App = () => {
     && !showCasualMatch
   );
   const mobileNavActiveKey = useMemo(() => {
-    if (showUtilityDrawer) return 'action';
+    if (showUtilityDrawer) return 'create';
     if (showProfileModal) return 'profile';
+    if (step === 'setup') {
+      if (mobileSetupView === 'create') return 'create';
+      if (mobileSetupView === 'stats' || mobileSetupView === 'elo' || showAllTimeStats || showEloLeaderboard || showRequestCenter) {
+        return 'stats';
+      }
+      if (mobileSetupView === 'live') return 'live';
+    }
     if (showAllTimeStats || showEloLeaderboard || showRequestCenter) return 'stats';
     if (showHistory || showCasualHistory) return 'home';
     if (step === 'tournament') return 'live';
     return 'home';
   }, [
+    mobileSetupView,
     showUtilityDrawer,
     showProfileModal,
     showHistory,
@@ -2693,6 +2791,12 @@ const App = () => {
     showRequestCenter,
     step,
   ]);
+
+  useEffect(() => {
+    if (step !== 'setup') {
+      setMobileSetupView('home');
+    }
+  }, [step, setMobileSetupView]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -2795,7 +2899,7 @@ const App = () => {
         onDeleteGroup={handleDeleteGroup}
         onConfirmAction={requestConfirmAction}
         viewerDashboardProps={viewerDashboardProps}
-        setupScreenProps={setupScreenProps}
+        setupScreenProps={enhancedSetupScreenProps}
         teamEntryProps={teamEntryProps}
         tournamentViewProps={tournamentViewProps}
         casualMatchProps={casualMatchProps}
@@ -2938,7 +3042,7 @@ const App = () => {
             onLive={handleMobileGoLive}
             onStats={handleMobileOpenStats}
             onProfile={handleMobileOpenProfile}
-            onPrimaryAction={() => setShowUtilityDrawer((prev) => !prev)}
+            onPrimaryAction={handleMobileOpenCreate}
           />
         </>
       )}

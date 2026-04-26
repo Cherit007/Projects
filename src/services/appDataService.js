@@ -128,6 +128,10 @@ const parseMaybeJson = (value, fallback) => {
   if (value && typeof value === 'object') return value;
   return fallback;
 };
+const toTimestampMs = (value) => {
+  const parsed = Date.parse(String(value || '').trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const parseWithSchema = (schema, value, context, fallback) => {
   const result = schema.safeParse(value);
@@ -454,7 +458,22 @@ export const appDataService = {
           'active tournament lock payload',
           activeTournament && typeof activeTournament === 'object' ? activeTournament : null
         );
-    const updatedAt = new Date().toISOString();
+    const incomingUpdatedAt = normalizedActiveTournament?.updatedAt || new Date().toISOString();
+    const updatedAt = incomingUpdatedAt;
+
+    const currentMeta = toMetaEnvelope(
+      getCachedMeta(resolvedGroupId) !== undefined
+        ? getCachedMeta(resolvedGroupId)
+        : await this.getAppMeta({ groupId: resolvedGroupId })
+    );
+    const currentUpdatedAtMs = toTimestampMs(currentMeta?.updatedAt);
+    const incomingUpdatedAtMs = toTimestampMs(updatedAt);
+    if (currentUpdatedAtMs > 0 && incomingUpdatedAtMs > 0 && incomingUpdatedAtMs < currentUpdatedAtMs) {
+      return {
+        activeTournament: currentMeta.activeTournament ?? null,
+        updatedAt: currentMeta.updatedAt || null,
+      };
+    }
 
     if (isActiveLockCollectionEnabled()) {
       await upsertActiveTournamentLockInCollection({
@@ -463,13 +482,8 @@ export const appDataService = {
         updatedAt,
       });
 
-      const existingForCache = toMetaEnvelope(
-        getCachedMeta(resolvedGroupId) !== undefined
-          ? getCachedMeta(resolvedGroupId)
-          : await this.getAppMeta({ groupId: resolvedGroupId })
-      );
       const merged = {
-        ...existingForCache,
+        ...currentMeta,
         activeTournament: normalizedActiveTournament || null,
         updatedAt,
       };
@@ -492,11 +506,7 @@ export const appDataService = {
       };
     }
 
-    const existing = toMetaEnvelope(
-      getCachedMeta(resolvedGroupId) !== undefined
-        ? getCachedMeta(resolvedGroupId)
-        : await this.getAppMeta({ groupId: resolvedGroupId })
-    );
+    const existing = currentMeta;
     const nextEnvelope = {
       invites: existing.groupInvites,
       joinRequests: existing.groupJoinRequests,

@@ -23,6 +23,7 @@ const matchPatchSchema = z.object({
   matchKind: z.string().optional(),
   id: z.union([z.string(), z.number()]).optional(),
   legacyMatchId: z.union([z.string(), z.number()]).optional(),
+  immutableMatchId: z.union([z.string(), z.number()]).optional(),
   bracketRoundIndex: z.union([z.string(), z.number()]).optional(),
   bracketMatchIndex: z.union([z.string(), z.number()]).optional(),
   team1: teamPayloadSchema.nullish(),
@@ -36,6 +37,7 @@ const matchPatchSchema = z.object({
   roundNo: z.union([z.string(), z.number()]).optional(),
   nextLegacyMatchId: z.union([z.string(), z.number()]).optional(),
   nextMatchId: z.union([z.string(), z.number()]).optional(),
+  sourceUpdatedAt: z.union([z.string(), z.number()]).optional(),
 }).passthrough();
 
 const tournamentDocSchema = z.object({
@@ -52,6 +54,7 @@ const tournamentDocSchema = z.object({
   oddPlayerName: z.string().optional(),
   sourceCreatedAt: z.string().optional(),
   sourceUpdatedAt: z.string().optional(),
+  migratedAt: z.string().optional(),
   $createdAt: z.string().optional(),
   $updatedAt: z.string().optional(),
 }).passthrough();
@@ -85,6 +88,10 @@ const tournamentMatchDocSchema = z.object({
   completed: z.union([z.boolean(), z.string(), z.number()]).optional(),
   completedAt: z.string().optional(),
   winnerSide: z.string().optional(),
+  sourceCreatedAt: z.string().optional(),
+  migratedAt: z.string().optional(),
+  $createdAt: z.string().optional(),
+  $updatedAt: z.string().optional(),
 }).passthrough();
 
 const matchParticipantDocSchema = z.object({
@@ -156,6 +163,68 @@ const toNumericString = (value) => {
 };
 
 const toBooleanString = (value) => String(Boolean(value));
+const toTimestampMs = (value) => {
+  const parsed = Date.parse(toNonEmptyString(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const pickFirstNonEmptyString = (...values) => (
+  values.map((value) => toNonEmptyString(value)).find(Boolean) || ''
+);
+
+const resolveTournamentImmutableId = ({
+  payload = null,
+  existing = null,
+  tournamentId = '',
+} = {}) => pickFirstNonEmptyString(
+  existing?.legacyTournamentId,
+  existing?.$id,
+  payload?.immutableTournamentId,
+  payload?.legacyTournamentId,
+  payload?.id,
+  payload?.appwriteId,
+  tournamentId
+);
+
+const resolveMatchImmutableId = ({
+  match = null,
+  existing = null,
+  fallbackLegacyMatchId = '',
+} = {}) => pickFirstNonEmptyString(
+  existing?.legacyMatchId,
+  existing?.$id,
+  match?.immutableMatchId,
+  match?.legacyMatchId,
+  match?.id,
+  match?.appwriteId,
+  fallbackLegacyMatchId
+);
+
+const getTournamentOptimisticVersionValue = (entity = null) => pickFirstNonEmptyString(
+  entity?.sourceUpdatedAt,
+  entity?.updatedAt,
+  entity?.$updatedAt,
+  entity?.sourceCreatedAt,
+  entity?.$createdAt
+);
+
+const getMatchOptimisticVersionValue = (entity = null) => pickFirstNonEmptyString(
+  entity?.sourceUpdatedAt,
+  entity?.migratedAt,
+  entity?.updatedAt,
+  entity?.completedAt,
+  entity?.$updatedAt,
+  entity?.sourceCreatedAt,
+  entity?.$createdAt
+);
+
+const getTournamentOptimisticVersionMs = (entity = null) => toTimestampMs(
+  getTournamentOptimisticVersionValue(entity)
+);
+
+const getMatchOptimisticVersionMs = (entity = null) => toTimestampMs(
+  getMatchOptimisticVersionValue(entity)
+);
 
 const parseBoolean = (value) => {
   if (typeof value === 'boolean') return value;
@@ -396,7 +465,9 @@ const findExistingTournamentDocForCreate = async ({ groupId, payload }) => {
     }
   }
 
-  const legacyTournamentId = toNonEmptyString(payload?.legacyTournamentId) || toNonEmptyString(payload?.id);
+  const legacyTournamentId = resolveTournamentImmutableId({
+    payload,
+  });
   if (!legacyTournamentId) return null;
 
   const docs = await listByGroupAndValues({
@@ -635,9 +706,16 @@ const parseMatchDocument = ({ doc, teamByRowId, participantsByMatchId }) => {
 
   const score1 = parseScore(doc.score1);
   const score2 = parseScore(doc.score2);
+  const immutableMatchId = pickFirstNonEmptyString(doc.legacyMatchId, doc.$id);
+  const optimisticVersion = getMatchOptimisticVersionValue(doc);
 
   return {
-    id: parseMaybeNumeric(doc.legacyMatchId) || toNonEmptyString(doc.$id),
+    id: parseMaybeNumeric(immutableMatchId) || toNonEmptyString(doc.$id),
+    appwriteId: toNonEmptyString(doc.$id),
+    legacyMatchId: immutableMatchId,
+    immutableMatchId,
+    optimisticVersion,
+    updatedAt: optimisticVersion,
     team1,
     team2,
     score1,
@@ -751,6 +829,11 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
     finalMatch,
     bracket,
   });
+  const immutableTournamentId = pickFirstNonEmptyString(
+    safeTournamentDoc.legacyTournamentId,
+    safeTournamentDoc.$id
+  );
+  const optimisticVersion = getTournamentOptimisticVersionValue(safeTournamentDoc);
   const normalizedStatus = normalizeTournamentStatusValue({
     status: safeTournamentDoc?.status,
     champion,
@@ -761,8 +844,10 @@ const hydrateTournament = ({ tournamentDoc, teamDocs = [], matchDocs = [], match
   return {
     id: safeTournamentDoc.$id,
     appwriteId: safeTournamentDoc.$id,
+    immutableTournamentId,
+    optimisticVersion,
     groupId: safeTournamentDoc.groupId,
-    legacyTournamentId: safeTournamentDoc.legacyTournamentId,
+    legacyTournamentId: immutableTournamentId,
     name: safeTournamentDoc.name,
     date: safeTournamentDoc.dateLabel,
     teams,
@@ -791,6 +876,14 @@ const buildTournamentDocument = ({
   playerByNormalized,
 }) => {
   const now = new Date().toISOString();
+  const immutableTournamentId = resolveTournamentImmutableId({
+    payload,
+    existing,
+    tournamentId,
+  });
+  const incomingUpdatedAt = getTournamentOptimisticVersionValue(payload)
+    || getTournamentOptimisticVersionValue(existing)
+    || now;
   const oddPlayerName = toNonEmptyString(payload.oddPlayerName ?? existing?.oddPlayerName);
   const resolvedOddPlayerId = resolvePlayerId(oddPlayerName, playerByNormalized);
   const normalizedStatus = normalizeTournamentStatusValue({
@@ -802,10 +895,7 @@ const buildTournamentDocument = ({
 
   return {
     groupId,
-    legacyTournamentId: toNonEmptyString(existing?.legacyTournamentId)
-      || toNonEmptyString(payload.legacyTournamentId)
-      || toNonEmptyString(payload.id)
-      || tournamentId,
+    legacyTournamentId: immutableTournamentId,
     name: toNonEmptyString(payload.name) || toNonEmptyString(existing?.name) || 'Untitled Tournament',
     dateLabel: toNonEmptyString(payload.date) || toNonEmptyString(existing?.dateLabel),
     status: normalizedStatus,
@@ -816,7 +906,7 @@ const buildTournamentDocument = ({
     oddPlayerName,
     oddPlayerId: resolvedOddPlayerId || toNonEmptyString(existing?.oddPlayerId),
     sourceCreatedAt: toNonEmptyString(existing?.sourceCreatedAt) || now,
-    sourceUpdatedAt: now,
+    sourceUpdatedAt: incomingUpdatedAt,
     migratedAt: now,
   };
 };
@@ -828,6 +918,7 @@ const buildTeamRows = ({
   teams,
   playerByNormalized,
   existingTeamRows,
+  optimisticVersion,
 }) => {
   const existingByLegacyTeamId = new Map();
   existingTeamRows.forEach((row) => {
@@ -863,7 +954,7 @@ const buildTeamRows = ({
         player1Id: resolvePlayerId(player1Name, playerByNormalized),
         player2Name,
         player2Id: resolvePlayerId(player2Name, playerByNormalized),
-        migratedAt: now,
+        migratedAt: toNonEmptyString(optimisticVersion) || now,
       },
     });
 
@@ -891,6 +982,7 @@ const buildMatchAndParticipantRows = ({
   teamRowIdByName,
   existingMatchRows,
   existingParticipantsByMatchId,
+  optimisticVersion,
 }) => {
   const existingMatchByNaturalKey = new Map();
   existingMatchRows.forEach((row) => {
@@ -932,7 +1024,20 @@ const buildMatchAndParticipantRows = ({
   }) => {
     if (!match?.team1 && !match?.team2) return;
 
-    const legacyMatchId = toNonEmptyString(match?.id) || fallbackLegacyMatchId;
+    const existing = existingMatchByNaturalKey.get(makeMatchNaturalKey({
+      matchKind,
+      legacyMatchId: resolveMatchImmutableId({
+        match,
+        fallbackLegacyMatchId,
+      }),
+      bracketRoundIndex: toNonEmptyString(bracketRoundIndex),
+      bracketMatchIndex: toNonEmptyString(bracketMatchIndex),
+    }));
+    const legacyMatchId = resolveMatchImmutableId({
+      match,
+      existing,
+      fallbackLegacyMatchId,
+    });
     const roundLabel = toNonEmptyString(match?.round);
     const roundNo = toNonEmptyString(match?.round);
     const sequenceValue = toNonEmptyString(sequenceNo);
@@ -948,15 +1053,19 @@ const buildMatchAndParticipantRows = ({
     if (seenMatchKeys.has(naturalKey)) return;
     seenMatchKeys.add(naturalKey);
 
-    const existing = existingMatchByNaturalKey.get(naturalKey);
-    const id = toNonEmptyString(existing?.$id) || ID.unique();
+    const existingRow = existing || existingMatchByNaturalKey.get(naturalKey);
+    const id = toNonEmptyString(existingRow?.$id) || ID.unique();
     const score1 = toNumericString(match?.score1);
     const score2 = toNumericString(match?.score2);
 
     const completedValue = getMatchCompleted(match, score1, score2);
     const completedAt = completedValue
-      ? (toNonEmptyString(match?.completedAt) || toNonEmptyString(existing?.completedAt))
+      ? (toNonEmptyString(match?.completedAt) || toNonEmptyString(existingRow?.completedAt))
       : '';
+    const matchOptimisticVersion = getMatchOptimisticVersionValue(match)
+      || toNonEmptyString(optimisticVersion)
+      || getMatchOptimisticVersionValue(existingRow)
+      || now;
 
     matchRows.push({
       id,
@@ -981,8 +1090,8 @@ const buildMatchAndParticipantRows = ({
         completed: toBooleanString(completedValue),
         completedAt,
         winnerSide: getWinnerSide(score1, score2),
-        sourceCreatedAt: toNonEmptyString(existing?.sourceCreatedAt) || now,
-        migratedAt: now,
+        sourceCreatedAt: toNonEmptyString(existingRow?.sourceCreatedAt) || now,
+        migratedAt: matchOptimisticVersion,
       },
     });
 
@@ -1010,7 +1119,7 @@ const buildMatchAndParticipantRows = ({
           playerName,
           playerId: resolvePlayerId(playerName, playerByNormalized),
           sourceCreatedAt: toNonEmptyString(existingParticipant?.sourceCreatedAt) || now,
-          migratedAt: now,
+          migratedAt: matchOptimisticVersion,
         },
       });
     };
@@ -1088,6 +1197,22 @@ const upsertRows = async (collectionId, rows = []) => {
   for (const [id, data] of byId.entries()) {
     const existingDoc = rows._existingById?.get(id);
     if (isRowDataEqual(existingDoc, data)) continue;
+    const existingVersionMs = Math.max(
+      getTournamentOptimisticVersionMs(existingDoc),
+      getMatchOptimisticVersionMs(existingDoc)
+    );
+    const incomingVersionMs = Math.max(
+      getTournamentOptimisticVersionMs(data),
+      getMatchOptimisticVersionMs(data)
+    );
+    if (
+      existingDoc
+      && existingVersionMs > 0
+      && incomingVersionMs > 0
+      && incomingVersionMs <= existingVersionMs
+    ) {
+      continue;
+    }
     // eslint-disable-next-line no-await-in-loop
     await databases.upsertDocument(DATABASE_ID, collectionId, id, data);
   }
@@ -1179,6 +1304,7 @@ const syncTournamentChildren = async ({
     teams: payload.teams,
     playerByNormalized,
     existingTeamRows,
+    optimisticVersion: getTournamentOptimisticVersionValue(payload) || getTournamentOptimisticVersionValue(tournamentDoc),
   });
 
   const { matchRows, participantRows } = buildMatchAndParticipantRows({
@@ -1193,6 +1319,7 @@ const syncTournamentChildren = async ({
     teamRowIdByName,
     existingMatchRows,
     existingParticipantsByMatchId,
+    optimisticVersion: getTournamentOptimisticVersionValue(payload) || getTournamentOptimisticVersionValue(tournamentDoc),
   });
 
   teamRows._existingById = existingTeamById;
@@ -1229,6 +1356,7 @@ const mergeTournamentState = (existing, updates = {}) => {
   const merged = {
     id: updates.id ?? existing?.id ?? null,
     appwriteId: updates.appwriteId ?? existing?.appwriteId ?? null,
+    immutableTournamentId: updates.immutableTournamentId ?? existing?.immutableTournamentId ?? null,
     legacyTournamentId: updates.legacyTournamentId ?? existing?.legacyTournamentId ?? null,
     name: updates.name ?? existing?.name ?? 'Untitled Tournament',
     date: updates.date ?? existing?.date ?? '',
@@ -1243,6 +1371,7 @@ const mergeTournamentState = (existing, updates = {}) => {
     status: updates.status ?? existing?.status ?? 'active',
     oddPlayerEnabled: updates.oddPlayerEnabled ?? existing?.oddPlayerEnabled ?? false,
     oddPlayerName: updates.oddPlayerName ?? existing?.oddPlayerName ?? '',
+    optimisticVersion: updates.optimisticVersion ?? existing?.optimisticVersion ?? updates.updatedAt ?? existing?.updatedAt ?? null,
     aiSummaries: updates.aiSummaries ?? existing?.aiSummaries ?? [],
     swapHistory: updates.swapHistory ?? existing?.swapHistory ?? [],
   };
@@ -1332,6 +1461,7 @@ export const tournamentService = {
     return {
       id: created.$id,
       appwriteId: created.$id,
+      immutableTournamentId: created.legacyTournamentId || created.$id,
       name: merged.name,
       date: merged.date,
       teams: merged.teams,
@@ -1348,6 +1478,8 @@ export const tournamentService = {
       oddPlayerEnabled: Boolean(merged.oddPlayerEnabled),
       oddPlayerName: toNonEmptyString(merged.oddPlayerName),
       createdAt: created.sourceCreatedAt || created.$createdAt,
+      updatedAt: created.sourceUpdatedAt || created.$updatedAt,
+      optimisticVersion: created.sourceUpdatedAt || created.$updatedAt,
     };
   },
 
@@ -1603,6 +1735,7 @@ export const tournamentService = {
       .map((item) => ({
         id: item.id,
         appwriteId: item.appwriteId,
+        immutableTournamentId: item.immutableTournamentId || item.legacyTournamentId || item.appwriteId || item.id,
         groupId: item.groupId,
         legacyTournamentId: item.legacyTournamentId,
         name: item.name,
@@ -1623,6 +1756,7 @@ export const tournamentService = {
         oddPlayerName: toNonEmptyString(item.oddPlayerName),
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
+        optimisticVersion: item.optimisticVersion || item.updatedAt || item.createdAt || null,
         isSummary: true,
       }));
   },
@@ -1700,7 +1834,12 @@ export const tournamentService = {
       .map((patch) => {
         const roundValue = patch?.roundLabel ?? patch?.round ?? patch?.roundNo;
         const matchKind = normalizePatchMatchKind(patch?.matchKind, roundValue);
-        const legacyMatchId = toNonEmptyString(patch?.legacyMatchId ?? patch?.id);
+        const legacyMatchId = pickFirstNonEmptyString(
+          patch?.legacyMatchId,
+          patch?.immutableMatchId,
+          patch?.id,
+          patch?.appwriteId
+        );
         const bracketRoundIndex = toNonEmptyString(patch?.bracketRoundIndex);
         const bracketMatchIndex = toNonEmptyString(patch?.bracketMatchIndex);
         const key = makeMatchNaturalKey({
@@ -1862,6 +2001,21 @@ export const tournamentService = {
       const winnerSide = toNonEmptyString(patch?.winnerSide)
         || getWinnerSide(score1, score2)
         || toNonEmptyString(row?.winnerSide);
+      const nextMatchVersion = getMatchOptimisticVersionValue(patch)
+        || getTournamentOptimisticVersionValue(tournamentDoc)
+        || now;
+      const incomingPatchUpdatedAtMs = toTimestampMs(nextMatchVersion);
+      const existingRowUpdatedAtMs = Math.max(
+        getMatchOptimisticVersionMs(row),
+        getTournamentOptimisticVersionMs(tournamentDoc)
+      );
+      if (
+        incomingPatchUpdatedAtMs > 0
+        && existingRowUpdatedAtMs > 0
+        && incomingPatchUpdatedAtMs <= existingRowUpdatedAtMs
+      ) {
+        continue;
+      }
 
       const nextLegacyMatchId = toNonEmptyString(
         patch?.nextLegacyMatchId ?? patch?.nextMatchId ?? row?.nextLegacyMatchId
@@ -1896,7 +2050,7 @@ export const tournamentService = {
         completedAt,
         winnerSide,
         sourceCreatedAt: toNonEmptyString(row?.sourceCreatedAt) || now,
-        migratedAt: now,
+        migratedAt: nextMatchVersion,
       };
 
       const isUnchanged = Object.keys(matchPayload).every((key) => (
@@ -1946,7 +2100,7 @@ export const tournamentService = {
           playerName: participant.playerName,
           playerId: resolvePlayerId(participant.playerName, playerByNormalized),
           sourceCreatedAt: toNonEmptyString(existingParticipant?.sourceCreatedAt) || now,
-          migratedAt: now,
+          migratedAt: nextMatchVersion,
         };
 
         if (existingParticipant?.$id) {
@@ -2003,6 +2157,13 @@ export const tournamentService = {
       throw new Error('Tournament is deleted');
     }
 
+    const incomingUpdatedAt = getTournamentOptimisticVersionValue(updates);
+    const remoteUpdatedAtMs = getTournamentOptimisticVersionMs(baseDoc);
+    const incomingUpdatedAtMs = toTimestampMs(incomingUpdatedAt);
+    if (incomingUpdatedAtMs > 0 && remoteUpdatedAtMs > 0 && incomingUpdatedAtMs <= remoteUpdatedAtMs) {
+      return this.getTournamentById(tournamentId, resolvedGroupId);
+    }
+
     const hasCompleteStateInUpdates = Boolean(
       updates
       && Object.prototype.hasOwnProperty.call(updates, 'teams')
@@ -2017,7 +2178,9 @@ export const tournamentService = {
       ? {
           id: baseDoc.$id,
           appwriteId: baseDoc.$id,
+          immutableTournamentId: baseDoc.legacyTournamentId || baseDoc.$id,
           groupId: baseDoc.groupId,
+          legacyTournamentId: baseDoc.legacyTournamentId || baseDoc.$id,
           name: baseDoc.name,
           date: baseDoc.dateLabel,
           teams: updates.teams,
@@ -2033,6 +2196,7 @@ export const tournamentService = {
           status: baseDoc.status || 'active',
           oddPlayerEnabled: parseBoolean(baseDoc.oddPlayerEnabled),
           oddPlayerName: toNonEmptyString(baseDoc.oddPlayerName),
+          optimisticVersion: getTournamentOptimisticVersionValue(baseDoc),
         }
       : await this.getTournamentById(tournamentId, resolvedGroupId);
     const merged = mergeTournamentState(existing, updates || {});
@@ -2070,8 +2234,10 @@ export const tournamentService = {
       ...merged,
       id: updatedDoc.$id,
       appwriteId: updatedDoc.$id,
+      immutableTournamentId: updatedDoc.legacyTournamentId || updatedDoc.$id,
       createdAt: updatedDoc.sourceCreatedAt || updatedDoc.$createdAt,
       updatedAt: updatedDoc.sourceUpdatedAt || updatedDoc.$updatedAt,
+      optimisticVersion: updatedDoc.sourceUpdatedAt || updatedDoc.$updatedAt,
     };
   },
 

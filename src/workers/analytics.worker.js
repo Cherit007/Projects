@@ -1,10 +1,10 @@
 import * as Comlink from 'comlink';
-import { calculateCumulativePlayerStats, getPlayerLeaderboard } from '../utils/calculations';
 import { buildPairingAnalytics } from '../utils/pairingAnalytics';
 import { buildFormPowerRankings } from '../utils/formPowerRankings';
 import { buildPlayerAdvancedProfile } from '../utils/playerProfileAnalytics';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildPlayerGamification } from '../utils/playerGamification';
+import { buildDashboardDerivedData } from '../utils/dashboardAnalytics';
 
 const computePairingAnalytics = (payload = {}) => buildPairingAnalytics({
   tournamentHistory: payload.tournamentHistory || [],
@@ -39,9 +39,10 @@ const computeProfileInsights = (payload = {}) => {
   };
 };
 
-const computeDashboardDerived = (payload = {}) => ({
-  cumulativeAllTimeStats: calculateCumulativePlayerStats(payload.tournamentHistory || []),
-  eloLeaderboard: getPlayerLeaderboard(payload.playerRatings || {}),
+const computeDashboardDerived = (payload = {}) => buildDashboardDerivedData({
+  tournamentHistory: payload.tournamentHistory || [],
+  casualMatches: payload.casualMatches || [],
+  playerRatings: payload.playerRatings || {},
 });
 
 Comlink.expose({
@@ -50,4 +51,3 @@ Comlink.expose({
   computeProfileInsights,
   computeDashboardDerived,
 });
-

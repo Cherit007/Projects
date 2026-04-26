@@ -1,5 +1,4 @@
 import React from 'react';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Minus, Sparkles, Swords } from 'lucide-react';
 
 const LiveNarrativePanel = ({
   prediction = null,
@@ -18,60 +17,43 @@ const LiveNarrativePanel = ({
   const underdogProbability = favoriteIsTeam1 ? team2Probability : team1Probability;
   const formDiff = Number(prediction?.factors?.formDiff || 0);
   const headToHeadSample = Number(prediction?.h2h?.sampleSize || 0);
-
-  const formTone = formDiff > 0 ? 'up' : formDiff < 0 ? 'down' : 'neutral';
+  const formLabel = formDiff > 0 ? `+${formDiff.toFixed(0)} form` : `${formDiff.toFixed(0)} form`;
 
   return (
-    <div className="live-narrative-shell mt-3 rounded-xl border border-cyan-400/30 bg-slate-950/45 p-3">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <p className="text-xs sm:text-sm font-semibold text-cyan-200">Match Narrative</p>
-        <span className="text-[11px] text-slate-400">Live story cards</span>
-      </div>
+    <div className="variant-a-narrative-grid">
+      <article className="variant-a-narrative-card">
+        <p className="variant-a-narrative-label">Favourite</p>
+        <p className="variant-a-narrative-value">{favoriteName}</p>
+        <p className="variant-a-narrative-copy">
+          {Math.max(team1Probability, team2Probability).toFixed(0)}% win chance
+        </p>
+      </article>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <article className="rounded-lg border border-slate-500/35 bg-slate-900/55 px-2.5 py-2">
-          <p className="text-[11px] text-slate-300 font-semibold flex items-center gap-1">
-            <Sparkles size={12} /> Favorite
-          </p>
-          <p className="mt-1 text-xs text-slate-100 font-semibold truncate">{favoriteName}</p>
-          <p className="text-[11px] text-cyan-300">{(Math.max(team1Probability, team2Probability) * 100).toFixed(0)}% win chance</p>
-        </article>
+      <article className="variant-a-narrative-card">
+        <p className="variant-a-narrative-label">Rivalry</p>
+        <p className="variant-a-narrative-value">{headToHeadSample} meetings</p>
+        <p className="variant-a-narrative-copy">
+          {headToHeadSample > 0 ? `${team1Name} vs ${team2Name}` : 'First encounter'}
+        </p>
+      </article>
 
-        <article className="rounded-lg border border-slate-500/35 bg-slate-900/55 px-2.5 py-2">
-          <p className="text-[11px] text-slate-300 font-semibold flex items-center gap-1">
-            <Swords size={12} /> Rivalry Heat
-          </p>
-          <p className="mt-1 text-xs text-slate-100 font-semibold">{headToHeadSample} prior meetings</p>
-          <p className="text-[11px] text-slate-300 truncate">{team1Name} vs {team2Name}</p>
-        </article>
-
-        <article className="rounded-lg border border-slate-500/35 bg-slate-900/55 px-2.5 py-2">
-          <p className="text-[11px] text-slate-300 font-semibold flex items-center gap-1">
-            <AlertTriangle size={12} /> Upset Meter
-          </p>
-          <p className="mt-1 text-xs text-slate-100 font-semibold truncate">
-            {underdogName}: {(underdogProbability * 100).toFixed(0)}%
-          </p>
-          <p className={`text-[11px] inline-flex items-center gap-0.5 ${
-            formTone === 'up' ? 'text-emerald-300' : formTone === 'down' ? 'text-rose-300' : 'text-slate-300'
-          }`}>
-            {formTone === 'up' && <ArrowUpRight size={12} />}
-            {formTone === 'down' && <ArrowDownRight size={12} />}
-            {formTone === 'neutral' && <Minus size={12} />}
-            Form swing {formDiff > 0 ? '+' : ''}{formDiff.toFixed(0)}
-          </p>
-        </article>
-      </div>
+      <article className="variant-a-narrative-card variant-a-narrative-card-wide">
+        <div>
+          <p className="variant-a-narrative-label">Upset meter</p>
+          <p className="variant-a-narrative-value">{underdogName}</p>
+          <p className="variant-a-narrative-copy">{(underdogProbability * 100).toFixed(0)}% upset chance</p>
+        </div>
+        <span className="variant-a-upset-chip">{upsetAlert?.title || formLabel}</span>
+      </article>
 
       {upsetAlert && (
-        <div className="mt-2 rounded-lg border border-rose-400/35 bg-rose-950/40 px-2.5 py-2">
-          <p className="text-xs font-semibold text-rose-200">⚠️ {upsetAlert.title}</p>
-          <p className="text-[11px] text-rose-100 mt-0.5">{upsetAlert.message}</p>
-        </div>
+        <article className="variant-a-alert-card">
+          <p className="variant-a-alert-title">{upsetAlert.title}</p>
+          <p className="variant-a-alert-copy">{upsetAlert.message}</p>
+        </article>
       )}
     </div>
   );
 };
 
 export default LiveNarrativePanel;
-

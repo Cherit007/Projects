@@ -1,5 +1,4 @@
 import React from 'react';
-import { Activity, Clock3, Play, TrendingUp, Trophy } from 'lucide-react';
 
 const formatActivityTime = (timestamp) => {
   const numericTs = Number(timestamp);
@@ -7,8 +6,6 @@ const formatActivityTime = (timestamp) => {
   const date = new Date(numericTs);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
@@ -16,16 +13,16 @@ const formatActivityTime = (timestamp) => {
 
 const EVENT_META = {
   'tournament-started': {
-    icon: Play,
-    rowClass: 'live-activity-type-start',
+    icon: '▶',
+    tone: 'neutral',
   },
   'rank-changed': {
-    icon: TrendingUp,
-    rowClass: 'live-activity-type-rank',
+    icon: '↑',
+    tone: 'up',
   },
   'match-result': {
-    icon: Trophy,
-    rowClass: 'live-activity-type-match',
+    icon: '🏆',
+    tone: 'match',
   },
 };
 
@@ -33,44 +30,39 @@ const LiveActivityFeed = ({ events = [] }) => {
   const rows = Array.isArray(events) ? events.filter(Boolean) : [];
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-blue-100 p-4 sm:p-5 live-activity-shell">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 live-activity-heading">
-          <Activity size={18} className="text-blue-600" />
-          Live Activity Feed
-        </h3>
-        <span className="text-xs text-gray-500 live-activity-count">{rows.length} updates</span>
+    <div className="variant-a-card variant-a-history-card live-activity-shell">
+      <div className="variant-a-history-head">
+        <div className="variant-a-section-head">
+          <p className="variant-a-section-label !mb-0">Activity</p>
+        </div>
+        <span className="variant-a-meta-copy live-activity-count">{rows.length} updates</span>
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center live-activity-empty">
-          <Clock3 size={18} className="mx-auto mb-2 text-gray-400" />
-          <p className="text-xs text-gray-600">No activity yet. Start entering match scores.</p>
+        <div className="variant-a-empty-card live-activity-empty">
+          <p>No activity yet. Start entering match scores.</p>
         </div>
       ) : (
-        <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+        <div className="space-y-0">
           {rows.map((event, index) => {
             const meta = EVENT_META[event.type] || EVENT_META['match-result'];
-            const Icon = meta.icon;
             const key = event.id || `activity-${index}`;
             const timeLabel = formatActivityTime(event.timestamp);
 
             return (
               <div
                 key={key}
-                className={`live-activity-row rounded-xl border px-3 py-2.5 flex items-start gap-3 ${meta.rowClass}`}
+                className={`variant-a-activity-row live-activity-row live-activity-type-${event.type || 'match-result'} live-activity-tone-${meta.tone}`}
               >
-                <div className="live-activity-icon h-7 w-7 rounded-lg flex items-center justify-center shrink-0">
-                  <Icon size={14} />
-                </div>
+                <div className="variant-a-activity-icon live-activity-icon">{meta.icon}</div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-gray-800 live-activity-message">{event.message}</p>
+                  <p className="variant-a-activity-title live-activity-message">{event.message}</p>
                   {event.detail && (
-                    <p className="text-xs text-gray-600 mt-0.5 live-activity-detail">{event.detail}</p>
+                    <p className="variant-a-activity-copy live-activity-detail">{event.detail}</p>
                   )}
                 </div>
                 {timeLabel && (
-                  <span className="text-[11px] text-gray-500 whitespace-nowrap live-activity-time">{timeLabel}</span>
+                  <span className="variant-a-activity-time live-activity-time">{timeLabel}</span>
                 )}
               </div>
             );

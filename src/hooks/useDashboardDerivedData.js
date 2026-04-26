@@ -1,45 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { calculateCumulativePlayerStats, getPlayerLeaderboard } from '../utils/calculations';
 import { analyticsWorkerService } from '../services/analyticsWorkerService';
-import { deriveRatingsFromHistory } from '../utils/appHelpers';
+import {
+  buildDashboardDerivedData,
+  filterLeaderboardRowsByRecordedMatches,
+} from '../utils/dashboardAnalytics';
 
 const emptyResult = {
   cumulativeAllTimeStats: [],
   eloLeaderboard: [],
 };
-
-const normalizeName = (value) => String(value || '').trim().toLowerCase();
-
-const getRecordedPlayersSet = (history = [], casual = []) => {
-  const recordedRatings = deriveRatingsFromHistory({
-    history: Array.isArray(history) ? history : [],
-    casual: Array.isArray(casual) ? casual : [],
-  });
-  return new Set(
-    Object.keys(recordedRatings || {})
-      .map((name) => normalizeName(name))
-      .filter(Boolean)
-  );
-};
-
-const filterLeaderboardRows = (rows = [], history = [], casual = []) => {
-  const list = Array.isArray(rows) ? rows : [];
-  const recordedPlayers = getRecordedPlayersSet(history, casual);
-  if (recordedPlayers.size === 0) {
-    return list.filter((entry) => Number(entry?.matchesPlayed || 0) > 0);
-  }
-  return list.filter((entry) => recordedPlayers.has(normalizeName(entry?.name)));
-};
-
-const buildFilteredLeaderboard = (ratings = {}, history = [], casual = []) => {
-  const raw = getPlayerLeaderboard(ratings || {});
-  return filterLeaderboardRows(raw, history, casual);
-};
-
-const buildFallbackData = (history = [], ratings = {}, casual = []) => ({
-  cumulativeAllTimeStats: calculateCumulativePlayerStats(history),
-  eloLeaderboard: buildFilteredLeaderboard(ratings, history, casual),
-});
 
 export const useDashboardDerivedData = ({
   tournamentHistory = [],
@@ -47,7 +16,11 @@ export const useDashboardDerivedData = ({
   playerRatings = {},
 }) => {
   const fallbackData = useMemo(
-    () => buildFallbackData(tournamentHistory, playerRatings, casualMatches),
+    () => buildDashboardDerivedData({
+      tournamentHistory,
+      casualMatches,
+      playerRatings,
+    }),
     [tournamentHistory, playerRatings, casualMatches]
   );
   const workerSupported = analyticsWorkerService.isSupported();
@@ -63,6 +36,7 @@ export const useDashboardDerivedData = ({
 
     void analyticsWorkerService.computeDashboardDerived({
       tournamentHistory,
+      casualMatches,
       playerRatings,
     }).then((result) => {
       if (cancelled || requestIdRef.current !== requestId) return;
@@ -70,10 +44,9 @@ export const useDashboardDerivedData = ({
         cumulativeAllTimeStats: Array.isArray(result?.cumulativeAllTimeStats)
           ? result.cumulativeAllTimeStats
           : emptyResult.cumulativeAllTimeStats,
-        eloLeaderboard: filterLeaderboardRows(
+        eloLeaderboard: filterLeaderboardRowsByRecordedMatches(
           Array.isArray(result?.eloLeaderboard) ? result.eloLeaderboard : [],
-          tournamentHistory,
-          casualMatches
+          { tournamentHistory, casualMatches }
         ),
       });
     }).catch((error) => {

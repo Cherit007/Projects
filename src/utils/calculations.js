@@ -124,8 +124,37 @@ export const calculatePlayerStats = (teams, fixtures) => {
   });
 };
 
-// Calculate cumulative player stats across all tournaments
-export const calculateCumulativePlayerStats = (tournamentHistory) => {
+const normalizeAnalyticsStatsInput = (historyOrOptions = [], maybeCasualMatches = []) => {
+  if (Array.isArray(historyOrOptions)) {
+    return {
+      tournamentHistory: historyOrOptions,
+      casualMatches: Array.isArray(maybeCasualMatches) ? maybeCasualMatches : [],
+    };
+  }
+
+  if (historyOrOptions && typeof historyOrOptions === 'object') {
+    return {
+      tournamentHistory: Array.isArray(historyOrOptions.tournamentHistory)
+        ? historyOrOptions.tournamentHistory
+        : [],
+      casualMatches: Array.isArray(historyOrOptions.casualMatches)
+        ? historyOrOptions.casualMatches
+        : [],
+    };
+  }
+
+  return {
+    tournamentHistory: [],
+    casualMatches: Array.isArray(maybeCasualMatches) ? maybeCasualMatches : [],
+  };
+};
+
+// Canonical all-time rule: include every completed tournament match plus every completed casual match.
+export const calculateCumulativePlayerStats = (historyOrOptions = [], maybeCasualMatches = []) => {
+  const {
+    tournamentHistory,
+    casualMatches,
+  } = normalizeAnalyticsStatsInput(historyOrOptions, maybeCasualMatches);
   const cumulativeStats = {};
   const normalizeCompletedMatch = (match) => {
     if (!match?.team1 || !match?.team2 || !match?.completed) return null;
@@ -186,6 +215,7 @@ export const calculateCumulativePlayerStats = (tournamentHistory) => {
   (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((tournament) => {
     const tournamentKey = String(
       tournament?.id
+      || tournament?.immutableTournamentId
       || tournament?.appwriteId
       || tournament?.legacyTournamentId
       || (tournament?.name && tournament?.date ? `${tournament.name}-${tournament.date}` : tournament?.name || '')
@@ -215,6 +245,11 @@ export const calculateCumulativePlayerStats = (tournamentHistory) => {
       });
     }
   });
+
+  (Array.isArray(casualMatches) ? casualMatches : [])
+    .map(normalizeCompletedMatch)
+    .filter(Boolean)
+    .forEach((match) => addMatchToStats(match, null));
 
   const statsArray = Object.values(cumulativeStats).map(player => ({
     ...player,
@@ -329,7 +364,7 @@ export const updatePlayerRatingsAfterMatch = (playerRatings, match) => {
   const parseLooseDate = (value) => {
     const raw = String(value || '').trim();
     if (!raw) return null;
-    const matchPattern = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    const matchPattern = raw.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
     if (!matchPattern) return null;
     const first = Number(matchPattern[1]);
     const second = Number(matchPattern[2]);

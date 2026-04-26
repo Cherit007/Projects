@@ -27,12 +27,13 @@ import PairingAnalyticsModal from './pairing/PairingAnalyticsModal';
 import FormPowerRankingsModal from './rankings/FormPowerRankingsModal';
 import PlayerAvatar from './PlayerAvatar';
 import MobileBottomSheet from './common/MobileBottomSheet';
-import StartTournamentLane from './home/StartTournamentLane';
-import ExploreDataLane from './home/ExploreDataLane';
+import SetupScreenDesktop from './SetupScreenDesktop';
+import SetupScreenMobileDashboard from './SetupScreenMobileDashboard';
 import { buildHomeNarratives } from '../utils/homeNarratives';
 import {
   formatTournamentDateLabel,
   isScheduledTournamentAlreadyStarted,
+  normalizeTournamentFormat,
 } from '../utils/appHelpers';
 
 const LoadingRows = ({ rows = 4 }) => (
@@ -77,6 +78,82 @@ const buildFormSummary = (rawSeries = []) => {
     label: series.join(''),
     tone: points > 0 ? 'up' : points < 0 ? 'down' : 'neutral',
   };
+};
+
+const formatHintByTournamentFormat = {
+  league: 'Round-robin, top 2 advance to final',
+  knockoutByes: '3+ teams: knockout bracket with automatic byes',
+  semiFinal: '4 teams: 2 semi finals lead to 1 final',
+  fullKnockout: '8 teams: quarter finals, semis, then final',
+};
+
+const formatLabelByTournamentFormat = {
+  league: 'League + Final',
+  knockoutByes: 'Knockout + Byes',
+  semiFinal: 'Semi Final + Final',
+  fullKnockout: 'Full Knockout',
+};
+
+const gameModeLabelByType = {
+  doubles: 'Doubles',
+  singles: 'Singles',
+  mixed: 'Mixed Doubles',
+};
+
+const dashboardGameModeOptions = [
+  { value: 'doubles', label: '🏸 Doubles' },
+  { value: 'singles', label: '👤 Singles' },
+  { value: 'mixed', label: '⚡ Mixed' },
+];
+
+const dashboardFormatOptions = [
+  { value: 'league', label: '🏁 League + Final' },
+  { value: 'knockoutByes', label: '🏆 Knockout + Byes' },
+  { value: 'semiFinal', label: '🎯 Semi Final + Final' },
+  { value: 'fullKnockout', label: '⚔️ Full Knockout' },
+];
+
+const dashboardMatchCountOptions = [
+  { value: '1', label: '1 Match' },
+  { value: '2', label: '2 Matches' },
+];
+
+const getTierMeta = ({ rating = 1000, levelName = '' } = {}) => {
+  const normalized = String(levelName || '').trim().toLowerCase();
+  if (normalized.includes('legend')) return { label: 'Legend', tone: 'legend', icon: '⭐' };
+  if (normalized.includes('elite')) return { label: 'Elite', tone: 'elite', icon: '💎' };
+  if (normalized.includes('pro')) return { label: 'Pro', tone: 'pro', icon: '⚡' };
+  if (rating >= 1080) return { label: 'Legend', tone: 'legend', icon: '⭐' };
+  if (rating >= 1040) return { label: 'Elite', tone: 'elite', icon: '💎' };
+  if (rating >= 980) return { label: 'Pro', tone: 'pro', icon: '⚡' };
+  return { label: 'Rising', tone: 'rising', icon: '🌱' };
+};
+
+const getEloHistoryWindowStart = (filterKey) => {
+  const now = Date.now();
+  if (filterKey === 'week') return now - (7 * 24 * 60 * 60 * 1000);
+  if (filterKey === 'month') return now - (30 * 24 * 60 * 60 * 1000);
+  return null;
+};
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toHistoryTimestamp = (entry) => {
+  const parsed = Date.parse(String(entry?.date || ''));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getHistoryOutcomeToken = (entry) => {
+  const result = String(entry?.result || '').trim().toLowerCase();
+  if (result === 'win') return 'W';
+  if (result === 'loss') return 'L';
+  const change = Number(entry?.change || 0);
+  if (change > 0) return 'W';
+  if (change < 0) return 'L';
+  return 'D';
 };
 
 const SetupScreen = ({ 
@@ -138,6 +215,9 @@ const SetupScreen = ({
   lastDataUpdatedAt = 0,
   realtimeConnected = false,
   isMobileViewport = false,
+  mobileSetupView = 'home',
+  setMobileSetupView = () => {},
+  onOpenUtilityDrawer = () => {},
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [numTeamsInput, setNumTeamsInput] = useState(String(numTeams));
@@ -147,7 +227,10 @@ const SetupScreen = ({
   const [showAdvancedActions, setShowAdvancedActions] = useState(false);
   const [freshnessNow, setFreshnessNow] = useState(() => Date.now());
   const [scheduledCarouselIndex, setScheduledCarouselIndex] = useState(0);
+  const [mobileLiveTab, setMobileLiveTab] = useState('inProgress');
+  const [mobileEloFilter, setMobileEloFilter] = useState('all');
   const scheduledCarouselRef = useRef(null);
+  const mobileScrollRef = useRef(null);
   const historyCacheRef = useRef(Array.isArray(tournamentHistory) ? tournamentHistory : []);
   const casualCacheRef = useRef(Array.isArray(casualMatches) ? casualMatches : []);
   const allTimeStatsCacheRef = useRef(Array.isArray(allTimeStats) ? allTimeStats : []);
@@ -156,6 +239,19 @@ const SetupScreen = ({
   useEffect(() => {
     setNumTeamsInput(String(numTeams));
   }, [numTeams]);
+
+  useEffect(() => {
+    if (mobileScrollRef.current) {
+      mobileScrollRef.current.scrollTop = 0;
+    }
+  }, [mobileSetupView]);
+
+  useEffect(() => {
+    if (!mobileScrollRef.current) return;
+    if (mobileSetupView === 'live' || mobileSetupView === 'elo') {
+      mobileScrollRef.current.scrollTop = 0;
+    }
+  }, [mobileLiveTab, mobileEloFilter, mobileSetupView]);
 
   const historyLoading = Boolean(isAppwriteEnabled && (historyHydrationPending || !historyHydrated));
   const casualLoading = Boolean(isAppwriteEnabled && (casualHydrationPending || !casualHydrated));
@@ -397,250 +493,265 @@ const SetupScreen = ({
   const syncChip = (
     <SyncStatusChip syncStatus={syncStatus} freshnessText={freshnessText} />
   );
+  const formatHint = formatHintByTournamentFormat[tournamentFormat] || formatHintByTournamentFormat.league;
+  const selectedFormatLabel = formatLabelByTournamentFormat[tournamentFormat] || formatLabelByTournamentFormat.league;
+  const selectedGameModeLabel = gameModeLabelByType[gameMode] || gameModeLabelByType.doubles;
+  const applyTemplateToForm = (template) => {
+    if (!template) return;
+    const nextFormat = normalizeTournamentFormat(template.tournamentFormat || 'league');
+    const nextGameMode = String(template.gameMode || 'doubles').trim() || 'doubles';
+    const nextFormatSetting = String(template.format || '1').trim() || '1';
+    const parsedNumTeams = Math.max(3, parseInt(template.numTeams, 10) || numTeams || 3);
+    const nextNumTeams = nextFormat === 'semiFinal'
+      ? 4
+      : nextFormat === 'fullKnockout'
+        ? 8
+        : parsedNumTeams;
+
+    setGameMode(nextGameMode);
+    setTournamentFormat(nextFormat);
+    setFormat(nextFormat === 'league' ? nextFormatSetting : '1');
+    setNumTeams(nextNumTeams);
+    setNumTeamsInput(String(nextNumTeams));
+    if (String(template.name || '').trim()) {
+      setTournamentName(String(template.name).trim());
+    }
+  };
+  const mobileStatsCards = [
+    { icon: '🏆', value: String(completedTournamentsCount), label: 'Completed' },
+    { icon: '🎯', value: String(totalMatchesPlayed), label: 'Matches Played' },
+  ];
+  const liveInProgressCards = useMemo(() => (
+    (Array.isArray(activeLiveTournaments) ? activeLiveTournaments : []).map((tournament, index) => {
+      const fixturesList = Array.isArray(tournament?.fixtures) ? tournament.fixtures : [];
+      const bracketList = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+        .flatMap((round) => (Array.isArray(round) ? round : []));
+      const finalMatch = tournament?.finalMatch ? [tournament.finalMatch] : [];
+      const allMatches = [...fixturesList, ...bracketList, ...finalMatch].filter(Boolean);
+      const completedCount = allMatches.filter((match) => Boolean(match?.completed)).length;
+      const currentMatch = allMatches.find((match) => !match?.completed && match?.team1 && match?.team2) || null;
+      const tournamentId = tournament?.id || tournament?.appwriteId || `live-${index}`;
+      return {
+        id: tournamentId,
+        name: tournament?.name || 'Live Tournament',
+        subtitle: formatTournamentDateLabel(tournament?.date, 'Today'),
+        phaseLabel: currentMatch?.round ? `Round ${currentMatch.round}` : 'Live now',
+        currentMatchLabel: currentMatch
+          ? `${currentMatch.team1?.name || 'Team 1'} vs ${currentMatch.team2?.name || 'Team 2'}`
+          : 'Resume current tournament',
+        completedCount,
+        totalCount: allMatches.length || 0,
+      };
+    })
+  ), [activeLiveTournaments]);
+  const liveCompletedRows = useMemo(() => (
+    displayTournamentHistory
+      .filter((entry) => entry?.champion || entry?.status === 'completed')
+      .slice(0, 8)
+  ), [displayTournamentHistory]);
+  const eloPeriodRows = useMemo(() => {
+    const windowStart = getEloHistoryWindowStart(mobileEloFilter);
+    return (displayEloLeaderboard || [])
+      .map((player) => {
+        const history = Array.isArray(player?.history) ? player.history : [];
+        const scopedHistory = windowStart === null
+          ? history
+          : history.filter((entry) => {
+              const timestamp = toHistoryTimestamp(entry);
+              return Number.isFinite(timestamp) && timestamp >= windowStart;
+            });
+        if (windowStart !== null && scopedHistory.length === 0) return null;
+        const recentEntries = (windowStart === null ? history : scopedHistory).slice(-4);
+        const lastEntry = (windowStart === null ? history : scopedHistory).slice(-1)[0] || null;
+        const rating = windowStart === null
+          ? toFiniteNumber(player?.rating, 1000)
+          : toFiniteNumber(lastEntry?.newRating, toFiniteNumber(player?.rating, 1000));
+        const delta = windowStart === null
+          ? toFiniteNumber(lastEntry?.change, 0)
+          : scopedHistory.reduce((sum, entry) => sum + toFiniteNumber(entry?.change, 0), 0);
+        const gamification = eloGamificationMap[player.name] || null;
+        const tier = getTierMeta({
+          rating,
+          levelName: gamification?.level?.name || '',
+        });
+        return {
+          name: player.name,
+          rating,
+          matchesPlayed: windowStart === null ? toFiniteNumber(player?.matchesPlayed, 0) : scopedHistory.length,
+          delta,
+          tier,
+          recentForm: recentEntries.map(getHistoryOutcomeToken),
+          photoUrl: playerPhotos[player.name],
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => {
+        if (right.rating !== left.rating) return right.rating - left.rating;
+        if (right.matchesPlayed !== left.matchesPlayed) return right.matchesPlayed - left.matchesPlayed;
+        return String(left.name || '').localeCompare(String(right.name || ''));
+      });
+  }, [displayEloLeaderboard, eloGamificationMap, mobileEloFilter, playerPhotos]);
+  const eloFilterLabel = mobileEloFilter === 'month'
+    ? 'This Month'
+    : mobileEloFilter === 'week'
+      ? 'This Week'
+      : 'All Time';
+  const premiumEloRows = eloPeriodRows.slice(0, 3);
+  const compactEloRows = eloPeriodRows.slice(3);
+  const statsPreviewRows = displayEloLeaderboard.slice(0, 3);
+  const mobileHeaderTitle = mobileSetupView === 'create'
+    ? 'New Tournament'
+    : mobileSetupView === 'live'
+      ? 'Live Matches'
+      : mobileSetupView === 'stats'
+        ? 'Stats'
+        : mobileSetupView === 'elo'
+          ? 'ELO Leaderboard'
+          : 'Tournament';
+  const mobileHeaderSubtitle = mobileSetupView === 'create'
+    ? 'Configure & launch'
+    : mobileSetupView === 'live'
+      ? 'Real-time scores'
+      : mobileSetupView === 'stats'
+        ? 'Insights + history'
+        : mobileSetupView === 'elo'
+          ? `${eloPeriodRows.length} players · ${eloFilterLabel}`
+          : 'Badminton · Group Workspace';
 
   return (
-    <div className="theme-page py-8 px-4 app-screen-home">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🏸</div>
-          <h1 className="theme-title app-hero-title text-4xl md:text-5xl font-bold mb-2">
-            Badminton Tournament
-          </h1>
-          <p className="text-gray-600 app-hero-subtitle">Professional tournament management</p>
-        </div>
-
-        <div className="theme-card app-surface-card app-card-tier-primary app-rhythm-panel rounded-2xl p-4 sm:p-5 md:p-6 mb-6">
-          <div className="setup-home-sync-row mb-4">
-            {syncChip}
-          </div>
-
-          {scheduledCards.length > 0 && (
-            <div className="mb-4 rounded-xl p-4 setup-highlight-card setup-scheduled-card app-surface-card app-card-tier-secondary">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-indigo-900 flex items-center gap-2 setup-scheduled-title">
-                  <Clock3 size={16} /> Scheduled Tournaments ({scheduledCards.length})
-                </p>
-                {scheduledCards.length > 1 && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      aria-label="Previous scheduled tournament"
-                      onClick={() => scrollScheduledToIndex(scheduledCarouselIndex - 1)}
-                      className="h-7 w-7 rounded-md border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 inline-flex items-center justify-center"
-                    >
-                      <ChevronLeft size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Next scheduled tournament"
-                      onClick={() => scrollScheduledToIndex(scheduledCarouselIndex + 1)}
-                      className="h-7 w-7 rounded-md border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 inline-flex items-center justify-center"
-                    >
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div
-                ref={scheduledCarouselRef}
-                className={`flex gap-3 ${scheduledCards.length > 1 ? 'overflow-x-auto snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'overflow-x-hidden'}`}
-                onScroll={handleScheduledTrackScroll}
-              >
-                {scheduledCards.map((tournament) => {
-                  const tournamentId = tournament.appwriteId || tournament.id;
-                  const editPending = Boolean(tournamentId && isPendingAction(`setup.edit-scheduled.${String(tournamentId)}`));
-                  const startPending = Boolean(tournamentId && isPendingAction(`setup.start-scheduled.${String(tournamentId)}`));
-                  const viewPending = Boolean(tournamentId && isPendingAction(`setup.view-scheduled.${String(tournamentId)}`));
-                  const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
-                  const alreadyStarted = isScheduledTournamentAlreadyStarted(tournament, activeLiveTournaments);
-                  const scheduleLabel = formatTournamentDateLabel(tournament.date, 'To be announced');
-                  return (
-                    <div
-                      key={tournamentId}
-                      className="w-full shrink-0 snap-start rounded-lg border border-indigo-200 bg-white px-3 py-3 setup-scheduled-row"
-                    >
-                      <div className="flex flex-col gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800 break-words leading-snug setup-scheduled-name">{tournament.name}</p>
-                          <p className="text-[11px] text-slate-500 break-words setup-scheduled-meta">
-                            {scheduleLabel} • {(
-                              Array.isArray(tournament.teams)
-                                ? tournament.teams.length
-                                : (typeof tournament.teamsCount === 'number' ? tournament.teamsCount : 0)
-                            )} teams
-                          </p>
-                          {alreadyStarted && (
-                            <p className="text-[11px] font-medium text-amber-700 mt-1 setup-scheduled-started-note">
-                              Already started. Resume from Live Tournament.
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => { void handleViewScheduledCard(tournament); }}
-                            disabled={!tournamentId || viewPending}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-sky-100 text-sky-700 hover:bg-sky-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-view-btn"
-                          >
-                            <Eye size={11} /> {viewPending ? 'Loading...' : 'View'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onEditScheduledTournament?.(tournamentId)}
-                            disabled={!tournamentId || alreadyStarted || editPending || startPending || deletePending || viewPending}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-edit-btn"
-                          >
-                            <PencilLine size={11} /> {editPending ? 'Loading...' : 'Edit'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onStartScheduledTournament?.(tournamentId)}
-                            disabled={!tournamentId || alreadyStarted || startPending || deletePending || viewPending}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-start-btn"
-                          >
-                            <Play size={11} /> {alreadyStarted ? 'Started' : (startPending ? 'Starting...' : 'Start')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onShareScheduledTournament?.(tournament)}
-                            disabled={startPending || deletePending || viewPending}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 setup-scheduled-share-btn"
-                          >
-                            <MessageCircle size={11} /> WhatsApp
-                          </button>
-                          {canDeleteActions && (
-                            <button
-                              type="button"
-                              onClick={() => onDeleteTournament?.(tournamentId)}
-                              disabled={!tournamentId || deletePending || startPending || editPending || viewPending}
-                              className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed setup-scheduled-delete-btn"
-                            >
-                              {deletePending ? 'Deleting...' : 'Delete'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {scheduledCards.length > 1 && (
-                <div className="mt-3 flex items-center justify-center gap-1.5">
-                  {scheduledCards.map((tournament, index) => (
-                    <button
-                      key={`scheduled-dot-${tournament?.appwriteId || tournament?.id || index}`}
-                      type="button"
-                      aria-label={`Go to scheduled tournament ${index + 1}`}
-                      onClick={() => scrollScheduledToIndex(index)}
-                      className={`h-1.5 rounded-full transition-all ${
-                        index === scheduledCarouselIndex ? 'w-5 bg-indigo-600' : 'w-2 bg-indigo-200'
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeLiveTournaments.length > 0 && (
-            <div className="mb-4 rounded-xl p-4 setup-highlight-card setup-live-card app-surface-card app-card-tier-secondary">
-              <p className="text-sm font-semibold text-emerald-900 mb-3 flex items-center gap-2 setup-live-title">
-                <Play size={16} /> Live Tournaments ({activeLiveTournaments.length})
-              </p>
-              <div className="space-y-2">
-                {activeLiveTournaments.map((tournament, index) => {
-                  const tournamentId = tournament.id || tournament.appwriteId;
-                  const rowKey = tournamentId || `${tournament.name || 'live'}-${index}`;
-                  const resumePending = Boolean(isPendingAction(`setup.resume-live.${String(tournamentId || 'active')}`));
-                  const deletePending = Boolean(isPendingAction(`setup.delete-live.${String(tournamentId || 'active')}`));
-                  return (
-                    <div key={rowKey} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 setup-live-row">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{tournament.name || 'Live tournament'}</p>
-                          <p className="text-[11px] text-slate-500 break-words">
-                            {formatTournamentDateLabel(tournament.date, 'Today')} • {(
-                              Array.isArray(tournament.teams)
-                                ? tournament.teams.length
-                                : (typeof tournament.teamsCount === 'number' ? tournament.teamsCount : 0)
-                            )} teams
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => onResumeActiveTournament?.(tournamentId)}
-                          disabled={resumePending || deletePending}
-                          className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1 whitespace-nowrap setup-live-resume-btn"
-                        >
-                          <Play size={11} /> {resumePending ? 'Resuming...' : 'Resume'}
-                        </button>
-                        {canDeleteLiveTournament && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteActiveTournament?.(tournamentId)}
-                            disabled={deletePending || resumePending}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap setup-live-delete-btn"
-                          >
-                            {deletePending ? 'Deleting...' : 'Delete'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <StartTournamentLane
-              gameMode={gameMode}
-              setGameMode={setGameMode}
-              tournamentFormat={tournamentFormat}
-              setTournamentFormat={setTournamentFormat}
-              format={format}
-              setFormat={setFormat}
-              numTeamsInput={numTeamsInput}
-              setNumTeamsInput={setNumTeamsInput}
-              setNumTeams={setNumTeams}
-              tournamentName={tournamentName}
-              setTournamentName={setTournamentName}
-              onNext={onNext}
-              startTournamentPending={startTournamentPending}
-            />
-            <ExploreDataLane
-              completedTournamentsCount={completedTournamentsCount}
-              casualCount={displayCasualMatches.length}
-              totalMatchesPlayed={totalMatchesPlayed}
-              topEloPlayer={topEloPlayer}
-              showAdvancedActions={showAdvancedActions}
-              setShowAdvancedActions={setShowAdvancedActions}
-              isMobileViewport={isMobileViewport}
-              historyCountLabel={historyCountLabel}
-              casualCountLabel={casualCountLabel}
-              setShowHistory={setShowHistory}
-              setShowCasualHistory={setShowCasualHistory}
-              setShowEloLeaderboard={setShowEloLeaderboard}
-              setShowAllTimeStats={setShowAllTimeStats}
-              setShowPairingAnalytics={setShowPairingAnalytics}
-              setShowPowerRankings={setShowPowerRankings}
-              tournamentTemplates={tournamentTemplates}
-              onSaveTemplate={onSaveTemplate}
-              onApplyTemplate={onApplyTemplate}
-              onDeleteTemplate={onDeleteTemplate}
-              canDeleteActions={canDeleteActions}
-              gameMode={gameMode}
-              tournamentFormat={tournamentFormat}
-              format={format}
-              numTeams={numTeams}
-              playerDatabase={playerDatabase}
-              teamNameDatabase={teamNameDatabase}
-              narratives={narratives}
-            />
-          </div>
-        </div>
-      </div>
+    <div>
+      {isMobileViewport && (
+        <SetupScreenMobileDashboard
+          mobileSetupView={mobileSetupView}
+          setMobileSetupView={setMobileSetupView}
+          onOpenUtilityDrawer={onOpenUtilityDrawer}
+          mobileScrollRef={mobileScrollRef}
+          syncChip={syncChip}
+          mobileHeaderTitle={mobileHeaderTitle}
+          mobileHeaderSubtitle={mobileHeaderSubtitle}
+          selectedGameModeLabel={selectedGameModeLabel}
+          selectedFormatLabel={selectedFormatLabel}
+          mobileStatsCards={mobileStatsCards}
+          topEloPlayer={topEloPlayer}
+          liveInProgressCards={liveInProgressCards}
+          completedTournamentsCount={completedTournamentsCount}
+          narratives={narratives}
+          gameMode={gameMode}
+          setGameMode={setGameMode}
+          tournamentFormat={tournamentFormat}
+          setTournamentFormat={setTournamentFormat}
+          format={format}
+          setFormat={setFormat}
+          setNumTeams={setNumTeams}
+          setNumTeamsInput={setNumTeamsInput}
+          numTeamsInput={numTeamsInput}
+          tournamentName={tournamentName}
+          setTournamentName={setTournamentName}
+          formatHint={formatHint}
+          startTournamentPending={startTournamentPending}
+          onNext={onNext}
+          tournamentTemplates={tournamentTemplates}
+          playerDatabase={playerDatabase}
+          teamNameDatabase={teamNameDatabase}
+          onSaveTemplate={onSaveTemplate}
+          onApplyTemplate={onApplyTemplate}
+          applyTemplateToForm={applyTemplateToForm}
+          onDeleteTemplate={onDeleteTemplate}
+          dashboardGameModeOptions={dashboardGameModeOptions}
+          dashboardFormatOptions={dashboardFormatOptions}
+          dashboardMatchCountOptions={dashboardMatchCountOptions}
+          mobileLiveTab={mobileLiveTab}
+          setMobileLiveTab={setMobileLiveTab}
+          isPendingAction={isPendingAction}
+          canDeleteLiveTournament={canDeleteLiveTournament}
+          onResumeActiveTournament={onResumeActiveTournament}
+          onDeleteActiveTournament={onDeleteActiveTournament}
+          scheduledCards={scheduledCards}
+          onViewScheduledCard={handleViewScheduledCard}
+          onEditScheduledTournament={onEditScheduledTournament}
+          onStartScheduledTournament={onStartScheduledTournament}
+          onShareScheduledTournament={onShareScheduledTournament}
+          canDeleteActions={canDeleteActions}
+          onDeleteTournament={onDeleteTournament}
+          activeLiveTournaments={activeLiveTournaments}
+          liveCompletedRows={liveCompletedRows}
+          onSelectTournament={setSelectedTournament}
+          totalMatchesPlayed={totalMatchesPlayed}
+          statsPreviewRows={statsPreviewRows}
+          eloGamificationMap={eloGamificationMap}
+          getTierMeta={getTierMeta}
+          casualCountLabel={casualCountLabel}
+          historyCountLabel={historyCountLabel}
+          setShowCasualHistory={setShowCasualHistory}
+          setShowHistory={setShowHistory}
+          setShowAllTimeStats={setShowAllTimeStats}
+          mobileEloFilter={mobileEloFilter}
+          setMobileEloFilter={setMobileEloFilter}
+          eloPeriodRows={eloPeriodRows}
+          eloFilterLabel={eloFilterLabel}
+          premiumEloRows={premiumEloRows}
+          compactEloRows={compactEloRows}
+          onSelectPlayer={setSelectedPlayerName}
+        />
+      )}
+      {!isMobileViewport && (
+        <SetupScreenDesktop
+          syncChip={syncChip}
+          scheduledCards={scheduledCards}
+          scheduledCarouselIndex={scheduledCarouselIndex}
+          scrollScheduledToIndex={scrollScheduledToIndex}
+          scheduledCarouselRef={scheduledCarouselRef}
+          handleScheduledTrackScroll={handleScheduledTrackScroll}
+          handleViewScheduledCard={handleViewScheduledCard}
+          activeLiveTournaments={activeLiveTournaments}
+          isPendingAction={isPendingAction}
+          onEditScheduledTournament={onEditScheduledTournament}
+          onStartScheduledTournament={onStartScheduledTournament}
+          onShareScheduledTournament={onShareScheduledTournament}
+          onDeleteTournament={onDeleteTournament}
+          canDeleteActions={canDeleteActions}
+          onResumeActiveTournament={onResumeActiveTournament}
+          onDeleteActiveTournament={onDeleteActiveTournament}
+          canDeleteLiveTournament={canDeleteLiveTournament}
+          gameMode={gameMode}
+          setGameMode={setGameMode}
+          tournamentFormat={tournamentFormat}
+          setTournamentFormat={setTournamentFormat}
+          format={format}
+          setFormat={setFormat}
+          numTeamsInput={numTeamsInput}
+          setNumTeamsInput={setNumTeamsInput}
+          setNumTeams={setNumTeams}
+          tournamentName={tournamentName}
+          setTournamentName={setTournamentName}
+          onNext={onNext}
+          startTournamentPending={startTournamentPending}
+          completedTournamentsCount={completedTournamentsCount}
+          displayCasualMatches={displayCasualMatches}
+          totalMatchesPlayed={totalMatchesPlayed}
+          topEloPlayer={topEloPlayer}
+          showAdvancedActions={showAdvancedActions}
+          setShowAdvancedActions={setShowAdvancedActions}
+          isMobileViewport={isMobileViewport}
+          historyCountLabel={historyCountLabel}
+          casualCountLabel={casualCountLabel}
+          setShowHistory={setShowHistory}
+          setShowCasualHistory={setShowCasualHistory}
+          setShowEloLeaderboard={setShowEloLeaderboard}
+          setShowAllTimeStats={setShowAllTimeStats}
+          setShowPairingAnalytics={setShowPairingAnalytics}
+          setShowPowerRankings={setShowPowerRankings}
+          tournamentTemplates={tournamentTemplates}
+          onSaveTemplate={onSaveTemplate}
+          onApplyTemplate={onApplyTemplate}
+          onDeleteTemplate={onDeleteTemplate}
+          canDeleteActionsForExplore={canDeleteActions}
+          numTeams={numTeams}
+          playerDatabase={playerDatabase}
+          teamNameDatabase={teamNameDatabase}
+          narratives={narratives}
+        />
+      )}
 
       {showHistory && (
         <>

@@ -1,6 +1,67 @@
 import React from 'react';
 import { Users } from 'lucide-react';
 
+const gameModeOptions = [
+  { value: 'doubles', label: '🏸 Doubles', description: '2 players per team' },
+  { value: 'singles', label: '👤 Singles', description: '1 player per team' },
+  { value: 'mixed', label: '⚡ Mixed', description: 'Mixed doubles setup' },
+];
+
+const tournamentFormatOptions = [
+  { value: 'league', label: '🏁 League + Final' },
+  { value: 'knockoutByes', label: '🏆 Knockout + Byes' },
+  { value: 'semiFinal', label: '🎯 Semi Final + Final' },
+  { value: 'fullKnockout', label: '⚔️ Full Knockout' },
+];
+
+const formatHints = {
+  league: 'Round-robin, top 2 advance to final',
+  knockoutByes: '3+ teams: knockout bracket with automatic byes',
+  semiFinal: '4 teams: 2 semi finals lead to 1 final',
+  fullKnockout: '8 teams: quarter finals, semis, then final',
+};
+
+const matchesPerPairOptions = [
+  { value: '1', label: '1 Match' },
+  { value: '2', label: '2 Matches' },
+];
+
+const SelectionGrid = ({
+  legend,
+  options,
+  value,
+  onChange,
+  columns = 2,
+}) => (
+  <div>
+    <label className="block text-sm font-semibold text-gray-700 mb-2">{legend}</label>
+    <div
+      className={`grid gap-2 ${columns === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}
+      role="radiogroup"
+      aria-label={legend}
+    >
+      {options.map((option) => {
+        const selected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+            className={`setup-selection-btn ${selected ? 'is-selected' : ''}`}
+          >
+            <span>{option.label}</span>
+            {option.description && (
+              <span className="setup-selection-copy">{option.description}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
 const StartTournamentLane = ({
   gameMode,
   setGameMode,
@@ -24,25 +85,19 @@ const StartTournamentLane = ({
     </div>
 
     <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Game Mode</label>
-        <select
-          value={gameMode}
-          onChange={(event) => setGameMode(event.target.value)}
-          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all bg-white"
-        >
-          <option value="doubles">🏸 Doubles (2 players per team)</option>
-          <option value="singles">👤 Singles (1 player per team)</option>
-          <option value="mixed">⚡ Mixed Doubles</option>
-        </select>
-      </div>
+      <SelectionGrid
+        legend="Game Mode"
+        value={gameMode}
+        onChange={setGameMode}
+        options={gameModeOptions}
+        columns={3}
+      />
 
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Tournament Format</label>
-        <select
+        <SelectionGrid
+          legend="Tournament Format"
           value={tournamentFormat}
-          onChange={(event) => {
-            const nextFormat = event.target.value;
+          onChange={(nextFormat) => {
             setTournamentFormat(nextFormat);
             if (nextFormat === 'knockoutByes' || nextFormat === 'semiFinal') {
               setNumTeams(4);
@@ -55,29 +110,19 @@ const StartTournamentLane = ({
               setNumTeamsInput('3');
             }
           }}
-          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all bg-white"
-        >
-          <option value="league">📊 League + Final</option>
-          <option value="knockoutByes">🏆 Knockout + Byes (3+ teams)</option>
-          <option value="semiFinal">🏆 Semi Final + Final (4 teams)</option>
-          <option value="fullKnockout">⚔️ Full Knockout (8 teams)</option>
-        </select>
+          options={tournamentFormatOptions}
+        />
         {tournamentFormat === 'league' && (
-          <select
-            value={format}
-            onChange={(event) => setFormat(event.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all bg-white mt-2"
-          >
-            <option value="1">1 match per pair</option>
-            <option value="2">2 matches per pair</option>
-          </select>
+          <div className="mt-3">
+            <SelectionGrid
+              legend="Matches per Pair"
+              value={format}
+              onChange={setFormat}
+              options={matchesPerPairOptions}
+            />
+          </div>
         )}
-        <p className="text-xs text-gray-500 mt-2">
-          {tournamentFormat === 'knockoutByes' && '3+ teams: knockout bracket with automatic byes'}
-          {tournamentFormat === 'semiFinal' && '4 teams: 2 semi finals → 1 final'}
-          {tournamentFormat === 'fullKnockout' && '8 teams: quarters → semis → final'}
-          {tournamentFormat === 'league' && 'Round-robin, top 2 advance to final'}
-        </p>
+        <p className="text-xs text-gray-500 mt-2">{formatHints[tournamentFormat] || formatHints.league}</p>
       </div>
 
       <div>
@@ -129,4 +174,3 @@ const StartTournamentLane = ({
 );
 
 export default StartTournamentLane;
-

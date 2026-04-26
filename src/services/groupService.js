@@ -3,6 +3,13 @@ import { queueLocalStorageJson } from './localStorageWriteService';
 
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const LOCAL_GROUP_META_KEY = 'badminton_group_meta';
+const GROUP_DEMO_MODE_ENABLED = String(
+  import.meta.env.VITE_ENABLE_GROUP_DEMO_MODE || 'false'
+).trim().toLowerCase() === 'true';
+const GROUP_SERVICE_CONFIGURATION_ERROR = (
+  'Group collections are not configured. Configure the normalized group collections, '
+  + 'or set VITE_ENABLE_GROUP_DEMO_MODE=true to use local demo groups explicitly.'
+);
 
 const randomInviteCode = () => Math.random().toString(36).slice(2, 10).toUpperCase();
 
@@ -23,7 +30,7 @@ const saveMeta = async ({ groups, groupMembers, groupInvites, groupJoinRequests 
   return payload;
 };
 
-const legacyGroupService = {
+const demoGroupService = {
   async getAllGroups() {
     const meta = await getMetaWithDefaults();
     return [...meta.groups].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -456,12 +463,23 @@ const GROUP_SERVICE_METHODS = [
   'rejectJoinRequest',
 ];
 
+export const getGroupServiceMode = () => {
+  if (groupCollectionsService.isEnabled()) return 'cloud';
+  if (GROUP_DEMO_MODE_ENABLED) return 'demo';
+  return 'unconfigured';
+};
+
+export const isGroupDemoModeEnabled = () => getGroupServiceMode() === 'demo';
+
 const buildRoutedGroupService = () => GROUP_SERVICE_METHODS.reduce((acc, methodName) => {
   acc[methodName] = async (...args) => {
     if (groupCollectionsService.isEnabled()) {
       return groupCollectionsService[methodName](...args);
     }
-    return legacyGroupService[methodName](...args);
+    if (GROUP_DEMO_MODE_ENABLED) {
+      return demoGroupService[methodName](...args);
+    }
+    throw new Error(GROUP_SERVICE_CONFIGURATION_ERROR);
   };
   return acc;
 }, {});

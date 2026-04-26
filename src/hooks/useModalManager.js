@@ -6,6 +6,7 @@ const INITIAL_MODAL_STATE = {
   showCasualHistory: false,
   showAllTimeStats: false,
   showEloLeaderboard: false,
+  mobileSetupView: 'home',
   pendingLinkPrompt: null,
   showProfileModal: false,
   showUtilityDrawer: false,
@@ -38,6 +39,9 @@ export const useModalManager = () => {
   }, [setModalValue]);
   const setShowEloLeaderboard = useCallback((value) => {
     setModalValue('showEloLeaderboard', value);
+  }, [setModalValue]);
+  const setMobileSetupView = useCallback((value) => {
+    setModalValue('mobileSetupView', value);
   }, [setModalValue]);
   const setPendingLinkPrompt = useCallback((value) => {
     setModalValue('pendingLinkPrompt', value);
@@ -96,15 +100,19 @@ export const useModalManager = () => {
     setShowAllTimeStats,
     showEloLeaderboard: modalState.showEloLeaderboard,
     setShowEloLeaderboard,
+    mobileSetupView: modalState.mobileSetupView,
+    setMobileSetupView,
   }), [
     modalState.showHistory,
     modalState.showCasualHistory,
     modalState.showAllTimeStats,
     modalState.showEloLeaderboard,
+    modalState.mobileSetupView,
     setShowHistory,
     setShowCasualHistory,
     setShowAllTimeStats,
     setShowEloLeaderboard,
+    setMobileSetupView,
   ]);
 
   return {
@@ -118,6 +126,8 @@ export const useModalManager = () => {
     setShowAllTimeStats,
     showEloLeaderboard: modalState.showEloLeaderboard,
     setShowEloLeaderboard,
+    mobileSetupView: modalState.mobileSetupView,
+    setMobileSetupView,
     pendingLinkPrompt: modalState.pendingLinkPrompt,
     setPendingLinkPrompt,
     showProfileModal: modalState.showProfileModal,

@@ -251,7 +251,7 @@ const prefersDayFirst = (() => {
 const parseLooseDate = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return null;
-  const match = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  const match = raw.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
   if (!match) return null;
   const first = Number(match[1]);
   const second = Number(match[2]);
@@ -374,7 +374,7 @@ export const buildRatingsDelta = (previousRatings = {}, nextRatings = {}) => {
 };
 
 export const getTournamentIdCandidates = (tournament) => Array.from(new Set(
-  [tournament?.appwriteId, tournament?.id, tournament?.legacyTournamentId]
+  [tournament?.appwriteId, tournament?.id, tournament?.legacyTournamentId, tournament?.immutableTournamentId]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
 ));
@@ -617,6 +617,7 @@ const getTournamentTeamSignature = (tournament) => {
 };
 
 const getTournamentAppwriteId = (tournament) => String(tournament?.appwriteId || '').trim();
+const getTournamentImmutableId = (tournament) => String(tournament?.immutableTournamentId || '').trim();
 const getTournamentLegacyId = (tournament) => String(tournament?.legacyTournamentId || '').trim();
 const isLocalTournamentId = (value) => {
   const normalized = String(value || '').trim();
@@ -625,17 +626,20 @@ const isLocalTournamentId = (value) => {
   return normalized.startsWith('sched-local-') || normalized.startsWith('local-');
 };
 const getTournamentStableId = (tournament) => (
-  getTournamentAppwriteId(tournament)
+  getTournamentImmutableId(tournament)
+  || getTournamentAppwriteId(tournament)
   || getTournamentLegacyId(tournament)
   || (isLocalTournamentId(tournament?.id) ? String(tournament?.id || '').trim() : '')
 );
 
 const hasLocalSyncIdentity = (tournament) => {
   const appwriteId = getTournamentAppwriteId(tournament);
+  const immutableId = getTournamentImmutableId(tournament);
   const legacyId = getTournamentLegacyId(tournament);
   const rawId = String(tournament?.id || '').trim();
   return Boolean(
     tournament?._fromLock
+    || isLocalTournamentId(immutableId)
     || isLocalTournamentId(legacyId)
     || (!appwriteId && isLocalTournamentId(rawId))
   );

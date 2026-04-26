@@ -63,6 +63,7 @@ const TemplateManager = ({
   teamNameSuggestions = [],
   onSave,
   onApply,
+  onApplyConfig = null,
   onDelete,
 }) => {
   const [showEditor, setShowEditor] = useState(false);
@@ -135,11 +136,23 @@ const TemplateManager = ({
     }
   };
 
+  const handleApply = (template) => {
+    if (!template) return;
+    if (typeof onApplyConfig === 'function') {
+      onApplyConfig(template);
+      return;
+    }
+    if (typeof onApply === 'function') {
+      onApply(template.id);
+    }
+  };
+
   return (
     <div className="mb-6 rounded-xl p-4 template-manager-card">
       <div className="flex items-center justify-between gap-3 mb-3">
         <p className="text-sm font-semibold text-gray-700 template-manager-title">📌 Tournament Templates</p>
         <button
+          type="button"
           onClick={openCreate}
           className="px-3 py-1.5 rounded-lg transition-all text-xs font-semibold template-manager-create-btn"
         >
@@ -159,18 +172,21 @@ const TemplateManager = ({
               </div>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => onApply(template.id)}
+                  type="button"
+                  onClick={() => handleApply(template)}
                   className="text-xs px-2 py-1 rounded-lg font-semibold template-manager-apply-btn"
                 >
                   Apply
                 </button>
                 <button
+                  type="button"
                   onClick={() => openEdit(template)}
                   className="text-xs px-2 py-1 rounded-lg font-semibold template-manager-edit-btn"
                 >
                   Edit
                 </button>
                 <button
+                  type="button"
                   onClick={() => onDelete(template.id)}
                   className="text-xs px-2 py-1 rounded-lg font-semibold template-manager-delete-btn"
                 >
@@ -269,12 +285,14 @@ const TemplateManager = ({
 
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={handleSave}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-semibold"
             >
               Save Template
             </button>
             <button
+              type="button"
               onClick={() => setShowEditor(false)}
               className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-semibold"
             >

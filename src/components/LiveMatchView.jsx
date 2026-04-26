@@ -26,13 +26,14 @@ const LiveMatchView = ({
   onSaveScore, 
   nextMatches = [],
   onSelectUpcomingMatch,
-  tournamentName,
   playerRatings = {},
   playerPhotos = {},
   pointsTable = [],
   tournamentHistory = [],
   casualMatches = [],
   syncState = null,
+  completedMatchesCount = 0,
+  totalMatchesCount = 0,
 }) => {
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
@@ -279,8 +280,6 @@ const LiveMatchView = ({
     : null;
   const projectedMargin = hasValidProjection ? Math.abs(parsedScore1 - parsedScore2) : null;
   const projectedWinnerRank = hasValidProjection ? getRankAfterOutcome(projectedWinnerId, projectedWinnerId, projectedMargin) : null;
-  const mobileStickyScore1 = score1 || '0';
-  const mobileStickyScore2 = score2 || '0';
   const upsetAlert = getUpsetAlert({
     prediction: currentMatchPrediction,
     score1,
@@ -288,286 +287,309 @@ const LiveMatchView = ({
     team1Name: currentMatch.team1?.name,
     team2Name: currentMatch.team2?.name,
   });
+  const team1Players = getTeamPlayers(currentMatch.team1);
+  const team2Players = getTeamPlayers(currentMatch.team2);
+  const oddPlayerMeta = currentMatch?.oddPlayerMeta || null;
+  const primaryUpcomingMatch = nextMatches[0] || null;
+  const remainingUpcomingMatches = nextMatches.slice(1);
+  const fallbackTotalMatches = completedMatchesCount + nextMatches.length + 1;
+  const displayTotalMatches = totalMatchesCount || fallbackTotalMatches;
+  const displayCurrentMatchNumber = Math.min(displayTotalMatches, completedMatchesCount + 1);
+  const primaryUpcomingPrediction = primaryUpcomingMatch ? upcomingPredictions[primaryUpcomingMatch.id] : null;
+  const primaryUpcomingUpsetAlert = primaryUpcomingMatch ? getUpsetAlert({
+    prediction: primaryUpcomingPrediction,
+    score1: '',
+    score2: '',
+    team1Name: primaryUpcomingMatch.team1?.name,
+    team2Name: primaryUpcomingMatch.team2?.name,
+  }) : null;
+  const leadTeam = hasValidProjection
+    ? (parsedScore1 > parsedScore2 ? 1 : 2)
+    : null;
+  const topTwoWatchCopy = hasValidProjection
+    ? `${parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name} wins → moves to rank #${projectedWinnerRank}`
+    : 'Enter scores to preview Top 2 movement';
 
   return (
-    <div className="space-y-4 sm:space-y-6 app-screen-live">
-      <div className={`live-board app-surface-card app-card-tier-primary submit-feedback-${submitFeedbackState}`}>
+    <div className="space-y-3 sm:space-y-4 app-screen-live">
+      <div className={`variant-a-card variant-a-live-shell submit-feedback-${submitFeedbackState}`}>
         <div className={`live-submit-flash ${submitFeedbackState === 'success' ? 'is-active' : ''}`} />
 
-        <div className="relative z-10 p-4 sm:p-6 lg:p-8">
-          <div className="flex items-center justify-between gap-3">
-            <div className="live-pill inline-flex items-center gap-2 sm:gap-3 rounded-2xl px-4 sm:px-5 py-2 sm:py-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-100 animate-pulse" />
-              <span className="font-extrabold tracking-wide text-white text-sm sm:text-base">LIVE NOW</span>
-            </div>
-            <div className="live-meta-chip inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-900/50 px-3 py-1.5 text-slate-200 text-xs sm:text-sm">
-              <Clock size={14} />
-              <span>Match {currentMatch.id}</span>
-            </div>
+        <div className="variant-a-live-row">
+          <div className="variant-a-live-pill live-pill">
+            <span className="variant-a-live-dot blink" />
+            <span>LIVE NOW</span>
           </div>
+          <span className="variant-a-context-chip">
+            Match {displayCurrentMatchNumber} of {displayTotalMatches}
+          </span>
+        </div>
 
-          <div className="live-title-chip mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/40 px-3 py-2 text-center">
-            <h2 className="live-title-text app-section-heading text-sm sm:text-base font-semibold text-sky-100">{tournamentName}</h2>
-          </div>
-
-          {isMobileViewport && (
-            <div className="live-sticky-mini-board" data-no-gesture="true">
-              <div className="live-sticky-mini-team">
-                <p className="live-sticky-mini-label">{currentMatch.team1.name}</p>
-                <p className="live-sticky-mini-score">{mobileStickyScore1}</p>
-              </div>
-              <div className="live-sticky-mini-divider">:</div>
-              <div className="live-sticky-mini-team">
-                <p className="live-sticky-mini-label">{currentMatch.team2.name}</p>
-                <p className="live-sticky-mini-score">{mobileStickyScore2}</p>
-              </div>
-            </div>
-          )}
-
-          {QUICK_SCORE_MODE_ENABLED && (
-            <div className="quick-score-primary mt-4 rounded-2xl border border-cyan-400/30 bg-cyan-950/35 p-3 sm:p-4" data-no-gesture="true">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <p className="text-cyan-100 text-sm sm:text-base font-bold">Quick Score Mode</p>
-                  <p className="text-cyan-200/80 text-xs">Primary scoring flow with large tap controls.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsQuickScoreModeOpen(true)}
-                  disabled={isSubmitting}
-                  className="quick-score-launch-btn"
-                >
-                  <Hand size={15} />
-                  <span>Open Quick Score</span>
-                </button>
-              </div>
-              <div className="live-quick-mode mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => applyQuickWinner(1)}
-                  disabled={isSubmitting}
-                  className="score-quick-btn score-quick-btn-one"
-                >
-                  <Zap size={14} />
-                  <span>{currentMatch.team1.name} wins</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyQuickWinner(2)}
-                  disabled={isSubmitting}
-                  className="score-quick-btn score-quick-btn-two"
-                >
-                  <Zap size={14} />
-                  <span>{currentMatch.team2.name} wins</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          <p className="manual-score-note mt-4 text-[11px] sm:text-xs text-slate-300">
-            Manual score entry:
-          </p>
-
-          <section className="mt-6">
-            <p className="live-team-label live-team-label-one text-sky-300 text-sm sm:text-base font-semibold">Team 1</p>
-            <div className="mt-2 flex items-start justify-between gap-3">
-              <h3 className="live-team-heading text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
-                {currentMatch.team1.name}
-              </h3>
-              <div className="elo-pill live-elo-pill live-elo-pill-one inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sky-300">
-                <TrendingUp size={14} />
-                <span className="font-bold">{team1Rating}</span>
-              </div>
-            </div>
-            <div className="team-glass team-one mt-4 rounded-3xl p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-4 sm:gap-6">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  {getTeamPlayers(currentMatch.team1).map((playerName, index) => (
-                    <div key={`${currentMatch.team1.id}-${playerName}-${index}`} className="player-orb player-orb-one">
-                      <PlayerAvatar
-                        name={playerName}
-                        photoUrl={playerPhotos[playerName]}
-                        size="xl"
-                        className="w-16 h-16 sm:w-20 sm:h-20 border-0"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <input
-                  ref={score1InputRef}
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={score1}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || /^\d+$/.test(value)) {
-                      setScore1(value);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      score2InputRef.current?.focus();
-                    }
-                  }}
-                  placeholder="0"
-                  className="score-input w-24 sm:w-28 rounded-2xl px-2 py-2 text-center text-5xl sm:text-6xl font-black leading-none outline-none"
-                  disabled={isSubmitting}
-                  aria-label={`${currentMatch.team1.name} score`}
-                  data-no-gesture="true"
-                />
-              </div>
-              <div className="live-team-roster mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
-                {getTeamPlayers(currentMatch.team1).map((playerName, index) => (
-                  <p key={`${currentMatch.team1.name}-name-${playerName}-${index}`} className="truncate font-medium">
-                    {playerName}
-                  </p>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <div className="my-6 sm:my-8 flex items-center gap-3 sm:gap-4">
-            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-400/60 to-transparent" />
-            <span className="vs-halo live-vs-text text-4xl sm:text-6xl font-black text-slate-200">VS</span>
-            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-400/60 to-transparent" />
-          </div>
-
-          <section>
-            <p className="live-team-label live-team-label-two text-violet-300 text-sm sm:text-base font-semibold">Team 2</p>
-            <div className="mt-2 flex items-start justify-between gap-3">
-              <h3 className="live-team-heading text-3xl sm:text-5xl font-extrabold text-slate-50 leading-none tracking-tight">
-                {currentMatch.team2.name}
-              </h3>
-              <div className="elo-pill live-elo-pill live-elo-pill-two inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-violet-300">
-                <TrendingUp size={14} />
-                <span className="font-bold">{team2Rating}</span>
-              </div>
-            </div>
-            <div className="team-glass team-two mt-4 rounded-3xl p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-4 sm:gap-6">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  {getTeamPlayers(currentMatch.team2).map((playerName, index) => (
-                    <div key={`${currentMatch.team2.id}-${playerName}-${index}`} className="player-orb player-orb-two">
-                      <PlayerAvatar
-                        name={playerName}
-                        photoUrl={playerPhotos[playerName]}
-                        size="xl"
-                        className="w-16 h-16 sm:w-20 sm:h-20 border-0"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <input
-                  ref={score2InputRef}
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={score2}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || /^\d+$/.test(value)) {
-                      setScore2(value);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void handleSubmit();
-                    }
-                  }}
-                  placeholder="0"
-                  className="score-input w-24 sm:w-28 rounded-2xl px-2 py-2 text-center text-5xl sm:text-6xl font-black leading-none outline-none"
-                  disabled={isSubmitting}
-                  aria-label={`${currentMatch.team2.name} score`}
-                  data-no-gesture="true"
-                />
-              </div>
-              <div className="live-team-roster mt-3 grid grid-cols-2 gap-2 text-xs sm:text-base text-slate-100">
-                {getTeamPlayers(currentMatch.team2).map((playerName, index) => (
-                  <p key={`${currentMatch.team2.name}-name-${playerName}-${index}`} className="truncate font-medium">
-                    {playerName}
-                  </p>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3" data-no-gesture="true">
+        {QUICK_SCORE_MODE_ENABLED && (
+          <div className="variant-a-quick-entry" data-no-gesture="true">
             <button
-              onClick={handleSubmit}
-              disabled={!score1 || !score2 || score1 === score2 || isSubmitting || submitFeedbackState === 'success'}
-              className={`submit-slab action-feedback-btn ${isSubmitting ? 'is-busy' : ''} ${submitFeedbackState === 'success' ? 'submit-feedback-success' : ''} w-full sm:flex-1 rounded-2xl py-4 sm:py-5 text-base sm:text-2xl font-extrabold tracking-wide text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3`}
+              type="button"
+              onClick={() => setIsQuickScoreModeOpen(true)}
+              disabled={isSubmitting}
+              className="quick-score-launch-btn"
             >
-              {(isSubmitting || submitFeedbackState === 'loading') ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white" />
-                  <span>Saving...</span>
-                </>
-              ) : submitFeedbackState === 'success' ? (
-                <>
-                  <CheckCircle2 size={20} className="sm:w-6 sm:h-6" />
-                  <span>Saved</span>
-                </>
-              ) : (
-                <>
-                  <Trophy size={20} className="sm:w-6 sm:h-6" />
-                  <span>SUBMIT &amp; CONTINUE</span>
-                </>
-              )}
+              <Hand size={14} />
+              <span>Open Quick Score</span>
             </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => applyQuickWinner(1)}
+                disabled={isSubmitting}
+                className="score-quick-btn score-quick-btn-one"
+              >
+                <Zap size={13} />
+                <span>{currentMatch.team1.name} wins</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => applyQuickWinner(2)}
+                disabled={isSubmitting}
+                className="score-quick-btn score-quick-btn-two"
+              >
+                <Zap size={13} />
+                <span>{currentMatch.team2.name} wins</span>
+              </button>
+            </div>
+          </div>
+        )}
 
-            {syncState?.status && (
-              <div className={`live-inline-sync live-inline-sync-${syncState.status} live-inline-sync-inline`}>
-                {syncState.status === 'syncing' && <RefreshCw size={14} className="animate-spin" />}
-                {syncState.status === 'saved' && <CheckCircle2 size={14} />}
-                {syncState.status === 'error' && <AlertTriangle size={14} />}
-                <span>{syncState.label || (syncState.status === 'saved' ? 'Saved' : (syncState.status === 'error' ? 'Retry' : 'Saving...'))}</span>
-              </div>
-            )}
+        <div className="variant-a-score-card">
+          <div className="variant-a-score-side">
+            <div className="variant-a-avatar-stack">
+              {team1Players.map((playerName, index) => (
+                <div key={`${currentMatch.team1.id}-${playerName}-${index}`} className="variant-a-avatar-shell">
+                  <PlayerAvatar
+                    name={playerName}
+                    photoUrl={playerPhotos[playerName]}
+                    size="md"
+                    className="variant-a-avatar"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="variant-a-score-names">
+              {team1Players.map((playerName, index) => (
+                <span key={`${playerName}-${index}`}>{playerName}</span>
+              ))}
+            </div>
+            <div className="variant-a-score-elo">
+              <TrendingUp size={11} />
+              <span>{currentMatch.team1.name} · {team1Rating}</span>
+            </div>
+            <input
+              ref={score1InputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={score1}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '' || /^\d+$/.test(value)) {
+                  setScore1(value);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  score2InputRef.current?.focus();
+                }
+              }}
+              placeholder="0"
+              className={`variant-a-score-input ${leadTeam === 1 ? 'variant-a-score-input-win' : ''}`}
+              disabled={isSubmitting}
+              aria-label={`${currentMatch.team1.name} score`}
+              data-no-gesture="true"
+            />
           </div>
 
-          {score1 === score2 && score1 !== '' && (
-            <p className="live-tie-warning text-center text-rose-300 text-xs sm:text-sm mt-3 font-semibold">
-              Scores must be different.
+          <div className="variant-a-vs">VS</div>
+
+          <div className="variant-a-score-side">
+            <div className="variant-a-avatar-stack">
+              {team2Players.map((playerName, index) => (
+                <div key={`${currentMatch.team2.id}-${playerName}-${index}`} className="variant-a-avatar-shell">
+                  <PlayerAvatar
+                    name={playerName}
+                    photoUrl={playerPhotos[playerName]}
+                    size="md"
+                    className="variant-a-avatar"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="variant-a-score-names">
+              {team2Players.map((playerName, index) => (
+                <span key={`${playerName}-${index}`}>{playerName}</span>
+              ))}
+            </div>
+            <div className="variant-a-score-elo">
+              <TrendingUp size={11} />
+              <span>{currentMatch.team2.name} · {team2Rating}</span>
+            </div>
+            <input
+              ref={score2InputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={score2}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '' || /^\d+$/.test(value)) {
+                  setScore2(value);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleSubmit();
+                }
+              }}
+              placeholder="0"
+              className={`variant-a-score-input ${leadTeam === 2 ? 'variant-a-score-input-win' : ''}`}
+              disabled={isSubmitting}
+              aria-label={`${currentMatch.team2.name} score`}
+              data-no-gesture="true"
+            />
+          </div>
+        </div>
+
+        <div className="variant-a-qualify-card">
+          {oddPlayerMeta && (
+            <p className="variant-a-qualify-copy mb-2">
+              Odd-player swap: <strong>{oddPlayerMeta.activeOddPlayerName}</strong> in for{' '}
+              <strong>{oddPlayerMeta.swapTeamName}</strong>; <strong>{oddPlayerMeta.sittingOutPlayerName}</strong> sits out.
             </p>
           )}
+          <p className="variant-a-qualify-title">Top 2 watch</p>
+          <div className="variant-a-qualify-copy">
+            <p className="variant-a-qualify-highlight">{topTwoWatchCopy}</p>
+          </div>
+        </div>
 
-          <div className="live-watch-shell mt-4 rounded-2xl border border-slate-500/35 bg-slate-950/45 p-3 sm:p-4">
-            <h4 className="live-watch-title font-bold text-slate-100 text-sm sm:text-base mb-2">Top 2 Qualification Watch</h4>
-            <div className="live-watch-copy space-y-1.5 text-xs sm:text-sm text-slate-300">
-              <p>
-                <span className="font-semibold text-slate-100">{currentMatch.team1.name}:</span>{' '}
-                {team1MinMargin
-                  ? `win by ${team1MinMargin}+ to enter Top 2 after this match.`
-                  : 'cannot reach Top 2 from this match alone.'}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-100">{currentMatch.team2.name}:</span>{' '}
-                {team2MinMargin
-                  ? `win by ${team2MinMargin}+ to enter Top 2 after this match.`
-                  : 'cannot reach Top 2 from this match alone.'}
-              </p>
-              {hasValidProjection && (
-                <p className="live-watch-projection pt-1 font-semibold text-cyan-300">
-                  If this score is submitted, {(parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name)} will move to rank #{projectedWinnerRank}.
-                </p>
-              )}
+        <div className="variant-a-submit-row" data-no-gesture="true">
+          <button
+            onClick={handleSubmit}
+            disabled={!score1 || !score2 || score1 === score2 || isSubmitting || submitFeedbackState === 'success'}
+            className={`variant-a-submit-btn action-feedback-btn ${isSubmitting ? 'is-busy' : ''} ${submitFeedbackState === 'success' ? 'submit-feedback-success' : ''}`}
+          >
+            {(isSubmitting || submitFeedbackState === 'loading') ? (
+              <>
+                <RefreshCw size={16} className="animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : submitFeedbackState === 'success' ? (
+              <>
+                <CheckCircle2 size={16} />
+                <span>Saved</span>
+              </>
+            ) : (
+              <>
+                <Trophy size={16} />
+                <span>Submit &amp; Continue</span>
+              </>
+            )}
+          </button>
+
+          {syncState?.status && (
+            <div className={`variant-a-inline-sync live-inline-sync live-inline-sync-${syncState.status} live-inline-sync-inline`}>
+              {syncState.status === 'syncing' && <RefreshCw size={13} className="animate-spin" />}
+              {syncState.status === 'saved' && <CheckCircle2 size={13} />}
+              {syncState.status === 'error' && <AlertTriangle size={13} />}
+              <span>{syncState.label || (syncState.status === 'saved' ? 'Saved' : (syncState.status === 'error' ? 'Retry' : 'Saving...'))}</span>
             </div>
-          </div>
+          )}
+        </div>
 
-          <div className="mt-4">
-            <MatchPredictionCard match={currentMatch} prediction={currentMatchPrediction} />
-          </div>
+        {score1 === score2 && score1 !== '' && (
+          <p className="variant-a-error-copy">Scores must be different.</p>
+        )}
+      </div>
 
+      {!primaryUpcomingMatch && currentMatchPrediction && (
+        <div className="variant-a-card">
+          <p className="variant-a-section-label">Match story</p>
           <LiveNarrativePanel
             prediction={currentMatchPrediction}
             upsetAlert={upsetAlert}
             currentMatch={currentMatch}
           />
         </div>
-      </div>
+      )}
+
+      {primaryUpcomingMatch && (
+        <div className="variant-a-card variant-a-upcoming-shell">
+          <p className="variant-a-section-label">Coming up</p>
+          <div className="variant-a-upcoming-head">
+            <span className="variant-a-meta-copy">Round {primaryUpcomingMatch.round} · Match {primaryUpcomingMatch.id}</span>
+            <span className="variant-a-badge">Next up</span>
+          </div>
+
+          <div className="variant-a-upcoming-teams">
+            <div className="variant-a-upcoming-side">
+              <div className="variant-a-avatar-stack">
+                {getTeamPlayers(primaryUpcomingMatch.team1).map((playerName, index) => (
+                  <div key={`${primaryUpcomingMatch.id}-upcoming-1-${playerName}-${index}`} className="variant-a-avatar-shell">
+                    <PlayerAvatar
+                      name={playerName}
+                      photoUrl={playerPhotos[playerName]}
+                      size="sm"
+                      className="variant-a-avatar variant-a-avatar-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="variant-a-upcoming-team-name">{primaryUpcomingMatch.team1?.name}</p>
+            </div>
+
+            <div className="variant-a-vs variant-a-vs-sm">VS</div>
+
+            <div className="variant-a-upcoming-side variant-a-upcoming-side-right">
+              <div className="variant-a-avatar-stack justify-end">
+                {getTeamPlayers(primaryUpcomingMatch.team2).map((playerName, index) => (
+                  <div key={`${primaryUpcomingMatch.id}-upcoming-2-${playerName}-${index}`} className="variant-a-avatar-shell">
+                    <PlayerAvatar
+                      name={playerName}
+                      photoUrl={playerPhotos[playerName]}
+                      size="sm"
+                      className="variant-a-avatar variant-a-avatar-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="variant-a-upcoming-team-name">{primaryUpcomingMatch.team2?.name}</p>
+            </div>
+          </div>
+
+          <MatchPredictionCard
+            match={primaryUpcomingMatch}
+            prediction={primaryUpcomingPrediction}
+            title="Prediction"
+            compact
+          />
+
+          <LiveNarrativePanel
+            prediction={primaryUpcomingPrediction}
+            upsetAlert={primaryUpcomingUpsetAlert}
+            currentMatch={primaryUpcomingMatch}
+          />
+
+          {typeof onSelectUpcomingMatch === 'function' && (
+            <button
+              type="button"
+              onClick={() => onSelectUpcomingMatch(primaryUpcomingMatch.id)}
+              className="variant-a-secondary-btn"
+            >
+              Start this match
+            </button>
+          )}
+        </div>
+      )}
 
       {QUICK_SCORE_MODE_ENABLED && isQuickScoreModeOpen && (
         <div
@@ -694,49 +716,25 @@ const LiveMatchView = ({
         </div>
       )}
 
-      {/* Next Matches Preview */}
-      {nextMatches.length > 0 && (
-        <div className="theme-card live-next-shell app-surface-card app-card-tier-secondary rounded-xl sm:rounded-2xl p-4 sm:p-6">
-          <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <Users size={16} className="live-next-icon text-slate-300 sm:w-5 sm:h-5" />
-            <h3 className="live-next-title font-bold text-base sm:text-lg text-slate-100">Coming Up Next ({nextMatches.length})</h3>
+      {remainingUpcomingMatches.length > 0 && (
+        <div className="variant-a-card">
+          <div className="variant-a-history-head">
+            <p className="variant-a-section-label !mb-0">Queue</p>
+            <span className="variant-a-meta-copy">{remainingUpcomingMatches.length} matches</span>
           </div>
-          <p className="live-next-note text-xs text-slate-400 mb-3">Click a match to make it LIVE NOW.</p>
-          <div className="space-y-2 sm:space-y-3 max-h-80 overflow-y-auto pr-1">
-            {nextMatches.map((match, index) => (
+          <div className="space-y-0">
+            {remainingUpcomingMatches.map((match) => (
               <button
                 key={match.id}
                 type="button"
                 onClick={() => onSelectUpcomingMatch?.(match.id)}
-                className="live-upcoming-card w-full text-left rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-500/35 bg-slate-900/55 hover:border-cyan-400/60 hover:bg-slate-900 transition-all"
+                className="variant-a-history-row variant-a-history-row-action"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                    <span className="live-upcoming-index text-xs font-bold text-slate-400">#{index + 1}</span>
-                    <span className="text-base sm:text-lg">{match.team1?.emoji}</span>
-                    <span className="live-upcoming-team text-xs sm:text-sm font-semibold text-slate-100 truncate">
-                      {match.team1?.name}
-                    </span>
-                  </div>
-                  <span className="live-upcoming-vs text-xs text-slate-400 mx-1 sm:mx-2">vs</span>
-                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 justify-end">
-                    <span className="live-upcoming-team text-xs sm:text-sm font-semibold text-slate-100 truncate">
-                      {match.team2?.name}
-                    </span>
-                    <span className="text-base sm:text-lg">{match.team2?.emoji}</span>
-                  </div>
+                <div>
+                  <p className="variant-a-history-title">{match.team1?.name} vs {match.team2?.name}</p>
+                  <p className="variant-a-history-copy">Round {match.round} · Match {match.id}</p>
                 </div>
-                <div className="live-upcoming-round mt-2 text-xs text-cyan-300 font-semibold">
-                  Round {match.round} • Match {match.id}
-                </div>
-                <div className="mt-2">
-                  <MatchPredictionCard
-                    match={match}
-                    prediction={upcomingPredictions[match.id]}
-                    title="Prediction"
-                    compact
-                  />
-                </div>
+                <span className="variant-a-meta-copy">Live now</span>
               </button>
             ))}
           </div>

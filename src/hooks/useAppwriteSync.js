@@ -5,6 +5,7 @@ import { tournamentService } from '../services/tournamentService';
 import { playerService } from '../services/playerService';
 import { appDataService } from '../services/appDataService';
 import { casualMatchService } from '../services/casualmatchservice';
+import { queryKeys } from '../config/queryKeys';
 import {
   isLikelyOfflineError,
   offlineOutboxService,
@@ -13,12 +14,49 @@ import {
 /**
  * Custom hook to manage Appwrite sync via React Query.
  */
-export const useAppwriteSync = (showToast, activeGroupId = null) => {
+export const useAppwriteSync = (showToast, activeGroupId = null, queryClient = null) => {
   const [isAppwriteEnabled] = useState(() => isAppwriteConfigured());
   const [isConfigChecked] = useState(true);
   const [currentTournamentId, setCurrentTournamentId] = useState(null);
   const [queuedWritesCount, setQueuedWritesCount] = useState(() => offlineOutboxService.getCount());
   const resolvedGroupId = activeGroupId || null;
+
+  const invalidateCloudQueries = useCallback(async ({
+    tournamentId = '',
+    includeCasual = false,
+    includeBootstrap = true,
+    includeTournaments = true,
+  } = {}) => {
+    if (!queryClient) return;
+
+    const tasks = [];
+    if (includeBootstrap) {
+      tasks.push(queryClient.invalidateQueries({
+        queryKey: queryKeys.appwriteData(resolvedGroupId),
+      }));
+    }
+    if (includeTournaments) {
+      tasks.push(queryClient.invalidateQueries({
+        queryKey: queryKeys.tournamentSummaries(resolvedGroupId),
+      }));
+      tasks.push(queryClient.invalidateQueries({
+        queryKey: queryKeys.tournamentHistory(resolvedGroupId),
+      }));
+    }
+    const normalizedTournamentId = String(tournamentId || '').trim();
+    if (normalizedTournamentId) {
+      tasks.push(queryClient.invalidateQueries({
+        queryKey: queryKeys.tournamentDetail(resolvedGroupId, normalizedTournamentId),
+      }));
+    }
+    if (includeCasual) {
+      tasks.push(queryClient.invalidateQueries({
+        queryKey: queryKeys.casualMatches(resolvedGroupId),
+      }));
+    }
+    if (tasks.length === 0) return;
+    await Promise.allSettled(tasks);
+  }, [queryClient, resolvedGroupId]);
 
   useEffect(() => {
     if (isAppwriteEnabled) {
@@ -159,6 +197,59 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     }
   }, [showToast]);
 
+  const hasRatingsDeltaChanges = (deltaPayload) => {
+    const changedRatings = deltaPayload?.changedRatings;
+    const deletedPlayerNames = deltaPayload?.deletedPlayerNames;
+    return Boolean(
+      changedRatings
+      && typeof changedRatings === 'object'
+      && Object.keys(changedRatings).length > 0
+    ) || (Array.isArray(deletedPlayerNames) && deletedPlayerNames.length > 0);
+  };
+
+  const executeTournamentTransaction = useCallback(async (payload = {}) => {
+    const entryGroupId = payload?.groupId || resolvedGroupId;
+    const tournamentId = String(payload?.tournamentId || '').trim();
+    const tournamentData = payload?.tournamentData && typeof payload.tournamentData === 'object'
+      ? payload.tournamentData
+      : null;
+    const ratingsDelta = payload?.ratingsDelta && typeof payload.ratingsDelta === 'object'
+      ? payload.ratingsDelta
+      : null;
+    const hasActiveTournamentField = Object.prototype.hasOwnProperty.call(payload, 'activeTournament');
+    const activeTournament = hasActiveTournamentField ? (payload?.activeTournament ?? null) : undefined;
+
+    let savedTournament = null;
+    if (tournamentId && tournamentData) {
+      savedTournament = await tournamentService.updateTournament(
+        tournamentId,
+        tournamentData,
+        entryGroupId,
+        { skipExistingHydration: true }
+      );
+    }
+
+    if (hasRatingsDeltaChanges(ratingsDelta)) {
+      await playerService.savePlayerRatingsDelta(ratingsDelta, entryGroupId);
+    }
+
+    if (hasActiveTournamentField) {
+      await appDataService.saveActiveTournamentLock(activeTournament, { groupId: entryGroupId });
+    }
+
+    await invalidateCloudQueries({
+      tournamentId: tournamentId || savedTournament?.appwriteId || savedTournament?.id || '',
+      includeBootstrap: true,
+      includeTournaments: true,
+    });
+
+    return {
+      tournament: savedTournament,
+      ratingsDelta: ratingsDelta || null,
+      activeTournament: hasActiveTournamentField ? activeTournament : undefined,
+    };
+  }, [invalidateCloudQueries, resolvedGroupId]);
+
   const executeOutboxEntry = useCallback(async (entry) => {
     const action = String(entry?.action || '').trim();
     const payload = entry?.payload || {};
@@ -254,6 +345,10 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
         await tournamentService.patchTournamentMatches(tournamentId, matches, entryGroupId);
         return;
       }
+      case 'tournament.transaction': {
+        await executeTournamentTransaction(payload);
+        return;
+      }
       case 'casual.create': {
         const matchData = payload?.matchData;
         if (!matchData) return;
@@ -269,7 +364,7 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
       default:
         return;
     }
-  }, [resolvedGroupId]);
+  }, [executeTournamentTransaction, resolvedGroupId]);
 
   const flushOfflineOutbox = useCallback(async ({ silent = false } = {}) => {
     if (!isAppwriteEnabled) {
@@ -285,6 +380,11 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     setQueuedWritesCount(summary.remainingCount);
 
     if (summary.flushedCount > 0) {
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: true,
+        includeCasual: true,
+      });
       if (!silent) {
         showToast?.(`Synced ${summary.flushedCount} queued cloud change${summary.flushedCount === 1 ? '' : 's'}`);
       }
@@ -294,7 +394,7 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     }
 
     return summary;
-  }, [executeOutboxEntry, isAppwriteEnabled, showToast]);
+  }, [executeOutboxEntry, invalidateCloudQueries, isAppwriteEnabled, showToast]);
 
   useEffect(() => {
     if (!isAppwriteEnabled || typeof window === 'undefined') return undefined;
@@ -439,6 +539,17 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     onSuccess: () => {},
   });
 
+  const tournamentTransactionMutation = useMutation({
+    mutationFn: async (payload) => {
+      if (!isAppwriteEnabled) return payload;
+      return executeTournamentTransaction(payload);
+    },
+    onError: (error) => {
+      console.error('Error syncing tournament transaction:', error);
+    },
+    onSuccess: () => {},
+  });
+
   const patchTournamentMatchesMutation = useMutation({
     mutationFn: async ({ tournamentId, matches }) => {
       if (!isAppwriteEnabled || !tournamentId) {
@@ -463,7 +574,13 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
 
   const saveTournamentToAppwrite = async (tournament) => {
     try {
-      return await saveTournamentMutation.mutateAsync(tournament);
+      const saved = await saveTournamentMutation.mutateAsync(tournament);
+      await invalidateCloudQueries({
+        tournamentId: saved?.appwriteId || saved?.id || tournament?.appwriteId || tournament?.id || '',
+        includeBootstrap: true,
+        includeTournaments: true,
+      });
+      return saved;
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         const dedupeId = String(tournament?.appwriteId || tournament?.id || tournament?.name || '').trim();
@@ -480,7 +597,13 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
 
   const deleteTournamentFromAppwrite = async (tournamentId) => {
     try {
-      return await deleteTournamentMutation.mutateAsync(tournamentId);
+      const deleted = await deleteTournamentMutation.mutateAsync(tournamentId);
+      await invalidateCloudQueries({
+        tournamentId,
+        includeBootstrap: true,
+        includeTournaments: true,
+      });
+      return deleted;
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         const normalizedId = String(tournamentId || '').trim();
@@ -498,7 +621,12 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
 
   const saveRatingsToAppwrite = async (ratings) => {
     try {
-      return await saveRatingsMutation.mutateAsync(ratings);
+      const saved = await saveRatingsMutation.mutateAsync(ratings);
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: false,
+      });
+      return saved;
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         queueOfflineAction(
@@ -514,7 +642,12 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
 
   const savePlayerDatabaseToAppwrite = async (players) => {
     try {
-      return await savePlayerDatabaseMutation.mutateAsync(players);
+      const saved = await savePlayerDatabaseMutation.mutateAsync(players);
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: false,
+      });
+      return saved;
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         queueOfflineAction(
@@ -538,6 +671,10 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
         members,
         ...(memberAccountLinks ? { memberAccountLinks } : {}),
       });
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: false,
+      });
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         queueOfflineAction(
@@ -556,6 +693,10 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const saveTemplatesToAppwrite = async (templates) => {
     try {
       await saveMetaMutation.mutateAsync({ templates });
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: false,
+      });
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         queueOfflineAction(
@@ -574,6 +715,10 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const savePlayerPhotosToAppwrite = async (playerPhotos) => {
     try {
       await saveMetaMutation.mutateAsync({ playerPhotos });
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: false,
+      });
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         queueOfflineAction(
@@ -593,10 +738,16 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     const targetTournamentId = tournamentIdOverride || currentTournamentId;
     if (!targetTournamentId) return null;
     try {
-      return await syncTournamentMutation.mutateAsync({
+      const result = await syncTournamentMutation.mutateAsync({
         tournamentId: targetTournamentId,
         tournamentData,
       });
+      await invalidateCloudQueries({
+        tournamentId: targetTournamentId,
+        includeBootstrap: true,
+        includeTournaments: true,
+      });
+      return result;
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         queueOfflineAction(
@@ -622,10 +773,16 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
       };
     }
     try {
-      return await patchTournamentMatchesMutation.mutateAsync({
+      const summary = await patchTournamentMatchesMutation.mutateAsync({
         tournamentId: targetTournamentId,
         matches,
       });
+      await invalidateCloudQueries({
+        tournamentId: targetTournamentId,
+        includeBootstrap: true,
+        includeTournaments: true,
+      });
+      return summary;
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         queueOfflineAction(
@@ -648,7 +805,13 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const saveCasualMatchToAppwrite = async (matchData) => {
     if (!isAppwriteEnabled) return matchData;
     try {
-      return await casualMatchService.createCasualMatch(matchData, resolvedGroupId);
+      const saved = await casualMatchService.createCasualMatch(matchData, resolvedGroupId);
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: false,
+        includeCasual: true,
+      });
+      return saved;
     } catch (error) {
       if (!isLikelyOfflineError(error)) throw error;
       const tempId = `offline-casual-${Date.now()}`;
@@ -671,7 +834,13 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
   const deleteCasualMatchFromAppwrite = async (matchId) => {
     if (!isAppwriteEnabled) return true;
     try {
-      return await casualMatchService.deleteCasualMatch(matchId, resolvedGroupId);
+      const deleted = await casualMatchService.deleteCasualMatch(matchId, resolvedGroupId);
+      await invalidateCloudQueries({
+        includeBootstrap: true,
+        includeTournaments: false,
+        includeCasual: true,
+      });
+      return deleted;
     } catch (error) {
       if (!isLikelyOfflineError(error)) throw error;
       const normalizedId = String(matchId || '').trim();
@@ -685,13 +854,38 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     }
   };
 
+  const saveTournamentTransactionToAppwrite = async (payload) => {
+    try {
+      return await tournamentTransactionMutation.mutateAsync(payload);
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        const normalizedTournamentId = String(payload?.tournamentId || '').trim();
+        queueOfflineAction(
+          'tournament.transaction',
+          {
+            ...payload,
+            groupId: payload?.groupId || resolvedGroupId,
+          },
+          `tournament.transaction:${resolvedGroupId || 'nogroup'}:${normalizedTournamentId || 'pending'}`,
+          'Offline: tournament progress queued for sync'
+        );
+        return {
+          queued: true,
+          tournament: payload?.tournamentData || null,
+        };
+      }
+      throw error;
+    }
+  };
+
   const isSyncing = saveTournamentMutation.isPending
     || deleteTournamentMutation.isPending
     || saveRatingsMutation.isPending
     || savePlayerDatabaseMutation.isPending
     || saveMetaMutation.isPending
     || syncTournamentMutation.isPending
-    || patchTournamentMatchesMutation.isPending;
+    || patchTournamentMatchesMutation.isPending
+    || tournamentTransactionMutation.isPending;
 
   return {
     isAppwriteEnabled,
@@ -712,6 +906,7 @@ export const useAppwriteSync = (showToast, activeGroupId = null) => {
     deleteCasualMatchFromAppwrite,
     syncCurrentTournament,
     patchTournamentMatches,
+    saveTournamentTransactionToAppwrite,
     flushOfflineOutbox,
   };
 };

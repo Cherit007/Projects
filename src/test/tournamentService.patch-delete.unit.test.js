@@ -338,6 +338,66 @@ describe('tournamentService patch + delete edge cases', () => {
     expect(databasesMock.createDocument).not.toHaveBeenCalled();
   });
 
+  it('ignores stale match patches when a newer optimistic version is already stored', async () => {
+    state.tournaments.push({
+      $id: 't-1',
+      groupId: 'g-1',
+      legacyTournamentId: 'legacy-1',
+      status: 'active',
+      name: 'Club Open',
+      sourceUpdatedAt: '2026-03-03T10:05:00.000Z',
+    });
+    state.matches.push({
+      $id: 'm-existing',
+      groupId: 'g-1',
+      tournamentId: 't-1',
+      legacyTournamentId: 'legacy-1',
+      legacyMatchId: 'match-1',
+      matchKind: 'league',
+      bracketRoundIndex: '',
+      bracketMatchIndex: '',
+      roundLabel: 'Round 1',
+      roundNo: '1',
+      sequenceNo: '1',
+      nextLegacyMatchId: '',
+      team1Id: '',
+      team2Id: '',
+      team1Name: 'A',
+      team2Name: 'B',
+      score1: '21',
+      score2: '18',
+      completed: 'true',
+      completedAt: '2026-03-03T10:05:00.000Z',
+      migratedAt: '2026-03-03T10:06:00.000Z',
+      winnerSide: '1',
+    });
+
+    const summary = await tournamentService.patchTournamentMatches('t-1', [{
+      id: 'match-1',
+      matchKind: 'league',
+      team1: { name: 'A', player1: 'P1', player2: 'P2' },
+      team2: { name: 'B', player1: 'P3', player2: 'P4' },
+      score1: 21,
+      score2: 10,
+      completed: true,
+      sourceUpdatedAt: '2026-03-03T10:04:00.000Z',
+    }], 'g-1');
+
+    expect(summary).toEqual({
+      updatedMatches: 0,
+      updatedParticipants: 0,
+      deletedParticipants: 0,
+      missingMatches: 0,
+    });
+    expect(state.matches[0].score2).toBe('18');
+    expect(databasesMock.updateDocument).not.toHaveBeenCalledWith(
+      'db1',
+      'v2_matches',
+      'm-existing',
+      expect.objectContaining({ score2: '10' })
+    );
+  });
+
   it('falls back to hard delete when soft delete status update fails', async () => {
     state.tournaments.push({
       $id: 't-1',

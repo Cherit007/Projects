@@ -11,7 +11,8 @@ const GroupAccessScreen = ({
   onSelectGroup,
   loading,
   onLogout,
-  isGuest
+  isGuest,
+  groupMode = 'cloud',
 }) => {
   const [groupName, setGroupName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,6 +64,16 @@ const GroupAccessScreen = ({
               <p className="text-xs uppercase tracking-widest text-slate-500">Access</p>
               <h1 className="theme-title text-2xl sm:text-4xl font-bold mt-1">Group Hub</h1>
               <p className="text-sm text-slate-600 mt-2">{isGuest ? 'Guest viewer mode' : `Signed in as ${displayIdentity}`}</p>
+              {groupMode === 'demo' && (
+                <p className="text-sm text-amber-700 mt-2">
+                  Demo mode: group access data is stored only on this device.
+                </p>
+              )}
+              {groupMode === 'unconfigured' && (
+                <p className="text-sm text-rose-700 mt-2">
+                  Group cloud collections are not configured. Enable explicit demo mode or finish the Appwrite group setup.
+                </p>
+              )}
             </div>
             <button
               onClick={onLogout}

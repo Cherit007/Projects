@@ -1,5 +1,4 @@
 import React from 'react';
-import { House, PlayCircle, BarChart3, UserCircle2, Plus } from 'lucide-react';
 
 const MobileBottomNav = ({
   isVisible = false,
@@ -16,60 +15,60 @@ const MobileBottomNav = ({
     {
       key: 'home',
       label: 'Home',
-      icon: House,
+      glyph: '🏠',
       onClick: onHome,
       disabled: typeof onHome !== 'function',
     },
     {
       key: 'live',
       label: 'Live',
-      icon: PlayCircle,
+      glyph: '🔄',
       onClick: onLive,
       disabled: typeof onLive !== 'function',
     },
     {
-      key: 'action',
-      label: 'Actions',
-      icon: Plus,
+      key: 'create',
+      label: 'Create',
+      glyph: '➕',
       onClick: onPrimaryAction,
       disabled: typeof onPrimaryAction !== 'function',
-      isPrimaryAction: true,
     },
     {
       key: 'stats',
       label: 'Stats',
-      icon: BarChart3,
+      glyph: '📊',
       onClick: onStats,
       disabled: typeof onStats !== 'function',
     },
     {
       key: 'profile',
       label: 'Profile',
-      icon: UserCircle2,
+      glyph: '👤',
       onClick: onProfile,
       disabled: typeof onProfile !== 'function',
     },
   ];
 
   return (
-    <nav className="app-mobile-nav" aria-label="Primary mobile navigation">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const active = activeKey === item.key;
-        return (
-          <button
-            key={item.key}
-            type="button"
-            className={`app-mobile-nav-item ${item.isPrimaryAction ? 'app-mobile-nav-item-primary-action' : ''} ${active ? 'is-active' : ''}`}
-            onClick={item.onClick}
-            disabled={item.disabled}
-            aria-current={active ? 'page' : undefined}
-          >
-            <Icon size={18} />
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
+    <nav className="tour-command-bar-shell app-mobile-bottom-command-bar" aria-label="Primary mobile navigation">
+      <div className="tour-command-bar" style={{ '--tour-command-cols': items.length }}>
+        {items.map((item) => {
+          const active = activeKey === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              className={`tour-command-btn ${active ? 'tour-command-btn-active' : ''}`}
+              onClick={item.onClick}
+              disabled={item.disabled}
+              aria-current={active ? 'page' : undefined}
+            >
+              <span className="tour-command-glyph">{item.glyph}</span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </nav>
   );
 };

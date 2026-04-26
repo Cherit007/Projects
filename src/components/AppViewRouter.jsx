@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import BadmintonLoader from './BadmintonLoader';
+import { APP_ROUTE_KEYS } from '../utils/appRoutes';
 
 const SetupScreen = lazy(() => import('./SetupScreen'));
 const TeamEntry = lazy(() => import('./Teamentry'));
@@ -36,6 +37,8 @@ const AppViewRouter = ({
   adminGroupMembers,
   currentUserId,
   inviteLoading,
+  routeKey = null,
+  groupServiceMode = 'cloud',
   onLogin,
   onRegister,
   onContinueAsViewer,
@@ -64,11 +67,21 @@ const AppViewRouter = ({
   appModals,
   isMobileViewport = false,
 }) => {
+  const currentRouteKey = routeKey || (() => {
+    if (requiresAuth && !currentUser && !isGuestViewer) return APP_ROUTE_KEYS.AUTH;
+    if (requiresAuth && groupRole === 'admin' && showRequestCenter) return APP_ROUTE_KEYS.GROUP_REQUESTS;
+    if (requiresAuth && !activeGroup) return APP_ROUTE_KEYS.GROUPS;
+    if (isViewerMode) return APP_ROUTE_KEYS.VIEWER;
+    if (tournamentViewProps.step === 'tournament') return APP_ROUTE_KEYS.TOURNAMENT;
+    if (teamEntryProps.step === 'teams') return APP_ROUTE_KEYS.TEAMS;
+    return APP_ROUTE_KEYS.SETUP;
+  })();
+
   if (!isConfigChecked || !authResolved || !groupResolved) {
     return <ScreenFallback />;
   }
 
-  if (requiresAuth && !currentUser && !isGuestViewer) {
+  if (currentRouteKey === APP_ROUTE_KEYS.AUTH) {
     return (
       <>
         <Suspense fallback={<ScreenFallback />}>
@@ -83,7 +96,7 @@ const AppViewRouter = ({
     );
   }
 
-  if (requiresAuth && !activeGroup) {
+  if (currentRouteKey === APP_ROUTE_KEYS.GROUPS) {
     return (
       <>
         <Suspense fallback={<ScreenFallback />}>
@@ -99,6 +112,7 @@ const AppViewRouter = ({
             loading={authLoading}
             onLogout={onLogout}
             isGuest={isGuestViewer}
+            groupMode={groupServiceMode}
           />
         </Suspense>
       </>
@@ -121,13 +135,14 @@ const AppViewRouter = ({
             loading={authLoading}
             onLogout={onLogout}
             isGuest={isGuestViewer}
+            groupMode={groupServiceMode}
           />
         </Suspense>
       </>
     );
   }
 
-  if (requiresAuth && groupRole === 'admin' && showRequestCenter) {
+  if (currentRouteKey === APP_ROUTE_KEYS.GROUP_REQUESTS) {
     return (
       <>
         <Suspense fallback={<ScreenFallback />}>
@@ -165,7 +180,7 @@ const AppViewRouter = ({
     );
   }
 
-  if (isViewerMode) {
+  if (currentRouteKey === APP_ROUTE_KEYS.VIEWER) {
     return (
       <>
         <Suspense fallback={<ScreenFallback />}>
@@ -207,9 +222,9 @@ const AppViewRouter = ({
             onLogout={onLogout}
           />
         )}
-        {setupScreenProps.step === 'setup' && <SetupScreen {...setupScreenProps} />}
-        {teamEntryProps.step === 'teams' && <TeamEntry {...teamEntryProps} />}
-        {tournamentViewProps.step === 'tournament' && <TournamentView {...tournamentViewProps} />}
+        {currentRouteKey === APP_ROUTE_KEYS.SETUP && <SetupScreen {...setupScreenProps} />}
+        {currentRouteKey === APP_ROUTE_KEYS.TEAMS && <TeamEntry {...teamEntryProps} />}
+        {currentRouteKey === APP_ROUTE_KEYS.TOURNAMENT && <TournamentView {...tournamentViewProps} />}
         {showCasualMatch && <CasualMatch {...casualMatchProps} />}
       </Suspense>
       {appModals}

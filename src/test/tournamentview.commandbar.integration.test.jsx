@@ -96,6 +96,8 @@ const baseProps = {
   onResetTournament: vi.fn(),
   onRerunTournament: vi.fn(),
   onStartNextTournament: vi.fn(),
+  allTimeStats: [],
+  eloLeaderboard: [],
   calculatePointsTable,
   calculatePlayerStats: vi.fn(() => []),
   getPlayerLeaderboard: vi.fn(() => [{ name: 'A1', rating: 1020, matchesPlayed: 1, history: [] }]),
@@ -118,12 +120,12 @@ describe('TournamentView command bar and sync state', () => {
     const command = within(commandBar);
 
     await user.click(command.getByRole('button', { name: /Table/i }));
-    expect(await screen.findByRole('heading', { name: /Points Table/i })).toBeInTheDocument();
+    expect(await screen.findByText('League table')).toBeInTheDocument();
 
     await user.click(command.getByRole('button', { name: /Final/i }));
     expect(await screen.findByText(/Complete all league matches first/i)).toBeInTheDocument();
 
-    await user.click(command.getByRole('button', { name: /^Home$/i }));
+    await user.click(command.getByRole('button', { name: /Home/i }));
     expect(onGoHome).toHaveBeenCalledTimes(1);
   });
 
@@ -142,10 +144,65 @@ describe('TournamentView command bar and sync state', () => {
     expect(commandBar).toBeTruthy();
     const command = within(commandBar);
 
-    const eloButton = command.getByRole('button', { name: /^ELO$/i });
+    const eloButton = command.getByRole('button', { name: /ELO/i });
     expect(eloButton).toBeInTheDocument();
     await user.click(eloButton);
 
-    expect(await screen.findByRole('heading', { name: /ELO Leaderboard/i })).toBeInTheDocument();
+    expect(await screen.findByText('ELO rankings')).toBeInTheDocument();
+  });
+
+  it('shows merged all-time stats and full leaderboard rows during a live league tournament', async () => {
+    const user = userEvent.setup();
+    render(
+      <TournamentView
+        {...baseProps}
+        allTimeStats={[
+          {
+            name: 'Historic Hero',
+            tournamentsPlayed: 3,
+            matchesPlayed: 8,
+            matchesWon: 6,
+            totalScored: 168,
+            totalConceded: 141,
+            championships: 1,
+            winPercentage: '75.0',
+          },
+        ]}
+        eloLeaderboard={[
+          { name: 'Historic Hero', rating: 1280, matchesPlayed: 8, history: [{ change: 4 }] },
+        ]}
+        calculatePlayerStats={vi.fn(() => [
+          {
+            name: 'A1',
+            team: 'Falcons',
+            teamEmoji: '🦅',
+            matchesPlayed: 1,
+            matchesWon: 1,
+            totalScored: 21,
+            totalConceded: 18,
+            winPercentage: '100.0',
+          },
+        ])}
+        getPlayerLeaderboard={vi.fn(() => [
+          { name: 'A1', rating: 1020, matchesPlayed: 1, history: [{ change: 12 }] },
+        ])}
+      />
+    );
+
+    const commandBar = within(document.querySelector('.tour-command-bar'));
+
+    await user.click(commandBar.getByRole('button', { name: /Stats/i }));
+    expect(await screen.findByRole('button', { name: 'Historic Hero' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'A1' }).length).toBeGreaterThan(0);
+
+    await user.click(commandBar.getByRole('button', { name: /ELO/i }));
+    await screen.findByText('ELO rankings');
+    const eloRows = document.querySelector('.variant-a-elo-list');
+    expect(eloRows).toBeTruthy();
+    const elo = within(eloRows);
+
+    expect(await elo.findByRole('button', { name: 'Historic Hero' })).toBeInTheDocument();
+    expect(elo.getByRole('button', { name: 'A1' })).toBeInTheDocument();
+    expect(elo.getByText('8 matches')).toBeInTheDocument();
   });
 });

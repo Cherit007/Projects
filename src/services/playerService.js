@@ -82,6 +82,10 @@ const toNumber = (value, fallback = 0) => {
 };
 
 const toSafeString = (value) => String(value || '').trim();
+const toTimestampMs = (value) => {
+  const parsed = Date.parse(toSafeString(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const pickFirstString = (doc, keys = []) => {
   for (const key of keys) {
@@ -303,6 +307,12 @@ const isRatingDocEqual = (existingDoc, payload) => (
   && String(existingDoc?.sourceUpdatedAt || '').trim() === String(payload?.sourceUpdatedAt || '').trim()
 );
 
+const isIncomingRatingPayloadStale = (existingDoc, payload) => {
+  const existingUpdatedAtMs = toTimestampMs(existingDoc?.sourceUpdatedAt || existingDoc?.updatedAt || existingDoc?.$updatedAt);
+  const incomingUpdatedAtMs = toTimestampMs(payload?.sourceUpdatedAt);
+  return existingUpdatedAtMs > 0 && incomingUpdatedAtMs > 0 && incomingUpdatedAtMs < existingUpdatedAtMs;
+};
+
 const ensurePlayersExist = async ({ groupId, names = [], source = 'runtime.player' }) => {
   if (names.length === 0) return new Map();
 
@@ -494,6 +504,9 @@ export const playerService = {
 
       const existingDoc = existingByPlayerNormalized.get(normalized);
       if (existingDoc?.$id) {
+        if (isIncomingRatingPayloadStale(existingDoc, payload)) {
+          continue;
+        }
         if (!isRatingDocEqual(existingDoc, payload)) {
           await databases.updateDocument(
             DATABASE_ID,
@@ -619,6 +632,9 @@ export const playerService = {
 
       const existingDoc = existingByNormalized.get(normalized);
       if (existingDoc?.$id) {
+        if (isIncomingRatingPayloadStale(existingDoc, payload)) {
+          continue;
+        }
         if (!isRatingDocEqual(existingDoc, payload)) {
           await databases.updateDocument(
             DATABASE_ID,
