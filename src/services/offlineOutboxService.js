@@ -1,4 +1,6 @@
-const OUTBOX_STORAGE_KEY = 'bfm:offline-outbox:v1';
+import { webStorage } from '../platform/storage';
+import { STORAGE_KEYS } from '../platform/storageKeys';
+
 const OUTBOX_EVENT_NAME = 'bfm:outbox-changed';
 const OUTBOX_MAX_ITEMS = 200;
 export const OUTBOX_SYNC_TAG = 'bfm-outbox-sync';
@@ -27,13 +29,13 @@ const emitOutboxChanged = (count) => {
 
 const readQueue = () => {
   if (!isBrowser()) return [];
-  const raw = window.localStorage.getItem(OUTBOX_STORAGE_KEY);
+  const raw = webStorage.getItem(STORAGE_KEYS.OFFLINE_OUTBOX);
   return normalizeQueue(safeParse(raw, []));
 };
 
 const writeQueue = (queue) => {
   if (!isBrowser()) return;
-  window.localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(normalizeQueue(queue)));
+  webStorage.setJson(STORAGE_KEYS.OFFLINE_OUTBOX, normalizeQueue(queue));
   emitOutboxChanged(normalizeQueue(queue).length);
 };
 

@@ -3,6 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
 import { appStore } from '../store/appStore';
+import { readPersistedHistory, seedPersistedHistory } from './storageTestHelpers';
+import { clearAutoResumeSuppressedTournamentId } from '../utils/autoResumePreference';
+import {
+  flushQueuedLocalStorageWrites,
+  resetLocalStorageWriteQueue,
+} from '../services/localStorageWriteService';
 
 vi.mock('../hooks/useAppwriteSync', () => ({
   useAppwriteSync: () => ({
@@ -114,28 +120,23 @@ describe('Resume tournament integration', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    clearAutoResumeSuppressedTournamentId();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   afterEach(() => {
+    flushQueuedLocalStorageWrites();
+    resetLocalStorageWriteQueue();
+    localStorage.clear();
+    sessionStorage.clear();
+    clearAutoResumeSuppressedTournamentId();
     vi.restoreAllMocks();
   });
 
-  it('auto-resumes and shows the next live match when match 1 is already completed', async () => {
-    localStorage.setItem('badminton_history', JSON.stringify([
-      buildActiveTournament({ firstMatchCompleted: true }),
-    ]));
-
-    renderApp();
-
-    expect(await screen.findByText(/LIVE NOW/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
-    expect(screen.getByText(/Match 2/i)).toBeInTheDocument();
-  }, 15000);
-
   it('after finishing match 1, Home + Resume returns to match 2', async () => {
-    localStorage.setItem('badminton_history', JSON.stringify([
-      buildActiveTournament({ firstMatchCompleted: false }),
-    ]));
+    seedPersistedHistory([
+      buildActiveTournament({ firstMatchCompleted: false, id: 102 }),
+    ]);
 
     const user = userEvent.setup();
     renderApp();
@@ -160,9 +161,9 @@ describe('Resume tournament integration', () => {
   }, 15000);
 
   it('after finishing match 1 and refreshing, app resumes at match 2 (not match 1)', async () => {
-    localStorage.setItem('badminton_history', JSON.stringify([
-      buildActiveTournament({ firstMatchCompleted: false }),
-    ]));
+    seedPersistedHistory([
+      buildActiveTournament({ firstMatchCompleted: false, id: 103 }),
+    ]);
 
     const user = userEvent.setup();
     const firstRender = renderApp();
@@ -181,9 +182,9 @@ describe('Resume tournament integration', () => {
   }, 15000);
 
   it('Delete & New clears live tournament and does not show resume after refresh', async () => {
-    localStorage.setItem('badminton_history', JSON.stringify([
-      buildActiveTournament({ firstMatchCompleted: false }),
-    ]));
+    seedPersistedHistory([
+      buildActiveTournament({ firstMatchCompleted: false, id: 104 }),
+    ]);
 
     const user = userEvent.setup();
     const firstRender = renderApp();
@@ -198,7 +199,7 @@ describe('Resume tournament integration', () => {
       { timeout: ASYNC_UI_TIMEOUT }
     )).toBeInTheDocument();
     await waitFor(() => {
-      expect(localStorage.getItem('badminton_history')).toBe('[]');
+      expect(JSON.stringify(readPersistedHistory())).toBe('[]');
     });
     expect(screen.queryByRole('button', { name: /Resume/i })).not.toBeInTheDocument();
 
@@ -213,7 +214,7 @@ describe('Resume tournament integration', () => {
   }, 15000);
 
   it('resumes the selected live tournament when multiple resume rows are shown on home', async () => {
-    localStorage.setItem('badminton_history', JSON.stringify([
+    seedPersistedHistory([
       buildActiveTournament({
         id: 101,
         name: 'Morning Cup',
@@ -226,7 +227,7 @@ describe('Resume tournament integration', () => {
         date: '2026-03-02',
         firstMatchCompleted: true,
       }),
-    ]));
+    ]);
 
     const user = userEvent.setup();
     renderApp();
@@ -256,7 +257,7 @@ describe('Resume tournament integration', () => {
   }, 15000);
 
   it('deleting one live tournament row should not remove another active tournament with the same name', async () => {
-    localStorage.setItem('badminton_history', JSON.stringify([
+    seedPersistedHistory([
       buildActiveTournament({
         id: 301,
         name: 'Night Cup',
@@ -274,7 +275,7 @@ describe('Resume tournament integration', () => {
           { id: 4, emoji: '🦁', name: 'Lions', player1: 'D1', player: 'D1', player2: 'D2' },
         ],
       }),
-    ]));
+    ]);
 
     const user = userEvent.setup();
     renderApp();
@@ -299,11 +300,22 @@ describe('Resume tournament integration', () => {
     await user.click(within(dialog).getByRole('button', { name: /^Delete$/i }));
 
     await waitFor(() => {
-      const history = JSON.parse(localStorage.getItem('badminton_history') || '[]');
+      const history = readPersistedHistory();
       expect(history).toHaveLength(1);
       expect(history[0]?.id).toBe(301);
     });
 
     expect(screen.getAllByRole('button', { name: /Resume/i })).toHaveLength(1);
+  }, 15000);
+
+  it('auto-resumes and shows the next live match when match 1 is already completed', async () => {
+    seedPersistedHistory([
+      buildActiveTournament({ firstMatchCompleted: true, id: 109 }),
+    ]);
+
+    renderApp();
+
+    expect(await screen.findByText(/LIVE NOW/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
+    expect(screen.getByText(/Match 2/i)).toBeInTheDocument();
   }, 15000);
 });

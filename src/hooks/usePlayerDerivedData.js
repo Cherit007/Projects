@@ -6,6 +6,26 @@ import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildPlayerGamification } from '../utils/playerGamification';
 import { analyticsWorkerService } from '../services/analyticsWorkerService';
 
+const EMPTY_PAIRING_ANALYTICS = Object.freeze({
+  totalDoublesMatches: 0,
+  totalTrackedPairs: 0,
+  bestCombinations: [],
+  whoShouldPair: [],
+  rotationSuggestions: [],
+});
+
+const EMPTY_FORM_POWER_RANKINGS = Object.freeze({
+  leaderboard: [],
+  weeklyLeaderboard: [],
+  monthlyLeaderboard: [],
+});
+
+const EMPTY_PROFILE_INSIGHTS = Object.freeze({
+  advancedStats: null,
+  achievements: null,
+  gamification: null,
+});
+
 export const usePlayerDerivedData = ({
   currentUser,
   members,
@@ -26,28 +46,11 @@ export const usePlayerDerivedData = ({
   const computeFormPowerRankings = compute.formPowerRankings !== false;
   const computeProfileInsights = compute.profileInsights !== false;
   const computeUnlinkedPlayerNames = compute.unlinkedPlayerNames !== false;
+  const workerSupported = analyticsWorkerService.isSupported();
 
-  const emptyPairingAnalytics = useMemo(() => ({
-    totalDoublesMatches: 0,
-    totalTrackedPairs: 0,
-    bestCombinations: [],
-    whoShouldPair: [],
-    rotationSuggestions: [],
-  }), []);
-
-  const emptyFormPowerRankings = useMemo(() => ({
-    leaderboard: [],
-    weeklyLeaderboard: [],
-    monthlyLeaderboard: [],
-  }), []);
-
-  const [pairingAnalytics, setPairingAnalytics] = useState(emptyPairingAnalytics);
-  const [formPowerRankings, setFormPowerRankings] = useState(emptyFormPowerRankings);
-  const [profileInsights, setProfileInsights] = useState({
-    advancedStats: null,
-    achievements: null,
-    gamification: null,
-  });
+  const [workerPairingAnalytics, setWorkerPairingAnalytics] = useState(EMPTY_PAIRING_ANALYTICS);
+  const [workerFormPowerRankings, setWorkerFormPowerRankings] = useState(EMPTY_FORM_POWER_RANKINGS);
+  const [workerProfileInsights, setWorkerProfileInsights] = useState(EMPTY_PROFILE_INSIGHTS);
   const pairingRequestIdRef = useRef(0);
   const rankingsRequestIdRef = useRef(0);
   const profileRequestIdRef = useRef(0);
@@ -62,81 +65,27 @@ export const usePlayerDerivedData = ({
     return [...new Set(names)];
   }, [tournamentHistory, computeTeamNameDatabase]);
 
-  useEffect(() => {
-    if (!computePairingAnalytics) {
-      setPairingAnalytics(emptyPairingAnalytics);
-      return undefined;
-    }
-
-    if (!analyticsWorkerService.isSupported()) {
-      setPairingAnalytics(buildPairingAnalytics({
-        tournamentHistory,
-        casualMatches,
-        playerRatings,
-      }));
-      return undefined;
-    }
-
-    const requestId = pairingRequestIdRef.current + 1;
-    pairingRequestIdRef.current = requestId;
-    let cancelled = false;
-
-    void analyticsWorkerService.computePairingAnalytics({
+  const syncPairingAnalytics = useMemo(() => {
+    if (!computePairingAnalytics) return EMPTY_PAIRING_ANALYTICS;
+    return buildPairingAnalytics({
       tournamentHistory,
       casualMatches,
       playerRatings,
-    }).then((result) => {
-      if (cancelled || pairingRequestIdRef.current !== requestId) return;
-      setPairingAnalytics(result || emptyPairingAnalytics);
-    }).catch((error) => {
-      if (cancelled || pairingRequestIdRef.current !== requestId) return;
-      console.error('Failed to compute pairing analytics in worker:', error);
-      setPairingAnalytics(buildPairingAnalytics({
-        tournamentHistory,
-        casualMatches,
-        playerRatings,
-      }));
     });
+  }, [computePairingAnalytics, tournamentHistory, casualMatches, playerRatings]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    computePairingAnalytics,
-    tournamentHistory,
-    casualMatches,
-    playerRatings,
-    emptyPairingAnalytics,
-  ]);
+  const syncFormPowerRankings = useMemo(() => {
+    if (!computeFormPowerRankings) return EMPTY_FORM_POWER_RANKINGS;
+    return buildFormPowerRankings(playerRatings);
+  }, [computeFormPowerRankings, playerRatings]);
 
-  useEffect(() => {
-    if (!computeFormPowerRankings) {
-      setFormPowerRankings(emptyFormPowerRankings);
-      return undefined;
-    }
-
-    if (!analyticsWorkerService.isSupported()) {
-      setFormPowerRankings(buildFormPowerRankings(playerRatings));
-      return undefined;
-    }
-
-    const requestId = rankingsRequestIdRef.current + 1;
-    rankingsRequestIdRef.current = requestId;
-    let cancelled = false;
-
-    void analyticsWorkerService.computeFormPowerRankings({ playerRatings }).then((result) => {
-      if (cancelled || rankingsRequestIdRef.current !== requestId) return;
-      setFormPowerRankings(result || emptyFormPowerRankings);
-    }).catch((error) => {
-      if (cancelled || rankingsRequestIdRef.current !== requestId) return;
-      console.error('Failed to compute form power rankings in worker:', error);
-      setFormPowerRankings(buildFormPowerRankings(playerRatings));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [computeFormPowerRankings, playerRatings, emptyFormPowerRankings]);
+  const liveTournament = useMemo(() => ({
+    tournamentName,
+    tournamentFormat,
+    gameMode,
+    fixtures,
+    bracket,
+  }), [tournamentName, tournamentFormat, gameMode, fixtures, bracket]);
 
   const currentUserMember = useMemo(() => {
     if (!currentUser || !Array.isArray(members)) return null;
@@ -150,58 +99,88 @@ export const usePlayerDerivedData = ({
   const currentUserPlayerName = currentUserMember?.name || null;
   const currentUserPlayerProfile = currentUserPlayerName ? (playerRatings[currentUserPlayerName] || null) : null;
 
-  const currentUserPlayerTeam = useMemo(() => {
-    if (!computeProfileInsights) return null;
-    if (!currentUserPlayerName) return null;
-    const inCurrentTeams = teams.find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(currentUserPlayerName));
-    if (inCurrentTeams) return inCurrentTeams;
-    const fromHistory = [...(tournamentHistory || [])]
-      .reverse()
-      .flatMap(tournament => tournament?.teams || [])
-      .find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(currentUserPlayerName));
-    return fromHistory || null;
-  }, [currentUserPlayerName, teams, tournamentHistory, computeProfileInsights]);
+  const syncProfileInsights = useMemo(() => {
+    if (!computeProfileInsights || !currentUserPlayerName) return EMPTY_PROFILE_INSIGHTS;
+    return {
+      advancedStats: buildPlayerAdvancedProfile({
+        playerName: currentUserPlayerName,
+        tournamentHistory,
+        casualMatches,
+        liveTournament,
+      }),
+      achievements: buildPlayerAchievements({
+        playerName: currentUserPlayerName,
+        playerRatings,
+        tournamentHistory,
+        casualMatches,
+      }),
+      gamification: buildPlayerGamification({
+        playerName: currentUserPlayerName,
+        tournamentHistory,
+        casualMatches,
+      }),
+    };
+  }, [
+    computeProfileInsights,
+    currentUserPlayerName,
+    playerRatings,
+    tournamentHistory,
+    casualMatches,
+    liveTournament,
+  ]);
 
   useEffect(() => {
-    if (!computeProfileInsights || !currentUserPlayerName) {
-      setProfileInsights({
-        advancedStats: null,
-        achievements: null,
-        gamification: null,
-      });
-      return undefined;
-    }
+    if (!workerSupported || !computePairingAnalytics) return undefined;
 
-    const liveTournament = {
-      tournamentName,
-      tournamentFormat,
-      gameMode,
-      fixtures,
-      bracket,
+    const requestId = pairingRequestIdRef.current + 1;
+    pairingRequestIdRef.current = requestId;
+    let cancelled = false;
+
+    void analyticsWorkerService.computePairingAnalytics({
+      tournamentHistory,
+      casualMatches,
+      playerRatings,
+    }).then((result) => {
+      if (cancelled || pairingRequestIdRef.current !== requestId) return;
+      setWorkerPairingAnalytics(result || EMPTY_PAIRING_ANALYTICS);
+    }).catch((error) => {
+      if (cancelled || pairingRequestIdRef.current !== requestId) return;
+      console.error('Failed to compute pairing analytics in worker:', error);
+      setWorkerPairingAnalytics(buildPairingAnalytics({
+        tournamentHistory,
+        casualMatches,
+        playerRatings,
+      }));
+    });
+
+    return () => {
+      cancelled = true;
     };
+  }, [workerSupported, computePairingAnalytics, tournamentHistory, casualMatches, playerRatings]);
 
-    if (!analyticsWorkerService.isSupported()) {
-      setProfileInsights({
-        advancedStats: buildPlayerAdvancedProfile({
-          playerName: currentUserPlayerName,
-          tournamentHistory,
-          casualMatches,
-          liveTournament,
-        }),
-        achievements: buildPlayerAchievements({
-          playerName: currentUserPlayerName,
-          playerRatings,
-          tournamentHistory,
-          casualMatches,
-        }),
-        gamification: buildPlayerGamification({
-          playerName: currentUserPlayerName,
-          tournamentHistory,
-          casualMatches,
-        }),
-      });
-      return undefined;
-    }
+  useEffect(() => {
+    if (!workerSupported || !computeFormPowerRankings) return undefined;
+
+    const requestId = rankingsRequestIdRef.current + 1;
+    rankingsRequestIdRef.current = requestId;
+    let cancelled = false;
+
+    void analyticsWorkerService.computeFormPowerRankings({ playerRatings }).then((result) => {
+      if (cancelled || rankingsRequestIdRef.current !== requestId) return;
+      setWorkerFormPowerRankings(result || EMPTY_FORM_POWER_RANKINGS);
+    }).catch((error) => {
+      if (cancelled || rankingsRequestIdRef.current !== requestId) return;
+      console.error('Failed to compute form power rankings in worker:', error);
+      setWorkerFormPowerRankings(buildFormPowerRankings(playerRatings));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workerSupported, computeFormPowerRankings, playerRatings]);
+
+  useEffect(() => {
+    if (!workerSupported || !computeProfileInsights || !currentUserPlayerName) return undefined;
 
     const requestId = profileRequestIdRef.current + 1;
     profileRequestIdRef.current = requestId;
@@ -215,7 +194,7 @@ export const usePlayerDerivedData = ({
       liveTournament,
     }).then((result) => {
       if (cancelled || profileRequestIdRef.current !== requestId) return;
-      setProfileInsights({
+      setWorkerProfileInsights({
         advancedStats: result?.advancedStats || null,
         achievements: result?.achievements || null,
         gamification: result?.gamification || null,
@@ -223,42 +202,44 @@ export const usePlayerDerivedData = ({
     }).catch((error) => {
       if (cancelled || profileRequestIdRef.current !== requestId) return;
       console.error('Failed to compute player profile insights in worker:', error);
-      setProfileInsights({
-        advancedStats: buildPlayerAdvancedProfile({
-          playerName: currentUserPlayerName,
-          tournamentHistory,
-          casualMatches,
-          liveTournament,
-        }),
-        achievements: buildPlayerAchievements({
-          playerName: currentUserPlayerName,
-          playerRatings,
-          tournamentHistory,
-          casualMatches,
-        }),
-        gamification: buildPlayerGamification({
-          playerName: currentUserPlayerName,
-          tournamentHistory,
-          casualMatches,
-        }),
-      });
+      setWorkerProfileInsights(syncProfileInsights);
     });
 
     return () => {
       cancelled = true;
     };
   }, [
+    workerSupported,
     computeProfileInsights,
     currentUserPlayerName,
     playerRatings,
     tournamentHistory,
     casualMatches,
-    tournamentName,
-    tournamentFormat,
-    gameMode,
-    fixtures,
-    bracket,
+    liveTournament,
+    syncProfileInsights,
   ]);
+
+  const pairingAnalytics = workerSupported && computePairingAnalytics
+    ? workerPairingAnalytics
+    : syncPairingAnalytics;
+  const formPowerRankings = workerSupported && computeFormPowerRankings
+    ? workerFormPowerRankings
+    : syncFormPowerRankings;
+  const profileInsights = workerSupported && computeProfileInsights && currentUserPlayerName
+    ? workerProfileInsights
+    : syncProfileInsights;
+
+  const currentUserPlayerTeam = useMemo(() => {
+    if (!computeProfileInsights) return null;
+    if (!currentUserPlayerName) return null;
+    const inCurrentTeams = teams.find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(currentUserPlayerName));
+    if (inCurrentTeams) return inCurrentTeams;
+    const fromHistory = [...(tournamentHistory || [])]
+      .reverse()
+      .flatMap(tournament => tournament?.teams || [])
+      .find(team => [team.player, team.player1, team.player2].filter(Boolean).includes(currentUserPlayerName));
+    return fromHistory || null;
+  }, [currentUserPlayerName, teams, tournamentHistory, computeProfileInsights]);
 
   const currentUserAdvancedStats = profileInsights.advancedStats;
   const currentUserAchievements = profileInsights.achievements;

@@ -6359,13 +6359,34 @@ body[data-theme='light'] .mobile-bottom-sheet-shell {
 }
 
 .variant-a-move-chip,
-.variant-a-form-chip {
+.variant-a-form-chip,
+.variant-a-qualification-chip {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
   padding: 0.1rem 0.38rem;
   font-size: 0.54rem;
   font-weight: 600;
+}
+
+.variant-a-qualification-chip-qualified {
+  background: rgba(46, 204, 143, 0.14);
+  color: var(--variant-a-green);
+}
+
+.variant-a-qualification-chip-watch {
+  background: rgba(243, 156, 18, 0.13);
+  color: var(--variant-a-amber);
+}
+
+.variant-a-qualification-chip-pending {
+  background: rgba(79, 142, 247, 0.12);
+  color: var(--variant-a-blue);
+}
+
+.variant-a-qualification-chip-out {
+  background: rgba(255, 71, 87, 0.12);
+  color: var(--variant-a-red);
 }
 
 .variant-a-move-chip {

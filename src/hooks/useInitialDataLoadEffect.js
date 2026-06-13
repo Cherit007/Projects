@@ -12,8 +12,8 @@ import {
   getAutoResumeSuppressedTournamentId,
   tournamentMatchesAutoResumeSuppression,
 } from '../utils/autoResumePreference';
-
-const ACTIVE_TOURNAMENT_CACHE_KEY = 'bfm:appwrite-active-tournament';
+import { webStorage } from '../platform/storage';
+import { STORAGE_KEYS } from '../platform/storageKeys';
 
 export const useInitialDataLoadEffect = ({
   isConfigChecked,
@@ -57,23 +57,23 @@ export const useInitialDataLoadEffect = ({
       setLoading(true);
 
       try {
-        const localMembers = JSON.parse(localStorage.getItem('badminton_members') || '[]');
-        const localTemplates = JSON.parse(localStorage.getItem('badminton_templates') || '[]');
-        const localPhotos = JSON.parse(localStorage.getItem('badminton_player_photos') || '{}');
+        const localMembers = webStorage.getJson(STORAGE_KEYS.MEMBERS, []);
+        const localTemplates = webStorage.getJson(STORAGE_KEYS.TEMPLATES, []);
+        const localPhotos = webStorage.getJson(STORAGE_KEYS.PLAYER_PHOTOS, {});
 
         // Local mode
         if (!isAppwriteEnabled) {
-          const localPlayers = JSON.parse(localStorage.getItem('badminton_players') || '[]');
-          const localRatings = JSON.parse(localStorage.getItem('badminton_ratings') || '{}');
-          const localHistory = JSON.parse(localStorage.getItem('badminton_history') || '[]');
-          const localCasualMatches = JSON.parse(localStorage.getItem('badminton_casual_matches') || '[]');
+          const localPlayers = webStorage.getJson(STORAGE_KEYS.PLAYERS, []);
+          const localRatings = webStorage.getJson(STORAGE_KEYS.RATINGS, {});
+          const localHistory = webStorage.getJson(STORAGE_KEYS.HISTORY, []);
+          const localCasualMatches = webStorage.getJson(STORAGE_KEYS.CASUAL_MATCHES, []);
           const backfilledLocalHistory = backfillTournamentHistoryCompletedAt(localHistory);
           const backfilledLocalCasual = backfillCasualMatchesCompletedAt(localCasualMatches);
           if (backfilledLocalHistory.changed) {
-            localStorage.setItem('badminton_history', JSON.stringify(backfilledLocalHistory.history));
+            webStorage.setJson(STORAGE_KEYS.HISTORY, backfilledLocalHistory.history);
           }
           if (backfilledLocalCasual.changed) {
-            localStorage.setItem('badminton_casual_matches', JSON.stringify(backfilledLocalCasual.matches));
+            webStorage.setJson(STORAGE_KEYS.CASUAL_MATCHES, backfilledLocalCasual.matches);
           }
 
           if (mounted) {
@@ -285,13 +285,7 @@ export const useInitialDataLoadEffect = ({
           const shouldUseLocalActiveCache = Boolean(isAppwriteEnabled);
           let mergedHistory = backfilledAppwriteHistory.history;
           if (shouldUseLocalActiveCache && !activeFromCloud && !lockCandidate) {
-            let cachedActive = null;
-            try {
-              const raw = localStorage.getItem(ACTIVE_TOURNAMENT_CACHE_KEY);
-              cachedActive = raw ? JSON.parse(raw) : null;
-            } catch {
-              cachedActive = null;
-            }
+            let cachedActive = webStorage.getJson(STORAGE_KEYS.ACTIVE_TOURNAMENT_CACHE, null);
             if (cachedActive) {
               const cachedGroupId = String(cachedActive?._cacheGroupId || cachedActive?.groupId || '').trim();
               if (cachedGroupId && activeGroupId && cachedGroupId !== String(activeGroupId)) {

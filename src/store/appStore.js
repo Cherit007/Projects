@@ -57,16 +57,25 @@ const createAppStore = () => {
       : partialOrUpdater;
 
     if (!nextPartial || typeof nextPartial !== 'object') return;
+    if (Object.keys(nextPartial).length === 0) return;
     state = { ...state, ...nextPartial };
     listeners.forEach((listener) => listener());
   };
 
   const setField = (key, valueOrUpdater) => {
-    setState((prev) => ({
-      [key]: typeof valueOrUpdater === 'function'
+    setState((prev) => {
+      const nextValue = typeof valueOrUpdater === 'function'
         ? valueOrUpdater(prev[key])
-        : valueOrUpdater,
-    }));
+        : valueOrUpdater;
+
+      if (Object.is(prev[key], nextValue)) {
+        return {};
+      }
+
+      return {
+        [key]: nextValue,
+      };
+    });
   };
 
   const subscribe = (listener) => {

@@ -153,7 +153,7 @@ describe('App integration flows', () => {
 
     const tableButtons = screen.getAllByRole('button', { name: /^Table$/i });
     await user.click(tableButtons[0]);
-    expect(await screen.findByText(/Points Table/i)).toBeInTheDocument();
+    expect(await screen.findByText(/League table/i)).toBeInTheDocument();
 
     const homeButtons = screen.getAllByRole('button', { name: /^Home$/i });
     await user.click(homeButtons[0]);

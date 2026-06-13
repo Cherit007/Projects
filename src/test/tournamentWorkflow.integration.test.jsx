@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
 import { appStore } from '../store/appStore';
+import { readPersistedHistory, seedPersistedHistory } from './storageTestHelpers';
 
 vi.mock('../hooks/useAppwriteSync', () => ({
   useAppwriteSync: () => ({
@@ -57,7 +58,7 @@ const renderApp = () => {
   );
 };
 
-const readHistory = () => JSON.parse(localStorage.getItem('badminton_history') || '[]');
+const readHistory = () => readPersistedHistory();
 
 const waitForHomeScreen = async () => (
   screen.findByPlaceholderText(/Summer Smash 2024/i, {}, { timeout: ASYNC_UI_TIMEOUT })

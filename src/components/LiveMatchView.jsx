@@ -16,6 +16,7 @@ import {
 import MatchPredictionCard from './predictions/MatchPredictionCard';
 import PlayerAvatar from './PlayerAvatar';
 import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
+import { buildLiveTopTwoWatch } from '../utils/qualificationScenarios';
 import { hapticError, hapticSubmit, hapticSuccess, hapticTap } from '../utils/haptics';
 import LiveNarrativePanel from './live/LiveNarrativePanel';
 
@@ -211,48 +212,6 @@ const LiveMatchView = ({
     (currentMatch.team2.player2 ? getPlayerRating(currentMatch.team2.player2) : 0)) / 
     (currentMatch.team2.player2 ? 2 : 1))) : 1000;
 
-  const getProjectedTable = (winnerId, margin) => {
-    const table = pointsTable.map(team => ({ ...team }));
-    const winner = table.find(team => team.id === winnerId);
-    const loserId = winnerId === currentMatch.team1.id ? currentMatch.team2.id : currentMatch.team1.id;
-    const loser = table.find(team => team.id === loserId);
-
-    if (!winner || !loser) return [];
-
-    winner.played += 1;
-    loser.played += 1;
-    winner.won += 1;
-    loser.lost += 1;
-    winner.points += 2;
-    winner.scoreDiff += margin;
-    loser.scoreDiff -= margin;
-    winner.netMatchRate = winner.played > 0 ? winner.scoreDiff / winner.played : 0;
-    loser.netMatchRate = loser.played > 0 ? loser.scoreDiff / loser.played : 0;
-
-    return table.sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      if (b.netMatchRate !== a.netMatchRate) return b.netMatchRate - a.netMatchRate;
-      return b.scoreDiff - a.scoreDiff;
-    });
-  };
-
-  const getRankAfterOutcome = (teamId, winnerId, margin) => {
-    const projected = getProjectedTable(winnerId, margin);
-    return projected.findIndex(team => team.id === teamId) + 1;
-  };
-
-  const getMinWinningMarginForTop2 = (teamId) => {
-    const maxMarginToCheck = 80;
-    for (let margin = 1; margin <= maxMarginToCheck; margin += 1) {
-      const rank = getRankAfterOutcome(teamId, teamId, margin);
-      if (rank > 0 && rank <= 2) return margin;
-    }
-    return null;
-  };
-
-  const team1MinMargin = getMinWinningMarginForTop2(currentMatch.team1.id);
-  const team2MinMargin = getMinWinningMarginForTop2(currentMatch.team2.id);
-
   const currentMatchPrediction = useMemo(() => predictMatchOutcome({
     match: currentMatch,
     playerRatings,
@@ -275,11 +234,6 @@ const LiveMatchView = ({
   const parsedScore1 = Number.parseInt(score1, 10);
   const parsedScore2 = Number.parseInt(score2, 10);
   const hasValidProjection = Number.isFinite(parsedScore1) && Number.isFinite(parsedScore2) && parsedScore1 !== parsedScore2;
-  const projectedWinnerId = hasValidProjection
-    ? (parsedScore1 > parsedScore2 ? currentMatch.team1.id : currentMatch.team2.id)
-    : null;
-  const projectedMargin = hasValidProjection ? Math.abs(parsedScore1 - parsedScore2) : null;
-  const projectedWinnerRank = hasValidProjection ? getRankAfterOutcome(projectedWinnerId, projectedWinnerId, projectedMargin) : null;
   const upsetAlert = getUpsetAlert({
     prediction: currentMatchPrediction,
     score1,
@@ -306,9 +260,13 @@ const LiveMatchView = ({
   const leadTeam = hasValidProjection
     ? (parsedScore1 > parsedScore2 ? 1 : 2)
     : null;
-  const topTwoWatchCopy = hasValidProjection
-    ? `${parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name} wins → moves to rank #${projectedWinnerRank}`
-    : 'Enter scores to preview Top 2 movement';
+  const topTwoWatch = useMemo(() => buildLiveTopTwoWatch({
+    standings: pointsTable,
+    currentMatch,
+    nextMatches,
+    score1,
+    score2,
+  }), [pointsTable, currentMatch, nextMatches, score1, score2]);
 
   return (
     <div className="space-y-3 sm:space-y-4 app-screen-live">
@@ -468,7 +426,10 @@ const LiveMatchView = ({
           )}
           <p className="variant-a-qualify-title">Top 2 watch</p>
           <div className="variant-a-qualify-copy">
-            <p className="variant-a-qualify-highlight">{topTwoWatchCopy}</p>
+            <p className="variant-a-qualify-highlight">{topTwoWatch.headline}</p>
+            {topTwoWatch.lines.map((line, index) => (
+              <p key={`${currentMatch.id}-top-two-${index}`}>{line}</p>
+            ))}
           </div>
         </div>
 

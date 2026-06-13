@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutGroup, motion } from 'framer-motion';
+import { getTeamQualificationStatus } from '../../utils/qualificationScenarios';
 
 const tabContentMotionVariants = {
   initial: { opacity: 0, x: 18 },
@@ -13,9 +14,34 @@ const TableTab = ({
   isActive,
   tournamentFormat,
   pointsTable,
-  pointsTableRankMovement,
+  pointsTableRankMovement = new Map(),
+  fixtures = [],
 }) => {
   if (!isActive || tournamentFormat !== 'league') return null;
+
+  const hasFixtureContext = Array.isArray(fixtures) && fixtures.length > 0;
+  const remainingMatches = hasFixtureContext
+    ? fixtures.filter((match) => !match?.completed)
+    : [];
+  const qualificationStatusByTeamId = new Map(
+    hasFixtureContext
+      ? pointsTable.map((team, index) => [
+        String(team.id),
+        getTeamQualificationStatus({
+          team,
+          standings: pointsTable,
+          remainingMatches,
+          rank: index + 1,
+        }),
+      ])
+      : []
+  );
+  const leaderStatus = pointsTable[0]
+    ? qualificationStatusByTeamId.get(String(pointsTable[0].id))
+    : null;
+  const secondStatus = pointsTable[1]
+    ? qualificationStatusByTeamId.get(String(pointsTable[1].id))
+    : null;
 
   return (
     <MotionSection
@@ -41,6 +67,7 @@ const TableTab = ({
 
           {pointsTable.map((team, index) => {
             const movement = pointsTableRankMovement.get(String(team.id));
+            const qualificationStatus = qualificationStatusByTeamId.get(String(team.id));
             return (
               <MotionDiv
                 key={team.id}
@@ -58,11 +85,18 @@ const TableTab = ({
                 <span className="variant-a-cell-center">{team.played}</span>
                 <span className="variant-a-points-cell">{team.points}</span>
 
-                {movement && (
+                {(movement || qualificationStatus) && (
                   <div className="variant-a-table-meta">
-                    <span className={`variant-a-move-chip ${movement.delta > 0 ? 'variant-a-move-chip-up' : 'variant-a-move-chip-down'}`}>
-                      {movement.delta > 0 ? '▲' : '▼'} {Math.abs(movement.delta)}
-                    </span>
+                    {movement && (
+                      <span className={`variant-a-move-chip ${movement.delta > 0 ? 'variant-a-move-chip-up' : 'variant-a-move-chip-down'}`}>
+                        {movement.delta > 0 ? '▲' : '▼'} {Math.abs(movement.delta)}
+                      </span>
+                    )}
+                    {qualificationStatus && (
+                      <span className={`variant-a-qualification-chip variant-a-qualification-chip-${qualificationStatus.tone}`}>
+                        {qualificationStatus.label}
+                      </span>
+                    )}
                   </div>
                 )}
               </MotionDiv>
@@ -78,13 +112,17 @@ const TableTab = ({
           <div className="variant-a-qualified-head">
             <span className="variant-a-team-dot">{pointsTable[0].emoji}</span>
             <div>
-              <p className="variant-a-qualified-title">{pointsTable[0].name} — qualified</p>
-              <p className="variant-a-qualified-copy">Rank #1 · {pointsTable[0].points} pts</p>
+              <p className="variant-a-qualified-title">
+                {pointsTable[0].name} — {leaderStatus?.label || 'Leading'}
+              </p>
+              <p className="variant-a-qualified-copy">
+                Rank #1 · {pointsTable[0].points} pts{leaderStatus?.detail ? ` · ${leaderStatus.detail}` : ''}
+              </p>
             </div>
           </div>
           <p className="variant-a-qualified-note">
             {pointsTable[1]
-              ? `${pointsTable[1].name} currently holds the second spot.`
+              ? `${pointsTable[1].name} currently holds the second spot${secondStatus ? ` (${secondStatus.label}).` : '.'}`
               : 'Second place will be decided by the remaining matches.'}
           </p>
         </div>

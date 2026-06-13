@@ -1,7 +1,4 @@
-const isBrowser = () => (
-  typeof window !== 'undefined'
-  && typeof window.localStorage !== 'undefined'
-);
+import { webStorage } from '../platform/storage';
 
 const DEFAULT_FLUSH_DELAY_MS = 220;
 const pendingWrites = new Map();
@@ -9,7 +6,6 @@ let flushTimer = null;
 let listenersAttached = false;
 
 const flushWrites = () => {
-  if (!isBrowser()) return;
   if (flushTimer) {
     clearTimeout(flushTimer);
     flushTimer = null;
@@ -20,20 +16,16 @@ const flushWrites = () => {
   pendingWrites.clear();
 
   entries.forEach(([key, value]) => {
-    try {
-      if (value == null) {
-        window.localStorage.removeItem(key);
-      } else {
-        window.localStorage.setItem(key, value);
-      }
-    } catch {
-      // Ignore quota/private mode errors to avoid blocking UI updates.
+    if (value == null) {
+      webStorage.removeItem(key);
+    } else {
+      webStorage.setItem(key, value);
     }
   });
 };
 
 const attachFlushListeners = () => {
-  if (!isBrowser() || listenersAttached) return;
+  if (typeof window === 'undefined' || listenersAttached) return;
   listenersAttached = true;
 
   window.addEventListener('beforeunload', flushWrites);
@@ -46,7 +38,7 @@ const attachFlushListeners = () => {
 };
 
 const scheduleFlush = (delayMs = DEFAULT_FLUSH_DELAY_MS) => {
-  if (!isBrowser()) return;
+  if (typeof window === 'undefined') return;
   attachFlushListeners();
   if (flushTimer) return;
   flushTimer = setTimeout(() => {
@@ -56,7 +48,6 @@ const scheduleFlush = (delayMs = DEFAULT_FLUSH_DELAY_MS) => {
 };
 
 export const queueLocalStorageValue = (key, value, options = {}) => {
-  if (!isBrowser()) return;
   const normalizedKey = String(key || '').trim();
   if (!normalizedKey) return;
 
@@ -78,4 +69,12 @@ export const queueLocalStorageJson = (key, value, options = {}) => {
 
 export const flushQueuedLocalStorageWrites = () => {
   flushWrites();
+};
+
+export const resetLocalStorageWriteQueue = () => {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  pendingWrites.clear();
 };

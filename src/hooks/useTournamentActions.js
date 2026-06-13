@@ -9,6 +9,7 @@ import {
 import { appDataService } from '../services/appDataService';
 import { tournamentService } from '../services/tournamentService';
 import { queueLocalStorageJson, queueLocalStorageValue } from '../services/localStorageWriteService';
+import { STORAGE_KEYS } from '../platform/storageKeys';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
@@ -93,7 +94,7 @@ export const useTournamentActions = ({
     value: null,
     cachedAt: 0,
   });
-  const ACTIVE_TOURNAMENT_CACHE_KEY = 'bfm:appwrite-active-tournament';
+  const ACTIVE_TOURNAMENT_CACHE_KEY = STORAGE_KEYS.ACTIVE_TOURNAMENT_CACHE;
   const shouldPersistActiveCache = Boolean(isAppwriteEnabled);
 
   const persistActiveTournamentCache = (snapshot) => {
@@ -319,7 +320,7 @@ export const useTournamentActions = ({
         pruneMissing,
       });
     } else if (!isAppwriteEnabled) {
-      queueLocalStorageJson('badminton_players', rebuilt);
+      queueLocalStorageJson(STORAGE_KEYS.PLAYERS, rebuilt);
     }
     return rebuilt;
   };
@@ -507,7 +508,7 @@ export const useTournamentActions = ({
     setTournamentHistory((prev) => {
       const next = upsertTournamentHistory(prev, snapshot);
       if (!isAppwriteEnabled) {
-        queueLocalStorageJson('badminton_history', next);
+        queueLocalStorageJson(STORAGE_KEYS.HISTORY, next);
       }
       return next;
     });
@@ -1507,7 +1508,7 @@ export const useTournamentActions = ({
     setTournamentHistory((prev) => {
       const next = upsertTournamentHistory(prev, localTournamentSnapshot);
       if (!isAppwriteEnabled) {
-        queueLocalStorageJson('badminton_history', next);
+        queueLocalStorageJson(STORAGE_KEYS.HISTORY, next);
       }
       return next;
     });
@@ -1714,7 +1715,7 @@ export const useTournamentActions = ({
 
     setTournamentHistory((prev) => {
       const next = upsertTournamentHistory(prev, scheduled);
-      queueLocalStorageJson('badminton_history', next);
+      queueLocalStorageJson(STORAGE_KEYS.HISTORY, next);
       return next;
     });
 
@@ -1812,7 +1813,7 @@ export const useTournamentActions = ({
     setTournamentHistory((prev) => {
       const updatedHistory = upsertTournamentHistory(prev, activeSnapshot);
       if (!isAppwriteEnabled) {
-        queueLocalStorageJson('badminton_history', updatedHistory);
+        queueLocalStorageJson(STORAGE_KEYS.HISTORY, updatedHistory);
       }
       return updatedHistory;
     });
@@ -2268,7 +2269,7 @@ export const useTournamentActions = ({
         tournamentName: normalizedTournament.name,
       });
     } else {
-      queueLocalStorageJson('badminton_history', updatedHistory);
+      queueLocalStorageJson(STORAGE_KEYS.HISTORY, updatedHistory);
     }
     return updatedHistory;
   };
@@ -2595,7 +2596,7 @@ export const useTournamentActions = ({
         };
         setCasualMatches((prev) => {
           const updatedMatches = [localMatch, ...prev];
-          queueLocalStorageJson('badminton_casual_matches', updatedMatches);
+          queueLocalStorageJson(STORAGE_KEYS.CASUAL_MATCHES, updatedMatches);
           return updatedMatches;
         });
       }
@@ -2761,7 +2762,7 @@ export const useTournamentActions = ({
             markRatingsPersisted(recalculatedRatings || {});
           }
         } else {
-          queueLocalStorageJson('badminton_history', updatedHistory);
+          queueLocalStorageJson(STORAGE_KEYS.HISTORY, updatedHistory);
         }
 
         await rebuildPlayerDatabase({
@@ -2978,7 +2979,7 @@ export const useTournamentActions = ({
     }
 
     if (!isAppwriteEnabled) {
-      queueLocalStorageJson('badminton_history', updatedHistory);
+      queueLocalStorageJson(STORAGE_KEYS.HISTORY, updatedHistory);
     }
 
     const persistDeletion = async () => {
@@ -3079,7 +3080,7 @@ export const useTournamentActions = ({
       setCasualMatches(updatedCasualMatches);
 
       if (!isAppwriteEnabled) {
-        queueLocalStorageJson('badminton_casual_matches', updatedCasualMatches);
+        queueLocalStorageJson(STORAGE_KEYS.CASUAL_MATCHES, updatedCasualMatches);
       }
 
       const recalculatedRatings = recalculateEloFromHistory(tournamentHistory, updatedCasualMatches);

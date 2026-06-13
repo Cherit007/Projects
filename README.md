@@ -137,6 +137,23 @@ Columns:
 - Keep legacy collections unchanged until migration validation passes.
 - Use backup and validation steps from `docs/appwrite-migration.md` before cutover.
 
+## Legacy Appwrite Collections (Read-Only / Migration)
+
+The app runtime uses **V2 normalized collections** as the source of truth. Legacy collections remain in the project for migration scripts and guard checks only — the browser app does not read or write them during normal operation.
+
+| Legacy env var | Collection | Status |
+|----------------|------------|--------|
+| `VITE_APPWRITE_COLLECTION_TOURNAMENTS` | `tournaments` | Superseded by `v2_tournaments` + child collections |
+| `VITE_APPWRITE_COLLECTION_PLAYERS` | `players` | Superseded by `v2_players` |
+| `VITE_APPWRITE_COLLECTION_RATINGS` | `ratings` | Superseded by `v2_ratings_current` |
+| `VITE_APPWRITE_COLLECTION_CASUAL_MATCHES` | `casualmatches` | Superseded by `matches` (`matchKind='casual'`) |
+| `VITE_APPWRITE_COLLECTION_APP_META` | `app_meta` | Partially superseded; still used for templates, photos, member links until Phase 1.7 migration |
+| `VITE_APPWRITE_COLLECTION_SESSION_STATE` | `session_state` | Defined in env; unused in app source |
+
+**V2 collections (runtime):** `v2_tournaments`, `tournament_teams`, `matches`, `match_players`, `v2_players`, `ratings_current`, plus normalized group collections when configured.
+
+Do not delete legacy collections until `scripts/migration/validate-normalized.mjs` passes and production cutover is confirmed.
+
 ## Appwrite Function
 
 No Appwrite Function is used by the current app flow.

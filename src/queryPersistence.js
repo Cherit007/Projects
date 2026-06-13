@@ -3,9 +3,9 @@ import {
   persistQueryClientSubscribe,
 } from '@tanstack/query-persist-client-core';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { webStorage, webStorageSyncAdapter, canUseWebStorage } from './platform/storage';
+import { STORAGE_KEYS } from './platform/storageKeys';
 
-const QUERY_CACHE_STORAGE_KEY = 'bfm:rq-cache:v2';
-const LEGACY_QUERY_CACHE_STORAGE_KEY = 'bfm:rq-cache:v1';
 const QUERY_CACHE_BUSTER = '2026-03-04-cache-policy-v2';
 const QUERY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const PERSIST_THROTTLE_MS = 800;
@@ -25,14 +25,9 @@ const EXCLUDED_QUERY_PREFIXES = [
 let persistenceStarted = false;
 let activeUnsubscribe = null;
 
-const canUseStorage = () => (
-  typeof window !== 'undefined'
-  && typeof window.localStorage !== 'undefined'
-);
-
 const getPersister = () => createSyncStoragePersister({
-  storage: window.localStorage,
-  key: QUERY_CACHE_STORAGE_KEY,
+  storage: webStorageSyncAdapter,
+  key: STORAGE_KEYS.QUERY_CACHE,
   throttleTime: PERSIST_THROTTLE_MS,
 });
 
@@ -51,7 +46,7 @@ const shouldPersistQuery = (query) => {
 };
 
 export const restoreQueryCache = async (queryClient) => {
-  if (!canUseStorage()) return;
+  if (!canUseWebStorage()) return;
   try {
     const persister = getPersister();
     await persistQueryClientRestore({
@@ -60,8 +55,7 @@ export const restoreQueryCache = async (queryClient) => {
       buster: QUERY_CACHE_BUSTER,
       maxAge: QUERY_CACHE_MAX_AGE_MS,
     });
-    // Drop previous custom-format cache payload if present.
-    window.localStorage.removeItem(LEGACY_QUERY_CACHE_STORAGE_KEY);
+    webStorage.removeItem(STORAGE_KEYS.QUERY_CACHE_LEGACY);
   } catch (error) {
     clearPersistedQueryCache();
     console.warn('Failed to restore React Query cache snapshot:', error);
@@ -69,7 +63,7 @@ export const restoreQueryCache = async (queryClient) => {
 };
 
 export const startQueryCachePersistence = (queryClient) => {
-  if (!canUseStorage()) return () => {};
+  if (!canUseWebStorage()) return () => {};
   if (persistenceStarted) return activeUnsubscribe || (() => {});
   persistenceStarted = true;
 
@@ -94,11 +88,7 @@ export const startQueryCachePersistence = (queryClient) => {
 };
 
 export const clearPersistedQueryCache = () => {
-  if (!canUseStorage()) return;
-  try {
-    window.localStorage.removeItem(QUERY_CACHE_STORAGE_KEY);
-    window.localStorage.removeItem(LEGACY_QUERY_CACHE_STORAGE_KEY);
-  } catch {
-    // Ignore storage errors.
-  }
+  if (!canUseWebStorage()) return;
+  webStorage.removeItem(STORAGE_KEYS.QUERY_CACHE);
+  webStorage.removeItem(STORAGE_KEYS.QUERY_CACHE_LEGACY);
 };

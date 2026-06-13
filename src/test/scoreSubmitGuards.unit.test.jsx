@@ -6,8 +6,101 @@ import FinalMatchCard from '../components/FinalMatchCard';
 
 const teamA = { id: 't1', emoji: '🔥', name: 'Alpha', player1: 'A1', player: 'A1', player2: 'A2' };
 const teamB = { id: 't2', emoji: '⚡', name: 'Beta', player1: 'B1', player: 'B1', player2: 'B2' };
+const teamRovers = { id: 'rovers', emoji: '🏸', name: 'Rovers', player1: 'R1', player: 'R1', player2: 'R2' };
+const teamBlues = { id: 'blues', emoji: '🔵', name: 'Blues', player1: 'B1', player: 'B1', player2: 'B2' };
+
+const topTwoScenarioTable = [
+  {
+    id: 'champions',
+    emoji: '🏆',
+    name: 'Champions',
+    points: 6,
+    played: 3,
+    won: 3,
+    lost: 0,
+    scoreFor: 63,
+    scoreAgainst: 55,
+    scoreDiff: 8,
+    netMatchRate: 8 / 3,
+  },
+  {
+    id: 'aces',
+    emoji: '🅰️',
+    name: 'Aces',
+    points: 4,
+    played: 2,
+    won: 2,
+    lost: 0,
+    scoreFor: 45,
+    scoreAgainst: 40,
+    scoreDiff: 5,
+    netMatchRate: 2.5,
+  },
+  {
+    id: 'rovers',
+    emoji: '🏸',
+    name: 'Rovers',
+    points: 2,
+    played: 1,
+    won: 1,
+    lost: 0,
+    scoreFor: 18,
+    scoreAgainst: 20,
+    scoreDiff: -2,
+    netMatchRate: -2,
+  },
+  {
+    id: 'blues',
+    emoji: '🔵',
+    name: 'Blues',
+    points: 0,
+    played: 2,
+    won: 0,
+    lost: 2,
+    scoreFor: 30,
+    scoreAgainst: 42,
+    scoreDiff: -12,
+    netMatchRate: -6,
+  },
+];
 
 describe('Score submission guard behavior', () => {
+  it('shows live Top 2 qualification guidance while scores are entered', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <LiveMatchView
+        currentMatch={{
+          id: 9,
+          round: 3,
+          completed: false,
+          team1: teamRovers,
+          team2: teamBlues,
+        }}
+        onSaveScore={vi.fn()}
+        nextMatches={[]}
+        onSelectUpcomingMatch={vi.fn()}
+        tournamentName="Top 2 Cup"
+        playerRatings={{}}
+        playerPhotos={{}}
+        pointsTable={topTwoScenarioTable}
+        tournamentHistory={[]}
+        casualMatches={[]}
+      />
+    );
+
+    expect(screen.getByText(/Rovers: #3 with 2 pts/i)).toBeInTheDocument();
+    expect(screen.getByText(/win by 8\+ to reach Top 2 now/i)).toBeInTheDocument();
+    expect(screen.getByText('Blues: out of Top 2 reach on league points.')).toBeInTheDocument();
+
+    const [score1Input, score2Input] = screen.getAllByPlaceholderText('0');
+    await user.type(score1Input, '21');
+    await user.type(score2Input, '13');
+
+    expect(screen.getByText('Rovers by 8 -> projected #2')).toBeInTheDocument();
+    expect(screen.getByText('Rovers: projected Top 2 (#2), not qualified yet.')).toBeInTheDocument();
+  });
+
   it('keeps live score inputs when parent save returns false', async () => {
     const user = userEvent.setup();
     const onSaveScore = vi.fn(async () => false);

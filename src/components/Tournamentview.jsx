@@ -1417,6 +1417,7 @@ const TournamentView = ({
               tournamentFormat={tournamentFormat}
               pointsTable={pointsTable}
               pointsTableRankMovement={pointsTableRankMovement}
+              fixtures={fixtures}
               getTeamFormMeta={getTeamFormMeta}
             />
           )}

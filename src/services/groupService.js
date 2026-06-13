@@ -1,8 +1,7 @@
 import { groupCollectionsService } from './groupCollectionsService';
 import { queueLocalStorageJson } from './localStorageWriteService';
-
-const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-const LOCAL_GROUP_META_KEY = 'badminton_group_meta';
+import { webStorage } from '../platform/storage';
+import { STORAGE_KEYS } from '../platform/storageKeys';
 const GROUP_DEMO_MODE_ENABLED = String(
   import.meta.env.VITE_ENABLE_GROUP_DEMO_MODE || 'false'
 ).trim().toLowerCase() === 'true';
@@ -14,7 +13,7 @@ const GROUP_SERVICE_CONFIGURATION_ERROR = (
 const randomInviteCode = () => Math.random().toString(36).slice(2, 10).toUpperCase();
 
 const getMetaWithDefaults = async () => {
-  const meta = JSON.parse(localStorage.getItem(LOCAL_GROUP_META_KEY) || '{}');
+  const meta = webStorage.getJson(STORAGE_KEYS.GROUP_META, {});
   return {
     ...meta,
     groups: Array.isArray(meta.groups) ? meta.groups : [],
@@ -26,7 +25,7 @@ const getMetaWithDefaults = async () => {
 
 const saveMeta = async ({ groups, groupMembers, groupInvites, groupJoinRequests }) => {
   const payload = { groups, groupMembers, groupInvites, groupJoinRequests };
-  queueLocalStorageJson(LOCAL_GROUP_META_KEY, payload);
+  queueLocalStorageJson(STORAGE_KEYS.GROUP_META, payload);
   return payload;
 };
 

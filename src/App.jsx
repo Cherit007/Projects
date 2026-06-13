@@ -20,10 +20,15 @@ import { useAdminRequestsEffect } from './hooks/useAdminRequestsEffect';
 import { useDashboardDerivedData } from './hooks/useDashboardDerivedData';
 import { useModalManager } from './hooks/useModalManager';
 import { useRealtimeCacheSync } from './hooks/useRealtimeCacheSync';
+import { useHashAppRoute } from './hooks/useHashAppRoute';
+import { useThemeMode } from './hooks/useThemeMode';
+import { useMobileViewport } from './hooks/useMobileViewport';
+import { useAppKeyboardShortcuts } from './hooks/useAppKeyboardShortcuts';
 import { useAppStoreShallow } from './store/appStore';
+import { STORAGE_KEYS } from './platform/storageKeys';
 import { appDataService } from './services/appDataService';
 import { tournamentService } from './services/tournamentService';
-import { queueLocalStorageJson, queueLocalStorageValue } from './services/localStorageWriteService';
+import { queueLocalStorageJson } from './services/localStorageWriteService';
 import {
   calculatePointsTable, 
   calculatePlayerStats, 
@@ -50,7 +55,6 @@ import {
   normalizeTournamentFormat,
   normalizeTournamentName,
   parseTournamentDateMs,
-  formatTournamentDateLabel,
   pickPreferredTournament,
   dedupeLiveTournaments,
   removeTournamentFromList,
@@ -58,28 +62,18 @@ import {
   upsertTournamentInHistory,
 } from './utils/appHelpers';
 import { clearAutoResumeSuppressedTournamentId } from './utils/autoResumePreference';
+import {
+  buildTournamentShareMessage,
+  getAppBaseUrl,
+  shareTournamentInvite,
+} from './utils/shareTournament';
 
 const AppModals = lazy(() => import('./components/AppModals'));
 
 const App = () => {
   const queryClient = useQueryClient();
-  const [themeMode, setThemeMode] = useState(() => {
-    try {
-      const savedTheme = localStorage.getItem('badminton_theme_mode');
-      return savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
-
-  useEffect(() => {
-    document.body.setAttribute('data-theme', themeMode);
-    try {
-      queueLocalStorageValue('badminton_theme_mode', themeMode);
-    } catch {
-      // Ignore storage errors (private mode / quota issues).
-    }
-  }, [themeMode]);
+  const { themeMode, toggleThemeMode } = useThemeMode();
+  const isMobileViewport = useMobileViewport();
 
   const cloneSerializable = (value) => {
     if (value === null || value === undefined) return value;
@@ -322,53 +316,13 @@ const App = () => {
   const setupHydrationRetryAtRef = useRef(0);
   const [pendingActions, setPendingActions] = useState({});
   const pendingActionsRef = useRef({});
-  const [isMobileViewport, setIsMobileViewport] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(max-width: 767px)').matches;
+
+  useAppKeyboardShortcuts({
+    showUtilityDrawer,
+    setShowUtilityDrawer,
+    isMobileViewport,
+    step,
   });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const media = window.matchMedia('(max-width: 767px)');
-    const updateViewport = () => {
-      setIsMobileViewport(media.matches);
-    };
-    updateViewport();
-    if (media.addEventListener) {
-      media.addEventListener('change', updateViewport);
-    } else {
-      media.addListener(updateViewport);
-    }
-    return () => {
-      if (media.removeEventListener) {
-        media.removeEventListener('change', updateViewport);
-      } else {
-        media.removeListener(updateViewport);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isMobileViewport) return;
-    setShowUtilityDrawer(false);
-  }, [isMobileViewport]);
-
-  useEffect(() => {
-    if (!showUtilityDrawer) return undefined;
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setShowUtilityDrawer(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showUtilityDrawer]);
-
-  useEffect(() => {
-    setShowUtilityDrawer(false);
-  }, [step]);
 
   const hydratePlayerPhotos = useCallback((rawPhotos = {}) => {
     const urls = {};
@@ -445,10 +399,6 @@ const App = () => {
       toastTimerRef.current = null;
     }, 3000);
   }, []);
-  const toggleThemeMode = useCallback(() => {
-    setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  }, []);
-
   const setActionPending = useCallback((actionKey, pending) => {
     if (!actionKey) return;
     setPendingActions((prev) => {
@@ -903,7 +853,7 @@ const App = () => {
       return;
     }
 
-    queueLocalStorageJson("badminton_ratings", nextRatings);
+    queueLocalStorageJson(STORAGE_KEYS.RATINGS, nextRatings);
     markRatingsPersisted(nextRatings);
   }, [playerRatings, isAppwriteEnabled, loading]);
 
@@ -1025,7 +975,7 @@ const App = () => {
       if (isAppwriteEnabled) {
         queuePlayerDatabaseSave(updated);
       } else {
-        queueLocalStorageJson("badminton_players", updated);
+        queueLocalStorageJson(STORAGE_KEYS.PLAYERS, updated);
       }
   
       return updated;
@@ -1071,7 +1021,7 @@ const App = () => {
       })();
       return;
     }
-    queueLocalStorageJson("badminton_members", safeMembers);
+    queueLocalStorageJson(STORAGE_KEYS.MEMBERS, safeMembers);
   };
 
   useMemberLinkEffect({
@@ -1098,7 +1048,7 @@ const App = () => {
       });
       return;
     }
-    queueLocalStorageJson("badminton_templates", updatedTemplates);
+    queueLocalStorageJson(STORAGE_KEYS.TEMPLATES, updatedTemplates);
   };
 
   const applyAccountLink = (prompt) => {
@@ -1361,10 +1311,10 @@ const App = () => {
         if (isAppwriteEnabled) {
           savePlayerPhotosMutation.mutateAsync(updated).catch((saveError) => {
             console.error('Failed to save player photos to Appwrite:', saveError);
-            queueLocalStorageJson('badminton_player_photos', updated);
+            queueLocalStorageJson(STORAGE_KEYS.PLAYER_PHOTOS, updated);
           });
         } else {
-          queueLocalStorageJson('badminton_player_photos', updated);
+          queueLocalStorageJson(STORAGE_KEYS.PLAYER_PHOTOS, updated);
         }
         return updated;
       });
@@ -2513,135 +2463,28 @@ const App = () => {
     const resolvedTournament = tournamentId
       ? ((await handleViewScheduledTournament(tournamentId, tournament)) || tournament)
       : tournament;
-    const tournamentLabel = String(resolvedTournament?.name || tournament?.name || '').trim();
-    if (!tournamentLabel) {
+
+    const sharePayload = buildTournamentShareMessage({
+      tournament: resolvedTournament,
+      groupName: activeGroup?.name,
+      baseUrl: getAppBaseUrl(),
+    });
+
+    if (!sharePayload?.message) {
       showToast('Tournament details unavailable for sharing', 'error');
       return;
     }
 
-    const formatTeamLabel = (team, fallbackIndex = 0) => {
-      if (!team) return `Team ${fallbackIndex + 1}`;
-      if (typeof team === 'string') return team;
+    const result = await shareTournamentInvite({
+      message: sharePayload.message,
+      title: sharePayload.title,
+      appUrl: sharePayload.appUrl,
+      onWhatsAppFallback: () => showToast('Opening WhatsApp with full fixture invite...'),
+    });
 
-      const teamName = String(team?.name || '').trim();
-      const player1 = String(team?.player1 || team?.player || '').trim();
-      const player2 = String(team?.player2 || '').trim();
-      const playerLabel = [player1, player2].filter(Boolean).join(' & ');
-      if (teamName && playerLabel && teamName.toLowerCase() !== playerLabel.toLowerCase()) {
-        return `${teamName} (${playerLabel})`;
-      }
-      return teamName || playerLabel || `Team ${fallbackIndex + 1}`;
-    };
-
-    const formatValue = normalizeTournamentFormat(
-      resolvedTournament?.tournamentFormat || resolvedTournament?.format || 'league'
-    );
-    const formatLabel = formatValue === 'league'
-      ? 'League'
-      : formatValue === 'semiFinal'
-        ? 'Semi Final'
-        : formatValue === 'fullKnockout'
-          ? 'Full Knockout'
-          : formatValue === 'knockoutByes'
-            ? 'Knockout (Byes)'
-            : formatValue === 'playInFinal'
-              ? 'Play-in + Final'
-              : 'Knockout';
-    const modeLabel = String(resolvedTournament?.gameMode || 'doubles').toLowerCase() === 'singles'
-      ? 'Singles'
-      : 'Doubles';
-    const normalizedTeams = Array.isArray(resolvedTournament?.teams) ? resolvedTournament.teams : [];
-    const teamsCount = normalizedTeams.length > 0
-      ? normalizedTeams.length
-      : Number(resolvedTournament?.teamsCount || 0);
-    const dateLabel = formatTournamentDateLabel(resolvedTournament?.date, 'To be announced');
-    const groupLabel = String(activeGroup?.name || '').trim();
-
-    const teamLines = normalizedTeams
-      .filter(Boolean)
-      .map((team, index) => `• 🧑‍🤝‍🧑 ${formatTeamLabel(team, index)}`);
-
-    const leagueFixtureLines = (Array.isArray(resolvedTournament?.fixtures) ? resolvedTournament.fixtures : [])
-      .filter((match) => match?.team1 && match?.team2)
-      .map((match, index) => {
-        const roundLabel = Number.isFinite(Number(match?.round)) ? `R${Number(match.round)}` : `M${index + 1}`;
-        return `• 🏸 ${roundLabel}: ${formatTeamLabel(match.team1, index)} vs ${formatTeamLabel(match.team2, index + 1)}`;
-      });
-
-    const bracketFixtureLines = (Array.isArray(resolvedTournament?.bracket) ? resolvedTournament.bracket : [])
-      .flatMap((round, roundIndex) => (Array.isArray(round) ? round : [])
-        .filter((match) => match?.team1 && match?.team2)
-        .map((match, matchIndex) => (
-          `• 🥊 KO R${roundIndex + 1}.${matchIndex + 1}: `
-          + `${formatTeamLabel(match.team1, matchIndex)} vs ${formatTeamLabel(match.team2, matchIndex + 1)}`
-        )));
-
-    const finalMatch = resolvedTournament?.finalMatch;
-    const finalMatchLine = finalMatch?.team1 && finalMatch?.team2
-      ? `• 🏆 Final: ${formatTeamLabel(finalMatch.team1)} vs ${formatTeamLabel(finalMatch.team2)}`
-      : null;
-
-    const fixturesSection = [
-      '📋 *Fixture Details*',
-      ...(leagueFixtureLines.length > 0
-        ? ['🔹 League Fixtures', ...leagueFixtureLines]
-        : []),
-      ...(bracketFixtureLines.length > 0
-        ? ['🔸 Knockout Fixtures', ...bracketFixtureLines]
-        : []),
-      finalMatchLine,
-      leagueFixtureLines.length === 0 && bracketFixtureLines.length === 0 && !finalMatchLine
-        ? '• Fixtures will be generated when the tournament starts.'
-        : null,
-    ].filter(Boolean);
-
-    const baseUrl = typeof window !== 'undefined'
-      ? new URL(import.meta.env.BASE_URL || '/', window.location.origin).toString()
-      : '';
-    const appUrl = baseUrl || '';
-    const posterUrl = baseUrl ? new URL('pwa-512x512.png', baseUrl).toString() : '';
-
-    const messageLines = [
-      '🏸 *Badminton Tournament Invite*',
-      `📛 *${tournamentLabel}*`,
-      groupLabel ? `👥 Group: ${groupLabel}` : null,
-      `🗓️ Date: ${dateLabel}`,
-      `🎯 Format: ${formatLabel}`,
-      `🎮 Mode: ${modeLabel}`,
-      teamsCount > 0 ? `👥 Teams: ${teamsCount}` : null,
-      teamLines.length > 0 ? '' : null,
-      teamLines.length > 0 ? '🧩 *Teams*' : null,
-      ...teamLines,
-      '',
-      ...fixturesSection,
-      appUrl ? '' : null,
-      appUrl ? `📲 Open App: ${appUrl}` : null,
-      posterUrl ? `🖼️ Poster: ${posterUrl}` : null,
-      '',
-      '🔥 See you on court!',
-    ].filter(Boolean);
-    const message = messageLines.join('\n');
-
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({
-          title: `${tournamentLabel} scheduled`,
-          text: message,
-          ...(appUrl ? { url: appUrl } : {}),
-        });
-        return;
-      } catch (error) {
-        if (error?.name === 'AbortError') return;
-      }
+    if (result.method === 'error') {
+      showToast('Unable to open WhatsApp from this device', 'error');
     }
-
-    const whatsAppUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    if (typeof window !== 'undefined') {
-      window.open(whatsAppUrl, '_blank', 'noopener,noreferrer');
-      showToast('Opening WhatsApp with full fixture invite...');
-      return;
-    }
-    showToast('Unable to open WhatsApp from this device', 'error');
   }, [activeGroup?.name, handleViewScheduledTournament, showToast]);
 
   const {
@@ -2755,6 +2598,29 @@ const App = () => {
     onOpenUtilityDrawer: () => setShowUtilityDrawer(true),
   };
 
+  const hasTournamentScreenState = useMemo(() => (
+    step === 'tournament'
+    || (Array.isArray(fixtures) && fixtures.length > 0)
+    || (Array.isArray(bracket) && bracket.some((round) => Array.isArray(round) && round.length > 0))
+  ), [step, fixtures, bracket]);
+
+  const hashRouteReady = isConfigChecked && authResolved && groupResolved;
+
+  const { routeKey } = useHashAppRoute({
+    isReady: hashRouteReady,
+    requiresAuth,
+    currentUser,
+    isGuestViewer,
+    activeGroup,
+    groupRole,
+    showRequestCenter,
+    setShowRequestCenter,
+    isViewerMode,
+    step,
+    setStep,
+    hasTournamentScreenState,
+  });
+
   const canRenderWorkspace = !requiresAuth || Boolean(activeGroup);
   const shouldShowMobileBottomNav = Boolean(
     isMobileViewport
@@ -2862,6 +2728,7 @@ const App = () => {
         isConfigChecked={isConfigChecked}
         authResolved={authResolved}
         groupResolved={groupResolved}
+        routeKey={routeKey}
         requiresAuth={requiresAuth}
         currentUser={currentUser}
         isGuestViewer={isGuestViewer}

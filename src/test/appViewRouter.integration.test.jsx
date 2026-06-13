@@ -156,4 +156,19 @@ describe('AppViewRouter integration workflows', () => {
     expect(await screen.findByTestId('tournament-view')).toHaveTextContent('tournament:tournament');
     expect(screen.getByTestId('casual-match')).toBeInTheDocument();
   });
+
+  it('uses explicit routeKey over inferred step props', async () => {
+    render(
+      <AppViewRouter
+        {...baseProps}
+        routeKey="teams"
+        setupScreenProps={{ step: 'setup' }}
+        teamEntryProps={{ step: 'teams' }}
+        tournamentViewProps={{ step: 'none' }}
+      />
+    );
+
+    expect(await screen.findByTestId('team-entry')).toBeInTheDocument();
+    expect(screen.queryByTestId('setup-screen')).not.toBeInTheDocument();
+  });
 });
