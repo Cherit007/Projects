@@ -6,7 +6,7 @@ export const boxCricketSport = {
   available: true,
   participantModel: 'squad',
   squad: {
-    minPlayers: 4,
+    minPlayers: 3,
     maxPlayers: 11,
     defaultSlots: 6,
   },
@@ -27,6 +27,7 @@ export const boxCricketSport = {
     { value: 'team', label: 'Team', icon: '🏏', description: 'Squad vs squad' },
   ],
   formats: [
+    { value: 'casual', label: 'Casual Match', icon: '🤝' },
     { value: 'league', label: 'League + Final', icon: '🏁' },
     { value: 'knockoutByes', label: 'Knockout + Byes', icon: '🏆' },
   ],
@@ -34,6 +35,7 @@ export const boxCricketSport = {
     { value: '1', label: '1 Match' },
   ],
   formatHints: {
+    casual: 'One-off match — pick teams, squads, and score (summary or ball-by-ball)',
     league: 'Round-robin — top teams advance (formats TBD)',
     knockoutByes: 'Knockout bracket with byes (formats TBD)',
   },
@@ -41,6 +43,7 @@ export const boxCricketSport = {
     team: 'Team',
   },
   formatLabels: {
+    casual: 'Casual Match',
     league: 'League + Final',
     knockoutByes: 'Knockout + Byes',
   },

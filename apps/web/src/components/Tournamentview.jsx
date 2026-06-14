@@ -1791,6 +1791,8 @@ const TournamentView = ({
         canEditPhoto={selectedPlayerCanEditPhoto}
         tournamentHistory={tournamentHistory}
         casualMatches={casualMatches}
+        playerRatings={playerRatings}
+        defaultSportId={sportId}
         onUpdatePhoto={onUpdatePlayerPhoto}
         onClose={() => setSelectedPlayerName(null)}
       />

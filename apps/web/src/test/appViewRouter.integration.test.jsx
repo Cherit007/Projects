@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import AppViewRouter from '../components/AppViewRouter';
+import { APP_ROUTE_KEYS } from '../utils/appRoutes';
+import { waitFor } from '@testing-library/react';
 
 vi.mock('../components/SetupScreen', () => ({
   default: (props) => <div data-testid="setup-screen">setup:{props.step}</div>,
@@ -13,7 +15,7 @@ vi.mock('../components/Tournamentview', () => ({
   default: (props) => <div data-testid="tournament-view">tournament:{props.step}</div>,
 }));
 
-vi.mock('../components/CasualMatch', () => ({
+vi.mock('../components/CasualMatchRouter', () => ({
   default: () => <div data-testid="casual-match">casual</div>,
 }));
 
@@ -90,9 +92,28 @@ describe('AppViewRouter integration workflows', () => {
     expect(await screen.findByTestId('auth-screen')).toBeInTheDocument();
   });
 
-  it('routes user without selected group to group access screen', async () => {
-    render(<AppViewRouter {...baseProps} requiresAuth currentUser={{ $id: 'u1' }} activeGroup={null} />);
+  it('routes user without selected group to group access screen when groups are enabled', async () => {
+    render(<AppViewRouter {...baseProps} requiresAuth groupsEnabled currentUser={{ $id: 'u1' }} activeGroup={null} />);
     expect(await screen.findByTestId('group-access-screen')).toBeInTheDocument();
+  });
+
+  it('routes user without selected group to sport hub when groups are disabled', async () => {
+    render(
+      <AppViewRouter
+        {...baseProps}
+        requiresAuth
+        groupsEnabled={false}
+        currentUser={{ $id: 'u1' }}
+        activeGroup={null}
+        routeKey={APP_ROUTE_KEYS.SPORT_HUB}
+        sportHubProps={{}}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Choose a sport/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('group-access-screen')).not.toBeInTheDocument();
   });
 
   it('renders admin request center workflow', async () => {
@@ -129,9 +150,11 @@ describe('AppViewRouter integration workflows', () => {
   });
 
   it('renders setup workflow in default app mode', async () => {
-    render(<AppViewRouter {...baseProps} />);
+    render(<AppViewRouter {...baseProps} routeKey={APP_ROUTE_KEYS.SPORT_HUB} sportHubProps={{}} />);
 
-    expect(await screen.findByTestId('setup-screen')).toHaveTextContent('setup:setup');
+    await waitFor(() => {
+      expect(screen.getByText(/Choose a sport/i)).toBeInTheDocument();
+    });
     expect(screen.queryByTestId('team-entry')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tournament-view')).not.toBeInTheDocument();
   });
@@ -142,10 +165,11 @@ describe('AppViewRouter integration workflows', () => {
     expect(await screen.findByTestId('team-entry')).toHaveTextContent('teams:teams');
   });
 
-  it('renders tournament workflow and casual modal when active', async () => {
+  it('renders tournament workflow without casual overlay', async () => {
     render(
       <AppViewRouter
         {...baseProps}
+        routeKey={APP_ROUTE_KEYS.TOURNAMENT}
         setupScreenProps={{ step: 'none' }}
         teamEntryProps={{ step: 'none' }}
         tournamentViewProps={{ step: 'tournament' }}
@@ -154,7 +178,7 @@ describe('AppViewRouter integration workflows', () => {
     );
 
     expect(await screen.findByTestId('tournament-view')).toHaveTextContent('tournament:tournament');
-    expect(screen.getByTestId('casual-match')).toBeInTheDocument();
+    expect(screen.queryByTestId('casual-match')).not.toBeInTheDocument();
   });
 
   it('uses explicit routeKey over inferred step props', async () => {

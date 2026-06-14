@@ -13,9 +13,10 @@
   },
   "scripts": {
     "dev": "npm run dev -w @fixture-maker/web",
+    "dev:mobile": "npm run start:clear -w @fixture-maker/mobile",
     "build": "npm run build -w @fixture-maker/web",
     "test": "npm run test -w @fixture-maker/web",
-    "test:run": "npm run test:run -w @fixture-maker/web",
+    "test:run": "npm run test:run -w @fixture-maker/web && npm run test:run -w @fixture-maker/mobile",
     "e2e:pickleball": "playwright test --grep @pickleball",
     "e2e:scoring": "playwright test --grep @scoring",
     "e2e:offline": "playwright test --grep @offline",

@@ -30,7 +30,7 @@ describe('MobileBottomNav', () => {
 
     await user.click(screen.getByRole('button', { name: /Home/i }));
     await user.click(screen.getByRole('button', { name: /Live/i }));
-    await user.click(screen.getByRole('button', { name: /Create/i }));
+    await user.click(screen.getByRole('button', { name: /Start/i }));
     await user.click(screen.getByRole('button', { name: /Profile/i }));
 
     expect(onHome).toHaveBeenCalledTimes(1);

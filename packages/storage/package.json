@@ -7,6 +7,11 @@
     "./*": "./src/*",
     "./storageKeys": "./src/storageKeys.js",
     "./createStorageAdapter": "./src/createStorageAdapter.js",
-    "./web": "./src/web.js"
+    "./web": "./src/web.js",
+    "./native": "./src/native.js",
+    "./offlineOutbox": "./src/offlineOutbox.js"
+  },
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": ">=1.23.0"
   }
 }

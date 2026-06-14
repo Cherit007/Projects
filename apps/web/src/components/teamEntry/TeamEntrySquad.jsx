@@ -4,10 +4,14 @@ import AutocompleteInput from '../AutocompleteInput';
 import { getSport } from '@fixture-maker/domain/sports';
 import {
   createSquadPlayer,
+  filterAutocompleteSuggestions,
   getSquadLimits,
+  getUsedSquadNames,
+  getUsedTeamNames,
   isSquadTeamValid,
   listSquadPlayerNames,
   normalizeSquad,
+  setSquadCaptain,
   syncLegacyPlayersFromSquad,
 } from '@fixture-maker/domain/sports/boxCricket/squadUtils';
 
@@ -31,38 +35,28 @@ const TeamEntrySquad = ({
   const generatePending = Boolean(loading || isActionPending('teams.generate'));
   const schedulePending = isActionPending('teams.schedule');
 
-  const normalizeValue = (value) => String(value || '').trim().toLowerCase();
-
-  const getTeamNameSuggestions = (teamIndex) => {
-    const currentValue = normalizeValue(teams[teamIndex]?.name);
-    const usedByOthers = new Set(
-      teams
-        .map((team, index) => ({ index, value: normalizeValue(team?.name) }))
-        .filter((item) => item.index !== teamIndex && item.value)
-        .map((item) => item.value),
-    );
-    return (teamNameDatabase || []).filter((name) => {
-      const normalized = normalizeValue(name);
-      return !normalized || !usedByOthers.has(normalized) || normalized === currentValue;
-    });
-  };
+  const getTeamNameSuggestions = (teamIndex) => (
+    filterAutocompleteSuggestions(
+      teamNameDatabase,
+      getUsedTeamNames(teams, teamIndex),
+      teams[teamIndex]?.name,
+    )
+  );
 
   const getPlayerSuggestions = (teamIndex, playerIndex) => {
-    const usedNames = new Set(
-      teams.flatMap((team, index) => (
-        listSquadPlayerNames(team).map((name) => ({
-          key: `${index}:${name}`,
-          value: normalizeValue(name),
-        }))
-      ))
-        .filter((entry) => !(entry.key.startsWith(`${teamIndex}:`)))
-        .map((entry) => entry.value),
+    const usedNames = getUsedSquadNames(teams, { teamIndex, playerIndex });
+    return filterAutocompleteSuggestions(
+      playerDatabase,
+      usedNames,
+      teams[teamIndex]?.squad?.[playerIndex]?.name,
     );
-    const currentName = normalizeValue(teams[teamIndex]?.squad?.[playerIndex]?.name);
-    return (playerDatabase || []).filter((name) => {
-      const normalized = normalizeValue(name);
-      return !normalized || !usedNames.has(normalized) || normalized === currentName;
-    });
+  };
+
+  const setCaptain = (teamIndex, playerId) => {
+    updateTeam(teamIndex, (team) => ({
+      ...team,
+      squad: setSquadCaptain(team.squad || [], playerId),
+    }));
   };
 
   const updateTeam = (index, updater) => {
@@ -160,9 +154,15 @@ const TeamEntrySquad = ({
                     <div className="space-y-2 mt-3">
                       {squad.map((player, playerIndex) => (
                         <div key={player.id || `${team.id}-${playerIndex}`} className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-gray-500 w-16">
-                            {player.role === 'captain' ? 'Captain' : `P${playerIndex + 1}`}
-                          </span>
+                          <button
+                            type="button"
+                            className={`box-cricket-captain-tag ${player.role === 'captain' ? 'is-captain' : ''}`}
+                            onClick={() => setCaptain(index, player.id)}
+                            disabled={!String(player.name || '').trim()}
+                            title={player.role === 'captain' ? 'Captain' : 'Make captain'}
+                          >
+                            {player.role === 'captain' ? 'C' : 'C?'}
+                          </button>
                           <div className="flex-1">
                             <AutocompleteInput
                               value={player.name}

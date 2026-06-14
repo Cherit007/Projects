@@ -1,15 +1,17 @@
+import { readEnv } from './readEnv.js';
+
 const DEFAULT_GROUP_ID = 'default-group';
 
 export const isTournamentTemplatesCollectionEnabled = () => Boolean(
-  import.meta.env.VITE_APPWRITE_COLLECTION_TOURNAMENT_TEMPLATES
+  readEnv('VITE_APPWRITE_COLLECTION_TOURNAMENT_TEMPLATES')
 );
 
 export const isGroupRosterCollectionEnabled = () => Boolean(
-  import.meta.env.VITE_APPWRITE_COLLECTION_GROUP_ROSTER
+  readEnv('VITE_APPWRITE_COLLECTION_GROUP_ROSTER')
 );
 
 export const isPlayerPhotoMetadataEnabled = () => Boolean(
-  import.meta.env.VITE_APPWRITE_COLLECTION_V2_PLAYERS
+  readEnv('VITE_APPWRITE_COLLECTION_V2_PLAYERS')
 );
 
 export const isAuxiliaryV2Enabled = () => (

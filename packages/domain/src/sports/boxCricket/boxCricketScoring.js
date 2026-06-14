@@ -1,5 +1,6 @@
 import { parseRuleConfig } from '../ruleConfig.js';
 import { boxCricketSport } from '../boxCricket.config.js';
+import { normalizeSquad } from './squadUtils.js';
 
 const SUPER_OVER_OVERS = 1;
 const SUPER_OVER_MAX_WICKETS = 2;
@@ -71,6 +72,9 @@ const buildInningsEntry = ({
     overs: Number(inningsInput.overs),
     phase,
     lastManStanding: rules.lastManStanding,
+    ...(Array.isArray(inningsInput.ballLog) && inningsInput.ballLog.length
+      ? { ballLog: inningsInput.ballLog, scoringMode: inningsInput.scoringMode || 'ballByBall' }
+      : {}),
     extras: {
       wides: 0,
       noBalls: 0,
@@ -95,8 +99,15 @@ export const validateBoxCricketInnings = (entry, rules, { phase = 'normal' } = {
   if (!Number.isFinite(wickets) || wickets < 0 || wickets > maxWickets) {
     return { valid: false, message: `Wickets must be between 0 and ${maxWickets}` };
   }
-  if (!Number.isFinite(overs) || overs <= 0 || overs > oversLimit) {
-    return { valid: false, message: `Overs must be greater than 0 and at most ${oversLimit}` };
+  const isBallByBall = entry?.scoringMode === 'ballByBall' || Array.isArray(entry?.ballLog);
+  if (!Number.isFinite(overs) || overs <= 0) {
+    return { valid: false, message: 'Overs must be greater than 0' };
+  }
+  if (!isBallByBall && overs > oversLimit) {
+    return { valid: false, message: `Overs must be at most ${oversLimit}` };
+  }
+  if (isBallByBall && overs > oversLimit + 0.001) {
+    return { valid: false, message: `Overs must be at most ${oversLimit}` };
   }
   return { valid: true };
 };
@@ -108,28 +119,38 @@ export const buildBoxCricketMatchStatistics = ({
   innings2,
   ruleConfig,
   superOver,
+  battingFirstTeamId = null,
+  toss = null,
 }) => {
   const rules = resolveBoxCricketRules(ruleConfig);
+  const team1BatsFirst = battingFirstTeamId == null
+    || String(battingFirstTeamId) === String(team1?.id);
+
+  const firstInningsTeam = team1BatsFirst ? team1 : team2;
+  const firstBowlingTeam = team1BatsFirst ? team2 : team1;
+  const secondInningsTeam = team1BatsFirst ? team2 : team1;
+  const secondBowlingTeam = team1BatsFirst ? team1 : team2;
+
   const innings = [
     buildInningsEntry({
-      battingTeamId: team1?.id,
-      bowlingTeamId: team2?.id,
+      battingTeamId: firstInningsTeam?.id,
+      bowlingTeamId: firstBowlingTeam?.id,
       inningsInput: innings1,
       rules,
       phase: superOver ? 'superOver' : 'normal',
     }),
     buildInningsEntry({
-      battingTeamId: team2?.id,
-      bowlingTeamId: team1?.id,
+      battingTeamId: secondInningsTeam?.id,
+      bowlingTeamId: secondBowlingTeam?.id,
       inningsInput: innings2,
       rules,
       phase: superOver ? 'superOver' : 'normal',
     }),
   ];
 
-  const runs1 = innings[0].runs;
-  const runs2 = innings[1].runs;
-  const isTie = runs1 === runs2;
+  const team1Runs = team1BatsFirst ? innings[0].runs : innings[1].runs;
+  const team2Runs = team1BatsFirst ? innings[1].runs : innings[0].runs;
+  const isTie = team1Runs === team2Runs;
 
   return {
     sportId: 'boxCricket',
@@ -137,6 +158,13 @@ export const buildBoxCricketMatchStatistics = ({
     format: superOver ? 'superOver' : 'singleInnings',
     oversLimit: superOver ? SUPER_OVER_OVERS : rules.oversLimit,
     ballType: rules.ballType,
+    ...(toss?.tossWinnerTeamId ? {
+      toss: {
+        winnerTeamId: toss.tossWinnerTeamId,
+        electedTo: toss.electedTo,
+        battingFirstTeamId: battingFirstTeamId ?? team1?.id,
+      },
+    } : {}),
     specialRules: {
       powerplayOvers: rules.powerplayOvers,
       lastManStanding: rules.lastManStanding,
@@ -145,14 +173,26 @@ export const buildBoxCricketMatchStatistics = ({
       penaltyRunsPerWide: rules.penaltyRunsPerWide,
     },
     innings,
+    teams: {
+      team1: {
+        id: team1?.id,
+        name: team1?.name || '',
+        squad: normalizeSquad(team1?.squad),
+      },
+      team2: {
+        id: team2?.id,
+        name: team2?.name || '',
+        squad: normalizeSquad(team2?.squad),
+      },
+    },
     result: {
-      winnerTeamId: runs1 > runs2
+      winnerTeamId: team1Runs > team2Runs
         ? team1?.id
-        : runs2 > runs1
+        : team2Runs > team1Runs
           ? team2?.id
           : null,
       marginType: isTie ? 'tie' : 'runs',
-      marginValue: Math.abs(runs1 - runs2),
+      marginValue: Math.abs(team1Runs - team2Runs),
       method: superOver ? 'superOver' : 'normal',
     },
   };
@@ -235,4 +275,73 @@ export const getBoxCricketRulesSummary = (ruleConfig) => {
   if (rules.lastManStanding) parts.push('LMS');
   if (rules.superOverEnabled) parts.push('super over');
   return parts.join(' · ');
+};
+
+export const CASUAL_SERIES_FORMATS = Object.freeze({
+  single: { id: 'single', label: 'Single game', maxGames: 1, winsRequired: 1 },
+  bo3: { id: 'bo3', label: 'Best of 3', maxGames: 3, winsRequired: 2 },
+  bo5: { id: 'bo5', label: 'Best of 5', maxGames: 5, winsRequired: 3 },
+});
+
+export const getCasualSeriesConfig = (seriesFormat) => (
+  CASUAL_SERIES_FORMATS[seriesFormat] || CASUAL_SERIES_FORMATS.single
+);
+
+export const isCasualSeriesComplete = (team1Wins, team2Wins, seriesFormat) => {
+  const { winsRequired } = getCasualSeriesConfig(seriesFormat);
+  return team1Wins >= winsRequired || team2Wins >= winsRequired;
+};
+
+export const buildCasualSeriesStatistics = ({
+  team1,
+  team2,
+  seriesFormat,
+  games = [],
+  team1Wins = 0,
+  team2Wins = 0,
+}) => {
+  const config = getCasualSeriesConfig(seriesFormat);
+  const winnerTeamId = team1Wins === team2Wins
+    ? null
+    : (team1Wins > team2Wins ? team1?.id : team2?.id);
+
+  return {
+    sportId: 'boxCricket',
+    version: 1,
+    format: 'casualSeries',
+    teams: {
+      team1: {
+        id: team1?.id,
+        name: team1?.name || '',
+        squad: normalizeSquad(team1?.squad),
+      },
+      team2: {
+        id: team2?.id,
+        name: team2?.name || '',
+        squad: normalizeSquad(team2?.squad),
+      },
+    },
+    series: {
+      format: config.id,
+      label: config.label,
+      winsRequired: config.winsRequired,
+      maxGames: config.maxGames,
+      team1Wins,
+      team2Wins,
+      winnerTeamId,
+      games,
+    },
+  };
+};
+
+export const formatCasualSeriesScoreLine = (statistics, team1Name = 'Team 1', team2Name = 'Team 2') => {
+  const series = statistics?.series;
+  if (!series) return null;
+  const { team1Wins, team2Wins, label } = series;
+  if (series.format === 'single') {
+    const game = series.games?.[0];
+    if (game) return `${game.score1} - ${game.score2}`;
+    return `${team1Wins} - ${team2Wins}`;
+  }
+  return `${team1Name} ${team1Wins}–${team2Wins} ${team2Name} (${label})`;
 };

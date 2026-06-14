@@ -10,6 +10,7 @@ import {
   removeTournamentFromList,
   upsertTournamentInHistory,
 } from '../utils/appHelpers';
+import { enrichCasualMatches, persistEnrichedCasualMatches } from '../utils/casualMatchHydration';
 
 const TOURNAMENT_PATCH_DEBOUNCE_MS = 280;
 const CASUAL_PATCH_DEBOUNCE_MS = 420;
@@ -222,8 +223,10 @@ export const useRealtimeCacheSync = ({
           if (!mountedRef.current) return;
           const nextMatches = Array.isArray(matches) ? matches : [];
           const backfilled = backfillCasualMatchesCompletedAt(nextMatches);
-          queryClient.setQueryData(queryKeys.casualMatches(activeGroupId), backfilled.matches);
-          setCasualMatches(backfilled.matches);
+          const enriched = enrichCasualMatches(backfilled.matches);
+          queryClient.setQueryData(queryKeys.casualMatches(activeGroupId), enriched);
+          persistEnrichedCasualMatches(enriched);
+          setCasualMatches(enriched);
           setLastCachePatchAt(Date.now());
         } catch (error) {
           if (!mountedRef.current) return;

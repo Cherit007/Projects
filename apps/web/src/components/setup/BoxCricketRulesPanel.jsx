@@ -2,6 +2,8 @@ import React from 'react';
 
 const OVERS_OPTIONS = [4, 5, 6, 8, 10];
 
+export { OVERS_OPTIONS };
+
 const BoxCricketRulesPanel = ({
   ruleConfig = {},
   setRuleConfig,
@@ -16,7 +18,7 @@ const BoxCricketRulesPanel = ({
   const readNumber = (key, fallback = 0) => Number(ruleConfig?.[key] ?? fallback);
 
   return (
-    <div className="tournament-setup-field box-cricket-rules-panel rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div className="tournament-setup-field box-cricket-rules-panel">
       <p className="tournament-setup-step">Box cricket rules</p>
       <p className="tournament-setup-hint mb-3">Optional house rules — applied to scoring and tie-breakers.</p>
 
@@ -68,8 +70,8 @@ const BoxCricketRulesPanel = ({
         </label>
       </div>
 
-      <div className="flex flex-wrap gap-4 text-sm">
-        <label className="inline-flex items-center gap-2">
+      <div className="box-cricket-rules-checks flex flex-wrap gap-4 text-sm">
+        <label className="inline-flex items-center gap-2 box-cricket-rules-check">
           <input
             type="checkbox"
             checked={Boolean(ruleConfig?.superOverEnabled ?? true)}
@@ -77,7 +79,7 @@ const BoxCricketRulesPanel = ({
           />
           Super over on tie
         </label>
-        <label className="inline-flex items-center gap-2">
+        <label className="inline-flex items-center gap-2 box-cricket-rules-check">
           <input
             type="checkbox"
             checked={Boolean(ruleConfig?.lastManStanding)}
@@ -85,7 +87,7 @@ const BoxCricketRulesPanel = ({
           />
           Last man standing
         </label>
-        <label className="inline-flex items-center gap-2">
+        <label className="inline-flex items-center gap-2 box-cricket-rules-check">
           <input
             type="checkbox"
             checked={Boolean(ruleConfig?.retiredOutAllowed)}

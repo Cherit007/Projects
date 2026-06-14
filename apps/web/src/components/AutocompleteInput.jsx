@@ -6,6 +6,7 @@ const AutocompleteInput = ({
   onChange, 
   placeholder, 
   playerDatabase = [],
+  excludeNames = [],
   className = "" 
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -18,17 +19,27 @@ const AutocompleteInput = ({
 
     const uniquePlayers = [...new Set(normalizedPlayers)];
     const searchTerm = value.toLowerCase().trim();
+    const excludeSet = new Set(
+      excludeNames
+        .map((name) => String(name || '').trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+    const availablePlayers = uniquePlayers.filter((player) => {
+      const normalized = player.toLowerCase().trim();
+      return !excludeSet.has(normalized) || normalized === searchTerm;
+    });
 
     if (searchTerm === '') {
-      return uniquePlayers.slice(0, 8);
+      return availablePlayers.slice(0, 8);
     }
 
-    return uniquePlayers
+    return availablePlayers
       .filter(player =>
         player.toLowerCase().includes(searchTerm)
       )
       .slice(0, 8);
-  }, [value, playerDatabase]);
+  }, [value, playerDatabase, excludeNames]);
 
   // FIX: use mousedown and container ref
   useEffect(() => {

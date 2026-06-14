@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X, TrendingUp, Trophy, Activity, Clock, Image, CheckCircle2, ArrowUpRight, ArrowDownRight, Minus, Users } from 'lucide-react';
 import AdvancedProfileInsights from './profile/AdvancedProfileInsights';
@@ -6,6 +6,15 @@ import AchievementsPanel from './profile/AchievementsPanel';
 import GamificationPanel from './profile/GamificationPanel';
 import PlayerAvatar from './PlayerAvatar';
 import PlayerPhotoEditorModal from './profile/PlayerPhotoEditorModal';
+import { resolveSportId } from '@fixture-maker/domain/sports';
+import { scrollElementToTop } from '../utils/scrollUtils';
+import {
+  buildPlayerStatsBySport,
+  getTeamPlayerNames,
+  listSportsWithPlayerActivity,
+  resolveDefaultPlayerSportId,
+  filterPlayerHistoryForSport,
+} from '../utils/playerSportStats';
 
 const formatDate = (dateString) => {
   if (!dateString) return 'Recent';
@@ -20,7 +29,7 @@ const toTimestamp = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getTeamPlayers = (team) => [team?.player || team?.player1, team?.player2].filter(Boolean);
+const getTeamPlayers = (team, match = null) => getTeamPlayerNames(team, match);
 
 const normalizeResult = (value) => {
   if (value === 'win' || value === 'loss' || value === 'draw') return value;
@@ -77,7 +86,7 @@ const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatche
   if (!normalizedName) return [];
 
   const entries = [];
-  const collectMatch = (match, fallbackDate = null, sourcePrefix = 'match') => {
+  const collectMatch = (match, fallbackDate = null, sourcePrefix = 'match', sportId = null) => {
     if (!match?.team1 || !match?.team2) return;
     if (match.completed === false) return;
 
@@ -85,8 +94,9 @@ const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatche
     const score2 = Number(match?.score2);
     if (!Number.isFinite(score1) || !Number.isFinite(score2)) return;
 
-    const team1Players = getTeamPlayers(match.team1);
-    const team2Players = getTeamPlayers(match.team2);
+    const resolvedSportId = sportId || match?.sportId || 'badminton';
+    const team1Players = getTeamPlayers(match.team1, match);
+    const team2Players = getTeamPlayers(match.team2, match);
     const inTeam1 = team1Players.some((name) => String(name || '').trim().toLowerCase() === normalizedName);
     const inTeam2 = team2Players.some((name) => String(name || '').trim().toLowerCase() === normalizedName);
     if (!inTeam1 && !inTeam2) return;
@@ -109,21 +119,23 @@ const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatche
       result,
       change: Number(match?.change || 0),
       date: match.completedAt || match.date || fallbackDate || null,
+      sportId: resolvedSportId,
     });
   };
 
   (Array.isArray(tournamentHistory) ? tournamentHistory : []).forEach((tournament) => {
     const fallbackDate = tournament?.date || tournament?.createdAt || tournament?.updatedAt || null;
+    const tournamentSportId = tournament?.sportId || 'badminton';
     (Array.isArray(tournament?.fixtures) ? tournament.fixtures : []).forEach((match) => {
-      collectMatch(match, fallbackDate, `fixture-${tournament?.id || tournament?.appwriteId || 't'}`);
+      collectMatch(match, fallbackDate, `fixture-${tournament?.id || tournament?.appwriteId || 't'}`, tournamentSportId);
     });
     (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
       .flatMap((round) => (Array.isArray(round) ? round : []))
       .forEach((match) => {
-        collectMatch(match, fallbackDate, `bracket-${tournament?.id || tournament?.appwriteId || 't'}`);
+        collectMatch(match, fallbackDate, `bracket-${tournament?.id || tournament?.appwriteId || 't'}`, tournamentSportId);
       });
     if (tournament?.finalMatch) {
-      collectMatch(tournament.finalMatch, fallbackDate, `final-${tournament?.id || tournament?.appwriteId || 't'}`);
+      collectMatch(tournament.finalMatch, fallbackDate, `final-${tournament?.id || tournament?.appwriteId || 't'}`, tournamentSportId);
     }
   });
 
@@ -131,7 +143,8 @@ const buildFallbackHistory = ({ playerName, tournamentHistory = [], casualMatche
     collectMatch(
       match,
       match?.completedAt || match?.date || match?.createdAt || match?.updatedAt || null,
-      'casual'
+      'casual',
+      match?.sportId || 'badminton',
     );
   });
 
@@ -165,17 +178,60 @@ const PlayerProfileModal = ({
   historyFallback = [],
   tournamentHistory = [],
   casualMatches = [],
+  playerRatings = {},
+  defaultSportId = null,
   onUpdatePhoto,
   onClose
 }) => {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
   const [showInsightsPanel, setShowInsightsPanel] = useState(false);
+  const [selectedSportId, setSelectedSportId] = useState(resolveSportId(defaultSportId));
+  const contentRef = useRef(null);
+
+  const statsBySport = useMemo(() => buildPlayerStatsBySport({
+    playerName,
+    tournamentHistory,
+    casualMatches,
+    playerRatings,
+  }), [playerName, tournamentHistory, casualMatches, playerRatings]);
+
+  const activeSports = useMemo(
+    () => listSportsWithPlayerActivity(statsBySport),
+    [statsBySport],
+  );
 
   useEffect(() => {
     setShowAllHistory(false);
     setShowInsightsPanel(false);
+    const nextSportId = resolveDefaultPlayerSportId({
+      defaultSportId,
+      statsBySport,
+    });
+    setSelectedSportId(activeSports.some((sport) => sport.id === nextSportId)
+      ? nextSportId
+      : (activeSports[0]?.id || nextSportId));
+  }, [playerName, defaultSportId, statsBySport, activeSports]);
+
+  useEffect(() => {
+    if (!playerName) return undefined;
+    scrollElementToTop(contentRef.current);
+    if (typeof document === 'undefined') return undefined;
+    document.body.classList.add('has-player-profile-open');
+    return () => {
+      document.body.classList.remove('has-player-profile-open');
+    };
   }, [playerName]);
+
+  useEffect(() => {
+    if (!playerName) return;
+    scrollElementToTop(contentRef.current);
+  }, [playerName, selectedSportId]);
+
+  const selectedSportStats = statsBySport[selectedSportId]?.stats || null;
+  const selectedSportMeta = statsBySport[selectedSportId] || null;
+  const isBoxCricketView = selectedSportId === 'boxCricket';
+  const showEloPanels = Boolean(selectedSportMeta?.usesElo && selectedSportStats);
 
   const profileHistory = Array.isArray(profile?.history) ? profile.history : [];
   const computedFallbackHistory = useMemo(() => {
@@ -188,24 +244,34 @@ const PlayerProfileModal = ({
       casualMatches,
     });
   }, [historyFallback, playerName, tournamentHistory, casualMatches]);
-  const history = useMemo(
-    () => mergeHistoryDates(profileHistory, computedFallbackHistory),
-    [profileHistory, computedFallbackHistory]
-  );
+  const effectiveHistory = useMemo(() => {
+    const sportFallbackHistory = filterPlayerHistoryForSport(computedFallbackHistory, selectedSportId);
+    if (showEloPanels && profileHistory.length > 0) {
+      const legacyProfileHistory = filterPlayerHistoryForSport(profileHistory, selectedSportId);
+      return mergeHistoryDates(legacyProfileHistory, sportFallbackHistory)
+        .filter((entry) => filterPlayerHistoryForSport([entry], selectedSportId).length > 0);
+    }
+    return sportFallbackHistory;
+  }, [showEloPanels, profileHistory, computedFallbackHistory, selectedSportId]);
   const unlockedBadges = (achievements?.badges || []).filter(badge => badge.earned);
   const highlightedBadges = unlockedBadges.slice(0, 4);
   const featuredBadge = highlightedBadges[0] || null;
-  const matchesPlayed = Math.max(Number(profile?.matchesPlayed || 0), history.length, 0);
-  const wins = history.filter(match => match.result === 'win').length;
-  const losses = history.filter(match => match.result === 'loss').length;
+  const matchesPlayed = Math.max(
+    Number(selectedSportStats?.matchesPlayed || 0),
+    Number(showEloPanels ? profile?.matchesPlayed : 0),
+    effectiveHistory.length,
+    0,
+  );
+  const wins = Number(selectedSportStats?.matchesWon ?? effectiveHistory.filter((match) => match.result === 'win').length);
+  const losses = Math.max(0, matchesPlayed - wins - effectiveHistory.filter((match) => match.result === 'draw').length);
   const winRate = matchesPlayed > 0 ? ((wins / matchesPlayed) * 100).toFixed(1) : '0.0';
   const sortedHistory = useMemo(() => (
-    [...history].sort((left, right) => {
+    [...effectiveHistory].sort((left, right) => {
       const leftTime = left?.date ? new Date(left.date).getTime() : 0;
       const rightTime = right?.date ? new Date(right.date).getTime() : 0;
       return leftTime - rightTime;
     })
-  ), [history]);
+  ), [effectiveHistory]);
   const orderedMatches = [...sortedHistory].reverse();
   const visibleMatches = showAllHistory ? orderedMatches : orderedMatches.slice(0, 8);
   const recentTen = sortedHistory.slice(-10);
@@ -298,7 +364,7 @@ const PlayerProfileModal = ({
   if (!playerName) return null;
 
   return (
-    <div className="fixed inset-0 z-[270] bg-black bg-opacity-50 flex items-center justify-center p-4 player-profile-overlay app-overlay">
+    <div className="fixed inset-0 z-[270] bg-black bg-opacity-50 flex items-end sm:items-center justify-center p-0 sm:p-4 player-profile-overlay app-overlay">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden player-profile-shell app-modal-shell flex flex-col">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 sm:px-4 sm:py-2.5 shrink-0">
           <div className="flex items-center justify-between gap-2">
@@ -343,7 +409,36 @@ const PlayerProfileModal = ({
           </div>
         </div>
 
-        <div className="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0 player-profile-content">
+        <div ref={contentRef} className="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0 player-profile-content">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {activeSports.length > 1 ? (
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                Sport
+                <select
+                  value={selectedSportId}
+                  onChange={(event) => setSelectedSportId(event.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-800"
+                >
+                  {activeSports.map((sport) => {
+                    const sportStats = statsBySport[sport.id]?.stats;
+                    const played = Number(sportStats?.matchesPlayed || 0);
+                    return (
+                      <option key={sport.id} value={sport.id}>
+                        {sport.icon} {sport.name} ({played})
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            ) : activeSports.length === 1 ? (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700">
+                {activeSports[0].icon} {activeSports[0].name}
+              </span>
+            ) : (
+              <span className="text-xs text-slate-500">No recorded matches yet for this player.</span>
+            )}
+          </div>
+
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-800">
               {team ? `${team.emoji || '🏸'} ${team.name}` : 'No current team'}
@@ -373,10 +468,48 @@ const PlayerProfileModal = ({
             )}
           </div>
 
+          {isBoxCricketView ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+              <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1">Runs</p>
+                <p className="text-lg font-bold text-teal-700">{selectedSportStats?.cricketRuns || 0}</p>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1">Balls</p>
+                <p className="text-lg font-bold text-blue-700">{selectedSportStats?.cricketBalls || 0}</p>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1">4s / 6s</p>
+                <p className="text-lg font-bold text-amber-700">
+                  {selectedSportStats?.cricketFours || 0} / {selectedSportStats?.cricketSixes || 0}
+                </p>
+              </div>
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1">Wickets</p>
+                <p className="text-lg font-bold text-purple-700">{selectedSportStats?.cricketWickets || 0}</p>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1 flex items-center gap-1"><Activity size={12} /> Matches</p>
+                <p className="text-lg font-bold text-green-700">{matchesPlayed}</p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1 flex items-center gap-1"><Trophy size={12} /> Won</p>
+                <p className="text-lg font-bold text-emerald-700">{wins}</p>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1">Runs conceded</p>
+                <p className="text-lg font-bold text-slate-700">{selectedSportStats?.cricketRunsConceded || 0}</p>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 player-profile-kpi">
+                <p className="text-xs text-gray-600 mb-1">Strike rate</p>
+                <p className="text-lg font-bold text-indigo-700">{selectedSportStats?.cricketAverage || '0.0'}</p>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 player-profile-kpi">
               <p className="text-xs text-gray-600 mb-1 flex items-center gap-1"><TrendingUp size={12} /> Rating</p>
-              <p className="text-lg font-bold text-blue-700">{profile?.rating || 1000}</p>
+              <p className="text-lg font-bold text-blue-700">{statsBySport[selectedSportId]?.rating || 1000}</p>
             </div>
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 player-profile-kpi">
               <p className="text-xs text-gray-600 mb-1 flex items-center gap-1"><Activity size={12} /> Played</p>
@@ -387,11 +520,13 @@ const PlayerProfileModal = ({
               <p className="text-lg font-bold text-emerald-700">{teamRecord}</p>
             </div>
             <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 player-profile-kpi">
-              <p className="text-xs text-gray-600 mb-1">Best Win Streak</p>
-              <p className="text-lg font-bold text-purple-700">{runningBestWinStreak}</p>
+              <p className="text-xs text-gray-600 mb-1">Win rate</p>
+              <p className="text-lg font-bold text-purple-700">{winRate}%</p>
             </div>
           </div>
+          )}
 
+          {showEloPanels && (
           <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 player-profile-history">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-800">Season Trend</p>
@@ -420,7 +555,9 @@ const PlayerProfileModal = ({
               </div>
             )}
           </div>
+          )}
 
+          {showEloPanels && (
           <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 player-profile-history">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-800">Form (Last 10)</p>
@@ -443,7 +580,9 @@ const PlayerProfileModal = ({
               )}
             </div>
           </div>
+          )}
 
+          {showEloPanels && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 player-profile-history">
               <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
@@ -500,6 +639,7 @@ const PlayerProfileModal = ({
               )}
             </div>
           </div>
+          )}
 
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4 player-profile-history">
             <p className="text-sm font-semibold text-gray-800 mb-3 player-profile-history-title">Recent Match History</p>
@@ -528,8 +668,8 @@ const PlayerProfileModal = ({
                             <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate player-profile-history-opponent">
                               vs {match?.opponent || 'Match opponent'}
                             </p>
-                            <span className={`text-xs font-bold ${safeDelta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {safeDelta >= 0 ? '+' : ''}{safeDelta}
+                            <span className={`text-xs font-bold ${showEloPanels ? (safeDelta >= 0 ? 'text-green-600' : 'text-red-600') : 'text-slate-500'}`}>
+                              {showEloPanels ? `${safeDelta >= 0 ? '+' : ''}${safeDelta}` : resultLabel}
                             </span>
                           </div>
                           <div className="flex items-center justify-between mt-1 text-[11px] sm:text-xs text-gray-500 player-profile-history-meta">

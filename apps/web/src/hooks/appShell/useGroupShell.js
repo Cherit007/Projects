@@ -4,6 +4,7 @@ import { authService } from '../../services/authService';
 import { groupService } from '../../services/groupService';
 import { queryKeys } from '../../config/queryKeys';
 import { useAuthGroupActions } from '../useAuthGroupActions';
+import { areGroupsEnabled } from '../../utils/groupFeatures';
 
 export const useGroupShell = ({
   isAppwriteEnabled,
@@ -34,6 +35,7 @@ export const useGroupShell = ({
   setStep,
 }) => {
   const requiresAuth = isAppwriteEnabled;
+  const groupsEnabled = areGroupsEnabled();
   const canOperate = !requiresAuth || groupRole === 'admin' || groupRole === 'member';
   const canDelete = !requiresAuth || groupRole === 'admin';
   const canManageMembers = !requiresAuth || groupRole === 'admin';
@@ -179,6 +181,7 @@ export const useGroupShell = ({
 
   return {
     requiresAuth,
+    groupsEnabled,
     canOperate,
     canDelete,
     canManageMembers,

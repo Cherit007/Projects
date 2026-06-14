@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
 import { appStore } from '../store/appStore';
 import { readPersistedHistory } from './storageTestHelpers';
-import { TOURNAMENT_NAME_PLACEHOLDER } from '../components/setup/sportSetupConfig';
+import { enterSportWorkspace } from './sportNavigationTestHelpers';
 
 vi.mock('../hooks/useAppwriteSync', () => ({
   useAppwriteSync: () => ({
@@ -60,13 +60,8 @@ const renderApp = () => {
   );
 };
 
-const waitForHomeScreen = async () => (
-  screen.findByPlaceholderText(TOURNAMENT_NAME_PLACEHOLDER, {}, { timeout: ASYNC_UI_TIMEOUT })
-);
-
 const startPickleballTournament = async (user, tournamentName = 'Pickleball Night') => {
-  const tournamentNameInput = await waitForHomeScreen();
-  await user.click(screen.getByRole('radio', { name: 'Pickleball' }));
+  const tournamentNameInput = await enterSportWorkspace(user, 'Pickleball', ASYNC_UI_TIMEOUT);
   await user.clear(tournamentNameInput);
   await user.type(tournamentNameInput, tournamentName);
   await user.click(screen.getByRole('button', { name: /Start Tournament/i }));

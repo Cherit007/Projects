@@ -1,7 +1,7 @@
 import { boxCricketSport } from '../boxCricket.config.js';
 
 export const getSquadLimits = (sportConfig = boxCricketSport) => ({
-  minPlayers: Number(sportConfig?.squad?.minPlayers) || 4,
+  minPlayers: Number(sportConfig?.squad?.minPlayers) || 3,
   maxPlayers: Number(sportConfig?.squad?.maxPlayers) || 11,
   defaultSlots: Number(sportConfig?.squad?.defaultSlots) || 6,
 });
@@ -84,4 +84,51 @@ export const isSquadTeamValid = (team, sportConfig = boxCricketSport) => {
 
 export const listSquadPlayerNames = (team) => (
   normalizeSquad(team?.squad).map((player) => player.name).filter(Boolean)
+);
+
+const normalizeNameKey = (value) => String(value || '').trim().toLowerCase();
+
+/** Player names already used in other squad slots or other teams. */
+export const getUsedSquadNames = (teams = [], { teamIndex, playerIndex = null } = {}) => {
+  const used = new Set();
+  teams.forEach((team, index) => {
+    const squad = Array.isArray(team?.squad) ? team.squad : [];
+    squad.forEach((player, slotIndex) => {
+      if (index === teamIndex && slotIndex === playerIndex) return;
+      const playerName = normalizeNameKey(player?.name);
+      if (playerName) used.add(playerName);
+    });
+  });
+  return used;
+};
+
+/** Team names already used by other teams. */
+export const getUsedTeamNames = (teams = [], teamIndex) => {
+  const used = new Set();
+  teams.forEach((team, index) => {
+    if (index === teamIndex) return;
+    const teamName = normalizeNameKey(team?.name);
+    if (teamName) used.add(teamName);
+  });
+  return used;
+};
+
+export const filterAutocompleteSuggestions = (
+  database = [],
+  usedNames = new Set(),
+  currentValue = '',
+) => {
+  const currentKey = normalizeNameKey(currentValue);
+  return (database || []).filter((name) => {
+    const key = normalizeNameKey(name);
+    if (!key) return false;
+    return !usedNames.has(key) || key === currentKey;
+  });
+};
+
+export const setSquadCaptain = (squad = [], captainId) => (
+  squad.map((player) => ({
+    ...player,
+    role: String(player.id) === String(captainId) ? 'captain' : 'player',
+  }))
 );

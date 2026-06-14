@@ -3,7 +3,13 @@ const asNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const getPlayersFromTeam = (team) => {
+import { listSquadPlayerNames } from '@fixture-maker/domain/sports/boxCricket/squadUtils';
+
+const getPlayersFromTeam = (team, match = null) => {
+  if (match?.sportId === 'boxCricket' || team?.squad?.length) {
+    const squadNames = listSquadPlayerNames(team);
+    if (squadNames.length > 0) return squadNames;
+  }
   if (!team) return [];
   return [team.player || team.player1, team.player2].filter(Boolean);
 };
@@ -61,8 +67,8 @@ const buildTournamentMatchRecords = (tournamentHistory = []) => {
     const pushMatch = (match, phase) => {
       if (!match?.completed || !match.team1 || !match.team2) return;
 
-      const team1Players = getPlayersFromTeam(match.team1);
-      const team2Players = getPlayersFromTeam(match.team2);
+      const team1Players = getPlayersFromTeam(match.team1, match);
+      const team2Players = getPlayersFromTeam(match.team2, match);
       if (team1Players.length === 0 || team2Players.length === 0) return;
 
       const score1 = asNumber(match.score1);
@@ -102,9 +108,12 @@ const buildCasualMatchRecords = (casualMatches = []) => {
 
   casualMatches.forEach((match) => {
     if (!match?.team1 || !match?.team2) return;
+    const isCompleted = match.completed !== false
+      && (match.completed === true || match.completedAt || match.winner || match.statistics?.series?.winnerTeamId != null);
+    if (!isCompleted) return;
 
-    const team1Players = getPlayersFromTeam(match.team1);
-    const team2Players = getPlayersFromTeam(match.team2);
+    const team1Players = getPlayersFromTeam(match.team1, match);
+    const team2Players = getPlayersFromTeam(match.team2, match);
     if (team1Players.length === 0 || team2Players.length === 0) return;
 
     const score1 = asNumber(match.score1);
@@ -115,6 +124,7 @@ const buildCasualMatchRecords = (casualMatches = []) => {
 
     records.push({
       source: 'casual',
+      sportId: match.sportId || 'badminton',
       matchId: match.id || match.appwriteId,
       date: match.completedAt || match.date || match.createdAt || null,
       venue: match.venue || match.location || 'Casual Court',
@@ -145,8 +155,8 @@ const buildLiveTournamentRecords = (liveTournament) => {
   const pushMatch = (match, phase) => {
     if (!match?.completed || !match.team1 || !match.team2) return;
 
-    const team1Players = getPlayersFromTeam(match.team1);
-    const team2Players = getPlayersFromTeam(match.team2);
+    const team1Players = getPlayersFromTeam(match.team1, match);
+    const team2Players = getPlayersFromTeam(match.team2, match);
     if (team1Players.length === 0 || team2Players.length === 0) return;
 
     const score1 = asNumber(match.score1);

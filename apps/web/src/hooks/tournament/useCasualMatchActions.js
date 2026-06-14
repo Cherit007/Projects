@@ -1,7 +1,24 @@
 import { updatePlayerRatingsAfterMatch } from '@fixture-maker/domain/scoring';
 import { ANALYTICS_EVENTS, trackEvent } from '@fixture-maker/analytics';
-import { queueLocalStorageJson } from '../../services/localStorageWriteService';
+import { flushQueuedLocalStorageWrites } from '../../services/localStorageWriteService';
+import { webStorage } from '../../platform/storage';
 import { STORAGE_KEYS } from '../../platform/storageKeys';
+import { queryKeys } from '../../config/queryKeys';
+import {
+  persistCasualMatchStatisticsBackup,
+  removeCasualMatchStatisticsBackup,
+} from '../../utils/casualMatchHydration';
+
+const persistLocalCasualMatches = (matches) => {
+  webStorage.setJson(STORAGE_KEYS.CASUAL_MATCHES, matches);
+  matches.forEach((match) => persistCasualMatchStatisticsBackup(match));
+  flushQueuedLocalStorageWrites();
+};
+
+const syncCasualMatchesQueryCache = (queryClient, activeGroupId, matches) => {
+  if (!queryClient || !activeGroupId) return;
+  queryClient.setQueryData(queryKeys.casualMatches(activeGroupId), matches);
+};
 
 export const useCasualMatchActions = ({
   assertCanOperate,
@@ -9,12 +26,15 @@ export const useCasualMatchActions = ({
   confirmAction,
   showToast,
   isAppwriteEnabled,
+  activeGroupId = null,
+  queryClient = null,
   playerRatings,
   setPlayerRatings,
   tournamentHistory,
   casualMatches,
   setCasualMatches,
   setShowCasualMatch,
+  onCasualFlowComplete,
   createCasualMatchMutation,
   deleteCasualMatchMutation,
   rebuildPlayerDatabase,
@@ -38,12 +58,22 @@ export const useCasualMatchActions = ({
     setTimeout(resolve, 0);
   });
 
-  const saveCasualMatch = async (matchData) => {
-    if (!assertCanOperate()) return;
+  const saveCasualMatch = async (matchData, options = {}) => {
+    const { keepOpen = false } = options;
+    if (!assertCanOperate()) {
+      return { success: false, error: 'Operation not allowed' };
+    }
     try {
+      const isBoxCricket = matchData?.sportId === 'boxCricket';
       const winner = matchData.score1 > matchData.score2 ? 'team1' : 'team2';
       const completedAt = new Date().toISOString();
-      const matchWithWinner = { ...matchData, winner, completedAt };
+      const matchWithWinner = {
+        ...matchData,
+        winner,
+        completed: true,
+        completedAt,
+        ...(isBoxCricket ? { matchType: 'team' } : {}),
+      };
 
       const match = {
         id: `casual-${Date.now()}`,
@@ -53,32 +83,51 @@ export const useCasualMatchActions = ({
         score2: matchData.score2,
         completed: true,
         completedAt,
+        ...(matchData.sportId ? { sportId: matchData.sportId } : {}),
+        ...(isBoxCricket ? {
+          sportId: 'boxCricket',
+          statistics: matchData.statistics,
+          matchType: 'team',
+        } : {}),
       };
 
-      const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, match);
-      setPlayerRatings(updatedRatings);
+      let updatedRatings = playerRatings;
+      if (!isBoxCricket) {
+        updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, match);
+        setPlayerRatings(updatedRatings);
+      }
 
       if (isAppwriteEnabled) {
         const savedMatch = await createCasualMatchMutation.mutateAsync(matchWithWinner);
-        setCasualMatches((prev) => [savedMatch, ...prev]);
+        setCasualMatches((prev) => {
+          const updatedMatches = [savedMatch, ...prev];
+          syncCasualMatchesQueryCache(queryClient, activeGroupId, updatedMatches);
+          persistLocalCasualMatches(updatedMatches);
+          return updatedMatches;
+        });
       } else {
         const localMatch = {
           ...matchWithWinner,
           id: `casual-${Date.now()}`,
           createdAt: new Date().toISOString(),
+          completed: true,
         };
         setCasualMatches((prev) => {
           const updatedMatches = [localMatch, ...prev];
-          queueLocalStorageJson(STORAGE_KEYS.CASUAL_MATCHES, updatedMatches);
+          persistLocalCasualMatches(updatedMatches);
           return updatedMatches;
         });
       }
 
-      showToast('✅ Match recorded & ELO updated!');
+      showToast(isBoxCricket ? '✅ Box cricket match saved!' : '✅ Match recorded & ELO updated!');
       trackEvent(ANALYTICS_EVENTS.CASUAL_MATCH_RECORDED, {
         winner,
+        sportId: isBoxCricket ? 'boxCricket' : undefined,
       });
-      setShowCasualMatch(false);
+      if (!keepOpen) {
+        setShowCasualMatch?.(false);
+        onCasualFlowComplete?.();
+      }
       return { success: true };
     } catch (error) {
       console.error('Error saving casual match:', error);
@@ -110,10 +159,16 @@ export const useCasualMatchActions = ({
         String(match?.id || '').trim() !== String(id || '').trim()
         && String(match?.appwriteId || '').trim() !== String(id || '').trim()
       ));
+      const deletedMatch = casualMatches.find((match) => (
+        String(match?.id || '').trim() === String(id || '').trim()
+        || String(match?.appwriteId || '').trim() === String(id || '').trim()
+      ));
       setCasualMatches(updatedCasualMatches);
+      syncCasualMatchesQueryCache(queryClient, activeGroupId, updatedCasualMatches);
+      removeCasualMatchStatisticsBackup(deletedMatch || id);
 
       if (!isAppwriteEnabled) {
-        queueLocalStorageJson(STORAGE_KEYS.CASUAL_MATCHES, updatedCasualMatches);
+        persistLocalCasualMatches(updatedCasualMatches);
       }
 
       const recalculatedRatings = recalculateEloFromHistory(tournamentHistory, updatedCasualMatches);

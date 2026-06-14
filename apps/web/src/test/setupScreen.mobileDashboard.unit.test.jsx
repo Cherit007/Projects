@@ -192,12 +192,9 @@ describe('SetupScreen mobile dashboard views', () => {
 
     expect(screen.getByText(/Sunday League/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('tab', { name: /Scheduled/i }));
-    expect(screen.getByText(/Friday Club Match/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /WhatsApp/i })).toBeInTheDocument();
-
     await user.click(screen.getByRole('tab', { name: /Completed/i }));
     expect(screen.getByText(/Completed Cup/i)).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Scheduled/i })).not.toBeInTheDocument();
   });
 
   it('filters the ELO leaderboard by active time window', async () => {

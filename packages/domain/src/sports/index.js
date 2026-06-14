@@ -2,6 +2,7 @@ export { badmintonSport } from './badminton.config.js';
 export { pickleballSport } from './pickleball.config.js';
 export { boxCricketSport } from './boxCricket.config.js';
 export { DEFAULT_SPORT_ID, resolveSportId } from './sportId.js';
+export { inferCasualMatchSportId, isBoxCricketCasualMatch } from './casualMatchSport.js';
 export { parseRuleConfig, serializeRuleConfig } from './ruleConfig.js';
 export { serializeMatchStatistics, parseMatchStatistics } from './matchStatistics.js';
 export { BadmintonPlugin } from './badminton/BadmintonPlugin.js';

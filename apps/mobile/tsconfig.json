@@ -1,0 +1,17 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@fixture-maker/domain/*": ["../../packages/domain/src/*"],
+      "@fixture-maker/config/*": ["../../packages/config/src/*"],
+      "@fixture-maker/api/*": ["../../packages/api/src/*"],
+      "@fixture-maker/storage/*": ["../../packages/storage/src/*"],
+      "@fixture-maker/analytics/*": ["../../packages/analytics/src/*"],
+      "@fixture-maker/types/*": ["../../packages/types/src/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

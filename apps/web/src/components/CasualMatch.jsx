@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Users, Trophy, TrendingUp, X, Plus } from 'lucide-react';
+import { Users, Trophy, TrendingUp } from 'lucide-react';
 import AutocompleteInput from './AutocompleteInput';
+import CasualMatchShell from './setup/CasualMatchShell';
 
-const CasualMatch = ({ 
-  playerDatabase, 
-  playerRatings, 
-  onSaveMatch, 
+const CasualMatch = ({
+  playerDatabase,
+  playerRatings,
+  onSaveMatch,
   onAddPlayer,
-  onClose 
+  onClose,
+  sportId = 'badminton',
+  layout = 'modal',
 }) => {
   const [matchType, setMatchType] = useState('singles'); // singles or doubles
   const [team1Player1, setTeam1Player1] = useState('');
@@ -46,6 +49,7 @@ const CasualMatch = ({
 
     const matchData = {
       type: 'casual',
+      sportId,
       matchType,
       date: new Date().toISOString(),
       team1: matchType === 'singles' 
@@ -80,27 +84,13 @@ if (matchType === 'doubles') {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col app-modal-shell casual-modal-shell">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6 flex items-center justify-between relative z-[70] shrink-0 casual-modal-header">
-          <div>
-            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Users size={24} /> Record Casual Match
-            </h2>
-            <p className="text-sm text-white opacity-90 mt-1">
-              Track individual matches and update ELO rankings
-            </p>
-          </div>
-          <button 
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <div className="p-6 overflow-y-auto overflow-x-hidden min-h-0 casual-modal-body">
+    <CasualMatchShell
+      layout={layout}
+      title="Casual Match"
+      subtitle="Track a one-off result and update ELO rankings"
+      icon={Users}
+      onClose={onClose}
+    >
           {/* Match Type Selector */}
           <div className="mb-6">
             <label className="block text-sm font-bold text-gray-700 mb-3">
@@ -295,9 +285,7 @@ if (matchType === 'doubles') {
               💡 <strong>Note:</strong> This match will be recorded in history and will update player ELO ratings automatically.
             </p>
           </div>
-        </div>
-      </div>
-    </div>
+    </CasualMatchShell>
   );
 };
 

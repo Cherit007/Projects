@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
 import { appStore } from '../store/appStore';
-import { TOURNAMENT_NAME_PLACEHOLDER } from '../components/setup/sportSetupConfig';
+import { enterSportWorkspace, waitForSportHub, waitForSportHome } from './sportNavigationTestHelpers';
 
 vi.mock('../hooks/useAppwriteSync', () => ({
   useAppwriteSync: () => ({
@@ -65,13 +65,11 @@ describe('App integration flows', () => {
   });
 
   it('loads setup screen in local mode', async () => {
+    const user = userEvent.setup();
     renderApp();
 
-    expect(await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    )).toBeInTheDocument();
+    await waitForSportHub(ASYNC_UI_TIMEOUT);
+    await enterSportWorkspace(user, 'Badminton', ASYNC_UI_TIMEOUT);
     expect(screen.getByRole('button', { name: /Start Tournament/i })).toBeInTheDocument();
   }, 15000);
 
@@ -79,11 +77,7 @@ describe('App integration flows', () => {
     const user = userEvent.setup();
     renderApp();
 
-    const nameInput = await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    );
+    const nameInput = await enterSportWorkspace(user, 'Badminton', ASYNC_UI_TIMEOUT);
     await user.type(nameInput, 'Integration Cup');
     await user.click(screen.getByRole('button', { name: /Start Tournament/i }));
 
@@ -113,13 +107,8 @@ describe('App integration flows', () => {
     const user = userEvent.setup();
     renderApp();
 
-    expect(await screen.findByText(/Local mode/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
-
-    const tournamentNameInput = await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    );
+    const tournamentNameInput = await enterSportWorkspace(user, 'Badminton', ASYNC_UI_TIMEOUT);
+    expect(screen.getByText(/Local mode/i)).toBeInTheDocument();
     await user.clear(tournamentNameInput);
     await user.type(tournamentNameInput, 'Full Flow Cup');
     await user.click(screen.getByRole('button', { name: /Start Tournament/i }));
@@ -158,11 +147,7 @@ describe('App integration flows', () => {
 
     const homeButtons = screen.getAllByRole('button', { name: /^Home$/i });
     await user.click(homeButtons[0]);
-    expect(await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    )).toBeInTheDocument();
+    expect(await waitForSportHome(ASYNC_UI_TIMEOUT)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Resume/i }));
     expect(await screen.findByRole('button', { name: /Submit & Continue/i })).toBeInTheDocument();

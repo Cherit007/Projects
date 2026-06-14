@@ -33,7 +33,7 @@ const baseProps = {
   tournamentFormat: 'league',
   setTournamentFormat: vi.fn(),
   onNext: vi.fn(),
-  onRecordCasualMatch: vi.fn(),
+  casualMatchProps: {},
   tournamentHistory: [],
   scheduledTournaments: [],
   activeLiveTournaments: [],

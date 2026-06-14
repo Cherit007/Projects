@@ -1,3 +1,26 @@
+import { useMemo } from 'react';
+import { filterBySport } from '../../utils/sportDataFilters';
+import { getSportMeta } from '../../components/setup/sportSetupConfig';
+import { buildDashboardDerivedData } from '../../utils/dashboardAnalytics';
+import { buildPairingAnalytics } from '../../utils/pairingAnalytics';
+import { buildFormPowerRankings } from '../../utils/formPowerRankings';
+import { deriveRatingsFromHistory } from '../../utils/appHelpers';
+import { sportUsesEloRatings } from '../../utils/sportFeatures';
+
+const EMPTY_PAIRING_ANALYTICS = Object.freeze({
+  totalDoublesMatches: 0,
+  totalTrackedPairs: 0,
+  bestCombinations: [],
+  whoShouldPair: [],
+  rotationSuggestions: [],
+});
+
+const EMPTY_FORM_POWER_RANKINGS = Object.freeze({
+  leaderboard: [],
+  weeklyLeaderboard: [],
+  monthlyLeaderboard: [],
+});
+
 const normalizeName = (value) => String(value || '').trim();
 const normalizeKey = (value) => normalizeName(value).toLowerCase();
 
@@ -150,8 +173,66 @@ export const useTournamentShell = ({
   saveCasualMatch,
   updatePlayerDatabase,
   setShowCasualMatch,
+  setMobileSetupView,
+  activeCasualDraft = null,
+  onCasualDraftChange = null,
+  onClearCasualDraft = null,
+  onResumeCasualDraft = null,
+  onDeleteCasualDraft = null,
   activeGroup,
+  onGoSportHub,
+  onSelectSport,
 }) => {
+  const sportScopedHistory = useMemo(
+    () => filterBySport(tournamentHistory, sportId),
+    [sportId, tournamentHistory],
+  );
+  const sportScopedCasualMatches = useMemo(
+    () => filterBySport(casualMatches, sportId),
+    [casualMatches, sportId],
+  );
+  const sportScopedLiveTournaments = useMemo(
+    () => filterBySport(activeLiveTournaments, sportId),
+    [activeLiveTournaments, sportId],
+  );
+  const sportScopedScheduledTournaments = useMemo(
+    () => filterBySport(scheduledTournaments, sportId),
+    [scheduledTournaments, sportId],
+  );
+  const sportMeta = useMemo(() => getSportMeta(sportId), [sportId]);
+
+  const sportScopedDashboard = useMemo(
+    () => buildDashboardDerivedData({
+      tournamentHistory,
+      casualMatches,
+      playerRatings,
+      sportId,
+    }),
+    [tournamentHistory, casualMatches, playerRatings, sportId],
+  );
+
+  const sportScopedRatings = useMemo(
+    () => deriveRatingsFromHistory({
+      history: sportScopedHistory,
+      casual: sportScopedCasualMatches,
+    }),
+    [sportScopedHistory, sportScopedCasualMatches],
+  );
+
+  const sportScopedPairingAnalytics = useMemo(() => {
+    if (!sportUsesEloRatings(sportId)) return EMPTY_PAIRING_ANALYTICS;
+    return buildPairingAnalytics({
+      tournamentHistory: sportScopedHistory,
+      casualMatches: sportScopedCasualMatches,
+      playerRatings: sportScopedRatings,
+    });
+  }, [sportId, sportScopedHistory, sportScopedCasualMatches, sportScopedRatings]);
+
+  const sportScopedFormPowerRankings = useMemo(() => {
+    if (!sportUsesEloRatings(sportId)) return EMPTY_FORM_POWER_RANKINGS;
+    return buildFormPowerRankings(sportScopedRatings);
+  }, [sportId, sportScopedRatings]);
+
   const suggestionPlayerDatabase = buildSuggestionPlayerDatabase({
     members,
     teams,
@@ -170,6 +251,24 @@ export const useTournamentShell = ({
     showEloLeaderboard = false,
     setShowEloLeaderboard = () => {},
   } = setupModals || {};
+
+  const casualMatchProps = {
+    playerDatabase: suggestionPlayerDatabase,
+    playerRatings: sportScopedRatings,
+    onSaveMatch: saveCasualMatch,
+    onAddPlayer: updatePlayerDatabase,
+    onClose: () => {
+      setShowCasualMatch?.(false);
+      setMobileSetupView?.('home');
+    },
+    initialDraft: activeCasualDraft,
+    onDraftChange: onCasualDraftChange,
+    onDraftClear: onClearCasualDraft,
+    sportId,
+    setSportId,
+    ruleConfig,
+    teamNameDatabase,
+  };
 
   const viewerDashboardProps = {
     group: activeGroup,
@@ -204,9 +303,12 @@ export const useTournamentShell = ({
       'setup.start-tournament',
       () => handleStartTournament(rawNumTeamsInput)
     ),
-    tournamentHistory,
-    scheduledTournaments,
-    activeLiveTournaments,
+    tournamentHistory: sportScopedHistory,
+    scheduledTournaments: sportScopedScheduledTournaments,
+    activeLiveTournaments: sportScopedLiveTournaments,
+    activeCasualDraft: sportId === 'boxCricket' ? activeCasualDraft : null,
+    onResumeCasualDraft,
+    onDeleteCasualDraft,
     onEditScheduledTournament: async (tournamentId) => withActionLock(
       `setup.edit-scheduled.${String(tournamentId || '')}`,
       () => handleEditScheduledTournament(tournamentId)
@@ -230,7 +332,7 @@ export const useTournamentShell = ({
     ),
     canDeleteLiveTournament: canDelete,
     canDeleteActions: canDelete,
-    casualMatches,
+    casualMatches: sportScopedCasualMatches,
     playerDatabase: suggestionPlayerDatabase,
     teamNameDatabase,
     showHistory,
@@ -280,11 +382,11 @@ export const useTournamentShell = ({
       `setup.delete-casual.${String(matchId || '')}`,
       () => handleDeleteCasualWithHydration(matchId)
     ),
-    allTimeStats: cumulativeAllTimeStats,
-    eloLeaderboard,
-    playerRatings,
-    pairingAnalytics,
-    formPowerRankings,
+    allTimeStats: sportScopedDashboard.cumulativeAllTimeStats,
+    eloLeaderboard: sportScopedDashboard.eloLeaderboard,
+    playerRatings: sportScopedRatings,
+    pairingAnalytics: sportScopedPairingAnalytics,
+    formPowerRankings: sportScopedFormPowerRankings,
     playerPhotos,
     onUpdatePlayerPhoto: updatePlayerPhoto,
     canEditPlayerPhoto: canEditOwnProfile,
@@ -299,6 +401,19 @@ export const useTournamentShell = ({
     lastDataUpdatedAt,
     realtimeConnected,
     isMobileViewport,
+    onGoSportHub,
+    sportMeta,
+    casualMatchProps,
+  };
+
+  const sportHubProps = {
+    tournamentHistory,
+    casualMatches,
+    activeLiveTournaments,
+    scheduledTournaments,
+    activeCasualDraft,
+    groupName: activeGroup?.name || '',
+    onSelectSport,
   };
 
   const teamEntryProps = {
@@ -350,8 +465,8 @@ export const useTournamentShell = ({
     oddPlayerEnabled,
     oddPlayerName,
     playerPhotos,
-    allTimeStats: cumulativeAllTimeStats,
-    eloLeaderboard,
+    allTimeStats: sportScopedDashboard.cumulativeAllTimeStats,
+    eloLeaderboard: sportScopedDashboard.eloLeaderboard,
     onUpdatePlayerPhoto: updatePlayerPhoto,
     canEditPlayerPhoto: canEditOwnProfile,
     onSaveMatchResult: async (matchId, score1, score2, extras) => withActionLock(
@@ -391,16 +506,9 @@ export const useTournamentShell = ({
     syncStatus,
   };
 
-  const casualMatchProps = {
-    playerDatabase: suggestionPlayerDatabase,
-    playerRatings,
-    onSaveMatch: saveCasualMatch,
-    onAddPlayer: updatePlayerDatabase,
-    onClose: () => setShowCasualMatch(false),
-  };
-
   return {
     viewerDashboardProps,
+    sportHubProps,
     setupScreenProps,
     teamEntryProps,
     tournamentViewProps,

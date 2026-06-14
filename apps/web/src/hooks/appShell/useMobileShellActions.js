@@ -7,6 +7,7 @@ export const useMobileShellActions = ({
   currentUser = null,
   assertCanOperate = () => true,
   handleHeaderGoHome,
+  openSportHub,
   handleOpenHistoryModal,
   setMobileSetupView,
   setShowHistory,
@@ -16,8 +17,10 @@ export const useMobileShellActions = ({
   setShowCasualMatch,
   setShowUtilityDrawer,
   setShowProfileModal,
+  onRequestMobileScrollReset = () => {},
 }) => {
   const handleMobileGoHome = useCallback(() => {
+    onRequestMobileScrollReset();
     setMobileSetupView('home');
     setShowHistory(false);
     setShowCasualHistory(false);
@@ -27,9 +30,12 @@ export const useMobileShellActions = ({
     setShowUtilityDrawer(false);
     if (step !== 'setup' || showRequestCenter) {
       handleHeaderGoHome();
+      return;
     }
+    openSportHub?.();
   }, [
     handleHeaderGoHome,
+    openSportHub,
     setMobileSetupView,
     setShowAllTimeStats,
     setShowCasualHistory,
@@ -39,31 +45,42 @@ export const useMobileShellActions = ({
     setShowUtilityDrawer,
     showRequestCenter,
     step,
+    onRequestMobileScrollReset,
   ]);
 
   const handleMobileOpenProfile = useCallback(() => {
+    onRequestMobileScrollReset();
     setShowUtilityDrawer(false);
     if (!requiresAuth || !currentUser) return;
     setShowProfileModal(true);
-  }, [currentUser, requiresAuth, setShowProfileModal, setShowUtilityDrawer]);
+  }, [currentUser, onRequestMobileScrollReset, requiresAuth, setShowProfileModal, setShowUtilityDrawer]);
 
-  const handleMobileRecordCasual = useCallback(() => {
+  const handleMobileOpenStart = useCallback(() => {
+    onRequestMobileScrollReset();
     setShowUtilityDrawer(false);
-    if (!assertCanOperate()) return;
+    setShowHistory(false);
+    setShowCasualHistory(false);
+    setShowAllTimeStats(false);
+    setShowEloLeaderboard(false);
     if (step !== 'setup' || showRequestCenter) {
       handleHeaderGoHome();
     }
-    setShowCasualMatch(true);
+    setMobileSetupView('start');
   }, [
-    assertCanOperate,
     handleHeaderGoHome,
-    setShowCasualMatch,
+    setMobileSetupView,
+    setShowAllTimeStats,
+    setShowCasualHistory,
+    setShowEloLeaderboard,
+    setShowHistory,
     setShowUtilityDrawer,
     showRequestCenter,
     step,
+    onRequestMobileScrollReset,
   ]);
 
   const handleMobileGoLive = useCallback(async () => {
+    onRequestMobileScrollReset();
     setShowUtilityDrawer(false);
     setShowHistory(false);
     setShowCasualHistory(false);
@@ -84,17 +101,20 @@ export const useMobileShellActions = ({
     setShowUtilityDrawer,
     showRequestCenter,
     step,
+    onRequestMobileScrollReset,
   ]);
 
   const handleMobileOpenHistory = useCallback(() => {
+    onRequestMobileScrollReset();
     setShowUtilityDrawer(false);
     if (step !== 'setup' || showRequestCenter) {
       handleHeaderGoHome();
     }
     void handleOpenHistoryModal();
-  }, [handleHeaderGoHome, handleOpenHistoryModal, setShowUtilityDrawer, showRequestCenter, step]);
+  }, [handleHeaderGoHome, handleOpenHistoryModal, onRequestMobileScrollReset, setShowUtilityDrawer, showRequestCenter, step]);
 
   const handleMobileOpenStats = useCallback(() => {
+    onRequestMobileScrollReset();
     setShowUtilityDrawer(false);
     setShowHistory(false);
     setShowCasualHistory(false);
@@ -114,37 +134,15 @@ export const useMobileShellActions = ({
     setShowUtilityDrawer,
     showRequestCenter,
     step,
-  ]);
-
-  const handleMobileOpenCreate = useCallback(() => {
-    setShowUtilityDrawer(false);
-    setShowHistory(false);
-    setShowCasualHistory(false);
-    setShowAllTimeStats(false);
-    setShowEloLeaderboard(false);
-    if (step !== 'setup' || showRequestCenter) {
-      handleHeaderGoHome();
-    }
-    setMobileSetupView('create');
-  }, [
-    handleHeaderGoHome,
-    setMobileSetupView,
-    setShowAllTimeStats,
-    setShowCasualHistory,
-    setShowEloLeaderboard,
-    setShowHistory,
-    setShowUtilityDrawer,
-    showRequestCenter,
-    step,
+    onRequestMobileScrollReset,
   ]);
 
   return {
     handleMobileGoHome,
     handleMobileOpenProfile,
-    handleMobileRecordCasual,
     handleMobileGoLive,
     handleMobileOpenHistory,
     handleMobileOpenStats,
-    handleMobileOpenCreate,
+    handleMobileOpenStart,
   };
 };

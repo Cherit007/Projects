@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { groupService } from '../services/groupService';
+import { areGroupsEnabled } from '../utils/groupFeatures';
 
 export const useAuthBootstrapEffect = ({
   isConfigChecked,
@@ -56,7 +57,19 @@ export const useAuthBootstrapEffect = ({
         if (!mounted) return;
         setRequestedGroupIds(pendingRequested);
 
-        if (groups.length === 1 && groups[0].role !== 'viewer') {
+        const groupsEnabled = areGroupsEnabled();
+        const playableGroups = groups.filter((group) => group.role !== 'viewer');
+        const autoGroup = playableGroups[0] || groups[0] || null;
+
+        if (!groupsEnabled) {
+          if (autoGroup) {
+            setActiveGroup(autoGroup);
+            setGroupRole(autoGroup.role || 'member');
+          } else {
+            setActiveGroup(null);
+            setGroupRole('member');
+          }
+        } else if (groups.length === 1 && groups[0].role !== 'viewer') {
           setActiveGroup(groups[0]);
           setGroupRole(groups[0].role);
         } else {

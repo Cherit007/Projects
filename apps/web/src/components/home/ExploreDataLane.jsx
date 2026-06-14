@@ -70,6 +70,8 @@ const ExploreDataLane = ({
   playerDatabase = [],
   teamNameDatabase = [],
   narratives = {},
+  sportId = 'badminton',
+  hideEloFeatures = false,
 }) => (
   <section className="setup-home-lane setup-home-lane-explore theme-card app-surface-card app-card-tier-secondary rounded-2xl p-4 sm:p-5">
     <div className="mb-4">
@@ -116,6 +118,7 @@ const ExploreDataLane = ({
           <p className="setup-dashboard-value">{totalMatchesPlayed}</p>
           <p className="setup-dashboard-label">Total Matches Played</p>
         </div>
+        {!hideEloFeatures && (
         <div className="setup-dashboard-card app-surface-card app-card-tier-tertiary">
           <div className="setup-dashboard-icon">
             <Trophy size={15} />
@@ -125,6 +128,7 @@ const ExploreDataLane = ({
             {topEloPlayer ? `${topEloPlayer.name} (Top ELO)` : 'Top ELO Pending'}
           </p>
         </div>
+        )}
       </div>
     </div>
 
@@ -145,8 +149,8 @@ const ExploreDataLane = ({
         {!isMobileViewport && (
           <ActionButton
             icon={History}
-            title={`Tournament History (${historyCountLabel})`}
-            subtitle={canDeleteActions ? 'View/delete past tournaments' : 'View past tournaments'}
+            title={`History (${historyCountLabel})`}
+            subtitle="Tournaments and casual matches"
             className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
             onClick={() => setShowHistory(true)}
           />
@@ -154,10 +158,20 @@ const ExploreDataLane = ({
         <ActionButton
           icon={Calendar}
           title={`Casual Matches (${casualCountLabel})`}
-          subtitle="Open casual match records"
+          subtitle="Quick access to casual records"
           className="bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
-          onClick={() => setShowCasualHistory(true)}
+          onClick={() => setShowHistory(true)}
         />
+        {hideEloFeatures && (
+          <ActionButton
+            icon={TrendingUp}
+            title="All-Time Stats"
+            subtitle="Career runs, wickets and wins"
+            className="bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"
+            onClick={() => setShowAllTimeStats(true)}
+          />
+        )}
+        {!hideEloFeatures && (
         <ActionButton
           icon={Trophy}
           title="ELO Leaderboard"
@@ -165,6 +179,7 @@ const ExploreDataLane = ({
           className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100"
           onClick={() => setShowEloLeaderboard(true)}
         />
+        )}
       </div>
 
       {showAdvancedActions && (
@@ -174,10 +189,11 @@ const ExploreDataLane = ({
             <ActionButton
               icon={TrendingUp}
               title="All-Time Stats"
-              subtitle="Career summary across tournaments"
+              subtitle={hideEloFeatures ? 'Career runs, wickets and wins' : 'Career summary across tournaments'}
               className="bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"
               onClick={() => setShowAllTimeStats(true)}
             />
+            {!hideEloFeatures && (
             <ActionButton
               icon={Sparkles}
               title="Pairing Analytics"
@@ -185,6 +201,8 @@ const ExploreDataLane = ({
               className="bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"
               onClick={() => setShowPairingAnalytics(true)}
             />
+            )}
+            {!hideEloFeatures && (
             <ActionButton
               icon={BarChart3}
               title="Power Rankings"
@@ -192,6 +210,7 @@ const ExploreDataLane = ({
               className="bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100"
               onClick={() => setShowPowerRankings(true)}
             />
+            )}
           </div>
         </div>
       )}

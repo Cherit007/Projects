@@ -1,3 +1,5 @@
+import { isDevEnv } from '@fixture-maker/config/readEnv.js';
+
 /** @typedef {{ track: (name: string, payload?: Record<string, unknown>) => void }} AnalyticsAdapter */
 
 /** @type {AnalyticsAdapter|null} */
@@ -19,7 +21,7 @@ export const trackEvent = (name, payload = {}) => {
     return;
   }
 
-  if (import.meta.env.DEV) {
+  if (isDevEnv()) {
     console.debug('[analytics]', name, payload);
   }
 };

@@ -319,3 +319,52 @@ body[data-theme='light'] .tournament-setup-option-desc {
     z-index: 2;
   }
 }
+
+.box-cricket-rules-panel {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(133, 162, 206, 0.28);
+  background: rgba(8, 19, 37, 0.55);
+}
+
+.box-cricket-rules-check {
+  color: var(--ink-1);
+}
+
+.box-cricket-rules-check input[type='checkbox'] {
+  accent-color: #0f766e;
+}
+
+body[data-theme='light'] .box-cricket-rules-panel {
+  background: rgba(248, 250, 252, 0.96);
+  border-color: rgba(203, 213, 225, 0.95);
+}
+
+body[data-theme='light'] .box-cricket-rules-check {
+  color: #0f172a;
+}
+
+.start-match-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent, #059669);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.start-match-casual-panel {
+  border-radius: var(--radius-xl, 1rem);
+  border: 1px solid rgba(133, 162, 206, 0.28);
+  background: var(--surface-card, rgba(8, 19, 37, 0.55));
+  overflow: hidden;
+}
+
+.casual-match-inline .casual-match-body {
+  overflow-x: hidden;
+}

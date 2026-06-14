@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { tournamentService } from '../services/tournamentService';
+import { casualMatchService } from '../services/casualmatchservice';
 import {
   backfillCasualMatchesCompletedAt,
   backfillTournamentHistoryCompletedAt,
@@ -14,6 +15,8 @@ import {
 } from '../utils/autoResumePreference';
 import { webStorage } from '../platform/storage';
 import { STORAGE_KEYS } from '../platform/storageKeys';
+import { areGroupsEnabled } from '../utils/groupFeatures';
+import { enrichCasualMatches, persistEnrichedCasualMatches } from '../utils/casualMatchHydration';
 
 export const useInitialDataLoadEffect = ({
   isConfigChecked,
@@ -49,7 +52,8 @@ export const useInitialDataLoadEffect = ({
 }) => {
   useEffect(() => {
     if (!isConfigChecked) return;
-    if (requiresAuth && (!authResolved || !groupResolved || !activeGroup)) return;
+    if (requiresAuth && (!authResolved || !groupResolved)) return;
+    if (requiresAuth && areGroupsEnabled() && !activeGroup) return;
 
     let mounted = true;
 
@@ -98,7 +102,9 @@ export const useInitialDataLoadEffect = ({
             setTournamentHistory(sortTournamentHistoryByRecent(
               dedupeTournamentHistory(backfilledLocalHistory.history)
             ));
-            setCasualMatches(backfilledLocalCasual.matches);
+            setCasualMatches(persistEnrichedCasualMatches(
+              enrichCasualMatches(backfilledLocalCasual.matches),
+            ));
             setHistoryHydrated(true);
             setCasualHydrated(true);
             const localActiveTournaments = dedupeLiveTournaments(
@@ -147,7 +153,7 @@ export const useInitialDataLoadEffect = ({
           : (5 * 60 * 1000);
 
         setHistoryHydrated(hasCachedTournamentHistory);
-        setCasualHydrated(hasCachedCasualMatches);
+        setCasualHydrated(false);
         const normalizedCachedHistory = dedupeTournamentHistory(
           hasCachedTournamentHistory
             ? cachedTournamentHistory
@@ -158,7 +164,7 @@ export const useInitialDataLoadEffect = ({
           hasCachedCasualMatches ? cachedCasualMatches : []
         );
         setTournamentHistory(sortTournamentHistoryByRecent(backfilledCachedHistory.history));
-        setCasualMatches(backfilledCachedCasual.matches);
+        setCasualMatches(enrichCasualMatches(backfilledCachedCasual.matches));
 
         const appwriteData = await queryClient.fetchQuery({
           queryKey: queryKeys.appwriteData(activeGroupId),
@@ -322,6 +328,42 @@ export const useInitialDataLoadEffect = ({
             }
           }
           setTournamentHistory(sortTournamentHistoryByRecent(mergedHistory));
+          let resolvedCasualMatches = backfilledCachedCasual.matches;
+          try {
+            const casualFromCloud = await queryClient.fetchQuery({
+              queryKey: queryKeys.casualMatches(activeGroupId),
+              queryFn: () => casualMatchService.getAllCasualMatches(100, activeGroupId),
+              staleTime: 0,
+            });
+            const backfilledCloudCasual = backfillCasualMatchesCompletedAt(casualFromCloud || []);
+            resolvedCasualMatches = backfilledCloudCasual.matches;
+            if (backfilledCloudCasual.changed) {
+              queryClient.setQueryData(
+                queryKeys.casualMatches(activeGroupId),
+                backfilledCloudCasual.matches,
+              );
+            }
+          } catch (error) {
+            console.error('Failed to load casual matches from cloud:', error);
+          }
+
+          if (resolvedCasualMatches.length === 0) {
+            const localCasual = backfillCasualMatchesCompletedAt(
+              webStorage.getJson(STORAGE_KEYS.CASUAL_MATCHES, []),
+            ).matches;
+            if (localCasual.length > 0) {
+              resolvedCasualMatches = localCasual;
+            }
+          }
+
+          resolvedCasualMatches = enrichCasualMatches(resolvedCasualMatches);
+          queryClient.setQueryData(queryKeys.casualMatches(activeGroupId), resolvedCasualMatches);
+          persistEnrichedCasualMatches(resolvedCasualMatches);
+
+          if (mounted) {
+            setCasualMatches(resolvedCasualMatches);
+            setCasualHydrated(true);
+          }
           const scoreTournament = (tournament) => {
             const completedFixtures = (Array.isArray(tournament?.fixtures) ? tournament.fixtures : [])
               .filter((match) => match?.completed).length;

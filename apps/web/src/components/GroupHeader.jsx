@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserCircle2, Bell, LogOut, ArrowLeftCircle, House } from 'lucide-react';
+import { UserCircle2, Bell, LogOut, ArrowLeftCircle, House, LayoutGrid } from 'lucide-react';
 
 const GroupHeader = ({
   group,
@@ -13,6 +13,8 @@ const GroupHeader = ({
   onOpenRequestCenter,
   onOpenProfile,
   onGoHome,
+  onGoSportHub,
+  sportMeta = null,
 }) => {
   const displayIdentity = user?.name
     ? `${user.name} (${user.email || ''})`
@@ -24,7 +26,16 @@ const GroupHeader = ({
       ? 'bg-blue-50 text-blue-700 border-blue-200'
       : 'bg-slate-100 text-slate-600 border-slate-200';
   const showRequestButton = role === 'admin' && onOpenRequestCenter;
-  const topActionGridClass = showRequestButton ? 'grid-cols-3' : 'grid-cols-2';
+  const showSportHubButton = Boolean(sportMeta?.id && onGoSportHub);
+  const topActionCount = 1
+    + (user && onOpenProfile ? 1 : 0)
+    + (showRequestButton ? 1 : 0)
+    + (showSportHubButton ? 1 : 0);
+  const topActionGridClass = topActionCount >= 4
+    ? 'grid-cols-2 sm:grid-cols-4'
+    : topActionCount === 3
+      ? 'grid-cols-3'
+      : 'grid-cols-2';
   const showPrimaryActions = !isMobileViewport;
 
   return (
@@ -33,9 +44,18 @@ const GroupHeader = ({
         <div className="theme-card rounded-2xl px-3 sm:px-4 py-3 border border-slate-200/70">
           <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Group Workspace</div>
-              <div className="font-bold text-slate-900 text-lg truncate">{group?.name}</div>
+              <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                {sportMeta?.label ? 'Sport workspace' : 'Sport Hub'}
+              </div>
+              <div className="font-bold text-slate-900 text-lg truncate">
+                {sportMeta?.label ? (
+                  <span>{sportMeta.icon} {sportMeta.label}</span>
+                ) : group?.name}
+              </div>
               <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                {sportMeta?.label && (
+                  <span className="text-xs text-slate-600 truncate max-w-full">{group?.name}</span>
+                )}
                 <span className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold ${roleBadgeClass}`}>
                   {role}
                 </span>
@@ -46,8 +66,20 @@ const GroupHeader = ({
             <div className="w-full lg:w-auto flex flex-col gap-2">
               {showPrimaryActions && (
                 <div className={`grid ${topActionGridClass} sm:flex sm:items-center gap-2`}>
+                  {showSportHubButton && (
+                    <button
+                      type="button"
+                      onClick={onGoSportHub}
+                      className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
+                      title="All sports"
+                    >
+                      <LayoutGrid size={18} />
+                      <span className="text-sm font-semibold">All sports</span>
+                    </button>
+                  )}
                   {user && onOpenProfile && (
                     <button
+                      type="button"
                       onClick={onOpenProfile}
                       className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
                       title="Open profile"
@@ -58,16 +90,18 @@ const GroupHeader = ({
                   )}
                   {onGoHome && (
                     <button
+                      type="button"
                       onClick={onGoHome}
                       className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
-                      title="Go home"
+                      title={sportMeta?.label ? 'Sport home' : 'Sport hub home'}
                     >
                       <House size={18} />
-                      <span className="text-sm font-semibold">Home</span>
+                      <span className="text-sm font-semibold">{sportMeta?.label ? 'Sport home' : 'Home'}</span>
                     </button>
                   )}
                   {showRequestButton && (
                     <button
+                      type="button"
                       onClick={onOpenRequestCenter}
                       className="relative w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
                       title="Open admin hub"
@@ -92,6 +126,7 @@ const GroupHeader = ({
               <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
                 {onBackToGroups && (
                   <button
+                    type="button"
                     onClick={onBackToGroups}
                     className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-h-[46px]"
                   >
@@ -100,6 +135,7 @@ const GroupHeader = ({
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={onLogout}
                   className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 min-h-[46px]"
                 >

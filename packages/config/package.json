@@ -7,6 +7,8 @@
     "./*": "./src/*",
     "./queryKeys": "./src/queryKeys.js",
     "./appwrite/env": "./src/appwrite/env.js",
-    "./auxiliary": "./src/auxiliaryConfig.js"
+    "./readEnv": "./src/readEnv.js",
+    "./groupFeatures": "./src/groupFeatures.js",
+    "./auxiliaryConfig": "./src/auxiliaryConfig.js"
   }
 }

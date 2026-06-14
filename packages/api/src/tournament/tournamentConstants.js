@@ -1,3 +1,5 @@
+import { readEnv } from '@fixture-maker/config/readEnv.js';
+
 const DEFAULT_GROUP_ID = 'default-group';
 const PAGE_SIZE = 100;
 const IN_QUERY_LIMIT = 100;
@@ -5,7 +7,7 @@ const PLAYER_LOOKUP_CACHE_TTL_MS = 60 * 1000;
 const CHILD_CACHE_TTL_MS = 2 * 60 * 1000;
 const TOURNAMENT_DELETED_STATUS = 'deleted';
 const TOURNAMENT_DELETE_MODE = String(
-  import.meta.env.VITE_APPWRITE_TOURNAMENT_DELETE_MODE || 'soft'
+  readEnv('VITE_APPWRITE_TOURNAMENT_DELETE_MODE', 'soft')
 ).trim().toLowerCase();
 
 export {

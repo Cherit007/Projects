@@ -19,6 +19,7 @@ const StartTournamentLane = ({
   setTournamentName,
   onNext,
   startTournamentPending = false,
+  showSportStep = true,
 }) => (
   <section className="setup-home-lane setup-home-lane-start tournament-setup-shell">
     <TournamentSetupForm
@@ -39,6 +40,7 @@ const StartTournamentLane = ({
       setTournamentName={setTournamentName}
       onNext={onNext}
       startTournamentPending={startTournamentPending}
+      showSportStep={showSportStep}
       submitLabel="Start Tournament"
       className="tournament-setup-form-embedded"
     />

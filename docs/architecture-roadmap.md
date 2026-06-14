@@ -59,7 +59,7 @@ Phases **1–4 are complete** for mobile handoff. Remaining items below are **de
 | 2 | Domain abstraction | **Complete** (deferral: golden-file fixture tests) | Weeks 4–8 |
 | 3 | Multi-sport architecture | **Complete** (deferrals: win-by-2 validation, package rename) | Weeks 8–14 |
 | 4 | Shared package extraction (monorepo) | **Complete** | Weeks 10–14 |
-| 5 | React Native setup | Not started | Weeks 14–22 |
+| 5 | React Native setup | **In progress** — Expo scaffold + auth/groups + tournament MVP; dashboard parity pending | Weeks 14–22 |
 | 6 | Android launch | Not started | Weeks 22–25 |
 | 7 | iOS launch | Not started | Weeks 25–28 |
 | 8 | Backend evolution | Not started | Weeks 16–28 |
@@ -325,38 +325,59 @@ Web-only services stay in `apps/web/src/services/`: `groupService`, `localStorag
 
 ### 5.1 Expo scaffold
 
-- [ ] **P0** Create `apps/mobile/` with Expo (SDK 52+)
-- [ ] **P0** Configure TypeScript (match web strictness)
-- [ ] **P0** Add `@fixture-maker/domain`, `@fixture-maker/api`, `@fixture-maker/config` as deps
-- [ ] **P0** Configure Appwrite env (`EXPO_PUBLIC_*` mirroring `VITE_*`)
-- [ ] **P1** Setup EAS Build profiles (development, preview, production)
+- [x] **P0** Create `apps/mobile/` with Expo (SDK 56)
+- [x] **P0** Configure TypeScript (match web strictness)
+- [x] **P0** Add `@fixture-maker/domain`, `@fixture-maker/api`, `@fixture-maker/config` as deps
+- [x] **P0** Configure Appwrite env (`EXPO_PUBLIC_*` mirroring `VITE_*` via `packages/config/readEnv.js`)
+- [x] **P1** Setup EAS Build profiles (development, preview, production) — `apps/mobile/eas.json`
 
 ### 5.2 Navigation & auth
 
-- [ ] **P0** Install React Navigation (native stack + bottom tabs)
-- [ ] **P0** Map routes: Auth, Groups, Setup, Teams, Tournament (match web route keys)
-- [ ] **P0** Implement Auth screen (email/password via `@fixture-maker/api`)
-- [ ] **P0** Implement Group Access screen
-- [ ] **P1** Deep linking config (`fixturemaker://` + universal links placeholder)
+- [x] **P0** Install React Navigation (native stack + bottom tabs)
+- [x] **P0** Map routes: Auth, Groups, Setup, Teams, Tournament (match web route keys)
+- [x] **P0** Implement Auth screen (email/password via `@fixture-maker/api`)
+- [x] **P0** Implement Group Access screen
+- [x] **P1** Deep linking config (`fixturemaker://` + universal links placeholder)
 
 ### 5.3 Storage & offline
 
-- [ ] **P0** Implement `packages/storage/native.ts` with `@react-native-async-storage/async-storage`
-- [ ] **P0** Wire TanStack Query with async storage persister
-- [ ] **P0** Port offline outbox to use native storage adapter
-- [ ] **P1** NetInfo listener for online/offline flush (replace service worker)
+- [x] **P0** Implement `packages/storage/native.js` with `@react-native-async-storage/async-storage`
+- [x] **P0** Wire TanStack Query with async storage persister
+- [x] **P0** Port offline outbox to use native storage adapter
+- [x] **P1** NetInfo listener for online/offline flush (replace service worker)
 - [ ] **P2** MMKV adapter for performance-critical keys
 
 ### 5.4 Core screens (MVP)
 
-- [ ] **P0** Setup screen — sport picker, format, create/schedule tournament
-- [ ] **P0** Team entry screen
-- [ ] **P0** Tournament view — fixtures tab + live scoring
-- [ ] **P1** Table tab (standings)
-- [ ] **P1** Stats tab
+- [x] **P0** Setup screen — sport picker, format, create/schedule tournament
+- [x] **P0** Team entry screen
+- [x] **P0** Tournament view — fixtures tab + live scoring
+- [x] **P0** Fix Setup crash — sport picker `id` vs `sportId`, safe cached `fixtures` hydration
+- [x] **P1** Table tab (standings) — segment tabs on Tournament screen
+- [x] **P1** Stats tab — group career stats from cloud tournament history
 - [ ] **P2** Bracket/knockout view
-- [ ] **P2** Casual match screen
+- [ ] **P2** Casual match screen (box cricket ball-by-ball)
 - [ ] **P2** Player profile modal
+
+### 5.4b Web mobile dashboard parity **(epic — post-MVP)**
+
+The web app has a full mobile dashboard (`SetupScreenMobileDashboard`: Home, Live, Stats, ELO, history). Native app currently only has tournament MVP tabs. Track separately:
+
+- [ ] **P1** Home hub — quick stats, start match, sync status
+- [ ] **P1** Live tab — in-progress + completed (tournaments + casual)
+- [ ] **P1** Stats / all-time leaders / box cricket runs & wickets tabs
+- [ ] **P1** History — tournament + casual unified list
+- [ ] **P2** Sport hub / multi-sport landing (when groups enabled)
+- [ ] **P2** Profile + utility drawer
+- [ ] **P2** Share / WhatsApp via RN Share API
+
+**Depends on:** Phase 5.4 MVP stable; reuse `@fixture-maker/domain`, `@fixture-maker/api`, shared hooks where possible.
+
+### 5.4c Env & monorepo hardening
+
+- [x] **P0** Static `EXPO_PUBLIC_*` reads for Metro inlining (`packages/config/src/expoPublicEnv.js`)
+- [x] **P0** `scripts/sync-mobile-env.py` — copy root `VITE_*` → `apps/mobile/.env`
+- [ ] **P1** Document `npm run dev:mobile` + wireless adb + cache clear in README
 
 ### 5.5 Mobile-specific features
 
@@ -369,7 +390,7 @@ Web-only services stay in `apps/web/src/services/`: `groupService`, `localStorag
 
 ### 5.6 Mobile testing
 
-- [ ] **P1** Jest unit tests for domain usage in mobile
+- [x] **P1** Jest unit tests for domain usage in mobile — `apps/mobile/src/test/tournamentDraft.unit.test.ts`
 - [ ] **P1** Detox or Maestro E2E: login → create tournament → score match
 - [ ] **P2** Test offline outbox flush on device
 
@@ -591,7 +612,9 @@ Phase 4.1–4.3 — **done** (`apps/web` + `@fixture-maker/domain`)
 
 ### Batch G — Mobile MVP (4–6 weeks)
 
-Phase 5.1–5.4 core screens
+Phase 5.1–5.3 — **in progress** (`apps/mobile` Expo + auth/groups + native storage)
+
+Run: `npm run dev:mobile` (requires Expo Go or simulator)
 
 ---
 

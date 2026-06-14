@@ -8,10 +8,11 @@ const MobileBottomNav = ({
   onStats,
   onProfile,
   onPrimaryAction,
+  hubMode = false,
 }) => {
   if (!isVisible) return null;
 
-  const items = [
+  const allItems = [
     {
       key: 'home',
       label: 'Home',
@@ -28,7 +29,7 @@ const MobileBottomNav = ({
     },
     {
       key: 'create',
-      label: 'Create',
+      label: 'Start',
       glyph: '➕',
       onClick: onPrimaryAction,
       disabled: typeof onPrimaryAction !== 'function',
@@ -49,6 +50,10 @@ const MobileBottomNav = ({
     },
   ];
 
+  const items = hubMode
+    ? allItems.filter((item) => item.key === 'home' || item.key === 'profile')
+    : allItems;
+
   return (
     <nav className="tour-command-bar-shell app-mobile-bottom-command-bar" aria-label="Primary mobile navigation">
       <div className="tour-command-bar" style={{ '--tour-command-cols': items.length }}>
@@ -59,6 +64,7 @@ const MobileBottomNav = ({
               key={item.key}
               type="button"
               className={`tour-command-btn ${active ? 'tour-command-btn-active' : ''}`}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={item.onClick}
               disabled={item.disabled}
               aria-current={active ? 'page' : undefined}

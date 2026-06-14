@@ -3,6 +3,10 @@ import { describe, it, expect } from 'vitest';
 import {
   buildBoxCricketMatchStatistics,
   validateBoxCricketMatchScore,
+  isCasualSeriesComplete,
+  buildCasualSeriesStatistics,
+  formatCasualSeriesScoreLine,
+  getCasualSeriesConfig,
 } from '@fixture-maker/domain/sports/boxCricket/boxCricketScoring';
 import {
   createEmptySquadTeam,
@@ -80,6 +84,49 @@ describe('box cricket scoring', () => {
     });
     const result = validateBoxCricketMatchScore(12, 10, {}, { statistics });
     expect(result.valid).toBe(true);
+  });
+});
+
+describe('box cricket casual series', () => {
+  const team1 = { id: 1, name: 'A' };
+  const team2 = { id: 2, name: 'B' };
+
+  it('detects best-of-3 completion at 2 wins', () => {
+    expect(isCasualSeriesComplete(1, 1, 'bo3')).toBe(false);
+    expect(isCasualSeriesComplete(2, 0, 'bo3')).toBe(true);
+    expect(isCasualSeriesComplete(0, 2, 'bo3')).toBe(true);
+  });
+
+  it('builds casual series statistics payload', () => {
+    const games = [
+      { gameNo: 1, score1: 40, score2: 35, winnerTeamId: 1 },
+      { gameNo: 2, score1: 30, score2: 42, winnerTeamId: 2 },
+      { gameNo: 3, score1: 45, score2: 41, winnerTeamId: 1 },
+    ];
+    const statistics = buildCasualSeriesStatistics({
+      team1,
+      team2,
+      seriesFormat: 'bo3',
+      games,
+      team1Wins: 2,
+      team2Wins: 1,
+    });
+    expect(statistics.format).toBe('casualSeries');
+    expect(statistics.series.team1Wins).toBe(2);
+    expect(statistics.series.games).toHaveLength(3);
+    expect(getCasualSeriesConfig('bo3').winsRequired).toBe(2);
+  });
+
+  it('formats series score line for history', () => {
+    const statistics = buildCasualSeriesStatistics({
+      team1: { id: 1, name: 'A' },
+      team2: { id: 2, name: 'B' },
+      seriesFormat: 'bo3',
+      games: [],
+      team1Wins: 2,
+      team2Wins: 1,
+    });
+    expect(formatCasualSeriesScoreLine(statistics, 'A', 'B')).toContain('A 2–1 B');
   });
 });
 

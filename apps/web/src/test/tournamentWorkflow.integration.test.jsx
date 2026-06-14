@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
 import { appStore } from '../store/appStore';
 import { readPersistedHistory, seedPersistedHistory } from './storageTestHelpers';
-import { TOURNAMENT_NAME_PLACEHOLDER } from '../components/setup/sportSetupConfig';
+import { enterSportWorkspace, waitForSportHome } from './sportNavigationTestHelpers';
 
 vi.mock('../hooks/useAppwriteSync', () => ({
   useAppwriteSync: () => ({
@@ -61,12 +61,10 @@ const renderApp = () => {
 
 const readHistory = () => readPersistedHistory();
 
-const waitForHomeScreen = async () => (
-  screen.findByPlaceholderText(TOURNAMENT_NAME_PLACEHOLDER, {}, { timeout: ASYNC_UI_TIMEOUT })
-);
+const waitForHomeScreen = () => waitForSportHome(ASYNC_UI_TIMEOUT);
 
 const startTournament = async (user, tournamentName = 'League Night 1st Tournament') => {
-  const tournamentNameInput = await waitForHomeScreen();
+  const tournamentNameInput = await enterSportWorkspace(user, 'Badminton', ASYNC_UI_TIMEOUT);
   await user.clear(tournamentNameInput);
   await user.type(tournamentNameInput, tournamentName);
   await user.click(screen.getByRole('button', { name: /Start Tournament/i }));

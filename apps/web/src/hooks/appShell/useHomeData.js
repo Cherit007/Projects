@@ -10,6 +10,10 @@ import {
   sortTournamentHistoryByRecent,
 } from '../../utils/appHelpers';
 import { useSetupPrefetchEffect } from '../useSetupPrefetchEffect';
+import {
+  enrichCasualMatches,
+  persistEnrichedCasualMatches,
+} from '../../utils/casualMatchHydration';
 
 export const useHomeData = ({
   activeGroupId,
@@ -270,20 +274,22 @@ export const useHomeData = ({
           staleTime: 5 * 60 * 1000,
         });
         const backfilledMatches = backfillCasualMatchesCompletedAt(matches || []);
+        const enrichedMatches = enrichCasualMatches(backfilledMatches.matches);
         if (casualHydrationVersionRef.current !== requestVersion) {
           return casualMatches || [];
         }
         queryClient.setQueryData(
           queryKeys.casualMatches(activeGroupId),
-          backfilledMatches.matches
+          enrichedMatches,
         );
-        setCasualMatches(backfilledMatches.matches);
+        persistEnrichedCasualMatches(enrichedMatches);
+        setCasualMatches(enrichedMatches);
         recoverRatingsIfMissing({
           history: tournamentHistory || [],
-          casual: backfilledMatches.matches,
+          casual: enrichedMatches,
         });
         setCasualHydrated(true);
-        return backfilledMatches.matches;
+        return enrichedMatches;
       } catch (error) {
         console.error('Failed to load casual match history:', error);
         if (!silent) {

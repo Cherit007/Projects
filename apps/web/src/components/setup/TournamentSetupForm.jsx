@@ -33,12 +33,19 @@ const TournamentSetupForm = ({
   startTournamentPending = false,
   showSportStep = true,
   showHeader = true,
+  excludeCasualFormat = false,
+  setupEyebrow = 'Create tournament',
+  setupTitle = 'Set up your event',
+  setupSubtitle = 'Sport-first flow — works on mobile, web, and future native apps.',
   submitLabel = 'Continue to Teams',
   className = '',
 }) => {
   const setupConfig = useMemo(() => getSportSetupConfig(sportId), [sportId]);
   const formatHint = getFormatHint(sportId, tournamentFormat);
   const teamCountEditable = isTeamCountEditable(tournamentFormat);
+  const formatOptions = excludeCasualFormat
+    ? setupConfig.formats.filter((entry) => entry.value !== 'casual')
+    : setupConfig.formats;
 
   const handleFormatChange = (nextFormat) => {
     applyTournamentFormatChange(nextFormat, {
@@ -60,11 +67,9 @@ const TournamentSetupForm = ({
     <div className={`tournament-setup-form ${className}`.trim()}>
       {showHeader && (
         <header className="tournament-setup-header">
-          <p className="tournament-setup-eyebrow">Create tournament</p>
-          <h2 className="tournament-setup-title">Set up your event</h2>
-          <p className="tournament-setup-subtitle">
-            Sport-first flow — works on mobile, web, and future native apps.
-          </p>
+          <p className="tournament-setup-eyebrow">{setupEyebrow}</p>
+          <h2 className="tournament-setup-title">{setupTitle}</h2>
+          <p className="tournament-setup-subtitle">{setupSubtitle}</p>
         </header>
       )}
 
@@ -109,7 +114,7 @@ const TournamentSetupForm = ({
           <SetupSelectionGrid
             step="Step 3"
             legend="Tournament format"
-            options={setupConfig.formats}
+            options={formatOptions}
             value={tournamentFormat}
             columns={2}
             onChange={handleFormatChange}

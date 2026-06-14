@@ -1,5 +1,8 @@
 import { databases, DATABASE_ID, COLLECTIONS, ID, Query } from '../appwrite/client.js';
 
+import { listSquadPlayerNames, normalizeSquad } from '@fixture-maker/domain/sports/boxCricket/squadUtils.js';
+import { serializeMatchStatistics, parseMatchStatistics } from '@fixture-maker/domain/sports/matchStatistics.js';
+
 const DEFAULT_GROUP_ID = 'default-group';
 const PAGE_SIZE = 100;
 const IN_QUERY_LIMIT = 100;
@@ -68,9 +71,59 @@ const isIndexConstraintError = (error) => {
 };
 
 const indexCacheKey = (collectionId, scope) => `${collectionId}::${scope}`;
+const attributeCacheKey = (collectionId, attribute) => `${collectionId}::attr::${attribute}`;
 const hasMissingIndex = (collectionId, scope) => missingIndexCache.has(indexCacheKey(collectionId, scope));
+const hasMissingAttribute = (collectionId, attribute) => (
+  missingIndexCache.has(attributeCacheKey(collectionId, attribute))
+);
 const markMissingIndex = (collectionId, scope) => {
   missingIndexCache.add(indexCacheKey(collectionId, scope));
+};
+const markMissingAttribute = (collectionId, attribute) => {
+  missingIndexCache.add(attributeCacheKey(collectionId, attribute));
+};
+
+const isUnknownAttributeError = (error, attribute) => {
+  const message = String(error?.message || '').toLowerCase();
+  const normalizedAttribute = String(attribute || '').toLowerCase();
+  return error?.code === 400
+    && (
+      error?.type === 'document_invalid_structure'
+      || message.includes('unknown attribute')
+    )
+    && message.includes(`"${normalizedAttribute}"`);
+};
+
+const createMatchDocument = async (payload, { statisticsJson = '' } = {}) => {
+  const includeStatistics = Boolean(statisticsJson)
+    && !hasMissingAttribute(COLLECTIONS.MATCHES_V2, 'statisticsJson');
+
+  const withStatistics = includeStatistics
+    ? { ...payload, statisticsJson }
+    : payload;
+
+  try {
+    return await databases.createDocument(
+      DATABASE_ID,
+      COLLECTIONS.MATCHES_V2,
+      ID.unique(),
+      withStatistics,
+    );
+  } catch (error) {
+    if (!statisticsJson || !isUnknownAttributeError(error, 'statisticsJson')) {
+      throw error;
+    }
+    markMissingAttribute(COLLECTIONS.MATCHES_V2, 'statisticsJson');
+    console.warn(
+      'v2_matches schema has no statisticsJson attribute — saving casual match without detailed statistics.',
+    );
+    return databases.createDocument(
+      DATABASE_ID,
+      COLLECTIONS.MATCHES_V2,
+      ID.unique(),
+      payload,
+    );
+  }
 };
 
 const listDocumentsPaged = async (collectionId, baseQueries = []) => {
@@ -166,11 +219,28 @@ const listByGroupAndValues = async ({ collectionId, groupId, key, values }) => {
   return byGroup.filter((doc) => allowed.has(toNonEmptyString(doc?.[key])));
 };
 
-const collectPlayersFromTeam = (team) => (
-  [team?.player || team?.player1, team?.player2]
+const collectPlayersFromTeam = (team) => {
+  const fromSquad = listSquadPlayerNames(team);
+  if (fromSquad.length > 0) return fromSquad;
+  return [team?.player || team?.player1, team?.player2]
     .map((name) => toNonEmptyString(name))
-    .filter(Boolean)
-);
+    .filter(Boolean);
+};
+
+const buildParticipantRows = (team, sideNo) => {
+  const squadNames = listSquadPlayerNames(team);
+  if (squadNames.length > 0) {
+    return squadNames.map((playerName, index) => ({
+      sideNo,
+      slotNo: String(index + 1),
+      playerName,
+    }));
+  }
+  return [
+    { sideNo, slotNo: '1', playerName: toNonEmptyString(team?.player || team?.player1) },
+    { sideNo, slotNo: '2', playerName: toNonEmptyString(team?.player2) },
+  ].filter((row) => row.playerName);
+};
 
 const inferMatchType = (team1, team2, explicitType = '') => {
   const normalized = toNonEmptyString(explicitType).toLowerCase();
@@ -249,6 +319,23 @@ const parseScore = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const inferSportIdFromCasualMatch = (matchDoc, team1Players, team2Players) => {
+  const statistics = parseMatchStatistics(matchDoc?.statisticsJson);
+  if (statistics?.sportId === 'boxCricket') return 'boxCricket';
+  const roundLabel = toNonEmptyString(matchDoc?.roundLabel).toLowerCase();
+  if (roundLabel === 'team' || roundLabel === 'boxcricket') return 'boxCricket';
+  if (team1Players.length > 2 || team2Players.length > 2) return 'boxCricket';
+  return 'badminton';
+};
+
+const buildSquadFromParticipantNames = (names = [], sideNo) => (
+  names.map((name, index) => ({
+    id: `casual-${sideNo}-${index + 1}`,
+    name,
+    role: index === 0 ? 'captain' : 'player',
+  }))
+);
+
 const parseCasualMatch = ({ matchDoc, participantRows }) => {
   const side1 = participantRows
     .filter((row) => toNonEmptyString(row.sideNo) === '1')
@@ -260,17 +347,27 @@ const parseCasualMatch = ({ matchDoc, participantRows }) => {
   const team1Players = side1.map((row) => toNonEmptyString(row.playerName)).filter(Boolean);
   const team2Players = side2.map((row) => toNonEmptyString(row.playerName)).filter(Boolean);
 
+  const team1Squad = buildSquadFromParticipantNames(team1Players, 1);
+  const team2Squad = buildSquadFromParticipantNames(team2Players, 2);
+  const statistics = parseMatchStatistics(matchDoc.statisticsJson);
+  const storedTeam1Squad = normalizeSquad(statistics?.teams?.team1?.squad);
+  const storedTeam2Squad = normalizeSquad(statistics?.teams?.team2?.squad);
+
   const team1 = {
-    name: toNonEmptyString(matchDoc.team1Name) || team1Players.join(' & ') || 'Team 1',
+    id: statistics?.teams?.team1?.id ?? 1,
+    name: toNonEmptyString(matchDoc.team1Name) || statistics?.teams?.team1?.name || team1Players.join(' & ') || 'Team 1',
     player1: team1Players[0] || '',
     player: team1Players[0] || '',
     player2: team1Players[1] || '',
+    squad: storedTeam1Squad.length ? storedTeam1Squad : team1Squad,
   };
   const team2 = {
-    name: toNonEmptyString(matchDoc.team2Name) || team2Players.join(' & ') || 'Team 2',
+    id: statistics?.teams?.team2?.id ?? 2,
+    name: toNonEmptyString(matchDoc.team2Name) || statistics?.teams?.team2?.name || team2Players.join(' & ') || 'Team 2',
     player1: team2Players[0] || '',
     player: team2Players[0] || '',
     player2: team2Players[1] || '',
+    squad: storedTeam2Squad.length ? storedTeam2Squad : team2Squad,
   };
 
   const score1 = parseScore(matchDoc.score1);
@@ -281,6 +378,7 @@ const parseCasualMatch = ({ matchDoc, participantRows }) => {
     id: matchDoc.$id,
     appwriteId: matchDoc.$id,
     matchType: inferMatchType(team1, team2, matchDoc.roundLabel),
+    sportId: inferSportIdFromCasualMatch(matchDoc, team1Players, team2Players),
     date: matchDoc.sourceCreatedAt || matchDoc.$createdAt,
     completedAt: toNonEmptyString(matchDoc.completedAt),
     team1,
@@ -289,6 +387,8 @@ const parseCasualMatch = ({ matchDoc, participantRows }) => {
     score2,
     winner: winnerSide === '1' ? 'team1' : (winnerSide === '2' ? 'team2' : ''),
     createdAt: matchDoc.sourceCreatedAt || matchDoc.$createdAt,
+    completed: Boolean(matchDoc.completedAt || matchDoc.completed === 'true'),
+    ...(statistics ? { statistics } : {}),
   };
 };
 
@@ -304,9 +404,10 @@ export const casualMatchService = {
 
     const team1 = matchData?.team1 || {};
     const team2 = matchData?.team2 || {};
-    const matchType = inferMatchType(team1, team2, matchData?.matchType);
+    const matchType = inferMatchType(team1, team2, matchData?.matchType || matchData?.sportId);
     const score1 = toNumericString(matchData?.score1);
     const score2 = toNumericString(matchData?.score2);
+    const statisticsJson = serializeMatchStatistics(matchData?.statistics) || '';
 
     const allPlayers = [
       ...collectPlayersFromTeam(team1),
@@ -326,11 +427,7 @@ export const casualMatchService = {
       || toNonEmptyString(matchData?.date)
       || now;
 
-    const matchDoc = await databases.createDocument(
-      DATABASE_ID,
-      COLLECTIONS.MATCHES_V2,
-      ID.unique(),
-      {
+    const matchDoc = await createMatchDocument({
         groupId: resolvedGroupId,
         tournamentId: '',
         legacyTournamentId: '',
@@ -353,15 +450,12 @@ export const casualMatchService = {
         winnerSide,
         sourceCreatedAt: toNonEmptyString(matchData?.date) || now,
         migratedAt: now,
-      }
-    );
+      }, { statisticsJson });
 
     const participants = [
-      { sideNo: '1', slotNo: '1', playerName: toNonEmptyString(team1?.player || team1?.player1) },
-      { sideNo: '1', slotNo: '2', playerName: toNonEmptyString(team1?.player2) },
-      { sideNo: '2', slotNo: '1', playerName: toNonEmptyString(team2?.player || team2?.player1) },
-      { sideNo: '2', slotNo: '2', playerName: toNonEmptyString(team2?.player2) },
-    ].filter((row) => row.playerName);
+      ...buildParticipantRows(team1, '1'),
+      ...buildParticipantRows(team2, '2'),
+    ];
 
     for (const participant of participants) {
       // eslint-disable-next-line no-await-in-loop
@@ -394,6 +488,11 @@ export const casualMatchService = {
       score2: parseScore(score2),
       winner: winnerSide === '1' ? 'team1' : 'team2',
       createdAt: matchDoc.sourceCreatedAt || matchDoc.$createdAt,
+      completed: true,
+      sportId: matchData?.sportId === 'boxCricket' || matchType === 'team'
+        ? 'boxCricket'
+        : (matchData?.sportId || 'badminton'),
+      ...(matchData?.statistics ? { statistics: matchData.statistics } : {}),
     };
   },
 

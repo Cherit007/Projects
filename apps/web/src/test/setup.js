@@ -20,7 +20,7 @@ afterEach(async () => {
   if (typeof window !== "undefined") {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.hash = "#/setup";
+    window.location.hash = "#/sports";
   }
 });
 

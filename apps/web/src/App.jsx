@@ -25,6 +25,11 @@ import { useDashboardDerivedData } from './hooks/useDashboardDerivedData';
 import { useModalManager } from './hooks/useModalManager';
 import { useRealtimeCacheSync } from './hooks/useRealtimeCacheSync';
 import { useHashAppRoute } from './hooks/useHashAppRoute';
+import { useSportNavigation } from './hooks/useSportNavigation';
+import { APP_ROUTE_KEYS, parseAppRoute } from './utils/appRoutes';
+import { getLastSportForGroup } from './utils/activeSportStorage';
+import { areGroupsEnabled } from './utils/groupFeatures';
+import { getSportMeta } from './components/setup/sportSetupConfig';
 import { useThemeMode } from './hooks/useThemeMode';
 import { useMobileViewport } from './hooks/useMobileViewport';
 import { useAppKeyboardShortcuts } from './hooks/useAppKeyboardShortcuts';
@@ -34,7 +39,8 @@ import { useMemberAdminActions } from './hooks/useMemberAdminActions';
 import { useAppStoreShallow } from './store/appStore';
 import { STORAGE_KEYS } from './platform/storageKeys';
 import { tournamentService } from './services/tournamentService';
-import { queueLocalStorageJson } from './services/localStorageWriteService';
+import { queueLocalStorageJson, queueLocalStorageValue } from './services/localStorageWriteService';
+import { readBoxCricketCasualDraftFromBrowser } from './utils/boxCricketCasualDraft';
 import {
   calculatePointsTable,
   getPlayerLeaderboard,
@@ -157,6 +163,10 @@ const App = () => {
     resolveConfirmDialog,
     setupModals,
   } = useModalManager();
+  const [mobileNavScrollTick, setMobileNavScrollTick] = useState(0);
+  const requestMobileScrollReset = useCallback(() => {
+    setMobileNavScrollTick((tick) => tick + 1);
+  }, []);
   const {
     playerDatabase,
     setPlayerDatabase,
@@ -274,6 +284,7 @@ const App = () => {
     setAdminAccounts: s.setAdminAccounts,
   }));
   const [activeTournamentLock, setActiveTournamentLock] = useState(null);
+  const [activeCasualDraft, setActiveCasualDraft] = useState(() => readBoxCricketCasualDraftFromBrowser());
   const linkPromptedRef = useRef(new Set());
   const previousStepRef = useRef(step);
   const toastTimerRef = useRef(null);
@@ -454,6 +465,7 @@ const App = () => {
 
   const {
     requiresAuth,
+    groupsEnabled,
     canDelete,
     canManageMembers,
     isViewerMode,
@@ -1069,6 +1081,7 @@ const App = () => {
     showToast,
     isAppwriteEnabled,
     activeGroup,
+    queryClient,
     updatePlayerDatabase,
     tournamentName,
     setTournamentName,
@@ -1099,6 +1112,7 @@ const App = () => {
     casualMatches,
     setCasualMatches,
     setShowCasualMatch,
+    onCasualFlowComplete: () => setMobileSetupView('home'),
     aiMatchSummaries,
     setAiMatchSummaries,
     swapHistory,
@@ -1118,6 +1132,122 @@ const App = () => {
     createCasualMatchMutation,
     deleteCasualMatchMutation,
   });
+
+  const hasTournamentScreenState = useMemo(() => (
+    step === 'tournament'
+    || (Array.isArray(fixtures) && fixtures.length > 0)
+    || (Array.isArray(bracket) && bracket.some((round) => Array.isArray(round) && round.length > 0))
+  ), [step, fixtures, bracket]);
+
+  const {
+    applySportContext,
+    navigateToSportHub,
+    navigateToSportHome,
+  } = useSportNavigation({
+    activeGroupId: activeGroup?.id,
+    sportId,
+    setSportId,
+    setRuleConfig,
+    gameMode,
+    setGameMode,
+    tournamentFormat,
+    setTournamentFormat,
+    format,
+    setFormat,
+    setNumTeams,
+    setNumTeamsInput: (value) => setNumTeams(Number(value) || 3),
+  });
+
+  const hashRouteReady = isConfigChecked && authResolved && groupResolved;
+
+  const {
+    routeKey,
+    openSportHub,
+    openSportHome,
+  } = useHashAppRoute({
+    isReady: hashRouteReady,
+    requiresAuth,
+    groupsEnabled,
+    currentUser,
+    isGuestViewer,
+    activeGroup,
+    activeGroupId: activeGroup?.id,
+    groupRole,
+    showRequestCenter,
+    setShowRequestCenter,
+    isViewerMode,
+    step,
+    setStep,
+    sportId,
+    setSportId,
+    applySportContext,
+    hasTournamentScreenState,
+  });
+
+  const handleSelectSport = useCallback((nextSportId) => {
+    setMobileSetupView('home');
+    openSportHome(nextSportId);
+  }, [openSportHome, setMobileSetupView]);
+
+  const handleHeaderGoHome = useCallback(() => {
+    setShowRequestCenter(false);
+    setShowCasualMatch(false);
+    if (step === 'tournament' || step === 'teams') {
+      goHome();
+      openSportHome(sportId);
+      return;
+    }
+    if (routeKey === APP_ROUTE_KEYS.SETUP) {
+      openSportHub();
+      return;
+    }
+    openSportHub();
+  }, [
+    goHome,
+    openSportHome,
+    openSportHub,
+    routeKey,
+    sportId,
+    step,
+  ]);
+
+  const activeSportMeta = useMemo(() => {
+    if (routeKey === APP_ROUTE_KEYS.SPORT_HUB) return null;
+    if (routeKey === APP_ROUTE_KEYS.SETUP
+      || routeKey === APP_ROUTE_KEYS.TEAMS
+      || routeKey === APP_ROUTE_KEYS.TOURNAMENT) {
+      return getSportMeta(sportId);
+    }
+    return null;
+  }, [routeKey, sportId]);
+
+  const prevActiveGroupIdRef = useRef(null);
+  useEffect(() => {
+    if (!hashRouteReady || !activeGroup?.id) return;
+    if (prevActiveGroupIdRef.current === activeGroup.id) return;
+
+    const previousGroupId = prevActiveGroupIdRef.current;
+    prevActiveGroupIdRef.current = activeGroup.id;
+
+    const parsed = typeof window !== 'undefined'
+      ? parseAppRoute(window.location.hash)
+      : { routeKey: null, sportId: null };
+    const userAlreadyOnSportSetup = (
+      parsed.routeKey === APP_ROUTE_KEYS.SETUP && Boolean(parsed.sportId)
+    );
+
+    if (previousGroupId === null && userAlreadyOnSportSetup) {
+      return;
+    }
+
+    if (areGroupsEnabled()) {
+      openSportHub();
+      return;
+    }
+
+    const lastSport = getLastSportForGroup(activeGroup.id) || sportId;
+    openSportHome(lastSport);
+  }, [activeGroup?.id, hashRouteReady, openSportHome, openSportHub, sportId]);
 
   const {
     saveTournamentTemplate,
@@ -1243,11 +1373,7 @@ const App = () => {
     activeGroupName: activeGroup?.name,
   });
 
-  const handleHeaderGoHome = () => {
-    setShowRequestCenter(false);
-    setShowCasualMatch(false);
-    goHome();
-  };
+  const handleHeaderGoHomeForShell = handleHeaderGoHome;
 
   useScheduledTournamentCleanupEffect({
     canDelete,
@@ -1276,11 +1402,10 @@ const App = () => {
   const {
     handleMobileGoHome,
     handleMobileOpenProfile,
-    handleMobileRecordCasual,
     handleMobileGoLive,
     handleMobileOpenHistory,
     handleMobileOpenStats,
-    handleMobileOpenCreate,
+    handleMobileOpenStart,
   } = useMobileShellActions({
     step,
     showRequestCenter,
@@ -1288,6 +1413,7 @@ const App = () => {
     currentUser,
     assertCanOperate,
     handleHeaderGoHome,
+    openSportHub,
     handleOpenHistoryModal,
     setMobileSetupView,
     setShowHistory,
@@ -1297,10 +1423,29 @@ const App = () => {
     setShowCasualMatch,
     setShowUtilityDrawer,
     setShowProfileModal,
+    onRequestMobileScrollReset: requestMobileScrollReset,
   });
+
+  const handleCasualDraftChange = useCallback((draft) => {
+    if (!draft) return;
+    setActiveCasualDraft(draft);
+    queueLocalStorageJson(STORAGE_KEYS.ACTIVE_CASUAL_MATCH_DRAFT, draft);
+  }, []);
+
+  const handleClearCasualDraft = useCallback(() => {
+    setActiveCasualDraft(null);
+    queueLocalStorageValue(STORAGE_KEYS.ACTIVE_CASUAL_MATCH_DRAFT, null);
+  }, []);
+
+  const handleResumeCasualDraft = useCallback(() => {
+    setSportId('boxCricket');
+    setMobileSetupView('casual');
+    setShowCasualMatch(true);
+  }, [setSportId, setMobileSetupView, setShowCasualMatch]);
 
   const {
     viewerDashboardProps,
+    sportHubProps,
     setupScreenProps,
     teamEntryProps,
     tournamentViewProps: tournamentShellProps,
@@ -1391,7 +1536,7 @@ const App = () => {
     saveBracketMatchResult,
     saveFinalResult,
     swapTeamMember,
-    handleHeaderGoHome,
+    handleHeaderGoHome: handleHeaderGoHomeForShell,
     handleResetTournamentWithHydration,
     rerunTournament,
     startNextTournament,
@@ -1399,7 +1544,15 @@ const App = () => {
     saveCasualMatch,
     updatePlayerDatabase,
     setShowCasualMatch,
+    setMobileSetupView,
+    activeCasualDraft,
+    onCasualDraftChange: handleCasualDraftChange,
+    onClearCasualDraft: handleClearCasualDraft,
+    onResumeCasualDraft: handleResumeCasualDraft,
+    onDeleteCasualDraft: handleClearCasualDraft,
     activeGroup,
+    onGoSportHub: openSportHub,
+    onSelectSport: handleSelectSport,
   });
 
   const tournamentViewProps = {
@@ -1418,35 +1571,14 @@ const App = () => {
   };
   const enhancedSetupScreenProps = {
     ...setupScreenProps,
+    routeKey,
     mobileSetupView,
+    mobileNavScrollTick,
     setMobileSetupView,
     onOpenUtilityDrawer: () => setShowUtilityDrawer(true),
   };
 
-  const hasTournamentScreenState = useMemo(() => (
-    step === 'tournament'
-    || (Array.isArray(fixtures) && fixtures.length > 0)
-    || (Array.isArray(bracket) && bracket.some((round) => Array.isArray(round) && round.length > 0))
-  ), [step, fixtures, bracket]);
-
-  const hashRouteReady = isConfigChecked && authResolved && groupResolved;
-
-  const { routeKey } = useHashAppRoute({
-    isReady: hashRouteReady,
-    requiresAuth,
-    currentUser,
-    isGuestViewer,
-    activeGroup,
-    groupRole,
-    showRequestCenter,
-    setShowRequestCenter,
-    isViewerMode,
-    step,
-    setStep,
-    hasTournamentScreenState,
-  });
-
-  const canRenderWorkspace = !requiresAuth || Boolean(activeGroup);
+  const canRenderWorkspace = !requiresAuth || Boolean(activeGroup) || !groupsEnabled;
   const shouldShowMobileBottomNav = Boolean(
     isMobileViewport
     && canRenderWorkspace
@@ -1455,13 +1587,12 @@ const App = () => {
     && groupResolved
     && !isViewerMode
     && step !== 'tournament'
-    && !showCasualMatch
   );
   const mobileNavActiveKey = useMemo(() => {
     if (showUtilityDrawer) return 'create';
     if (showProfileModal) return 'profile';
     if (step === 'setup') {
-      if (mobileSetupView === 'create') return 'create';
+      if (mobileSetupView === 'create' || mobileSetupView === 'start' || mobileSetupView === 'casual') return 'create';
       if (mobileSetupView === 'stats' || mobileSetupView === 'elo' || showAllTimeStats || showEloLeaderboard || showRequestCenter) {
         return 'stats';
       }
@@ -1555,6 +1686,7 @@ const App = () => {
         groupResolved={groupResolved}
         routeKey={routeKey}
         requiresAuth={requiresAuth}
+        groupsEnabled={groupsEnabled}
         currentUser={currentUser}
         isGuestViewer={isGuestViewer}
         activeGroup={activeGroup}
@@ -1580,6 +1712,8 @@ const App = () => {
         onSelectGroup={handleSelectGroup}
         onOpenProfile={() => setShowProfileModal(true)}
         onGoHome={handleHeaderGoHome}
+        onGoSportHub={openSportHub}
+        sportMeta={activeSportMeta}
         onBackToGroups={handleBackToGroups}
         onOpenRequestCenter={handleOpenRequestCenter}
         onLogout={handleLogout}
@@ -1591,6 +1725,7 @@ const App = () => {
         onDeleteGroup={handleDeleteGroup}
         onConfirmAction={requestConfirmAction}
         viewerDashboardProps={viewerDashboardProps}
+        sportHubProps={sportHubProps}
         setupScreenProps={enhancedSetupScreenProps}
         teamEntryProps={teamEntryProps}
         tournamentViewProps={tournamentViewProps}
@@ -1675,12 +1810,12 @@ const App = () => {
               <div className="utility-drawer-body">
                 <button
                   type="button"
-                  onClick={handleMobileRecordCasual}
+                  onClick={handleMobileOpenStart}
                   className="utility-drawer-action"
-                  aria-label="Record casual match"
+                  aria-label="Start match"
                 >
                   <Plus size={17} />
-                  <span>Record Casual Match</span>
+                  <span>Start Match</span>
                 </button>
                 <button
                   type="button"
@@ -1691,7 +1826,7 @@ const App = () => {
                   <History size={17} />
                   <span>Tournament History</span>
                 </button>
-                {requiresAuth && groupRole === 'admin' && (
+                {requiresAuth && groupsEnabled && groupRole === 'admin' && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1729,12 +1864,13 @@ const App = () => {
 
           <MobileBottomNav
             isVisible={shouldShowMobileBottomNav}
+            hubMode={routeKey === APP_ROUTE_KEYS.SPORT_HUB}
             activeKey={mobileNavActiveKey}
             onHome={handleMobileGoHome}
             onLive={handleMobileGoLive}
             onStats={handleMobileOpenStats}
             onProfile={handleMobileOpenProfile}
-            onPrimaryAction={handleMobileOpenCreate}
+            onPrimaryAction={handleMobileOpenStart}
           />
         </>
       )}

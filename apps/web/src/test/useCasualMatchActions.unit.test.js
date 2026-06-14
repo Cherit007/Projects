@@ -25,6 +25,7 @@ describe('useCasualMatchActions', () => {
     const setPlayerRatings = vi.fn();
     const showToast = vi.fn();
     const setShowCasualMatch = vi.fn();
+    const onCasualFlowComplete = vi.fn();
 
     const { result } = renderHook(() => useCasualMatchActions({
       assertCanOperate: () => true,
@@ -38,6 +39,7 @@ describe('useCasualMatchActions', () => {
       casualMatches,
       setCasualMatches,
       setShowCasualMatch,
+      onCasualFlowComplete,
       createCasualMatchMutation: { mutateAsync: vi.fn() },
       deleteCasualMatchMutation: { mutateAsync: vi.fn() },
       rebuildPlayerDatabase: vi.fn(async () => {}),
@@ -58,6 +60,7 @@ describe('useCasualMatchActions', () => {
     expect(setCasualMatches).toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith('✅ Match recorded & ELO updated!');
     expect(setShowCasualMatch).toHaveBeenCalledWith(false);
+    expect(onCasualFlowComplete).toHaveBeenCalled();
   });
 
   it('deletes a casual match after confirmation', async () => {

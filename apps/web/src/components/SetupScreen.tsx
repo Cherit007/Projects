@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { buildCasualDraftLiveCard } from '../utils/boxCricketCasualDraft';
 import {
   Calendar,
   History,
@@ -19,7 +20,10 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import TournamentViewer from './TournamentViewer';
+import BoxCricketCasualMatchDetail from './boxCricket/BoxCricketCasualMatchDetail';
+import UnifiedHistoryModal from './setup/UnifiedHistoryModal';
 import PlayerProfileModal from './PlayerProfileModal';
+import { buildUnifiedHistoryEntries, countUnifiedHistoryEntries } from '../utils/historyEntries';
 import { buildPlayerAdvancedProfile } from '../utils/playerProfileAnalytics';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildPlayerGamification } from '../utils/playerGamification';
@@ -34,7 +38,12 @@ import {
   getGameModeLabel,
   getSportMeta,
 } from './setup';
+import { formatCasualSeriesScoreLine } from '@fixture-maker/domain/sports/boxCricket/boxCricketScoring';
 import { buildHomeNarratives } from '../utils/homeNarratives';
+import { buildBoxCricketStatsRows } from '../utils/boxCricketStats';
+import { scrollMobileShellToTop } from '../utils/scrollUtils';
+import { sportUsesEloRatings } from '../utils/sportFeatures';
+import { hasViewableBoxCricketDetail } from '../utils/casualMatchHydration';
 import {
   formatTournamentDateLabel,
   isScheduledTournamentAlreadyStarted,
@@ -142,6 +151,9 @@ const SetupScreen = ({
   tournamentHistory,
   scheduledTournaments = [],
   activeLiveTournaments = [],
+  activeCasualDraft = null,
+  onResumeCasualDraft,
+  onDeleteCasualDraft,
   onEditScheduledTournament,
   onStartScheduledTournament,
   onViewScheduledTournament,
@@ -186,11 +198,15 @@ const SetupScreen = ({
   lastDataUpdatedAt = 0,
   realtimeConnected = false,
   isMobileViewport = false,
+  routeKey = null,
+  mobileNavScrollTick = 0,
   mobileSetupView = 'home',
   setMobileSetupView = () => {},
   onOpenUtilityDrawer = () => {},
+  casualMatchProps = {},
 }) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
+  const [selectedCasualMatch, setSelectedCasualMatch] = useState(null);
   const [numTeamsInput, setNumTeamsInput] = useState(String(numTeams));
   const [selectedPlayerName, setSelectedPlayerName] = useState(null);
   const [showPairingAnalytics, setShowPairingAnalytics] = useState(false);
@@ -200,6 +216,7 @@ const SetupScreen = ({
   const [scheduledCarouselIndex, setScheduledCarouselIndex] = useState(0);
   const [mobileLiveTab, setMobileLiveTab] = useState('inProgress');
   const [mobileEloFilter, setMobileEloFilter] = useState('all');
+  const [boxCricketStatsTab, setBoxCricketStatsTab] = useState('runs');
   const scheduledCarouselRef = useRef(null);
   const mobileScrollRef = useRef(null);
   const historyCacheRef = useRef(Array.isArray(tournamentHistory) ? tournamentHistory : []);
@@ -212,17 +229,21 @@ const SetupScreen = ({
   }, [numTeams]);
 
   useEffect(() => {
-    if (mobileScrollRef.current) {
-      mobileScrollRef.current.scrollTop = 0;
-    }
-  }, [mobileSetupView]);
+    if (!isMobileViewport) return;
+    scrollMobileShellToTop(mobileScrollRef);
+  }, [
+    isMobileViewport,
+    mobileSetupView,
+    mobileLiveTab,
+    mobileEloFilter,
+    boxCricketStatsTab,
+    mobileNavScrollTick,
+    routeKey,
+  ]);
 
-  useEffect(() => {
-    if (!mobileScrollRef.current) return;
-    if (mobileSetupView === 'live' || mobileSetupView === 'elo') {
-      mobileScrollRef.current.scrollTop = 0;
-    }
-  }, [mobileLiveTab, mobileEloFilter, mobileSetupView]);
+  const handleSelectPlayer = (playerName) => {
+    setSelectedPlayerName(playerName);
+  };
 
   const historyLoading = Boolean(isAppwriteEnabled && (historyHydrationPending || !historyHydrated));
   const casualLoading = Boolean(isAppwriteEnabled && (casualHydrationPending || !casualHydrated));
@@ -345,14 +366,38 @@ const SetupScreen = ({
     }
   }, [statsLoading, allTimeStats, eloLeaderboard]);
 
-  const formatCasualTeam = (team) => {
+  const formatCasualTeam = (team, match) => {
     if (!team) return 'Unknown';
+    if (match?.sportId === 'boxCricket' || team?.squad?.length) {
+      const name = String(team.name || '').trim();
+      const squadCount = Array.isArray(team.squad)
+        ? team.squad.filter((player) => String(player?.name || '').trim()).length
+        : 0;
+      if (name && squadCount) return `${name} (${squadCount} players)`;
+      if (name) return name;
+    }
     const player1 = String(team.player1 || team.player || '').trim();
     const player2 = String(team.player2 || '').trim();
     if (player1 && player2) return `${player1} & ${player2}`;
     if (player1) return player1;
     if (player2) return player2;
     return String(team.name || 'Unknown').trim() || 'Unknown';
+  };
+
+  const formatCasualMatchMeta = (match) => {
+    if (match?.sportId === 'boxCricket') {
+      const seriesLabel = match?.statistics?.series?.label;
+      return seriesLabel ? `🏏 Box Cricket · ${seriesLabel}` : '🏏 Box Cricket';
+    }
+    return match.matchType === 'doubles' ? '👥 Doubles' : '🎯 Singles';
+  };
+
+  const formatCasualScoreLine = (match, team1Name, team2Name) => {
+    if (match?.sportId === 'boxCricket') {
+      const seriesLine = formatCasualSeriesScoreLine(match.statistics, team1Name, team2Name);
+      if (seriesLine) return seriesLine;
+    }
+    return `${Number(match.score1)} - ${Number(match.score2)}`;
   };
 
   const selectedPlayerProfile = selectedPlayerName ? playerRatings?.[selectedPlayerName] : null;
@@ -425,10 +470,20 @@ const SetupScreen = ({
     });
     return map;
   }, [displayEloLeaderboard]);
-  const historyCountLabel = String(displayTournamentHistory.length);
+  const unifiedHistoryEntries = useMemo(
+    () => buildUnifiedHistoryEntries(displayTournamentHistory, displayCasualMatches),
+    [displayTournamentHistory, displayCasualMatches],
+  );
+  const unifiedHistoryCountLabel = String(countUnifiedHistoryEntries(displayTournamentHistory, displayCasualMatches));
+  const historyCountLabel = unifiedHistoryCountLabel;
   const casualCountLabel = String(displayCasualMatches.length);
-  const showHistorySkeleton = historyLoading && displayTournamentHistory.length === 0;
-  const showCasualSkeleton = casualLoading && displayCasualMatches.length === 0;
+  const historyModalOpen = showHistory || showCasualHistory;
+  const closeHistoryModal = () => {
+    setShowHistory(false);
+    setShowCasualHistory(false);
+  };
+  const showUnifiedHistorySkeleton = (historyLoading || casualLoading)
+    && unifiedHistoryEntries.length === 0;
   const showStatsSkeleton = statsLoading && displayAllTimeStats.length === 0;
   const showEloSkeleton = statsLoading && displayEloLeaderboard.length === 0;
   const completedTournamentsCount = useMemo(
@@ -447,7 +502,15 @@ const SetupScreen = ({
     [displayTournamentHistory]
   );
   const totalMatchesPlayed = totalTournamentMatchesPlayed + displayCasualMatches.length;
-  const topEloPlayer = displayEloLeaderboard[0] || null;
+  const hideEloFeatures = !sportUsesEloRatings(sportId);
+  const isBoxCricketStats = sportId === 'boxCricket';
+  const boxCricketStatsRows = useMemo(
+    () => (isBoxCricketStats
+      ? buildBoxCricketStatsRows(displayAllTimeStats, boxCricketStatsTab)
+      : displayAllTimeStats),
+    [displayAllTimeStats, isBoxCricketStats, boxCricketStatsTab],
+  );
+  const topEloPlayer = hideEloFeatures ? null : (displayEloLeaderboard[0] || null);
   const narratives = useMemo(() => buildHomeNarratives({
     tournamentHistory: displayTournamentHistory,
     casualMatches: displayCasualMatches,
@@ -493,8 +556,8 @@ const SetupScreen = ({
     { icon: '🏆', value: String(completedTournamentsCount), label: 'Completed' },
     { icon: '🎯', value: String(totalMatchesPlayed), label: 'Matches Played' },
   ];
-  const liveInProgressCards = useMemo(() => (
-    (Array.isArray(activeLiveTournaments) ? activeLiveTournaments : []).map((tournament, index) => {
+  const liveInProgressCards = useMemo(() => {
+    const tournamentCards = (Array.isArray(activeLiveTournaments) ? activeLiveTournaments : []).map((tournament, index) => {
       const fixturesList = Array.isArray(tournament?.fixtures) ? tournament.fixtures : [];
       const bracketList = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
         .flatMap((round) => (Array.isArray(round) ? round : []));
@@ -518,13 +581,36 @@ const SetupScreen = ({
         completedCount,
         totalCount: allMatches.length || 0,
       };
-    })
-  ), [activeLiveTournaments]);
-  const liveCompletedRows = useMemo(() => (
-    displayTournamentHistory
+    });
+    const casualCard = activeCasualDraft ? buildCasualDraftLiveCard(activeCasualDraft) : null;
+    return casualCard ? [casualCard, ...tournamentCards] : tournamentCards;
+  }, [activeLiveTournaments, activeCasualDraft]);
+  const liveCompletedEntries = useMemo(() => {
+    const toTimestamp = (value) => {
+      const parsed = new Date(value || 0).getTime();
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const tournamentEntries = displayTournamentHistory
       .filter((entry) => entry?.champion || entry?.status === 'completed')
-      .slice(0, 8)
-  ), [displayTournamentHistory]);
+      .map((tournament, index) => ({
+        kind: 'tournament',
+        id: tournament.id || tournament.appwriteId || `completed-tournament-${index}`,
+        sortKey: toTimestamp(tournament.date || tournament.completedAt || tournament.createdAt),
+        tournament,
+      }));
+    const casualEntries = displayCasualMatches
+      .filter((match) => match?.completed !== false)
+      .map((match, index) => ({
+        kind: 'casual',
+        id: match.id || match.appwriteId || `completed-casual-${index}`,
+        sortKey: toTimestamp(match.completedAt || match.date || match.createdAt),
+        match,
+      }));
+    return [...tournamentEntries, ...casualEntries]
+      .sort((left, right) => right.sortKey - left.sortKey)
+      .slice(0, 24);
+  }, [displayTournamentHistory, displayCasualMatches]);
+  const liveCompletedRows = liveCompletedEntries;
   const eloPeriodRows = useMemo(() => {
     const windowStart = getEloHistoryWindowStart(mobileEloFilter);
     return (displayEloLeaderboard || [])
@@ -576,7 +662,11 @@ const SetupScreen = ({
   const compactEloRows = eloPeriodRows.slice(3);
   const statsPreviewRows = displayEloLeaderboard.slice(0, 3);
   const mobileHeaderTitle = mobileSetupView === 'create'
-    ? 'New Tournament'
+    ? 'Tournament Setup'
+    : mobileSetupView === 'start'
+      ? 'Start Match'
+    : mobileSetupView === 'casual'
+      ? 'Casual Match'
     : mobileSetupView === 'live'
       ? 'Live Matches'
       : mobileSetupView === 'stats'
@@ -585,7 +675,11 @@ const SetupScreen = ({
           ? 'ELO Leaderboard'
           : 'Tournament';
   const mobileHeaderSubtitle = mobileSetupView === 'create'
-    ? 'Configure & launch'
+    ? 'Configure & launch tournament'
+    : mobileSetupView === 'start'
+      ? 'Casual or tournament'
+    : mobileSetupView === 'casual'
+      ? 'Score and save result'
     : mobileSetupView === 'live'
       ? 'Real-time scores'
       : mobileSetupView === 'stats'
@@ -642,6 +736,8 @@ const SetupScreen = ({
           canDeleteLiveTournament={canDeleteLiveTournament}
           onResumeActiveTournament={onResumeActiveTournament}
           onDeleteActiveTournament={onDeleteActiveTournament}
+          onResumeCasualDraft={onResumeCasualDraft}
+          onDeleteCasualDraft={onDeleteCasualDraft}
           scheduledCards={scheduledCards}
           onViewScheduledCard={handleViewScheduledCard}
           onEditScheduledTournament={onEditScheduledTournament}
@@ -651,9 +747,19 @@ const SetupScreen = ({
           onDeleteTournament={onDeleteTournament}
           activeLiveTournaments={activeLiveTournaments}
           liveCompletedRows={liveCompletedRows}
+          formatCasualTeam={formatCasualTeam}
+          formatCasualScoreLine={formatCasualScoreLine}
+          formatCasualMatchMeta={formatCasualMatchMeta}
+          onSelectCasualMatch={setSelectedCasualMatch}
+          hasViewableBoxCricketDetail={hasViewableBoxCricketDetail}
           onSelectTournament={setSelectedTournament}
           totalMatchesPlayed={totalMatchesPlayed}
           statsPreviewRows={statsPreviewRows}
+          allTimeStatsPreview={boxCricketStatsRows.slice(0, 5)}
+          isBoxCricketStats={isBoxCricketStats}
+          boxCricketStatsTab={boxCricketStatsTab}
+          setBoxCricketStatsTab={setBoxCricketStatsTab}
+          boxCricketStatsRows={boxCricketStatsRows}
           eloGamificationMap={eloGamificationMap}
           getTierMeta={getTierMeta}
           casualCountLabel={casualCountLabel}
@@ -667,7 +773,9 @@ const SetupScreen = ({
           eloFilterLabel={eloFilterLabel}
           premiumEloRows={premiumEloRows}
           compactEloRows={compactEloRows}
-          onSelectPlayer={setSelectedPlayerName}
+          onSelectPlayer={handleSelectPlayer}
+          hideEloFeatures={hideEloFeatures}
+          casualMatchProps={casualMatchProps}
         />
       )}
       {!isMobileViewport && (
@@ -730,299 +838,29 @@ const SetupScreen = ({
           playerDatabase={playerDatabase}
           teamNameDatabase={teamNameDatabase}
           narratives={narratives}
+          hideEloFeatures={hideEloFeatures}
+          casualMatchProps={casualMatchProps}
         />
       )}
 
-      {showHistory && (
-        <>
-          {isMobileViewport ? (
-            <MobileBottomSheet
-              open={showHistory}
-              title="Tournament History"
-              subtitle={`${displayTournamentHistory.length} entries`}
-              onClose={() => setShowHistory(false)}
-              sheetClassName="history-modal-shell"
-            >
-              {historyLoading && displayTournamentHistory.length > 0 && (
-                <div className="mb-3 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-700">
-                  Refreshing latest tournament history...
-                </div>
-              )}
-              {showHistorySkeleton ? (
-                <LoadingRows rows={4} />
-              ) : displayTournamentHistory.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <History size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p>No tournament history yet</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {displayTournamentHistory.map((tournament, index) => {
-                    const tournamentId = tournament.id || tournament.appwriteId;
-                    const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
-                    return (
-                      <div key={tournamentId || `${tournament.name || 'history'}-${index}`} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all bg-gradient-to-r from-white to-gray-50 history-entry-card">
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
-                            <p className="text-xs text-gray-500">{formatTournamentDateLabel(tournament.date)} • {tournament.teams?.length || 0} teams</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setSelectedTournament(tournament)}
-                              className="text-blue-600 hover:text-blue-700 text-xs px-3 py-1 rounded-lg hover:bg-blue-50 transition-all font-semibold whitespace-nowrap"
-                            >
-                              View
-                            </button>
-                            {canDeleteActions && (
-                              <button
-                                onClick={() => onDeleteTournament?.(tournamentId)}
-                                disabled={!tournamentId || deletePending}
-                                className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {deletePending ? 'Deleting...' : 'Delete'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {tournament.champion && (
-                          <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-50 to-orange-50 p-3 rounded-lg border-2 border-yellow-200 history-champion-card">
-                            <span className="text-3xl">{tournament.champion.emoji}</span>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-bold text-gray-800 flex items-center gap-2">
-                                <Trophy size={16} className="text-yellow-600" />
-                                {tournament.champion.name}
-                              </p>
-                              <p className="text-xs text-gray-600">
-                                {tournament.champion.player || tournament.champion.player1}
-                                {tournament.champion.player2 && ` & ${tournament.champion.player2}`}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </MobileBottomSheet>
-          ) : (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-              <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden history-modal-shell app-modal-shell">
-                <div className="app-gradient-band p-6 flex items-center justify-between setup-modal-header setup-modal-header-history">
-                  <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <History size={24} /> Tournament History
-                  </h3>
-                  <button
-                    onClick={() => setShowHistory(false)}
-                    aria-label="Close tournament history"
-                    className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
-                  >
-                    <X size={24} />
-                  </button>
-                </div>
-                <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
-                  {historyLoading && displayTournamentHistory.length > 0 && (
-                    <div className="mb-3 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-700">
-                      Refreshing latest tournament history...
-                    </div>
-                  )}
-                  {showHistorySkeleton ? (
-                    <LoadingRows rows={4} />
-                  ) : displayTournamentHistory.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      <History size={48} className="mx-auto mb-4 text-gray-300" />
-                      <p>No tournament history yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {displayTournamentHistory.map((tournament, index) => {
-                        const tournamentId = tournament.id || tournament.appwriteId;
-                        const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
-                        return (
-                          <div key={tournamentId || `${tournament.name || 'history'}-${index}`} className="border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 transition-all bg-gradient-to-r from-white to-gray-50 history-entry-card">
-                            <div className="flex items-start justify-between gap-3 mb-3">
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-bold text-lg text-gray-800 mb-1">{tournament.name}</h4>
-                                <p className="text-xs text-gray-500">{formatTournamentDateLabel(tournament.date)} • {tournament.teams?.length || 0} teams</p>
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => setSelectedTournament(tournament)}
-                                  className="text-blue-600 hover:text-blue-700 text-xs px-3 py-1 rounded-lg hover:bg-blue-50 transition-all font-semibold whitespace-nowrap"
-                                >
-                                  View
-                                </button>
-                                {canDeleteActions && (
-                                  <button
-                                    onClick={() => onDeleteTournament?.(tournamentId)}
-                                    disabled={!tournamentId || deletePending}
-                                    className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    {deletePending ? 'Deleting...' : 'Delete'}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            {tournament.champion && (
-                              <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-50 to-orange-50 p-3 rounded-lg border-2 border-yellow-200 history-champion-card">
-                                <span className="text-3xl">{tournament.champion.emoji}</span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-bold text-gray-800 flex items-center gap-2">
-                                    <Trophy size={16} className="text-yellow-600" />
-                                    {tournament.champion.name}
-                                  </p>
-                                  <p className="text-xs text-gray-600">
-                                    {tournament.champion.player || tournament.champion.player1}
-                                    {tournament.champion.player2 && ` & ${tournament.champion.player2}`}
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Casual Match History Modal */}
-      {showCasualHistory && (
-        <>
-          {isMobileViewport ? (
-            <MobileBottomSheet
-              open={showCasualHistory}
-              title="Casual Match History"
-              subtitle={`${displayCasualMatches.length} matches`}
-              onClose={() => setShowCasualHistory(false)}
-              sheetClassName="casual-history-shell"
-            >
-              {casualLoading && displayCasualMatches.length > 0 && (
-                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                  Refreshing latest casual matches...
-                </div>
-              )}
-              {showCasualSkeleton ? (
-                <LoadingRows rows={4} />
-              ) : displayCasualMatches.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p>No casual match history yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {displayCasualMatches.map((match, index) => {
-                    const team1Name = formatCasualTeam(match.team1);
-                    const team2Name = formatCasualTeam(match.team2);
-                    const score1 = Number(match.score1);
-                    const score2 = Number(match.score2);
-                    const isTeam1Winner = score1 > score2;
-                    const matchId = match.id || match.appwriteId;
-                    const deletePending = Boolean(matchId && isPendingAction(`setup.delete-casual.${String(matchId)}`));
-                    return (
-                      <div key={matchId || index} className="border-2 border-gray-200 rounded-xl p-4 bg-gradient-to-r from-white to-gray-50 casual-history-card">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="min-w-0">
-                            <p className="text-xs text-gray-500 mb-1 casual-history-meta">
-                              {match.matchType === 'doubles' ? '👥 Doubles' : '🎯 Singles'} • {new Date(match.date || match.createdAt || Date.now()).toLocaleString()}
-                            </p>
-                            <p className="font-semibold text-gray-800 overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] leading-snug break-words">
-                              <span className={isTeam1Winner ? 'text-green-700' : ''}>{team1Name}</span> vs <span className={!isTeam1Winner ? 'text-green-700' : ''}>{team2Name}</span>
-                            </p>
-                            <p className="text-sm text-gray-700 mt-1 casual-history-score">Score: {score1} - {score2}</p>
-                          </div>
-                          {canDeleteActions && (
-                            <button
-                              onClick={() => onDeleteCasualMatch?.(matchId)}
-                              disabled={!matchId || deletePending}
-                              className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed casual-history-delete-btn"
-                            >
-                              {deletePending ? 'Deleting...' : 'Delete'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </MobileBottomSheet>
-          ) : (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
-              <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden casual-history-shell app-modal-shell">
-                <div className="app-gradient-band p-6 flex items-center justify-between setup-modal-header setup-modal-header-casual">
-                  <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Calendar size={24} /> Casual Match History
-                  </h3>
-                  <button
-                    onClick={() => setShowCasualHistory(false)}
-                    aria-label="Close casual history"
-                    className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
-                  >
-                    <X size={24} />
-                  </button>
-                </div>
-                <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
-                  {casualLoading && displayCasualMatches.length > 0 && (
-                    <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                      Refreshing latest casual matches...
-                    </div>
-                  )}
-                  {showCasualSkeleton ? (
-                    <LoadingRows rows={4} />
-                  ) : displayCasualMatches.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
-                      <p>No casual match history yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {displayCasualMatches.map((match, index) => {
-                        const team1Name = formatCasualTeam(match.team1);
-                        const team2Name = formatCasualTeam(match.team2);
-                        const score1 = Number(match.score1);
-                        const score2 = Number(match.score2);
-                        const isTeam1Winner = score1 > score2;
-                        const matchId = match.id || match.appwriteId;
-                        const deletePending = Boolean(matchId && isPendingAction(`setup.delete-casual.${String(matchId)}`));
-                        return (
-                          <div key={matchId || index} className="border-2 border-gray-200 rounded-xl p-4 bg-gradient-to-r from-white to-gray-50 casual-history-card">
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                              <div className="min-w-0">
-                                <p className="text-xs text-gray-500 mb-1 casual-history-meta">
-                                  {match.matchType === 'doubles' ? '👥 Doubles' : '🎯 Singles'} • {new Date(match.date || match.createdAt || Date.now()).toLocaleString()}
-                                </p>
-                                <p className="font-semibold text-gray-800 overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] leading-snug break-words">
-                                  <span className={isTeam1Winner ? 'text-green-700' : ''}>{team1Name}</span> vs <span className={!isTeam1Winner ? 'text-green-700' : ''}>{team2Name}</span>
-                                </p>
-                                <p className="text-sm text-gray-700 mt-1 casual-history-score">Score: {score1} - {score2}</p>
-                              </div>
-                              {canDeleteActions && (
-                                <button
-                                  onClick={() => onDeleteCasualMatch?.(matchId)}
-                                  disabled={!matchId || deletePending}
-                                  className="text-red-500 hover:text-red-700 text-xs px-3 py-1 rounded-lg hover:bg-red-50 transition-all font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed casual-history-delete-btn"
-                                >
-                                  {deletePending ? 'Deleting...' : 'Delete'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      <UnifiedHistoryModal
+        open={historyModalOpen}
+        onClose={closeHistoryModal}
+        isMobileViewport={isMobileViewport}
+        entryCount={unifiedHistoryEntries.length}
+        entries={unifiedHistoryEntries}
+        isLoading={historyLoading || casualLoading}
+        showSkeleton={showUnifiedHistorySkeleton}
+        onViewTournament={setSelectedTournament}
+        onViewCasualMatch={setSelectedCasualMatch}
+        onDeleteTournament={onDeleteTournament}
+        onDeleteCasualMatch={onDeleteCasualMatch}
+        canDeleteActions={canDeleteActions}
+        isPendingAction={isPendingAction}
+        formatCasualTeam={formatCasualTeam}
+        formatCasualMatchMeta={formatCasualMatchMeta}
+        formatCasualScoreLine={formatCasualScoreLine}
+      />
 
       {/* All-Time Stats Modal */}
       {showAllTimeStats && (
@@ -1041,16 +879,35 @@ const SetupScreen = ({
               </button>
             </div>
             <div className="overflow-y-auto max-h-[calc(80vh-88px)]">
-              {statsLoading && displayAllTimeStats.length > 0 && (
+              {statsLoading && boxCricketStatsRows.length > 0 && (
                 <div className="mx-4 mt-4 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
                   Refreshing latest statistics...
+                </div>
+              )}
+              {isBoxCricketStats && boxCricketStatsRows.length > 0 && (
+                <div className="dashboard-v2-filter-tabs mx-4 mt-4" role="tablist" aria-label="Box cricket stat leaders">
+                  {[
+                    { key: 'runs', label: 'Top Scorers' },
+                    { key: 'wickets', label: 'Top Wicket Takers' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={boxCricketStatsTab === tab.key}
+                      className={`dashboard-v2-filter-tab ${boxCricketStatsTab === tab.key ? 'is-active' : ''}`}
+                      onClick={() => setBoxCricketStatsTab(tab.key)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
               )}
               {showStatsSkeleton ? (
                 <div className="p-6">
                   <LoadingRows rows={5} />
                 </div>
-              ) : displayAllTimeStats.length === 0 ? (
+              ) : boxCricketStatsRows.length === 0 ? (
                 <div className="p-12 text-center text-gray-500">
                   <TrendingUp size={48} className="mx-auto mb-4 text-gray-300" />
                   <p>No player statistics available yet</p>
@@ -1058,7 +915,7 @@ const SetupScreen = ({
               ) : (
                 <>
                   <div className="mobile-leaderboard-cards p-4">
-                    {displayAllTimeStats.map((player, index) => (
+                    {boxCricketStatsRows.map((player, index) => (
                       <article key={`stats-modal-card-${player.name}`} className="leaderboard-mobile-card app-surface-card app-card-tier-secondary">
                         <div className="leaderboard-mobile-top">
                           <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
@@ -1075,12 +932,28 @@ const SetupScreen = ({
                           </button>
                         </div>
                         <div className="leaderboard-mobile-metrics">
-                          <span className="leaderboard-stat-chip">Tours {player.tournamentsPlayed}</span>
-                          <span className="leaderboard-stat-chip">Played {player.matchesPlayed}</span>
-                          <span className="leaderboard-stat-chip leaderboard-stat-chip-up">Won {player.matchesWon}</span>
+                          {isBoxCricketStats ? (
+                            <>
+                              <span className="leaderboard-stat-chip">Runs {player.cricketRuns || 0}</span>
+                              <span className="leaderboard-stat-chip">Wkts {player.cricketWickets || 0}</span>
+                              <span className="leaderboard-stat-chip">Matches {player.matchesPlayed}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="leaderboard-stat-chip">Tours {player.tournamentsPlayed}</span>
+                              <span className="leaderboard-stat-chip">Played {player.matchesPlayed}</span>
+                              <span className="leaderboard-stat-chip leaderboard-stat-chip-up">Won {player.matchesWon}</span>
+                            </>
+                          )}
                         </div>
                         <div className="leaderboard-mobile-bottom">
-                          <span className="leaderboard-form-chip leaderboard-form-chip-up">Win {player.winPercentage}%</span>
+                          {isBoxCricketStats ? (
+                            <span className="leaderboard-form-chip leaderboard-form-chip-up">
+                              Won {player.matchesWon} · SR {player.cricketAverage}
+                            </span>
+                          ) : (
+                            <span className="leaderboard-form-chip leaderboard-form-chip-up">Win {player.winPercentage}%</span>
+                          )}
                         </div>
                       </article>
                     ))}
@@ -1092,15 +965,29 @@ const SetupScreen = ({
                         <tr>
                           <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Rank</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Player</th>
-                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">🏆</th>
-                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Tournaments</th>
-                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Played</th>
-                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Won</th>
-                          <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Win %</th>
+                          {isBoxCricketStats ? (
+                            <>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Runs</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Balls</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">4s</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">6s</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Wkts</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Matches</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Won</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">🏆</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Tournaments</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Played</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Won</th>
+                              <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">Win %</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
-                        {displayAllTimeStats.map((player, index) => (
+                        {boxCricketStatsRows.map((player, index) => (
                           <tr key={player.name} className="border-b border-gray-200 hover:bg-gray-50">
                             <td className="px-4 py-4 text-center">
                               <span className={`leaderboard-rank-badge ${index < 3 ? 'leaderboard-rank-badge-podium' : ''}`}>#{index + 1}</span>
@@ -1117,19 +1004,33 @@ const SetupScreen = ({
                                 </button>
                               </div>
                             </td>
-                            <td className="px-4 py-4 text-center">
-                              <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-bold text-sm">
-                                {player.championships}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 text-center font-semibold">{player.tournamentsPlayed}</td>
-                            <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
-                            <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
-                            <td className="px-4 py-4 text-center">
-                              <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm stats-win-badge">
-                                {player.winPercentage}%
-                              </span>
-                            </td>
+                            {isBoxCricketStats ? (
+                              <>
+                                <td className="px-4 py-4 text-center font-semibold">{player.cricketRuns || 0}</td>
+                                <td className="px-4 py-4 text-center font-semibold">{player.cricketBalls || 0}</td>
+                                <td className="px-4 py-4 text-center font-semibold">{player.cricketFours || 0}</td>
+                                <td className="px-4 py-4 text-center font-semibold">{player.cricketSixes || 0}</td>
+                                <td className="px-4 py-4 text-center font-semibold">{player.cricketWickets || 0}</td>
+                                <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
+                                <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-4 py-4 text-center">
+                                  <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-bold text-sm">
+                                    {player.championships}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 text-center font-semibold">{player.tournamentsPlayed}</td>
+                                <td className="px-4 py-4 text-center font-semibold">{player.matchesPlayed}</td>
+                                <td className="px-4 py-4 text-center font-semibold text-green-600">{player.matchesWon}</td>
+                                <td className="px-4 py-4 text-center">
+                                  <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold text-sm stats-win-badge">
+                                    {player.winPercentage}%
+                                  </span>
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -1143,7 +1044,7 @@ const SetupScreen = ({
       )}
 
       {/* ELO Leaderboard Modal */}
-      {showEloLeaderboard && (
+      {showEloLeaderboard && !hideEloFeatures && (
         <>
           {isMobileViewport ? (
             <MobileBottomSheet
@@ -1446,6 +1347,16 @@ const SetupScreen = ({
         />
       )}
 
+      {selectedCasualMatch && (
+        <BoxCricketCasualMatchDetail
+          match={selectedCasualMatch}
+          onClose={() => setSelectedCasualMatch(null)}
+          isMobileViewport={isMobileViewport}
+          formatTeamName={formatCasualTeam}
+          formatScoreLine={formatCasualScoreLine}
+        />
+      )}
+
       <PlayerProfileModal
         playerName={selectedPlayerName}
         profile={selectedPlayerProfile}
@@ -1459,6 +1370,8 @@ const SetupScreen = ({
         canEditPhoto={selectedPlayerCanEditPhoto}
         tournamentHistory={displayTournamentHistory}
         casualMatches={displayCasualMatches}
+        playerRatings={playerRatings}
+        defaultSportId={sportId}
         onUpdatePhoto={onUpdatePlayerPhoto}
         onClose={() => setSelectedPlayerName(null)}
       />

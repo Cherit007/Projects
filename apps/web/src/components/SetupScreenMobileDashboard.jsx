@@ -7,6 +7,8 @@ import {
   isScheduledTournamentAlreadyStarted,
 } from '../utils/appHelpers';
 import TournamentSetupForm from './setup/TournamentSetupForm';
+import MatchTypePicker from './setup/MatchTypePicker';
+import CasualMatchFlow from './setup/CasualMatchFlow';
 
 const SetupScreenMobileDashboard = ({
   mobileSetupView,
@@ -53,6 +55,8 @@ const SetupScreenMobileDashboard = ({
   canDeleteLiveTournament,
   onResumeActiveTournament,
   onDeleteActiveTournament,
+  onResumeCasualDraft,
+  onDeleteCasualDraft,
   scheduledCards,
   onViewScheduledCard,
   onEditScheduledTournament,
@@ -63,8 +67,18 @@ const SetupScreenMobileDashboard = ({
   activeLiveTournaments,
   liveCompletedRows,
   onSelectTournament,
+  onSelectCasualMatch,
+  formatCasualTeam,
+  formatCasualScoreLine,
+  formatCasualMatchMeta,
+  hasViewableBoxCricketDetail,
   totalMatchesPlayed,
   statsPreviewRows,
+  allTimeStatsPreview = [],
+  isBoxCricketStats = false,
+  boxCricketStatsTab = 'runs',
+  setBoxCricketStatsTab = () => {},
+  boxCricketStatsRows = [],
   eloGamificationMap,
   getTierMeta,
   casualCountLabel,
@@ -79,6 +93,8 @@ const SetupScreenMobileDashboard = ({
   premiumEloRows,
   compactEloRows,
   onSelectPlayer,
+  hideEloFeatures = false,
+  casualMatchProps = {},
 }) => (
   <div className="theme-page app-screen-home dashboard-v2-page">
     <div className="dashboard-v2-mobile-shell">
@@ -87,7 +103,17 @@ const SetupScreenMobileDashboard = ({
           <button
             type="button"
             className="dashboard-v2-back"
-            onClick={() => setMobileSetupView(mobileSetupView === 'elo' ? 'stats' : 'home')}
+            onClick={() => {
+              if (mobileSetupView === 'elo') {
+                setMobileSetupView('stats');
+                return;
+              }
+              if (mobileSetupView === 'create' || mobileSetupView === 'casual') {
+                setMobileSetupView('start');
+                return;
+              }
+              setMobileSetupView('home');
+            }}
           >
             ← Back
           </button>
@@ -114,17 +140,17 @@ const SetupScreenMobileDashboard = ({
             <div className="dashboard-v2-sync-row">{syncChip}</div>
 
             <section className="dashboard-v2-hero">
-              <p className="dashboard-v2-hero-label">Start Tournament</p>
-              <h2 className="dashboard-v2-hero-title">Create New Tournament</h2>
+              <p className="dashboard-v2-hero-label">Start match</p>
+              <h2 className="dashboard-v2-hero-title">Casual or tournament</h2>
               <p className="dashboard-v2-hero-copy">
                 {selectedGameModeLabel} · {selectedFormatLabel} format
               </p>
               <button
                 type="button"
                 className="dashboard-v2-primary-btn"
-                onClick={() => setMobileSetupView('create')}
+                onClick={() => setMobileSetupView('start')}
               >
-                + Create Tournament
+                + Start Match
               </button>
             </section>
 
@@ -150,6 +176,7 @@ const SetupScreenMobileDashboard = ({
                 </button>
               </div>
               <div className="dashboard-v2-card">
+                {!hideEloFeatures && (
                 <button
                   type="button"
                   className="dashboard-v2-list-row"
@@ -164,6 +191,7 @@ const SetupScreenMobileDashboard = ({
                   </span>
                   <span className="dashboard-v2-list-chevron">›</span>
                 </button>
+                )}
                 <button
                   type="button"
                   className="dashboard-v2-list-row"
@@ -186,7 +214,7 @@ const SetupScreenMobileDashboard = ({
                   <span className="dashboard-v2-list-icon dashboard-v2-list-icon-green">📊</span>
                   <span className="dashboard-v2-list-copy">
                     <span className="dashboard-v2-list-title">Insights + History</span>
-                    <span className="dashboard-v2-list-subtitle">{completedTournamentsCount} completed tournaments</span>
+                    <span className="dashboard-v2-list-subtitle">{historyCountLabel} tournaments & casual matches</span>
                   </span>
                   <span className="dashboard-v2-list-chevron">›</span>
                 </button>
@@ -265,11 +293,43 @@ const SetupScreenMobileDashboard = ({
           </div>
         )}
 
+        {mobileSetupView === 'start' && (
+          <div className="dashboard-v2-screen">
+            <div className="dashboard-v2-sync-row">{syncChip}</div>
+            <section className="dashboard-v2-card dashboard-v2-create-card tournament-setup-shell">
+              <MatchTypePicker
+                value=""
+                onChange={(nextType) => setMobileSetupView(nextType === 'casual' ? 'casual' : 'create')}
+              />
+            </section>
+          </div>
+        )}
+
+        {mobileSetupView === 'casual' && (
+          <div className="dashboard-v2-screen">
+            <div className="dashboard-v2-sync-row">{syncChip}</div>
+            <CasualMatchFlow
+              layout="inline"
+              sportId={sportId}
+              ruleConfig={ruleConfig}
+              {...casualMatchProps}
+              onClose={() => setMobileSetupView('home')}
+            />
+          </div>
+        )}
+
         {mobileSetupView === 'create' && (
           <div className="dashboard-v2-screen">
             <div className="dashboard-v2-sync-row">{syncChip}</div>
 
             <section className="dashboard-v2-card dashboard-v2-create-card tournament-setup-shell">
+              <button
+                type="button"
+                className="start-match-back-link mb-3"
+                onClick={() => setMobileSetupView('start')}
+              >
+                ← Back to format
+              </button>
               <TournamentSetupForm
                 sportId={sportId}
                 setSportId={setSportId}
@@ -289,6 +349,9 @@ const SetupScreenMobileDashboard = ({
                 onNext={onNext}
                 startTournamentPending={startTournamentPending}
                 showHeader={false}
+                excludeCasualFormat
+                setupEyebrow="Start match"
+                setupTitle="Tournament setup"
                 className="tournament-setup-form-mobile"
               />
             </section>
@@ -320,7 +383,6 @@ const SetupScreenMobileDashboard = ({
             <div className="dashboard-v2-filter-tabs" role="tablist" aria-label="Live sections">
               {[
                 { key: 'inProgress', label: 'In Progress' },
-                { key: 'scheduled', label: 'Scheduled' },
                 { key: 'completed', label: 'Completed' },
               ].map((tab) => (
                 <button
@@ -340,12 +402,17 @@ const SetupScreenMobileDashboard = ({
               <div className="dashboard-v2-stack">
                 {liveInProgressCards.length === 0 ? (
                   <div className="dashboard-v2-empty-card">
-                    <p>No live tournaments yet. Start one from the Create screen.</p>
+                    <p>No live matches yet. Start a casual match or tournament from Create.</p>
                   </div>
                 ) : (
                   liveInProgressCards.map((card) => {
-                    const resumePending = Boolean(isPendingAction(`setup.resume-live.${String(card.id || 'active')}`));
-                    const deletePending = Boolean(isPendingAction(`setup.delete-live.${String(card.id || 'active')}`));
+                    const isCasualDraft = card.kind === 'casualDraft';
+                    const resumePending = Boolean(isPendingAction(
+                      isCasualDraft ? 'setup.resume-casual-draft' : `setup.resume-live.${String(card.id || 'active')}`,
+                    ));
+                    const deletePending = Boolean(isPendingAction(
+                      isCasualDraft ? 'setup.delete-casual-draft' : `setup.delete-live.${String(card.id || 'active')}`,
+                    ));
                     return (
                       <article key={card.id} className="dashboard-v2-card dashboard-v2-live-card">
                         <div className="dashboard-v2-live-head">
@@ -360,7 +427,13 @@ const SetupScreenMobileDashboard = ({
                           <button
                             type="button"
                             className="dashboard-v2-primary-btn dashboard-v2-primary-btn-sm"
-                            onClick={() => onResumeActiveTournament?.(card.id)}
+                            onClick={() => {
+                              if (isCasualDraft) {
+                                onResumeCasualDraft?.();
+                                return;
+                              }
+                              onResumeActiveTournament?.(card.id);
+                            }}
                             disabled={resumePending || deletePending}
                           >
                             {resumePending ? 'Resuming...' : 'Resume'}
@@ -369,83 +442,14 @@ const SetupScreenMobileDashboard = ({
                             <button
                               type="button"
                               className="dashboard-v2-secondary-btn dashboard-v2-danger-btn"
-                              onClick={() => onDeleteActiveTournament?.(card.id)}
+                              onClick={() => {
+                                if (isCasualDraft) {
+                                  onDeleteCasualDraft?.();
+                                  return;
+                                }
+                                onDeleteActiveTournament?.(card.id);
+                              }}
                               disabled={deletePending || resumePending}
-                            >
-                              {deletePending ? 'Deleting...' : 'Delete'}
-                            </button>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {mobileLiveTab === 'scheduled' && (
-              <div className="dashboard-v2-stack">
-                {scheduledCards.length === 0 ? (
-                  <div className="dashboard-v2-empty-card">
-                    <p>No scheduled tournaments right now.</p>
-                  </div>
-                ) : (
-                  scheduledCards.map((tournament) => {
-                    const tournamentId = tournament.appwriteId || tournament.id;
-                    const editPending = Boolean(tournamentId && isPendingAction(`setup.edit-scheduled.${String(tournamentId)}`));
-                    const startPending = Boolean(tournamentId && isPendingAction(`setup.start-scheduled.${String(tournamentId)}`));
-                    const viewPending = Boolean(tournamentId && isPendingAction(`setup.view-scheduled.${String(tournamentId)}`));
-                    const deletePending = Boolean(tournamentId && isPendingAction(`setup.delete-tournament.${String(tournamentId)}`));
-                    const alreadyStarted = isScheduledTournamentAlreadyStarted(tournament, activeLiveTournaments);
-                    return (
-                      <article key={tournamentId} className="dashboard-v2-card dashboard-v2-live-card">
-                        <div className="dashboard-v2-live-head">
-                          <span className="dashboard-v2-pill">Scheduled</span>
-                          <span className="dashboard-v2-live-phase">{formatTournamentDateLabel(tournament.date, 'To be announced')}</span>
-                        </div>
-                        <h2 className="dashboard-v2-live-title">{tournament.name}</h2>
-                        <p className="dashboard-v2-live-copy">
-                          {(Array.isArray(tournament.teams) ? tournament.teams.length : (typeof tournament.teamsCount === 'number' ? tournament.teamsCount : 0))} teams
-                        </p>
-                        <div className="dashboard-v2-inline-actions dashboard-v2-inline-actions-wrap">
-                          <button
-                            type="button"
-                            className="dashboard-v2-secondary-btn"
-                            onClick={() => { void onViewScheduledCard(tournament); }}
-                            disabled={!tournamentId || viewPending}
-                          >
-                            {viewPending ? 'Loading...' : 'View'}
-                          </button>
-                          <button
-                            type="button"
-                            className="dashboard-v2-secondary-btn"
-                            onClick={() => onEditScheduledTournament?.(tournamentId)}
-                            disabled={!tournamentId || alreadyStarted || editPending || startPending || deletePending || viewPending}
-                          >
-                            {editPending ? 'Loading...' : 'Edit'}
-                          </button>
-                          <button
-                            type="button"
-                            className="dashboard-v2-primary-btn dashboard-v2-primary-btn-sm"
-                            onClick={() => onStartScheduledTournament?.(tournamentId)}
-                            disabled={!tournamentId || alreadyStarted || startPending || deletePending || viewPending}
-                          >
-                            {alreadyStarted ? 'Started' : (startPending ? 'Starting...' : 'Start')}
-                          </button>
-                          <button
-                            type="button"
-                            className="dashboard-v2-secondary-btn"
-                            onClick={() => onShareScheduledTournament?.(tournament)}
-                            disabled={startPending || deletePending || viewPending}
-                          >
-                            WhatsApp
-                          </button>
-                          {canDeleteActions && (
-                            <button
-                              type="button"
-                              className="dashboard-v2-secondary-btn dashboard-v2-danger-btn"
-                              onClick={() => onDeleteTournament?.(tournamentId)}
-                              disabled={!tournamentId || deletePending || startPending || editPending || viewPending}
                             >
                               {deletePending ? 'Deleting...' : 'Delete'}
                             </button>
@@ -462,26 +466,72 @@ const SetupScreenMobileDashboard = ({
               <div className="dashboard-v2-stack">
                 {liveCompletedRows.length === 0 ? (
                   <div className="dashboard-v2-empty-card">
-                    <p>No completed tournaments yet.</p>
+                    <p>No completed matches yet.</p>
                   </div>
                 ) : (
-                  liveCompletedRows.map((tournament, index) => (
-                    <button
-                      key={tournament.id || tournament.appwriteId || `${tournament.name}-${index}`}
-                      type="button"
-                      className="dashboard-v2-card dashboard-v2-history-card"
-                      onClick={() => onSelectTournament(tournament)}
-                    >
-                      <div className="dashboard-v2-live-head">
-                        <span className="dashboard-v2-pill is-positive">Completed</span>
-                        <span className="dashboard-v2-live-phase">{formatTournamentDateLabel(tournament.date)}</span>
-                      </div>
-                      <h2 className="dashboard-v2-live-title">{tournament.name}</h2>
-                      <p className="dashboard-v2-live-copy">
-                        {tournament.champion?.name ? `${tournament.champion.name} won the title` : 'Tournament completed'}
-                      </p>
-                    </button>
-                  ))
+                  liveCompletedRows.map((entry) => {
+                    if (entry.kind === 'casual') {
+                      const match = entry.match;
+                      const team1Name = formatCasualTeam(match.team1, match);
+                      const team2Name = formatCasualTeam(match.team2, match);
+                      const score1 = Number(match.score1);
+                      const score2 = Number(match.score2);
+                      const isTeam1Winner = score1 > score2;
+                      const canView = hasViewableBoxCricketDetail?.(match);
+                      return (
+                        <div
+                          key={entry.id}
+                          className="dashboard-v2-card dashboard-v2-history-card"
+                        >
+                          <div className="dashboard-v2-live-head">
+                            <span className="dashboard-v2-pill is-positive">Casual</span>
+                            <span className="dashboard-v2-live-phase">
+                              {new Date(match.date || match.completedAt || match.createdAt || Date.now()).toLocaleString()}
+                            </span>
+                          </div>
+                          <h2 className="dashboard-v2-live-title">
+                            <span className={isTeam1Winner ? 'text-green-700' : ''}>{team1Name}</span>
+                            {' vs '}
+                            <span className={!isTeam1Winner ? 'text-green-700' : ''}>{team2Name}</span>
+                          </h2>
+                          <p className="dashboard-v2-live-copy">
+                            Score: {formatCasualScoreLine(match, team1Name, team2Name)}
+                          </p>
+                          <p className="dashboard-v2-live-copy">{formatCasualMatchMeta(match)}</p>
+                          {canView && (
+                            <div className="dashboard-v2-inline-actions">
+                              <button
+                                type="button"
+                                className="dashboard-v2-primary-btn dashboard-v2-primary-btn-sm"
+                                onClick={() => onSelectCasualMatch?.(match)}
+                              >
+                                View
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    const tournament = entry.tournament;
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        className="dashboard-v2-card dashboard-v2-history-card"
+                        onClick={() => onSelectTournament(tournament)}
+                      >
+                        <div className="dashboard-v2-live-head">
+                          <span className="dashboard-v2-pill is-positive">Tournament</span>
+                          <span className="dashboard-v2-live-phase">{formatTournamentDateLabel(tournament.date)}</span>
+                        </div>
+                        <h2 className="dashboard-v2-live-title">{tournament.name}</h2>
+                        <p className="dashboard-v2-live-copy">
+                          {tournament.champion?.name ? `${tournament.champion.name} won the title` : 'Tournament completed'}
+                        </p>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -490,12 +540,32 @@ const SetupScreenMobileDashboard = ({
 
         {mobileSetupView === 'stats' && (
           <div className="dashboard-v2-screen">
+            {isBoxCricketStats && (
+              <div className="dashboard-v2-filter-tabs" role="tablist" aria-label="Box cricket stat leaders">
+                {[
+                  { key: 'runs', label: 'Top Scorers' },
+                  { key: 'wickets', label: 'Top Wicket Takers' },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={boxCricketStatsTab === tab.key}
+                    className={`dashboard-v2-filter-tab ${boxCricketStatsTab === tab.key ? 'is-active' : ''}`}
+                    onClick={() => setBoxCricketStatsTab(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <section className="dashboard-v2-stats-grid dashboard-v2-stats-grid-tight">
               <article className="dashboard-v2-stat-card">
                 <p className="dashboard-v2-stat-icon">🎯</p>
                 <p className="dashboard-v2-stat-value">{totalMatchesPlayed}</p>
                 <p className="dashboard-v2-stat-label">Total Matches</p>
               </article>
+              {!hideEloFeatures && (
               <article className="dashboard-v2-stat-card">
                 <p className="dashboard-v2-stat-icon">🏆</p>
                 <p className="dashboard-v2-stat-value">{topEloPlayer ? topEloPlayer.rating : '--'}</p>
@@ -503,8 +573,10 @@ const SetupScreenMobileDashboard = ({
                   {topEloPlayer ? `Top ELO (${topEloPlayer.name})` : 'Top ELO Pending'}
                 </p>
               </article>
+              )}
             </section>
 
+            {!hideEloFeatures && (
             <section className="dashboard-v2-section">
               <div className="dashboard-v2-section-head">
                 <h2 className="dashboard-v2-section-title">ELO Leaderboard</h2>
@@ -550,25 +622,62 @@ const SetupScreenMobileDashboard = ({
                 )}
               </div>
             </section>
+            )}
+
+            {hideEloFeatures && (
+            <section className="dashboard-v2-section">
+              <div className="dashboard-v2-section-head">
+                <h2 className="dashboard-v2-section-title">
+                  {boxCricketStatsTab === 'wickets' ? 'Top Wicket Takers' : 'Top Scorers'}
+                </h2>
+                <button
+                  type="button"
+                  className="dashboard-v2-section-link"
+                  onClick={() => setShowAllTimeStats(true)}
+                >
+                  Full list →
+                </button>
+              </div>
+              <div className="dashboard-v2-card">
+                {(boxCricketStatsRows.length > 0 ? boxCricketStatsRows : allTimeStatsPreview).length === 0 ? (
+                  <div className="dashboard-v2-empty-card">
+                    <p>No player stats yet. Finish ball-by-ball matches to build career stats.</p>
+                  </div>
+                ) : (
+                  (boxCricketStatsRows.length > 0 ? boxCricketStatsRows : allTimeStatsPreview).slice(0, 5).map((player, index) => (
+                    <button
+                      key={`all-time-preview-${player.name}`}
+                      type="button"
+                      className="dashboard-v2-list-row"
+                      onClick={() => onSelectPlayer(player.name)}
+                    >
+                      <span className="dashboard-v2-list-icon dashboard-v2-list-icon-blue">#{index + 1}</span>
+                      <span className="dashboard-v2-list-copy">
+                        <span className="dashboard-v2-list-title">{player.name}</span>
+                        <span className="dashboard-v2-list-subtitle">
+                          {boxCricketStatsTab === 'wickets'
+                            ? `${player.cricketWickets || 0} wkts · ${player.cricketRuns || 0} runs · ${player.matchesWon || 0} wins`
+                            : `${player.cricketRuns || 0} runs · ${player.cricketWickets || 0} wkts · ${player.matchesWon || 0} wins`}
+                        </span>
+                      </span>
+                      <span className="dashboard-v2-list-chevron">›</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </section>
+            )}
 
             <section className="dashboard-v2-section">
               <div className="dashboard-v2-section-head">
                 <h2 className="dashboard-v2-section-title">Records</h2>
               </div>
               <div className="dashboard-v2-card">
-                <button type="button" className="dashboard-v2-list-row" onClick={() => setShowCasualHistory(true)}>
-                  <span className="dashboard-v2-list-icon dashboard-v2-list-icon-green">📅</span>
-                  <span className="dashboard-v2-list-copy">
-                    <span className="dashboard-v2-list-title">Casual Matches</span>
-                    <span className="dashboard-v2-list-subtitle">{casualCountLabel} casual records</span>
-                  </span>
-                  <span className="dashboard-v2-list-chevron">›</span>
-                </button>
                 <button type="button" className="dashboard-v2-list-row" onClick={() => setShowHistory(true)}>
-                  <span className="dashboard-v2-list-icon dashboard-v2-list-icon-amber">🏟️</span>
+                  <span className="dashboard-v2-list-icon dashboard-v2-list-icon-amber">📜</span>
                   <span className="dashboard-v2-list-copy">
-                    <span className="dashboard-v2-list-title">Tournament History</span>
-                    <span className="dashboard-v2-list-subtitle">{historyCountLabel} completed entries</span>
+                    <span className="dashboard-v2-list-title">History</span>
+                    <span className="dashboard-v2-list-subtitle">{historyCountLabel} tournaments & casual matches</span>
                   </span>
                   <span className="dashboard-v2-list-chevron">›</span>
                 </button>
@@ -576,7 +685,9 @@ const SetupScreenMobileDashboard = ({
                   <span className="dashboard-v2-list-icon dashboard-v2-list-icon-blue">📈</span>
                   <span className="dashboard-v2-list-copy">
                     <span className="dashboard-v2-list-title">All-Time Stats</span>
-                    <span className="dashboard-v2-list-subtitle">Career summary across tournaments</span>
+                    <span className="dashboard-v2-list-subtitle">
+                      {isBoxCricketStats ? 'Career runs, wickets and wins' : 'Career summary across tournaments'}
+                    </span>
                   </span>
                   <span className="dashboard-v2-list-chevron">›</span>
                 </button>
@@ -585,7 +696,7 @@ const SetupScreenMobileDashboard = ({
           </div>
         )}
 
-        {mobileSetupView === 'elo' && (
+        {mobileSetupView === 'elo' && !hideEloFeatures && (
           <div className="dashboard-v2-screen">
             <div className="dashboard-v2-filter-tabs" role="tablist" aria-label="ELO filters">
               {[

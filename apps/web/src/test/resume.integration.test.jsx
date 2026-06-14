@@ -9,7 +9,7 @@ import {
   flushQueuedLocalStorageWrites,
   resetLocalStorageWriteQueue,
 } from '../services/localStorageWriteService';
-import { TOURNAMENT_NAME_PLACEHOLDER } from '../components/setup/sportSetupConfig';
+import { enterSportWorkspace, waitForSportHome } from './sportNavigationTestHelpers';
 
 vi.mock('../hooks/useAppwriteSync', () => ({
   useAppwriteSync: () => ({
@@ -100,7 +100,7 @@ const buildActiveTournament = ({
   };
 };
 
-const renderApp = ({ hash = '#/setup' } = {}) => {
+const renderApp = ({ hash = '#/sports/badminton' } = {}) => {
   appStore.resetState();
   if (hash !== undefined) {
     window.location.hash = hash;
@@ -145,7 +145,7 @@ const tearDownLiveApp = async (renderResult) => {
   sessionStorage.clear();
   clearAutoResumeSuppressedTournamentId();
   appStore.resetState();
-  window.location.hash = '#/setup';
+  window.location.hash = '#/sports/badminton';
   await settleAppAsync();
 };
 
@@ -206,11 +206,7 @@ describe('Resume tournament integration', () => {
     await user.click(screen.getAllByRole('button', { name: /Delete & New/i })[0]);
     await user.click(await screen.findByRole('button', { name: /Delete & Start New/i }));
 
-    expect(await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    )).toBeInTheDocument();
+    expect(await waitForSportHome(ASYNC_UI_TIMEOUT)).toBeInTheDocument();
     await waitFor(() => {
       expect(JSON.stringify(readPersistedHistory())).toBe('[]');
     });
@@ -219,11 +215,7 @@ describe('Resume tournament integration', () => {
     await tearDownLiveApp(firstRender);
 
     const refreshRender = renderApp();
-    expect(await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    )).toBeInTheDocument();
+    expect(await waitForSportHome(ASYNC_UI_TIMEOUT)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Resume/i })).not.toBeInTheDocument();
     await tearDownLiveApp(refreshRender);
   }, 15000);
@@ -247,11 +239,7 @@ describe('Resume tournament integration', () => {
     const user = userEvent.setup();
     const view = renderApp();
 
-    expect(await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    )).toBeInTheDocument();
+    expect(await waitForSportHome(ASYNC_UI_TIMEOUT)).toBeInTheDocument();
 
     const liveRows = screen.getAllByText(/Cup/i)
       .map((node) => node.closest('.setup-live-row'))
@@ -296,11 +284,7 @@ describe('Resume tournament integration', () => {
     const user = userEvent.setup();
     const view = renderApp();
 
-    expect(await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    )).toBeInTheDocument();
+    expect(await waitForSportHome(ASYNC_UI_TIMEOUT)).toBeInTheDocument();
 
     const liveRows = screen.getAllByText('Night Cup')
       .map((node) => node.closest('.setup-live-row'))
@@ -354,11 +338,7 @@ describe('Resume tournament integration', () => {
     expect(await screen.findByText(/Match 2/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
 
     await user.click(screen.getAllByRole('button', { name: /^Home$/i })[0]);
-    expect(await screen.findByPlaceholderText(
-      TOURNAMENT_NAME_PLACEHOLDER,
-      {},
-      { timeout: ASYNC_UI_TIMEOUT }
-    )).toBeInTheDocument();
+    expect(await waitForSportHome(ASYNC_UI_TIMEOUT)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Resume/i }));
     expect(await screen.findByText(/Match 2/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();

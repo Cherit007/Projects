@@ -8,7 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import StartTournamentLane from './home/StartTournamentLane';
+import StartMatchLane from './home/StartMatchLane';
 import ExploreDataLane from './home/ExploreDataLane';
 import {
   formatTournamentDateLabel,
@@ -75,6 +75,8 @@ const SetupScreenDesktop = ({
   playerDatabase,
   teamNameDatabase,
   narratives,
+  hideEloFeatures = false,
+  casualMatchProps = {},
 }) => (
   <div className="theme-page py-8 px-4 app-screen-home">
     <div className="max-w-2xl mx-auto">
@@ -275,7 +277,7 @@ const SetupScreenDesktop = ({
         )}
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <StartTournamentLane
+          <StartMatchLane
             sportId={sportId}
             setSportId={setSportId}
             ruleConfig={ruleConfig}
@@ -293,6 +295,8 @@ const SetupScreenDesktop = ({
             setTournamentName={setTournamentName}
             onNext={onNext}
             startTournamentPending={startTournamentPending}
+            showSportStep={false}
+            casualMatchProps={casualMatchProps}
           />
           <ExploreDataLane
             completedTournamentsCount={completedTournamentsCount}
@@ -322,6 +326,8 @@ const SetupScreenDesktop = ({
             playerDatabase={playerDatabase}
             teamNameDatabase={teamNameDatabase}
             narratives={narratives}
+            sportId={sportId}
+            hideEloFeatures={hideEloFeatures}
           />
         </div>
       </div>

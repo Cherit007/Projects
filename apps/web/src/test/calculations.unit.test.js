@@ -218,6 +218,82 @@ describe("leaderboard/stat sorting stability", () => {
     expect(stats.map((entry) => entry.name).slice(0, 2)).toEqual(["Amy", "Bob"]);
   });
 
+  it("includes box cricket casual matches with squad players and batting stats", () => {
+    const stats = calculateCumulativePlayerStats({
+      tournamentHistory: [],
+      casualMatches: [{
+        sportId: "boxCricket",
+        completedAt: "2026-06-01T12:00:00.000Z",
+        winner: "team1",
+        team1: {
+          id: 1,
+          name: "Aces",
+          squad: [{ id: "p1", name: "Alex" }, { id: "p2", name: "Ben" }],
+        },
+        team2: {
+          id: 2,
+          name: "Blaze",
+          squad: [{ id: "p9", name: "Chris" }],
+        },
+        score1: 45,
+        score2: 42,
+        statistics: {
+          sportId: "boxCricket",
+          format: "casualSeries",
+          teams: {
+            team1: { id: 1, name: "Aces", squad: [{ id: "p1", name: "Alex" }, { id: "p2", name: "Ben" }] },
+            team2: { id: 2, name: "Blaze", squad: [{ id: "p9", name: "Chris" }] },
+          },
+          series: {
+            format: "single",
+            winnerTeamId: 1,
+            games: [{
+              gameNo: 1,
+              score1: 45,
+              score2: 42,
+              winnerTeamId: 1,
+              statistics: {
+                sportId: "boxCricket",
+                scoringMode: "ballByBall",
+                oversLimit: 6,
+                innings: [
+                  {
+                    battingTeamId: 1,
+                    bowlingTeamId: 2,
+                    runs: 45,
+                    wickets: 2,
+                    overs: 6,
+                    ballLog: [{ kind: "runs", runs: 10, strikerId: "p1", nonStrikerId: "p2", bowlerId: "p9" }],
+                  },
+                  {
+                    battingTeamId: 2,
+                    bowlingTeamId: 1,
+                    runs: 42,
+                    wickets: 3,
+                    overs: 6,
+                    ballLog: [{ kind: "runs", runs: 4, strikerId: "p9", nonStrikerId: "p10", bowlerId: "p2" }],
+                  },
+                ],
+                result: { winnerTeamId: 1 },
+              },
+            }],
+          },
+        },
+      }],
+    });
+
+    expect(stats.find((entry) => entry.name === "Alex")).toMatchObject({
+      matchesPlayed: 1,
+      matchesWon: 1,
+      cricketRuns: 10,
+    });
+    expect(stats.find((entry) => entry.name === "Chris")).toMatchObject({
+      matchesPlayed: 1,
+      matchesWon: 0,
+      cricketRuns: 4,
+    });
+  });
+
   it("includes casual matches in cumulative all-time stats without inflating tournament counts", () => {
     const stats = calculateCumulativePlayerStats({
       tournamentHistory: [
@@ -260,5 +336,19 @@ describe("leaderboard/stat sorting stability", () => {
       matchesWon: 0,
       tournamentsPlayed: 0,
     });
+  });
+
+  it('drops stats for casual matches removed from history (delete simulation)', () => {
+    const match = {
+      completed: true,
+      team1: { player1: 'Amy', player2: '' },
+      team2: { player1: 'Eli', player2: '' },
+      score1: 21,
+      score2: 16,
+    };
+    const withMatch = calculateCumulativePlayerStats({ tournamentHistory: [], casualMatches: [match] });
+    const withoutMatch = calculateCumulativePlayerStats({ tournamentHistory: [], casualMatches: [] });
+    expect(withMatch.find((entry) => entry.name === 'Eli')?.matchesPlayed).toBe(1);
+    expect(withoutMatch.find((entry) => entry.name === 'Eli')).toBeUndefined();
   });
 });

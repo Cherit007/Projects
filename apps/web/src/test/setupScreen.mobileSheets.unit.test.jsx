@@ -79,7 +79,7 @@ const baseProps = {
 };
 
 describe('SetupScreen mobile bottom sheets', () => {
-  it('renders tournament history as explicit bottom sheet on mobile', () => {
+  it('renders unified history as explicit bottom sheet on mobile', () => {
     render(
       <SetupScreen
         {...baseProps}
@@ -88,12 +88,13 @@ describe('SetupScreen mobile bottom sheets', () => {
       />
     );
 
-    const dialog = screen.getByRole('dialog', { name: /Tournament History/i });
+    const dialog = screen.getByRole('dialog', { name: /^History$/i });
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveClass('mobile-bottom-sheet-shell');
+    expect(screen.getByText('Night Cup')).toBeInTheDocument();
   });
 
-  it('renders casual history as explicit bottom sheet on mobile', () => {
+  it('renders casual matches inside unified history on mobile', () => {
     render(
       <SetupScreen
         {...baseProps}
@@ -109,11 +110,11 @@ describe('SetupScreen mobile bottom sheets', () => {
       />
     );
 
-    const dialog = screen.getByRole('dialog', { name: /Casual Match History/i });
+    const dialog = screen.getByRole('dialog', { name: /^History$/i });
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveClass('mobile-bottom-sheet-shell');
-    expect(screen.getByText('A & B')).toBeInTheDocument();
-    expect(screen.getByText('C & D')).toBeInTheDocument();
+    expect(screen.getByText(/A & B/)).toBeInTheDocument();
+    expect(screen.getByText(/C & D/)).toBeInTheDocument();
   });
 
   it('renders elo leaderboard as explicit bottom sheet on mobile', () => {

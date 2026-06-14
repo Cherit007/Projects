@@ -1,6 +1,8 @@
 import { calculateCumulativePlayerStats } from '@fixture-maker/domain/stats/CumulativeStatsCalculator.js';
 import { getPlayerLeaderboard } from '@fixture-maker/domain/scoring/EloCalculator.js';
 import { deriveRatingsFromHistory } from './appHelpers';
+import { filterBySport } from './sportDataFilters';
+import { sportUsesEloRatings } from './sportFeatures';
 
 const normalizeName = (value) => String(value || '').trim().toLowerCase();
 
@@ -45,14 +47,32 @@ export const buildDashboardDerivedData = ({
   tournamentHistory = [],
   casualMatches = [],
   playerRatings = {},
+  sportId = null,
 } = {}) => {
   const scope = normalizeAnalyticsScope({ tournamentHistory, casualMatches });
+  const filteredScope = sportId
+    ? {
+      tournamentHistory: filterBySport(scope.tournamentHistory, sportId),
+      casualMatches: filterBySport(scope.casualMatches, sportId),
+    }
+    : scope;
+
+  const effectiveRatings = sportId
+    ? deriveRatingsFromHistory({
+      history: filteredScope.tournamentHistory,
+      casual: filteredScope.casualMatches,
+    })
+    : (playerRatings || {});
+
+  const eloLeaderboard = sportUsesEloRatings(sportId)
+    ? filterLeaderboardRowsByRecordedMatches(
+      getPlayerLeaderboard(effectiveRatings),
+      filteredScope,
+    )
+    : [];
 
   return {
-    cumulativeAllTimeStats: calculateCumulativePlayerStats(scope),
-    eloLeaderboard: filterLeaderboardRowsByRecordedMatches(
-      getPlayerLeaderboard(playerRatings || {}),
-      scope
-    ),
+    cumulativeAllTimeStats: calculateCumulativePlayerStats(filteredScope),
+    eloLeaderboard,
   };
 };

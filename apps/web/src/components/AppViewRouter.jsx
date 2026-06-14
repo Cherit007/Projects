@@ -2,10 +2,10 @@ import React, { Suspense, lazy } from 'react';
 import BadmintonLoader from './BadmintonLoader';
 import { APP_ROUTE_KEYS } from '../utils/appRoutes';
 
+const SportHubScreen = lazy(() => import('./SportHubScreen'));
 const SetupScreen = lazy(() => import('./SetupScreen'));
 const TeamEntry = lazy(() => import('./Teamentry.tsx'));
 const TournamentView = lazy(() => import('./Tournamentview'));
-const CasualMatch = lazy(() => import('./CasualMatch'));
 const AuthScreen = lazy(() => import('./AuthScreen'));
 const GroupAccessScreen = lazy(() => import('./GroupAccessScreen'));
 const GroupHeader = lazy(() => import('./GroupHeader'));
@@ -21,6 +21,7 @@ const AppViewRouter = ({
   authResolved,
   groupResolved,
   requiresAuth,
+  groupsEnabled = true,
   currentUser,
   isGuestViewer,
   activeGroup,
@@ -48,7 +49,9 @@ const AppViewRouter = ({
   onSelectGroup,
   onOpenProfile,
   onGoHome,
+  onGoSportHub,
   onBackToGroups,
+  sportMeta = null,
   onOpenRequestCenter,
   onLogout,
   onCloseRequestCenter,
@@ -59,6 +62,7 @@ const AppViewRouter = ({
   onDeleteGroup,
   onConfirmAction,
   viewerDashboardProps,
+  sportHubProps,
   setupScreenProps,
   teamEntryProps,
   tournamentViewProps,
@@ -69,12 +73,12 @@ const AppViewRouter = ({
 }) => {
   const currentRouteKey = routeKey || (() => {
     if (requiresAuth && !currentUser && !isGuestViewer) return APP_ROUTE_KEYS.AUTH;
-    if (requiresAuth && groupRole === 'admin' && showRequestCenter) return APP_ROUTE_KEYS.GROUP_REQUESTS;
-    if (requiresAuth && !activeGroup) return APP_ROUTE_KEYS.GROUPS;
+    if (requiresAuth && groupsEnabled && groupRole === 'admin' && showRequestCenter) return APP_ROUTE_KEYS.GROUP_REQUESTS;
+    if (requiresAuth && groupsEnabled && !activeGroup) return APP_ROUTE_KEYS.GROUPS;
     if (isViewerMode) return APP_ROUTE_KEYS.VIEWER;
     if (tournamentViewProps.step === 'tournament') return APP_ROUTE_KEYS.TOURNAMENT;
     if (teamEntryProps.step === 'teams') return APP_ROUTE_KEYS.TEAMS;
-    return APP_ROUTE_KEYS.SETUP;
+    return APP_ROUTE_KEYS.SPORT_HUB;
   })();
 
   if (!isConfigChecked || !authResolved || !groupResolved) {
@@ -96,7 +100,7 @@ const AppViewRouter = ({
     );
   }
 
-  if (currentRouteKey === APP_ROUTE_KEYS.GROUPS) {
+  if (currentRouteKey === APP_ROUTE_KEYS.GROUPS && groupsEnabled) {
     return (
       <>
         <Suspense fallback={<ScreenFallback />}>
@@ -119,7 +123,7 @@ const AppViewRouter = ({
     );
   }
 
-  if (requiresAuth && activeGroup && !groupRole) {
+  if (groupsEnabled && requiresAuth && activeGroup && !groupRole) {
     return (
       <>
         <Suspense fallback={<ScreenFallback />}>
@@ -142,7 +146,7 @@ const AppViewRouter = ({
     );
   }
 
-  if (currentRouteKey === APP_ROUTE_KEYS.GROUP_REQUESTS) {
+  if (currentRouteKey === APP_ROUTE_KEYS.GROUP_REQUESTS && groupsEnabled) {
     return (
       <>
         <Suspense fallback={<ScreenFallback />}>
@@ -153,7 +157,9 @@ const AppViewRouter = ({
             isMobileViewport={isMobileViewport}
             onOpenProfile={onOpenProfile}
             onGoHome={onGoHome}
+            onGoSportHub={onGoSportHub}
             onBackToGroups={onBackToGroups}
+            sportMeta={sportMeta}
             pendingRequests={pendingJoinRequests}
             unreadRequestCount={unreadRequestCount}
             onOpenRequestCenter={onOpenRequestCenter}
@@ -191,7 +197,9 @@ const AppViewRouter = ({
             isMobileViewport={isMobileViewport}
             onOpenProfile={onOpenProfile}
             onGoHome={onGoHome}
+            onGoSportHub={onGoSportHub}
             onBackToGroups={onBackToGroups}
+            sportMeta={sportMeta}
             pendingRequests={pendingJoinRequests}
             unreadRequestCount={unreadRequestCount}
             onOpenRequestCenter={groupRole === 'admin' ? onOpenRequestCenter : undefined}
@@ -207,7 +215,7 @@ const AppViewRouter = ({
   return (
     <>
       <Suspense fallback={<ScreenFallback />}>
-        {requiresAuth && (
+        {requiresAuth && groupsEnabled && (
           <GroupHeader
             group={activeGroup}
             role={groupRole}
@@ -215,17 +223,19 @@ const AppViewRouter = ({
             isMobileViewport={isMobileViewport}
             onOpenProfile={onOpenProfile}
             onGoHome={onGoHome}
+            onGoSportHub={onGoSportHub}
             onBackToGroups={onBackToGroups}
+            sportMeta={sportMeta}
             pendingRequests={pendingJoinRequests}
             unreadRequestCount={unreadRequestCount}
             onOpenRequestCenter={groupRole === 'admin' ? onOpenRequestCenter : undefined}
             onLogout={onLogout}
           />
         )}
+        {currentRouteKey === APP_ROUTE_KEYS.SPORT_HUB && <SportHubScreen {...sportHubProps} />}
         {currentRouteKey === APP_ROUTE_KEYS.SETUP && <SetupScreen {...setupScreenProps} />}
         {currentRouteKey === APP_ROUTE_KEYS.TEAMS && <TeamEntry {...teamEntryProps} />}
         {currentRouteKey === APP_ROUTE_KEYS.TOURNAMENT && <TournamentView {...tournamentViewProps} />}
-        {showCasualMatch && <CasualMatch {...casualMatchProps} />}
       </Suspense>
       {appModals}
     </>
