@@ -35,12 +35,24 @@ export default defineConfig([
     },
   },
   {
-    files: ['**/*.test.{js,jsx}', 'src/test/**/*.{js,jsx}'],
+    files: ['**/*.test.{js,jsx}', 'apps/web/src/test/**/*.{js,jsx}'],
     languageOptions: {
       globals: {
         ...globals.browser,
         ...globals.vitest,
       },
+    },
+  },
+  {
+    files: [
+      'scripts/**/*.{js,mjs}',
+      'apps/web/vite.config.js',
+      'playwright.config.js',
+      'eslint.config.js',
+      'packages/**/*.{js,mjs}',
+    ],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 ])

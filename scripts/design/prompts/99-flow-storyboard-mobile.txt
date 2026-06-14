@@ -1,0 +1,7 @@
+# 99-flow-storyboard-mobile.png
+# Platform: mobile | Screen: Flow storyboard
+# Aspect: 16:9
+
+Single image horizontal storyboard 5 mobile screens same app: 1 sport setup 2 team entry 3 fixtures 4 live scoring 5 standings table. Labels Step 1-5 below each panel. Identical dark cyan glass cross-platform iOS Android design system, portrait phone proportions, no device frames.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

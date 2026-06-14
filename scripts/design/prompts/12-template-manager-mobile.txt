@@ -1,0 +1,7 @@
+# 12-template-manager-mobile.png
+# Platform: mobile | Screen: Template manager
+# Aspect: 9:16
+
+Mobile modal or full screen sheet template manager. Saved templates list cards: name Spring Doubles League, sport icon, format league, 6 teams, doubles. Swipe or trash delete icon. Save current setup as template button top. Blurred dark backdrop glass panel safe areas.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

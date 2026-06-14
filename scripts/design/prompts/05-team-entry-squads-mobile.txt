@@ -1,0 +1,7 @@
+# 05-team-entry-squads-mobile.png
+# Platform: mobile | Screen: Team entry (squads)
+# Aspect: 9:16
+
+Mobile box cricket team entry future design. Cricket sport badge, squad not pairs: each team card shows team name and expandable roster list 8 player rows with add player plus button. Labels Squad members not Player 2. Same dark cyan cross-platform mobile safe areas. Coming soon sport variant.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

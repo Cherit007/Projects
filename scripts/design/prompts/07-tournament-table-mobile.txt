@@ -1,0 +1,7 @@
+# 07-tournament-table-mobile.png
+# Platform: mobile | Screen: Live — Table
+# Aspect: 9:16
+
+Mobile league standings table tab. Compact table Rank Team P W L Pts with team emojis. Rows 1-2 qualification zone subtle green cyan tint. Sortable header feel. Sport badge in page header. Dark glass table on navy, horizontal scroll if needed for small screens, safe areas.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

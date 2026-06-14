@@ -1,0 +1,16 @@
+{
+  "name": "@fixture-maker/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*",
+    "./sports": "./src/sports/index.js",
+    "./fixture": "./src/fixture/index.js",
+    "./scoring": "./src/scoring/index.js",
+    "./stats": "./src/stats/index.js"
+  },
+  "scripts": {
+    "test:run": "vitest run --config ../../apps/web/vite.config.js ../../apps/web/src/test/domain.unit.test.js ../../apps/web/src/test/boxCricket.unit.test.js"
+  }
+}

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './apps/web/e2e',
   fullyParallel: true,
   timeout: 60_000,
   expect: {
@@ -24,7 +24,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4173',
+    command: 'npm run dev -w @fixture-maker/web -- --host 127.0.0.1 --port 4173',
+    cwd: process.cwd(),
     url: 'http://127.0.0.1:4173',
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,

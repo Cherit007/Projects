@@ -1,0 +1,28 @@
+{
+  "name": "@fixture-maker/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*",
+    "./appwrite/client": "./src/appwrite/client.js",
+    "./auth/authService": "./src/auth/authService.js",
+    "./player/playerService": "./src/player/playerService.js",
+    "./player/playerPhotoStorageService": "./src/player/playerPhotoStorageService.js",
+    "./groups/groupCollectionsService": "./src/groups/groupCollectionsService.js",
+    "./groups/groupRosterService": "./src/groups/groupRosterService.js",
+    "./casual/casualMatchService": "./src/casual/casualMatchService.js",
+    "./app/appDataService": "./src/app/appDataService.js",
+    "./templates/tournamentTemplatesService": "./src/templates/tournamentTemplatesService.js",
+    "./tournamentService": "./src/tournamentService.js",
+    "./tournament": "./src/tournament/index.js",
+    "./tournament/tournamentSport": "./src/tournament/tournamentSport.js"
+  },
+  "dependencies": {
+    "@fixture-maker/config": "*",
+    "@fixture-maker/domain": "*",
+    "@fixture-maker/types": "*",
+    "appwrite": "^22.3.0",
+    "zod": "^4.3.6"
+  }
+}

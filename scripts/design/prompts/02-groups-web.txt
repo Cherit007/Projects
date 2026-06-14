@@ -1,0 +1,7 @@
+# 02-groups-web.png
+# Platform: web | Screen: Group picker
+# Aspect: 16:9
+
+Web group picker page, dark navy, centered content max-width 960px, grid of group cards 2 columns on desktop same glass card style as mobile. Create group and Join with code in header toolbar. Responsive web app not mobile frame.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

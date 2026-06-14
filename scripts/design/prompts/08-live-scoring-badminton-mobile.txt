@@ -1,0 +1,7 @@
+# 08-live-scoring-badminton-mobile.png
+# Platform: mobile | Screen: Live scoring
+# Aspect: 9:16
+
+Mobile full screen live match scoring cross-platform iOS Android. Minimal chrome. Team names Falcons vs Sharks large. Score steppers or big numeric inputs 21 and 18 center. Quick score chips 11 15 21. Amber upset alert banner underdog leading. Footer fixed Save match cyan button. Small chip 72 percent favorite. Immersive dark scoring mode safe areas top bottom large touch targets.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

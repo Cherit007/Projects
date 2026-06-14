@@ -1,0 +1,7 @@
+# 06-tournament-fixtures-mobile.png
+# Platform: mobile | Screen: Live — Fixtures
+# Aspect: 9:16
+
+Mobile tournament live Fixtures tab cross-platform. Top app bar sport icon tournament title Spring League pills League and Synced. Horizontal scroll tab bar Fixtures active Table Stats ELO Final. Round 1 header, match cards Falcons vs Sharks tap to score chevron, next match cyan left border glow. Round 2 below. Bottom safe area. iOS Android shared custom UI dark glass.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

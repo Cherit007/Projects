@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "outputDir": "docs/design/mockups",
+  "geminiChatUrl": "https://gemini.google.com/app/3c92073cbf174a38",
+  "defaultApiModel": "gemini-2.5-flash-preview-image",
+  "fallbackApiModels": [
+    "gemini-2.5-flash-preview-image",
+    "gemini-2.0-flash-preview-image-generation",
+    "gemini-2.5-flash-image"
+  ],
+  "mockups": [
+    {
+      "id": "01-auth-mobile",
+      "filename": "01-auth-mobile.png",
+      "platform": "mobile",
+      "screen": "Auth",
+      "aspectRatio": "9:16",
+      "priority": 2,
+      "prompt": "Mobile portrait login screen, cross-platform iOS Android sports tournament app. Full screen dark navy gradient. Top safe area padding. Centered glass card: app logo abstract trophy cyan accent, title Fixture Maker, subtitle Manage tournaments for any sport. Email field, password field, primary button Sign in full width cyan gradient, text buttons Register and Continue as viewer below. Large touch-friendly inputs. Bottom safe area padding."
+    },
+    {
+      "id": "01-auth-web",
+      "filename": "01-auth-web.png",
+      "platform": "web",
+      "screen": "Auth",
+      "aspectRatio": "16:9",
+      "priority": 2,
+      "prompt": "Responsive web login page same design system as mobile auth. Dark navy full viewport, centered glass card max-width 420px, same fields and buttons as mobile. Optional subtle wide-screen gradient background. Desktop browser layout not phone frame."
+    },
+    {
+      "id": "02-groups-mobile",
+      "filename": "02-groups-mobile.png",
+      "platform": "mobile",
+      "screen": "Group picker",
+      "aspectRatio": "9:16",
+      "priority": 2,
+      "prompt": "Mobile group picker screen iOS Android cross-platform. Header Your groups with sync chip. Scrollable list of 3 glass cards: group name, member count, last active. Selected card cyan border glow. Floating or bottom primary button Create group, secondary Join with code. Safe area top and bottom. Sport-neutral icons not badminton-only."
+    },
+    {
+      "id": "02-groups-web",
+      "filename": "02-groups-web.png",
+      "platform": "web",
+      "screen": "Group picker",
+      "aspectRatio": "16:9",
+      "priority": 2,
+      "prompt": "Web group picker page, dark navy, centered content max-width 960px, grid of group cards 2 columns on desktop same glass card style as mobile. Create group and Join with code in header toolbar. Responsive web app not mobile frame."
+    },
+    {
+      "id": "03-setup-home-mobile",
+      "filename": "03-setup-home-mobile.png",
+      "platform": "mobile",
+      "screen": "Setup / create tournament",
+      "aspectRatio": "9:16",
+      "priority": 1,
+      "prompt": "Mobile home dashboard cross-platform tournament app iOS Android. Top bar: group name, avatar, sync saved chip. Hero card Create tournament with labeled steps: STEP 1 Sport horizontal scroll chips Badminton selected cyan border, Pickleball, Box Cricket gray coming soon. STEP 2 Game mode grid Doubles selected Singles Mixed. STEP 3 Format League plus Final selected Knockout plus Byes Semi Final Full Knockout. Hint text round-robin top 2 advance. STEP 4 row Team count number input and Tournament name text field. Full width sticky bottom button Continue to teams cyan gradient above home indicator safe area. Below fold cards Resume live tournament with progress, quick stats. Glass cards dark navy cyan accents thumb-friendly."
+    },
+    {
+      "id": "03-setup-home-web",
+      "filename": "03-setup-home-web.png",
+      "platform": "web",
+      "screen": "Setup / create tournament",
+      "aspectRatio": "16:9",
+      "priority": 1,
+      "prompt": "Desktop web setup dashboard two columns same design tokens. Left 60 percent: Create tournament form identical steps sport mode format teams name continue button. Right 40 percent: ELO leaderboard top 5, completed tournaments stat, AI narrative card, scheduled tournaments list. Max width 1200px centered. Dark navy glass panels cyan-teal CTA. Responsive web application layout wide screen."
+    },
+    {
+      "id": "04-team-entry-pairs-mobile",
+      "filename": "04-team-entry-pairs-mobile.png",
+      "platform": "mobile",
+      "screen": "Team entry (pairs)",
+      "aspectRatio": "9:16",
+      "priority": 1,
+      "prompt": "Mobile team entry cross-platform iOS Android. Header back arrow, sport badge shuttlecock, tournament name Spring League, format chip League. Progress Teams 6 of 6. Scrollable list team cards each with emoji picker, team name input, Player 1 Player 2 fields, edit chevron. Sticky footer Back text button and Start tournament primary cyan. Safe areas, 44pt buttons, dark glass UI."
+    },
+    {
+      "id": "04-team-entry-pairs-web",
+      "filename": "04-team-entry-pairs-web.png",
+      "platform": "web",
+      "screen": "Team entry (pairs)",
+      "aspectRatio": "16:9",
+      "priority": 2,
+      "prompt": "Web team entry page wide layout, same header and cards in 2 column grid of team cards, sticky bottom action bar Start tournament. Max width 1100px dark navy glass design matching mobile."
+    },
+    {
+      "id": "05-team-entry-squads-mobile",
+      "filename": "05-team-entry-squads-mobile.png",
+      "platform": "mobile",
+      "screen": "Team entry (squads)",
+      "aspectRatio": "9:16",
+      "priority": 3,
+      "prompt": "Mobile box cricket team entry future design. Cricket sport badge, squad not pairs: each team card shows team name and expandable roster list 8 player rows with add player plus button. Labels Squad members not Player 2. Same dark cyan cross-platform mobile safe areas. Coming soon sport variant."
+    },
+    {
+      "id": "06-tournament-fixtures-mobile",
+      "filename": "06-tournament-fixtures-mobile.png",
+      "platform": "mobile",
+      "screen": "Live — Fixtures",
+      "aspectRatio": "9:16",
+      "priority": 2,
+      "prompt": "Mobile tournament live Fixtures tab cross-platform. Top app bar sport icon tournament title Spring League pills League and Synced. Horizontal scroll tab bar Fixtures active Table Stats ELO Final. Round 1 header, match cards Falcons vs Sharks tap to score chevron, next match cyan left border glow. Round 2 below. Bottom safe area. iOS Android shared custom UI dark glass."
+    },
+    {
+      "id": "06-tournament-fixtures-web",
+      "filename": "06-tournament-fixtures-web.png",
+      "platform": "web",
+      "screen": "Live — Fixtures",
+      "aspectRatio": "16:9",
+      "priority": 2,
+      "prompt": "Web tournament fixtures view, wide layout, tabs horizontal under header, match cards in 2 column grid on desktop, same dark cyan design system, max-width 1200px, browser web app not phone."
+    },
+    {
+      "id": "07-tournament-table-mobile",
+      "filename": "07-tournament-table-mobile.png",
+      "platform": "mobile",
+      "screen": "Live — Table",
+      "aspectRatio": "9:16",
+      "priority": 2,
+      "prompt": "Mobile league standings table tab. Compact table Rank Team P W L Pts with team emojis. Rows 1-2 qualification zone subtle green cyan tint. Sortable header feel. Sport badge in page header. Dark glass table on navy, horizontal scroll if needed for small screens, safe areas."
+    },
+    {
+      "id": "08-live-scoring-badminton-mobile",
+      "filename": "08-live-scoring-badminton-mobile.png",
+      "platform": "mobile",
+      "screen": "Live scoring",
+      "aspectRatio": "9:16",
+      "priority": 2,
+      "prompt": "Mobile full screen live match scoring cross-platform iOS Android. Minimal chrome. Team names Falcons vs Sharks large. Score steppers or big numeric inputs 21 and 18 center. Quick score chips 11 15 21. Amber upset alert banner underdog leading. Footer fixed Save match cyan button. Small chip 72 percent favorite. Immersive dark scoring mode safe areas top bottom large touch targets."
+    },
+    {
+      "id": "09-live-scoring-pickleball-mobile",
+      "filename": "09-live-scoring-pickleball-mobile.png",
+      "platform": "mobile",
+      "screen": "Live scoring (pickleball)",
+      "aspectRatio": "9:16",
+      "priority": 3,
+      "prompt": "Same live scoring layout as badminton mobile but pickleball paddle sport badge and quick score chips 11 15 21 labeled for pickleball. Cross-platform mobile dark cyan UI."
+    },
+    {
+      "id": "10-casual-match-mobile",
+      "filename": "10-casual-match-mobile.png",
+      "platform": "mobile",
+      "screen": "Casual match",
+      "aspectRatio": "9:16",
+      "priority": 3,
+      "prompt": "Mobile bottom sheet casual match recorder iOS Android style sheet with drag handle. Sport chips Badminton selected. Player selectors team A team B, optional singles doubles toggle, score inputs, Record match primary button. Glass sheet over dimmed home screen, rounded top corners 20px, safe area bottom."
+    },
+    {
+      "id": "11-viewer-dashboard-mobile",
+      "filename": "11-viewer-dashboard-mobile.png",
+      "platform": "mobile",
+      "screen": "Viewer dashboard",
+      "aspectRatio": "9:16",
+      "priority": 3,
+      "prompt": "Mobile read-only viewer dashboard. Viewer mode badge top. Live tournaments list no edit icons. Standings preview card. Muted secondary buttons disabled state. Same dark glass cross-platform design sport-neutral copy."
+    },
+    {
+      "id": "12-template-manager-mobile",
+      "filename": "12-template-manager-mobile.png",
+      "platform": "mobile",
+      "screen": "Template manager",
+      "aspectRatio": "9:16",
+      "priority": 3,
+      "prompt": "Mobile modal or full screen sheet template manager. Saved templates list cards: name Spring Doubles League, sport icon, format league, 6 teams, doubles. Swipe or trash delete icon. Save current setup as template button top. Blurred dark backdrop glass panel safe areas."
+    },
+    {
+      "id": "13-player-profile-mobile",
+      "filename": "13-player-profile-mobile.png",
+      "platform": "mobile",
+      "screen": "Player profile",
+      "aspectRatio": "9:16",
+      "priority": 3,
+      "prompt": "Mobile player profile sheet or modal. Large avatar circle, player name, ELO 1042, tier badge Pro cyan. Last 5 form W W L W W pills. Stats grid matches won championships avg score. Mini rating line chart. Sport-neutral. Cross-platform dark glass cyan accent scrollable safe areas."
+    },
+    {
+      "id": "99-flow-storyboard-mobile",
+      "filename": "99-flow-storyboard-mobile.png",
+      "platform": "mobile",
+      "screen": "Flow storyboard",
+      "aspectRatio": "16:9",
+      "priority": 3,
+      "prompt": "Single image horizontal storyboard 5 mobile screens same app: 1 sport setup 2 team entry 3 fixtures 4 live scoring 5 standings table. Labels Step 1-5 below each panel. Identical dark cyan glass cross-platform iOS Android design system, portrait phone proportions, no device frames."
+    }
+  ]
+}

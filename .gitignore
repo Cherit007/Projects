@@ -15,6 +15,7 @@ backups
 migration-reports
 playwright-report
 test-results
+.gemini-playwright-profile
 
 # Editor directories and files
 .vscode/*

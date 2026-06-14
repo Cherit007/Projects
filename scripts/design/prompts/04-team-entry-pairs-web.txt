@@ -1,0 +1,7 @@
+# 04-team-entry-pairs-web.png
+# Platform: web | Screen: Team entry (pairs)
+# Aspect: 16:9
+
+Web team entry page wide layout, same header and cards in 2 column grid of team cards, sticky bottom action bar Start tournament. Max width 1100px dark navy glass design matching mobile.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

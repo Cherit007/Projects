@@ -1,0 +1,7 @@
+# 03-setup-home-mobile.png
+# Platform: mobile | Screen: Setup / create tournament
+# Aspect: 9:16
+
+Mobile home dashboard cross-platform tournament app iOS Android. Top bar: group name, avatar, sync saved chip. Hero card Create tournament with labeled steps: STEP 1 Sport horizontal scroll chips Badminton selected cyan border, Pickleball, Box Cricket gray coming soon. STEP 2 Game mode grid Doubles selected Singles Mixed. STEP 3 Format League plus Final selected Knockout plus Byes Semi Final Full Knockout. Hint text round-robin top 2 advance. STEP 4 row Team count number input and Tournament name text field. Full width sticky bottom button Continue to teams cyan gradient above home indicator safe area. Below fold cards Resume live tournament with progress, quick stats. Glass cards dark navy cyan accents thumb-friendly.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

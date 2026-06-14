@@ -1,0 +1,12 @@
+{
+  "name": "@fixture-maker/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*",
+    "./queryKeys": "./src/queryKeys.js",
+    "./appwrite/env": "./src/appwrite/env.js",
+    "./auxiliary": "./src/auxiliaryConfig.js"
+  }
+}

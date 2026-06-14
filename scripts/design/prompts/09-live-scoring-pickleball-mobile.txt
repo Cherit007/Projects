@@ -1,0 +1,7 @@
+# 09-live-scoring-pickleball-mobile.png
+# Platform: mobile | Screen: Live scoring (pickleball)
+# Aspect: 9:16
+
+Same live scoring layout as badminton mobile but pickleball paddle sport badge and quick score chips 11 15 21 labeled for pickleball. Cross-platform mobile dark cyan UI.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

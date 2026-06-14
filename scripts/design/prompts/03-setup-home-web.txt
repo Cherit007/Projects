@@ -1,0 +1,7 @@
+# 03-setup-home-web.png
+# Platform: web | Screen: Setup / create tournament
+# Aspect: 16:9
+
+Desktop web setup dashboard two columns same design tokens. Left 60 percent: Create tournament form identical steps sport mode format teams name continue button. Right 40 percent: ELO leaderboard top 5, completed tournaments stat, AI narrative card, scheduled tournaments list. Max width 1200px centered. Dark navy glass panels cyan-teal CTA. Responsive web application layout wide screen.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

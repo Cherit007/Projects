@@ -1,0 +1,7 @@
+# 01-auth-mobile.png
+# Platform: mobile | Screen: Auth
+# Aspect: 9:16
+
+Mobile portrait login screen, cross-platform iOS Android sports tournament app. Full screen dark navy gradient. Top safe area padding. Centered glass card: app logo abstract trophy cyan accent, title Fixture Maker, subtitle Manage tournaments for any sport. Email field, password field, primary button Sign in full width cyan gradient, text buttons Register and Continue as viewer below. Large touch-friendly inputs. Bottom safe area padding.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

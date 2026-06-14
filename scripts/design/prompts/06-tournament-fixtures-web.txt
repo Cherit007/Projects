@@ -1,0 +1,7 @@
+# 06-tournament-fixtures-web.png
+# Platform: web | Screen: Live — Fixtures
+# Aspect: 16:9
+
+Web tournament fixtures view, wide layout, tabs horizontal under header, match cards in 2 column grid on desktop, same dark cyan design system, max-width 1200px, browser web app not phone.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.

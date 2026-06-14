@@ -1,0 +1,7 @@
+# 10-casual-match-mobile.png
+# Platform: mobile | Screen: Casual match
+# Aspect: 9:16
+
+Mobile bottom sheet casual match recorder iOS Android style sheet with drag handle. Sport chips Badminton selected. Player selectors team A team B, optional singles doubles toggle, score inputs, Record match primary button. Glass sheet over dimmed home screen, rounded top corners 20px, safe area bottom.
+
+Cross-platform sports tournament app UI, designed for iOS and Android native mobile AND responsive web from the same design system. Dark mode default, deep navy background (#030913), glassmorphism cards with soft cyan glow borders (#49d8ff), modern system sans-serif typography (SF Pro / Roboto style), 16px rounded corners, cyan-teal gradient primary buttons, 44pt minimum touch targets, safe area padding top and bottom, professional league admin aesthetic, high fidelity UI mockup, flat screen only no device bezel unless filename says device-frame, no watermark.
