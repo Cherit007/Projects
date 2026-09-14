@@ -6,7 +6,7 @@ const createAppStore = () => {
     // Tournament slice
     step: 'setup',
     tournamentName: '',
-    numTeams: 3,
+    numTeams: 2,
     format: '1',
     gameMode: 'doubles',
     tournamentFormat: 'league',

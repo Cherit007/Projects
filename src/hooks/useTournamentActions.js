@@ -1370,8 +1370,8 @@ export const useTournamentActions = ({
         showToast('Please enter number of teams', 'error');
         return;
       }
-      if (parsedNumTeams < 3 || parsedNumTeams > 12) {
-        showToast('Number of teams must be between 3 and 12', 'error');
+      if (parsedNumTeams < 2 || parsedNumTeams > 12) {
+        showToast('Number of teams must be between 2 and 12', 'error');
         return;
       }
       setNumTeams(parsedNumTeams);
@@ -1383,8 +1383,8 @@ export const useTournamentActions = ({
         showToast('Please enter number of teams', 'error');
         return;
       }
-      if (parsedNumTeams < 3 || parsedNumTeams > 16) {
-        showToast('Number of teams must be between 3 and 16', 'error');
+      if (parsedNumTeams < 2 || parsedNumTeams > 16) {
+        showToast('Number of teams must be between 2 and 16', 'error');
         return;
       }
       setNumTeams(parsedNumTeams);

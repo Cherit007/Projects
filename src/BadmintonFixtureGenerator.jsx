@@ -32,7 +32,7 @@ const DEFAULT_TEAM_CONFIGS = [
 const BadmintonFixtureGenerator = () => {
   const [step, setStep] = useState('setup');
   const [tournamentName, setTournamentName] = useState('');
-  const [numTeams, setNumTeams] = useState(3);
+  const [numTeams, setNumTeams] = useState(2);
   const [format, setFormat] = useState('1');
   const [teams, setTeams] = useState([]);
   const [fixtures, setFixtures] = useState([]);

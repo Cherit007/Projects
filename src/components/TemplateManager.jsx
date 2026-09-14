@@ -18,7 +18,7 @@ const createEmptyTeam = (index, gameMode) => ({
 });
 
 const normalizeTeams = (teams, numTeams, gameMode) => {
-  const safeNumTeams = Math.max(3, parseInt(numTeams, 10) || 3);
+  const safeNumTeams = Math.max(2, parseInt(numTeams, 10) || 2);
   return Array.from({ length: safeNumTeams }, (_, index) => {
     const team = teams?.[index];
     if (!team) return createEmptyTeam(index, gameMode);
@@ -51,7 +51,7 @@ const buildDraftFromTemplate = (template, currentConfig) => {
     tournamentFormat: base.tournamentFormat || 'league',
     gameMode: base.gameMode || 'doubles',
     format: base.format || '1',
-    numTeams: Math.max(3, parseInt(base.numTeams, 10) || 3),
+    numTeams: Math.max(2, parseInt(base.numTeams, 10) || 2),
     teams: normalizeTeams(base.teams, base.numTeams, base.gameMode || 'doubles'),
   };
 };
@@ -83,8 +83,8 @@ const TemplateManager = ({
     let numTeams = draft.numTeams;
     if (value === 'semiFinal') numTeams = 4;
     else if (value === 'fullKnockout') numTeams = 8;
-    else if (value === 'knockoutByes') numTeams = Math.max(3, numTeams);
-    else numTeams = Math.max(3, numTeams);
+    else if (value === 'knockoutByes') numTeams = Math.max(2, numTeams);
+    else numTeams = Math.max(2, numTeams);
 
     setDraft(prev => ({
       ...prev,
@@ -106,7 +106,7 @@ const TemplateManager = ({
     const parsed = parseInt(value, 10);
     if (Number.isNaN(parsed)) return;
     const maxTeams = draft.tournamentFormat === 'league' ? 12 : 16;
-    const normalized = Math.max(3, Math.min(maxTeams, parsed));
+    const normalized = Math.max(2, Math.min(maxTeams, parsed));
     setDraft(prev => ({
       ...prev,
       numTeams: normalized,

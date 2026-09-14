@@ -370,8 +370,8 @@ const SetupScreenMobileDashboard = ({
                   className="dashboard-v2-input"
                 />
                 <p className="dashboard-v2-hint">
-                  {tournamentFormat === 'league' && 'Min: 3 · Max: 12 teams'}
-                  {tournamentFormat === 'knockoutByes' && 'Min: 3 · Max: 16 teams'}
+                  {tournamentFormat === 'league' && 'Min: 2 · Max: 12 teams'}
+                  {tournamentFormat === 'knockoutByes' && 'Min: 2 · Max: 16 teams'}
                   {tournamentFormat !== 'league' && tournamentFormat !== 'knockoutByes' && 'Fixed for this format'}
                 </p>
               </div>
@@ -395,7 +395,7 @@ const SetupScreenMobileDashboard = ({
               </div>
               <TemplateManager
                 templates={tournamentTemplates}
-                currentConfig={{ gameMode, tournamentFormat, format, numTeams: Number(numTeamsInput || 0) || 3 }}
+                currentConfig={{ gameMode, tournamentFormat, format, numTeams: Number(numTeamsInput || 0) || 2 }}
                 playerSuggestions={playerDatabase}
                 teamNameSuggestions={teamNameDatabase}
                 onSave={onSaveTemplate}

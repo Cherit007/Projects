@@ -501,7 +501,7 @@ const SetupScreen = ({
     const nextFormat = normalizeTournamentFormat(template.tournamentFormat || 'league');
     const nextGameMode = String(template.gameMode || 'doubles').trim() || 'doubles';
     const nextFormatSetting = String(template.format || '1').trim() || '1';
-    const parsedNumTeams = Math.max(3, parseInt(template.numTeams, 10) || numTeams || 3);
+    const parsedNumTeams = Math.max(2, parseInt(template.numTeams, 10) || numTeams || 2);
     const nextNumTeams = nextFormat === 'semiFinal'
       ? 4
       : nextFormat === 'fullKnockout'

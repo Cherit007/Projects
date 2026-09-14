@@ -591,7 +591,7 @@ const App = () => {
         teams: normalizeTemplateTeams(
           template.teams || [],
           template.gameMode || 'doubles',
-          template.numTeams || 3
+          template.numTeams || 2
         ),
       }));
       const { urls, refs } = hydratePlayerPhotos(appwriteData.playerPhotos || {});
@@ -1386,7 +1386,7 @@ const App = () => {
 
     const templateFormat = normalizeTournamentFormat(templateData.tournamentFormat || tournamentFormat);
     const templateGameMode = templateData.gameMode || gameMode;
-    const templateNumTeams = Math.max(3, parseInt(templateData.numTeams, 10) || numTeams || 3);
+    const templateNumTeams = Math.max(2, parseInt(templateData.numTeams, 10) || numTeams || 2);
     const normalizedTeams = normalizeTemplateTeams(
       templateData.teams || [],
       templateGameMode,
@@ -1429,7 +1429,7 @@ const App = () => {
 
     const appliedFormat = normalizeTournamentFormat(template.tournamentFormat || 'league');
     const appliedMode = template.gameMode || 'doubles';
-    const appliedNumTeams = Math.max(3, parseInt(template.numTeams, 10) || 3);
+    const appliedNumTeams = Math.max(2, parseInt(template.numTeams, 10) || 2);
     const normalizedTeams = normalizeTemplateTeams(template.teams || [], appliedMode, appliedNumTeams);
 
     setGameMode(appliedMode);

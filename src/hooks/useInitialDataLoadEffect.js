@@ -88,7 +88,7 @@ export const useInitialDataLoadEffect = ({
                 teams: normalizeTemplateTeams(
                   template.teams || [],
                   template.gameMode || 'doubles',
-                  template.numTeams || 3
+                  template.numTeams || 2
                 ),
               }))
             );
@@ -206,7 +206,7 @@ export const useInitialDataLoadEffect = ({
               teams: normalizeTemplateTeams(
                 template.teams || [],
                 template.gameMode || 'doubles',
-                template.numTeams || 3
+                template.numTeams || 2
               ),
             }))
           );

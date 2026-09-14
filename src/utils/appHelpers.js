@@ -9,8 +9,8 @@ export const findActiveTournament = (history = []) => {
   return history.find((item) => item?.status === 'active') || null;
 };
 
-export const normalizeTemplateTeams = (teamsData = [], templateGameMode = 'doubles', templateNumTeams = 3) => {
-  const safeNumTeams = Math.max(3, parseInt(templateNumTeams, 10) || 3);
+export const normalizeTemplateTeams = (teamsData = [], templateGameMode = 'doubles', templateNumTeams = 2) => {
+  const safeNumTeams = Math.max(2, parseInt(templateNumTeams, 10) || 2);
   return Array.from({ length: safeNumTeams }, (_, index) => {
     const rawTeam = teamsData[index] || {};
     const player1 = rawTeam.player1 || rawTeam.player || '';
