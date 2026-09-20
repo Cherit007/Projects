@@ -29,6 +29,11 @@ const updateHashRoute = (routeKey, { replace = false } = {}) => {
   } else {
     window.history.pushState(window.history.state, '', nextUrl);
   }
+  // Keep location.hash in sync for environments where pushState does not update it (jsdom).
+  if (window.location.hash !== nextHash) {
+    const { history } = window;
+    history.replaceState(history.state, '', nextUrl);
+  }
 };
 
 export const useHashAppRoute = ({
@@ -66,6 +71,7 @@ export const useHashAppRoute = ({
   ]);
   const derivedRouteRef = useRef(derivedRouteKey);
   const previousDerivedRouteRef = useRef(null);
+  const applyRequestedRouteRef = useRef(null);
   const [routeKey, setRouteKey] = useState(derivedRouteKey);
 
   useEffect(() => {
@@ -137,12 +143,20 @@ export const useHashAppRoute = ({
   ]);
 
   useEffect(() => {
+    applyRequestedRouteRef.current = applyRequestedRoute;
+  }, [applyRequestedRoute]);
+
+  // Hash → app state: only on mount / readiness and explicit hash navigation.
+  // Do not re-sync when step changes from in-app actions — that fights state → hash sync below.
+  useEffect(() => {
     if (!isReady || typeof window === 'undefined') return undefined;
 
     const syncFromHash = () => {
       const requestedRouteKey = parseHashRouteKey(window.location.hash);
       const fallbackRouteKey = derivedRouteRef.current;
-      const applied = applyRequestedRoute(requestedRouteKey);
+      const applied = applyRequestedRouteRef.current
+        ? applyRequestedRouteRef.current(requestedRouteKey)
+        : false;
       const effectiveRouteKey = applied && requestedRouteKey ? requestedRouteKey : fallbackRouteKey;
       if (!requestedRouteKey || !applied) {
         updateHashRoute(effectiveRouteKey, { replace: true });
@@ -156,7 +170,7 @@ export const useHashAppRoute = ({
     return () => {
       window.removeEventListener('hashchange', syncFromHash);
     };
-  }, [applyRequestedRoute, isReady]);
+  }, [isReady]);
 
   useEffect(() => {
     if (!isReady || typeof window === 'undefined') return;

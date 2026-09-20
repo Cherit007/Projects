@@ -67,6 +67,11 @@ const startTournament = async (user, tournamentName = 'League Night 1st Tourname
   const tournamentNameInput = await waitForHomeScreen();
   await user.clear(tournamentNameInput);
   await user.type(tournamentNameInput, tournamentName);
+
+  const numTeamsInput = screen.getByDisplayValue('2');
+  await user.clear(numTeamsInput);
+  await user.type(numTeamsInput, '3');
+
   await user.click(screen.getByRole('button', { name: /Start Tournament/i }));
 
   expect(await screen.findByText(/Enter Team Details/i, {}, { timeout: ASYNC_UI_TIMEOUT })).toBeInTheDocument();
@@ -74,6 +79,7 @@ const startTournament = async (user, tournamentName = 'League Night 1st Tourname
   const teamNameInputs = screen.getAllByPlaceholderText('Team Name');
   const player1Inputs = screen.getAllByPlaceholderText('Player 1 Name');
   const player2Inputs = screen.getAllByPlaceholderText('Player 2 Name');
+  expect(teamNameInputs).toHaveLength(TEAM_FIXTURES.length);
 
   for (let index = 0; index < TEAM_FIXTURES.length; index += 1) {
     const team = TEAM_FIXTURES[index];

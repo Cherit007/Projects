@@ -3,7 +3,7 @@ import AutocompleteInput from './AutocompleteInput';
 
 const tournamentFormatOptions = [
   { value: 'league', label: '📊 League + Final' },
-  { value: 'knockoutByes', label: '🏆 Knockout + Byes (3+ teams)' },
+  { value: 'knockoutByes', label: '🏆 Knockout + Byes (2+ teams)' },
   { value: 'semiFinal', label: '🏆 Semi Final + Final (4 teams)' },
   { value: 'fullKnockout', label: '⚔️ Full Knockout (8 teams)' },
 ];

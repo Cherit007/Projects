@@ -20,9 +20,11 @@ import { useAdminRequestsEffect } from './hooks/useAdminRequestsEffect';
 import { useDashboardDerivedData } from './hooks/useDashboardDerivedData';
 import { useModalManager } from './hooks/useModalManager';
 import { useRealtimeCacheSync } from './hooks/useRealtimeCacheSync';
+import { useHashAppRoute } from './hooks/useHashAppRoute';
 import { useAppStoreShallow } from './store/appStore';
 import { appDataService } from './services/appDataService';
 import { tournamentService } from './services/tournamentService';
+import { getGroupServiceMode } from './services/groupService';
 import { queueLocalStorageJson, queueLocalStorageValue } from './services/localStorageWriteService';
 import {
   calculatePointsTable, 
@@ -2756,6 +2758,27 @@ const App = () => {
   };
 
   const canRenderWorkspace = !requiresAuth || Boolean(activeGroup);
+  const hasTournamentScreenState = useMemo(() => (
+    step === 'tournament'
+    || (Array.isArray(fixtures) && fixtures.length > 0)
+    || (Array.isArray(bracket) && bracket.some((round) => Array.isArray(round) && round.length > 0))
+  ), [step, fixtures, bracket]);
+  const hashRouteReady = isConfigChecked && authResolved && groupResolved;
+  const { routeKey } = useHashAppRoute({
+    isReady: hashRouteReady,
+    requiresAuth,
+    currentUser,
+    isGuestViewer,
+    activeGroup,
+    groupRole,
+    showRequestCenter,
+    setShowRequestCenter,
+    isViewerMode,
+    step,
+    setStep,
+    hasTournamentScreenState,
+  });
+  const groupServiceMode = useMemo(() => getGroupServiceMode(), []);
   const shouldShowMobileBottomNav = Boolean(
     isMobileViewport
     && canRenderWorkspace
@@ -2859,6 +2882,8 @@ const App = () => {
   return (
     <>
       <AppViewRouter
+        routeKey={routeKey}
+        groupServiceMode={groupServiceMode}
         isConfigChecked={isConfigChecked}
         authResolved={authResolved}
         groupResolved={groupResolved}
