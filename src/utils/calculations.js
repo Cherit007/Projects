@@ -53,6 +53,89 @@ export const calculatePointsTable = (teams, fixtures) => {
   });
 };
 
+export const countRemainingMatchesForTeam = (teamId, fixtures = []) => {
+  const id = String(teamId ?? '');
+  if (!id) return 0;
+  return (Array.isArray(fixtures) ? fixtures : []).filter((match) => {
+    if (!match || match.completed) return false;
+    return String(match.team1?.id ?? '') === id || String(match.team2?.id ?? '') === id;
+  }).length;
+};
+
+/**
+ * How many league points a team still needs for a realistic Top 2 chase.
+ * Win = 2 points. Returns status: in | chase | out | hidden.
+ */
+export const getTop2PointsChase = ({
+  teamId,
+  pointsTable = [],
+  fixtures = [],
+} = {}) => {
+  const table = Array.isArray(pointsTable) ? pointsTable : [];
+  if (table.length < 2) return { status: 'hidden' };
+
+  const rank = table.findIndex((team) => String(team?.id) === String(teamId)) + 1;
+  if (rank <= 0) return { status: 'hidden' };
+
+  const team = table[rank - 1];
+  if (rank <= 2) {
+    return {
+      status: 'in',
+      rank,
+      points: Number(team.points) || 0,
+      scoreDiff: Number(team.scoreDiff) || 0,
+    };
+  }
+
+  const second = table[1];
+  const remaining = countRemainingMatchesForTeam(teamId, fixtures);
+  const currentPoints = Number(team.points) || 0;
+  const maxReachable = currentPoints + (remaining * 2);
+  const secondPoints = Number(second?.points) || 0;
+
+  const unbeatableAbove = table.filter((other) => (
+    String(other?.id) !== String(teamId)
+    && (Number(other?.points) || 0) > maxReachable
+  )).length;
+  if (unbeatableAbove >= 2) {
+    return { status: 'out', rank, remaining, maxReachable };
+  }
+
+  // Points needed to at least match current 2nd place.
+  let pointsNeeded = Math.max(0, secondPoints - currentPoints);
+  // Tied on points but still outside Top 2 (worse net) → need a win (2 pts).
+  if (pointsNeeded === 0) {
+    pointsNeeded = 2;
+  }
+
+  if (pointsNeeded > remaining * 2) {
+    return { status: 'out', rank, remaining, maxReachable, pointsNeeded };
+  }
+
+  return {
+    status: 'chase',
+    rank,
+    points: currentPoints,
+    scoreDiff: Number(team.scoreDiff) || 0,
+    pointsNeeded,
+    winsNeeded: Math.ceil(pointsNeeded / 2),
+    remaining,
+    maxReachable,
+  };
+};
+
+export const formatTop2ChaseLine = (teamName, chase) => {
+  if (!chase || chase.status === 'hidden' || chase.status === 'out') return null;
+  if (chase.status === 'in') {
+    return `${teamName}: in Top 2 (#${chase.rank})`;
+  }
+  if (chase.status === 'chase') {
+    const winLabel = chase.winsNeeded === 1 ? '1 win' : `${chase.winsNeeded} wins`;
+    return `${teamName}: need ${chase.pointsNeeded} pts (${winLabel}) for Top 2`;
+  }
+  return null;
+};
+
 // Calculate Player Statistics
 export const calculatePlayerStats = (teams, fixtures) => {
   const playerStats = {};

@@ -75,6 +75,7 @@ const FixturesTab = ({
               completedMatchesCount={completedMatches.length}
               totalMatchesCount={fixtures.length}
               onReassignOddPlayerHostTeam={onReassignOddPlayerHostTeam}
+              fixtures={fixtures}
             />
           )}
 

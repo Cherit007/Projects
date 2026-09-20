@@ -18,6 +18,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
 import { hapticError, hapticSubmit, hapticSuccess, hapticTap } from '../utils/haptics';
 import LiveNarrativePanel from './live/LiveNarrativePanel';
+import { formatTop2ChaseLine, getTop2PointsChase } from '../utils/calculations';
 
 const QUICK_SCORE_MODE_ENABLED = false;
 
@@ -35,6 +36,7 @@ const LiveMatchView = ({
   completedMatchesCount = 0,
   totalMatchesCount = 0,
   onReassignOddPlayerHostTeam = null,
+  fixtures = [],
 }) => {
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
@@ -311,6 +313,23 @@ const LiveMatchView = ({
     ? `${parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name} wins → moves to rank #${projectedWinnerRank}`
     : 'Enter scores to preview Top 2 movement';
 
+  const team1Top2Chase = useMemo(() => getTop2PointsChase({
+    teamId: currentMatch?.team1?.id,
+    pointsTable,
+    fixtures,
+  }), [currentMatch?.team1?.id, pointsTable, fixtures]);
+  const team2Top2Chase = useMemo(() => getTop2PointsChase({
+    teamId: currentMatch?.team2?.id,
+    pointsTable,
+    fixtures,
+  }), [currentMatch?.team2?.id, pointsTable, fixtures]);
+  const top2ChaseLines = useMemo(() => (
+    [
+      formatTop2ChaseLine(currentMatch?.team1?.name, team1Top2Chase),
+      formatTop2ChaseLine(currentMatch?.team2?.name, team2Top2Chase),
+    ].filter(Boolean)
+  ), [currentMatch?.team1?.name, currentMatch?.team2?.name, team1Top2Chase, team2Top2Chase]);
+
   return (
     <div className="space-y-3 sm:space-y-4 app-screen-live">
       <div className={`variant-a-card variant-a-live-shell submit-feedback-${submitFeedbackState}`}>
@@ -501,6 +520,14 @@ const LiveMatchView = ({
                   </p>
                 </div>
               )}
+            </div>
+          )}
+          {top2ChaseLines.length > 0 && (
+            <div className="mb-3 space-y-1">
+              <p className="variant-a-qualify-title">Points to Top 2</p>
+              {top2ChaseLines.map((line) => (
+                <p key={line} className="variant-a-qualify-copy">{line}</p>
+              ))}
             </div>
           )}
           <p className="variant-a-qualify-title">Top 2 watch</p>

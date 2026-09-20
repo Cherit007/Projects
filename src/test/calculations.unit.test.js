@@ -3,9 +3,12 @@ import { describe, it, expect } from "vitest";
 import {
   calculateCumulativePlayerStats,
   calculatePlayerStats,
+  calculatePointsTable,
+  formatTop2ChaseLine,
   generateFixtures,
   generateKnockoutBracket,
   getPlayerLeaderboard,
+  getTop2PointsChase,
 } from "../utils/calculations";
 
 const createTeams = (count) =>
@@ -258,5 +261,138 @@ describe("leaderboard/stat sorting stability", () => {
       matchesWon: 0,
       tournamentsPlayed: 0,
     });
+  });
+});
+
+describe("getTop2PointsChase", () => {
+  const teams = createTeams(4);
+
+  it("marks current top-2 teams as in", () => {
+    const fixtures = [
+      {
+        id: 1,
+        completed: true,
+        team1: teams[0],
+        team2: teams[2],
+        score1: 21,
+        score2: 10,
+      },
+      {
+        id: 2,
+        completed: true,
+        team1: teams[1],
+        team2: teams[3],
+        score1: 21,
+        score2: 15,
+      },
+      {
+        id: 3,
+        completed: false,
+        team1: teams[0],
+        team2: teams[1],
+      },
+    ];
+    const table = calculatePointsTable(teams, fixtures);
+    const chase = getTop2PointsChase({
+      teamId: teams[0].id,
+      pointsTable: table,
+      fixtures,
+    });
+    expect(chase.status).toBe("in");
+    expect(formatTop2ChaseLine(teams[0].name, chase)).toContain("in Top 2");
+  });
+
+  it("reports points needed for a chasing team and hides eliminated teams", () => {
+    const fixtures = [
+      {
+        id: 1,
+        completed: true,
+        team1: teams[0],
+        team2: teams[3],
+        score1: 21,
+        score2: 5,
+      },
+      {
+        id: 2,
+        completed: true,
+        team1: teams[1],
+        team2: teams[3],
+        score1: 21,
+        score2: 8,
+      },
+      {
+        id: 3,
+        completed: true,
+        team1: teams[2],
+        team2: teams[3],
+        score1: 21,
+        score2: 10,
+      },
+      // Team 4 has 0 pts and only this remaining match — can get at most 2.
+      // Teams 1 and 2 already have 2 pts each from wins... wait team3 also has 2.
+      // Actually all of 1,2,3 have 2 pts. Team 4 has 0 with 1 match left => max 2.
+      // Not eliminated by unbeatableAbove (>=2 teams with points > 2). None have > 2.
+      {
+        id: 4,
+        completed: false,
+        team1: teams[0],
+        team2: teams[3],
+      },
+    ];
+    const table = calculatePointsTable(teams, fixtures);
+    const chase = getTop2PointsChase({
+      teamId: teams[3].id,
+      pointsTable: table,
+      fixtures,
+    });
+    expect(chase.status).toBe("chase");
+    expect(chase.pointsNeeded).toBeGreaterThan(0);
+    expect(formatTop2ChaseLine(teams[3].name, chase)).toContain("need");
+  });
+
+  it("returns out when two teams already exceed max reachable points", () => {
+    const fixtures = [
+      {
+        id: 1,
+        completed: true,
+        team1: teams[0],
+        team2: teams[2],
+        score1: 21,
+        score2: 10,
+      },
+      {
+        id: 2,
+        completed: true,
+        team1: teams[0],
+        team2: teams[3],
+        score1: 21,
+        score2: 8,
+      },
+      {
+        id: 3,
+        completed: true,
+        team1: teams[1],
+        team2: teams[2],
+        score1: 21,
+        score2: 12,
+      },
+      {
+        id: 4,
+        completed: true,
+        team1: teams[1],
+        team2: teams[3],
+        score1: 21,
+        score2: 9,
+      },
+      // Team 3 and 4 have 0 points, no remaining matches for team 3
+    ];
+    const table = calculatePointsTable(teams, fixtures);
+    const chase = getTop2PointsChase({
+      teamId: teams[2].id,
+      pointsTable: table,
+      fixtures,
+    });
+    expect(chase.status).toBe("out");
+    expect(formatTop2ChaseLine(teams[2].name, chase)).toBeNull();
   });
 });
