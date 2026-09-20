@@ -11,6 +11,7 @@ const tournamentFormatOptions = [
   { value: 'league', label: '🏁 League + Final' },
   { value: 'knockoutByes', label: '🏆 Knockout + Byes' },
   { value: 'semiFinal', label: '🎯 Semi Final + Final' },
+  { value: 'doubleElim4', label: '🔁 Second Chance (5 games)' },
   { value: 'fullKnockout', label: '⚔️ Full Knockout' },
 ];
 
@@ -18,6 +19,7 @@ const formatHints = {
   league: 'Round-robin, top 2 advance to final',
   knockoutByes: '2+ teams: knockout bracket with automatic byes',
   semiFinal: '4 teams: 2 semi finals lead to 1 final',
+  doubleElim4: '4 teams: random openers, winners + losers paths, then final (5 games)',
   fullKnockout: '8 teams: quarter finals, semis, then final',
 };
 
@@ -99,7 +101,11 @@ const StartTournamentLane = ({
           value={tournamentFormat}
           onChange={(nextFormat) => {
             setTournamentFormat(nextFormat);
-            if (nextFormat === 'knockoutByes' || nextFormat === 'semiFinal') {
+            if (nextFormat === 'knockoutByes') {
+              const keepCount = Math.max(2, parseInt(numTeamsInput, 10) || 2);
+              setNumTeams(keepCount);
+              setNumTeamsInput(String(keepCount));
+            } else if (nextFormat === 'semiFinal' || nextFormat === 'doubleElim4') {
               setNumTeams(4);
               setNumTeamsInput('4');
             } else if (nextFormat === 'fullKnockout') {

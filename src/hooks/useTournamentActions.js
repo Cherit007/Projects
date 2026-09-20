@@ -1464,7 +1464,7 @@ export const useTournamentActions = ({
       setNumTeams(parsedNumTeams);
     }
 
-    if (tournamentFormat === 'semiFinal') {
+    if (tournamentFormat === 'semiFinal' || tournamentFormat === 'doubleElim4') {
       setNumTeams(4);
     } else if (tournamentFormat === 'fullKnockout') {
       setNumTeams(8);

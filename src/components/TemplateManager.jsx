@@ -5,6 +5,7 @@ const tournamentFormatOptions = [
   { value: 'league', label: '📊 League + Final' },
   { value: 'knockoutByes', label: '🏆 Knockout + Byes (2+ teams)' },
   { value: 'semiFinal', label: '🏆 Semi Final + Final (4 teams)' },
+  { value: 'doubleElim4', label: '🔁 Second Chance (5 games, 4 teams)' },
   { value: 'fullKnockout', label: '⚔️ Full Knockout (8 teams)' },
 ];
 
@@ -81,7 +82,7 @@ const TemplateManager = ({
 
   const setDraftFormat = (value) => {
     let numTeams = draft.numTeams;
-    if (value === 'semiFinal') numTeams = 4;
+    if (value === 'semiFinal' || value === 'doubleElim4') numTeams = 4;
     else if (value === 'fullKnockout') numTeams = 8;
     else if (value === 'knockoutByes') numTeams = Math.max(2, numTeams);
     else numTeams = Math.max(2, numTeams);
@@ -246,7 +247,7 @@ const TemplateManager = ({
             type="number"
             min={3}
             max={draft.tournamentFormat === 'league' ? 12 : 16}
-            disabled={draft.tournamentFormat === 'semiFinal' || draft.tournamentFormat === 'fullKnockout'}
+            disabled={draft.tournamentFormat === 'semiFinal' || draft.tournamentFormat === 'doubleElim4' || draft.tournamentFormat === 'fullKnockout'}
             value={draft.numTeams}
             onChange={(e) => setDraftNumTeams(e.target.value)}
             className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-indigo-500 outline-none text-sm disabled:bg-gray-100"

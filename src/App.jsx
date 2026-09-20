@@ -1438,7 +1438,7 @@ const App = () => {
     setTournamentFormat(appliedFormat);
     setFormat(template.format || '1');
 
-    if (appliedFormat === 'semiFinal') {
+    if (appliedFormat === 'semiFinal' || appliedFormat === 'doubleElim4') {
       setNumTeams(4);
     } else if (appliedFormat === 'fullKnockout') {
       setNumTeams(8);
@@ -2543,13 +2543,15 @@ const App = () => {
       ? 'League'
       : formatValue === 'semiFinal'
         ? 'Semi Final'
-        : formatValue === 'fullKnockout'
-          ? 'Full Knockout'
-          : formatValue === 'knockoutByes'
-            ? 'Knockout (Byes)'
-            : formatValue === 'playInFinal'
-              ? 'Play-in + Final'
-              : 'Knockout';
+        : formatValue === 'doubleElim4'
+          ? 'Second Chance (5 games)'
+          : formatValue === 'fullKnockout'
+            ? 'Full Knockout'
+            : formatValue === 'knockoutByes'
+              ? 'Knockout (Byes)'
+              : formatValue === 'playInFinal'
+                ? 'Play-in + Final'
+                : 'Knockout';
     const modeLabel = String(resolvedTournament?.gameMode || 'doubles').toLowerCase() === 'singles'
       ? 'Singles'
       : 'Doubles';
