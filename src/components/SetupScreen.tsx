@@ -82,7 +82,7 @@ const buildFormSummary = (rawSeries = []) => {
 
 const formatHintByTournamentFormat = {
   league: 'Round-robin, top 2 advance to final',
-  knockoutByes: '3+ teams: knockout bracket with automatic byes',
+  knockoutByes: '2+ teams: knockout bracket with automatic byes',
   semiFinal: '4 teams: 2 semi finals lead to 1 final',
   fullKnockout: '8 teams: quarter finals, semis, then final',
 };

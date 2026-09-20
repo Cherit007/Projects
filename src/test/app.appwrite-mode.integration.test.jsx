@@ -89,6 +89,7 @@ vi.mock('../services/authService', () => ({
 
 vi.mock('../services/groupService', () => ({
   groupService: groupServiceMock,
+  getGroupServiceMode: () => 'cloud',
 }));
 
 vi.mock('../services/tournamentService', () => ({

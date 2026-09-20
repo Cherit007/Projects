@@ -157,7 +157,7 @@ describe('SetupScreen mobile dashboard views', () => {
 
     const leagueOption = screen.getByRole('radio', { name: /League \+ Final/i });
     await user.click(leagueOption);
-    expect(screen.getByDisplayValue('3')).not.toBeDisabled();
+    expect(screen.getByDisplayValue('2')).not.toBeDisabled();
 
     const twoMatchesOption = screen.getByRole('radio', { name: /2 Matches/i });
     await user.click(twoMatchesOption);

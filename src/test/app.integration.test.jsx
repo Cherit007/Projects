@@ -121,6 +121,11 @@ describe('App integration flows', () => {
     );
     await user.clear(tournamentNameInput);
     await user.type(tournamentNameInput, 'Full Flow Cup');
+
+    const numTeamsInput = screen.getByDisplayValue('2');
+    await user.clear(numTeamsInput);
+    await user.type(numTeamsInput, '3');
+
     await user.click(screen.getByRole('button', { name: /Start Tournament/i }));
 
     expect(await screen.findByText(
@@ -131,6 +136,7 @@ describe('App integration flows', () => {
     const teamNameInputs = screen.getAllByPlaceholderText('Team Name');
     const player1Inputs = screen.getAllByPlaceholderText('Player 1 Name');
     const player2Inputs = screen.getAllByPlaceholderText('Player 2 Name');
+    expect(teamNameInputs).toHaveLength(3);
 
     for (let i = 0; i < teamNameInputs.length; i += 1) {
       await user.type(teamNameInputs[i], `Flow Team ${i + 1}`);
@@ -153,7 +159,7 @@ describe('App integration flows', () => {
 
     const tableButtons = screen.getAllByRole('button', { name: /^Table$/i });
     await user.click(tableButtons[0]);
-    expect(await screen.findByText(/Points Table/i)).toBeInTheDocument();
+    expect(await screen.findByText(/League table/i)).toBeInTheDocument();
 
     const homeButtons = screen.getAllByRole('button', { name: /^Home$/i });
     await user.click(homeButtons[0]);

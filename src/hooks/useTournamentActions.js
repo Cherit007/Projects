@@ -24,6 +24,7 @@ import {
   clearAutoResumeSuppressedTournamentId,
   setAutoResumeSuppressedTournamentId,
 } from '../utils/autoResumePreference';
+import { DEFAULT_NUM_TEAMS } from '../store/appStore';
 
 export const useTournamentActions = ({
   assertCanOperate,
@@ -1979,7 +1980,7 @@ export const useTournamentActions = ({
     return true;
   };
 
-  const prioritizeMatch = (matchId) => {
+  const prioritizeMatch = async (matchId) => {
     if (!assertCanOperate()) return;
     const currentIndex = fixtures.findIndex((match) => !match.completed);
     const targetIndex = fixtures.findIndex((match) => match.id === matchId && !match.completed);
@@ -1992,7 +1993,10 @@ export const useTournamentActions = ({
     [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
     setFixtures(reordered);
     persistActiveTournamentSnapshot({ fixturesSnapshot: reordered });
-    const syncTournamentId = resolveSyncTournamentId();
+    let syncTournamentId = resolveSyncTournamentId();
+    if (isAppwriteEnabled && !syncTournamentId) {
+      syncTournamentId = await resolveSyncTournamentIdForWrite();
+    }
     const reorderedLockSnapshot = buildActiveTournamentSnapshot({
       id: syncTournamentId || null,
       fixturesSnapshot: reordered,
@@ -2581,11 +2585,13 @@ export const useTournamentActions = ({
         completedAt,
       };
 
+      // Compute ratings first, but only commit after the match persists so a
+      // failed cloud save cannot leave phantom ELO changes without a match row.
       const updatedRatings = updatePlayerRatingsAfterMatch(playerRatings, match);
-      setPlayerRatings(updatedRatings);
 
       if (isAppwriteEnabled) {
         const savedMatch = await createCasualMatchMutation.mutateAsync(matchWithWinner);
+        setPlayerRatings(updatedRatings);
         setCasualMatches((prev) => [savedMatch, ...prev]);
       } else {
         const localMatch = {
@@ -2593,6 +2599,7 @@ export const useTournamentActions = ({
           id: `casual-${Date.now()}`,
           createdAt: new Date().toISOString(),
         };
+        setPlayerRatings(updatedRatings);
         setCasualMatches((prev) => {
           const updatedMatches = [localMatch, ...prev];
           queueLocalStorageJson('badminton_casual_matches', updatedMatches);
@@ -2679,7 +2686,7 @@ export const useTournamentActions = ({
 
       setStep('setup');
       setTournamentName('');
-      setNumTeams(3);
+      setNumTeams(DEFAULT_NUM_TEAMS);
       setTeams([]);
       setFixtures([]);
       setBracket([]);
@@ -2825,7 +2832,7 @@ export const useTournamentActions = ({
     setAutoResumeSuppressedTournamentId(localTournamentIdRef.current || currentTournamentId);
     setStep('setup');
     setTournamentName('');
-    setNumTeams(3);
+    setNumTeams(DEFAULT_NUM_TEAMS);
     setTeams([]);
     setFixtures([]);
     setBracket([]);

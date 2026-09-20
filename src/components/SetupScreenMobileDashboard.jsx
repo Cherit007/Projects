@@ -311,8 +311,8 @@ const SetupScreenMobileDashboard = ({
                             setNumTeams(8);
                             setNumTeamsInput('8');
                           } else {
-                            setNumTeams(3);
-                            setNumTeamsInput('3');
+                            setNumTeams(2);
+                            setNumTeamsInput('2');
                           }
                         }}
                       >

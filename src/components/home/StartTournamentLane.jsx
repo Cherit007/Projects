@@ -16,7 +16,7 @@ const tournamentFormatOptions = [
 
 const formatHints = {
   league: 'Round-robin, top 2 advance to final',
-  knockoutByes: '3+ teams: knockout bracket with automatic byes',
+  knockoutByes: '2+ teams: knockout bracket with automatic byes',
   semiFinal: '4 teams: 2 semi finals lead to 1 final',
   fullKnockout: '8 teams: quarter finals, semis, then final',
 };
@@ -106,8 +106,8 @@ const StartTournamentLane = ({
               setNumTeams(8);
               setNumTeamsInput('8');
             } else {
-              setNumTeams(3);
-              setNumTeamsInput('3');
+              setNumTeams(2);
+              setNumTeamsInput('2');
             }
           }}
           options={tournamentFormatOptions}
