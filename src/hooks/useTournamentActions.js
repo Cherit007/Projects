@@ -12,7 +12,7 @@ import { queueLocalStorageJson, queueLocalStorageValue } from '../services/local
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
-import { applyRandomOddPlayerSwapToLeagueFixtures } from '../utils/draft';
+import { applyRandomOddPlayerSwapToLeagueFixtures, reassignOddPlayerHostOnMatch } from '../utils/draft';
 import {
   dedupeTournamentHistory,
   deriveRatingsFromHistory,
@@ -2225,6 +2225,81 @@ export const useTournamentActions = ({
     return true;
   };
 
+  const reassignOddPlayerHostTeam = ({
+    matchId,
+    targetTeamId,
+    sitOutSlot = null,
+    sitOutPlayerName = null,
+  } = {}) => {
+    if (!assertCanOperate()) return false;
+    if (champion) {
+      showToast('Odd-player host cannot change after the tournament is complete.', 'error');
+      return false;
+    }
+
+    const matchIndex = (Array.isArray(fixtures) ? fixtures : []).findIndex((match) => (
+      String(match?.id) === String(matchId)
+    ));
+    if (matchIndex === -1) {
+      showToast('Match not found', 'error');
+      return false;
+    }
+
+    const result = reassignOddPlayerHostOnMatch({
+      match: fixtures[matchIndex],
+      targetTeamId,
+      sitOutSlot,
+      sitOutPlayerName,
+    });
+    if (!result.ok) {
+      showToast(result.reason || 'Unable to move odd player', 'error');
+      return false;
+    }
+    if (result.unchanged) {
+      return true;
+    }
+
+    const updatedFixtures = fixtures.map((match, index) => (
+      index === matchIndex ? result.match : match
+    ));
+    setFixtures(updatedFixtures);
+    persistActiveTournamentSnapshot({ fixturesSnapshot: updatedFixtures });
+
+    const syncTournamentId = resolveSyncTournamentId();
+    const lockSnapshot = buildActiveTournamentSnapshot({
+      id: syncTournamentId || null,
+      fixturesSnapshot: updatedFixtures,
+      bracketSnapshot: bracket,
+      championSnapshot: champion,
+      aiSummariesSnapshot: aiMatchSummaries,
+      swapHistorySnapshot: swapHistory,
+    });
+    if (isAppwriteEnabled && syncTournamentId) {
+      if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
+      queueTournamentSync({
+        tournamentId: syncTournamentId,
+        delayMs: 900,
+        tournamentData: {
+          teams,
+          fixtures: updatedFixtures,
+          bracket,
+          champion,
+          finalMatch: null,
+          aiSummaries: aiMatchSummaries,
+          swapHistory,
+        },
+      });
+    }
+    if (isAppwriteEnabled) {
+      void updateActiveTournamentLock(lockSnapshot, { immediate: true });
+    }
+
+    const hostName = result.match?.oddPlayerMeta?.swapTeamName || 'selected team';
+    const sittingOut = result.match?.oddPlayerMeta?.sittingOutPlayerName || 'a player';
+    showToast(`Odd player now with ${hostName}; ${sittingOut} sits out`);
+    return true;
+  };
+
   const normalizeCloudTournamentId = (value) => {
     const normalized = normalizeTournamentId(value);
     return normalized || null;
@@ -3185,6 +3260,7 @@ export const useTournamentActions = ({
     saveTournamentHistory,
     saveCasualMatch,
     swapTeamMember,
+    reassignOddPlayerHostTeam,
     resetTournament,
     rerunTournament,
     startNextTournament,

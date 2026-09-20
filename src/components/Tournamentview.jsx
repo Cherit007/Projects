@@ -88,6 +88,7 @@ const TournamentView = ({
   onSaveBracketResult,
   onSaveFinalResult,
   onSwapTeamMember,
+  onReassignOddPlayerHostTeam = null,
   swapHistory = [],
   onGoHome,
   onResetTournament,
@@ -1458,6 +1459,7 @@ const TournamentView = ({
               onSaveBracketResult={handleSaveBracketResult}
               leagueMatchesComplete={leagueMatchesComplete}
               onGoToFinal={() => setActiveTab('final')}
+              onReassignOddPlayerHostTeam={onReassignOddPlayerHostTeam}
             />
           )}
 
