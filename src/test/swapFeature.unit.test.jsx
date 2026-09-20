@@ -381,4 +381,149 @@ describe('Swap feature use cases', () => {
 
     expect(success).toBe(false);
   });
+
+  it('preserves odd-player rotation lineups when swapping an unrelated roster player', () => {
+    const teams = makeBaseTeams();
+    const fixtures = [
+      {
+        ...makeMatch({
+          id: 1,
+          team1: { ...teams[1], player1: 'Z9', player: 'Z9', player2: 'C1' },
+          team2: { ...teams[2], player1: 'C1', player: 'C1', player2: 'C2' },
+          completed: false,
+          round: 1,
+        }),
+        oddPlayerMeta: {
+          activeOddPlayerName: 'Z9',
+          sittingOutPlayerName: 'B2',
+          swapTeamId: 2,
+          swapTeamName: 'Tigers',
+          swapSlot: 'player1',
+        },
+        roundTeams: [
+          { ...teams[0] },
+          { ...teams[1], player1: 'Z9', player: 'Z9', player2: 'B1' },
+          { ...teams[2] },
+        ],
+      },
+      makeMatch({
+        id: 2,
+        team1: { ...teams[0], player1: 'A1', player: 'A1', player2: 'A2' },
+        team2: { ...teams[1], player1: 'B1', player: 'B1', player2: 'B2' },
+        completed: false,
+        round: 2,
+      }),
+    ];
+    const h = createHookHarness({ teams, fixtures });
+
+    let success;
+    act(() => {
+      success = h.result.current.swapTeamMember({
+        teamId: 1,
+        currentPlayerName: 'A2',
+        replacementPlayerName: 'A9',
+      });
+    });
+    h.sync();
+
+    expect(success).toBe(true);
+    expect(h.state.teams[0].player2).toBe('A9');
+    // Odd-player fixture lineup must keep Z9 in place (not wiped back to base roster).
+    expect(h.state.fixtures[0].team1.player1).toBe('Z9');
+    expect(h.state.fixtures[0].oddPlayerMeta.activeOddPlayerName).toBe('Z9');
+    expect(h.state.fixtures[0].oddPlayerMeta.sittingOutPlayerName).toBe('B2');
+    // Later fixture still gets the renamed Falcons player.
+    expect(h.state.fixtures[1].team1.player2).toBe('A9');
+  });
+
+  it('renames sitting-out odd-player meta when that roster player is swapped', () => {
+    const teams = makeBaseTeams();
+    const fixtures = [
+      {
+        ...makeMatch({
+          id: 1,
+          team1: { ...teams[1], player1: 'Z9', player: 'Z9', player2: 'B1' },
+          team2: { ...teams[2] },
+          completed: false,
+          round: 1,
+        }),
+        oddPlayerMeta: {
+          activeOddPlayerName: 'Z9',
+          sittingOutPlayerName: 'B2',
+          swapTeamId: 2,
+          swapTeamName: 'Tigers',
+          swapSlot: 'player1',
+        },
+      },
+    ];
+    const h = createHookHarness({ teams, fixtures });
+
+    act(() => {
+      h.result.current.swapTeamMember({
+        teamId: 2,
+        currentPlayerName: 'B2',
+        replacementPlayerName: 'B9',
+      });
+    });
+    h.sync();
+
+    expect(h.state.teams[1].player2).toBe('B9');
+    expect(h.state.fixtures[0].team1.player1).toBe('Z9');
+    expect(h.state.fixtures[0].oddPlayerMeta.sittingOutPlayerName).toBe('B9');
+  });
+
+  it('allows swap after league fixtures finish but before final/champion', () => {
+    const teams = makeBaseTeams();
+    const fixtures = [
+      makeMatch({ id: 1, team1: teams[0], team2: teams[1], completed: true, score1: 21, score2: 16, round: 1 }),
+      makeMatch({ id: 2, team1: teams[0], team2: teams[2], completed: true, score1: 21, score2: 18, round: 2 }),
+    ];
+    const h = createHookHarness({ teams, fixtures, champion: null });
+
+    let success;
+    act(() => {
+      success = h.result.current.swapTeamMember({
+        teamId: 1,
+        currentPlayerName: 'A1',
+        replacementPlayerName: 'Z9',
+      });
+    });
+    h.sync();
+
+    expect(success).toBe(true);
+    expect(h.state.teams[0].player1).toBe('Z9');
+  });
+
+  it('blocks live-opponent swap in knockout bracket matches', () => {
+    const teams = makeBaseTeams().slice(0, 2);
+    const h = createHookHarness({
+      teams,
+      fixtures: [],
+      tournamentFormat: 'semiFinal',
+      bracket: [[
+        makeMatch({
+          id: 'ko-1',
+          team1: teams[0],
+          team2: teams[1],
+          completed: false,
+          round: 1,
+        }),
+      ]],
+    });
+
+    let success;
+    act(() => {
+      success = h.result.current.swapTeamMember({
+        teamId: 1,
+        currentPlayerName: 'A1',
+        replacementPlayerName: 'B1',
+      });
+    });
+
+    expect(success).toBe(false);
+    expect(h.showToast).toHaveBeenCalledWith(
+      'Cannot pick a player from the current live opposite team. Choose another player.',
+      'error'
+    );
+  });
 });
