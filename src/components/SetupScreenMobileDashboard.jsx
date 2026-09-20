@@ -304,7 +304,11 @@ const SetupScreenMobileDashboard = ({
                         className={`dashboard-v2-option ${selected ? 'is-selected' : ''}`}
                         onClick={() => {
                           setTournamentFormat(option.value);
-                          if (option.value === 'knockoutByes' || option.value === 'semiFinal') {
+                          if (option.value === 'knockoutByes') {
+                            const keepCount = Math.max(2, parseInt(numTeamsInput, 10) || 2);
+                            setNumTeams(keepCount);
+                            setNumTeamsInput(String(keepCount));
+                          } else if (option.value === 'semiFinal' || option.value === 'doubleElim4') {
                             setNumTeams(4);
                             setNumTeamsInput('4');
                           } else if (option.value === 'fullKnockout') {

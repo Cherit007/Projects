@@ -12,7 +12,7 @@ import { queueLocalStorageJson, queueLocalStorageValue } from '../services/local
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
-import { applyRandomOddPlayerSwapToLeagueFixtures } from '../utils/draft';
+import { applyRandomOddPlayerSwapToLeagueFixtures, reassignOddPlayerHostOnMatch } from '../utils/draft';
 import {
   dedupeTournamentHistory,
   deriveRatingsFromHistory,
@@ -592,6 +592,79 @@ export const useTournamentActions = ({
       if (normalizePlayerName(value) === needle) return slot;
     }
     return null;
+  };
+
+  const renamePlayerOnTeamSide = (side, fromName, toName) => {
+    if (!side || typeof side !== 'object') return side;
+    const fromNormalized = normalizePlayerName(fromName);
+    if (!fromNormalized) return side;
+    const next = { ...side };
+    let changed = false;
+    ['player1', 'player2', 'player'].forEach((slot) => {
+      if (!(slot in next) && slot !== 'player1' && slot !== 'player2') return;
+      const current = next[slot];
+      if (normalizePlayerName(current) === fromNormalized) {
+        next[slot] = toName;
+        changed = true;
+      }
+    });
+    // Keep player1/player aliases aligned when only one was present.
+    if (changed && next.player1 && (!next.player || normalizePlayerName(next.player) === fromNormalized)) {
+      next.player = next.player1;
+    }
+    return changed ? next : side;
+  };
+
+  const renamePlayerInMatchLineups = (match, fromName, toName) => {
+    if (!match || match.completed) return match;
+    const next = { ...match };
+    next.team1 = renamePlayerOnTeamSide(match.team1, fromName, toName);
+    next.team2 = renamePlayerOnTeamSide(match.team2, fromName, toName);
+    if (Array.isArray(match.roundTeams)) {
+      next.roundTeams = match.roundTeams.map((team) => renamePlayerOnTeamSide(team, fromName, toName));
+    }
+    if (match.oddPlayerMeta && typeof match.oddPlayerMeta === 'object') {
+      const meta = { ...match.oddPlayerMeta };
+      let metaChanged = false;
+      ['activeOddPlayerName', 'sittingOutPlayerName'].forEach((key) => {
+        if (normalizePlayerName(meta[key]) === normalizePlayerName(fromName)) {
+          meta[key] = toName;
+          metaChanged = true;
+        }
+      });
+      if (metaChanged) next.oddPlayerMeta = meta;
+    }
+    return next;
+  };
+
+  const collectLiveMatchesForSwapGuard = () => {
+    const live = [];
+    const firstIncompleteFixture = (Array.isArray(fixtures) ? fixtures : []).find((match) => !match?.completed);
+    if (firstIncompleteFixture) live.push(firstIncompleteFixture);
+    (Array.isArray(bracket) ? bracket : []).forEach((round) => {
+      const firstIncomplete = (Array.isArray(round) ? round : []).find((match) => (
+        match && !match.completed && match.team1 && match.team2
+      ));
+      if (firstIncomplete) live.push(firstIncomplete);
+    });
+    return live;
+  };
+
+  const replacementConflictsWithLiveOpponent = (teamId, replacementNormalized) => {
+    const selectedTeamId = String(teamId || '');
+    return collectLiveMatchesForSwapGuard().some((liveMatch) => {
+      const team1Id = String(liveMatch.team1?.id || '');
+      const team2Id = String(liveMatch.team2?.id || '');
+      if (selectedTeamId !== team1Id && selectedTeamId !== team2Id) return false;
+      const opponentTeam = selectedTeamId === team1Id ? liveMatch.team2 : liveMatch.team1;
+      const opponentPlayers = [
+        opponentTeam?.player || opponentTeam?.player1,
+        opponentTeam?.player2,
+      ]
+        .map((name) => normalizePlayerName(name))
+        .filter(Boolean);
+      return opponentPlayers.includes(replacementNormalized);
+    });
   };
 
   const setRemoteActiveCache = (value) => {
@@ -1391,7 +1464,7 @@ export const useTournamentActions = ({
       setNumTeams(parsedNumTeams);
     }
 
-    if (tournamentFormat === 'semiFinal') {
+    if (tournamentFormat === 'semiFinal' || tournamentFormat === 'doubleElim4') {
       setNumTeams(4);
     } else if (tournamentFormat === 'fullKnockout') {
       setNumTeams(8);
@@ -2028,10 +2101,11 @@ export const useTournamentActions = ({
 
   const swapTeamMember = ({ teamId, currentPlayerName, replacementPlayerName }) => {
     if (!assertCanOperate()) return false;
-    const leagueCompleted = fixtures.length > 0 && fixtures.every((match) => match.completed);
     const flatBracket = (Array.isArray(bracket) ? bracket : []).flatMap((round) => (Array.isArray(round) ? round : []));
     const knockoutCompleted = flatBracket.length > 0 && flatBracket.every((match) => match?.completed);
-    if (champion || leagueCompleted || knockoutCompleted) {
+    // League finals live outside `fixtures`, so do not block purely because RR is done.
+    // Keep swap open until a champion is crowned (or all knockout matches finish).
+    if (champion || knockoutCompleted) {
       showToast('Swap is blocked. Tournament or match flow is already completed.', 'error');
       return false;
     }
@@ -2068,53 +2142,24 @@ export const useTournamentActions = ({
       return false;
     }
 
-    const currentLiveMatch = (Array.isArray(fixtures) ? fixtures : []).find((match) => !match?.completed) || null;
-    if (currentLiveMatch) {
-      const selectedTeamId = String(teamId || '');
-      const team1Id = String(currentLiveMatch.team1?.id || '');
-      const team2Id = String(currentLiveMatch.team2?.id || '');
-      if (selectedTeamId === team1Id || selectedTeamId === team2Id) {
-        const opponentTeam = selectedTeamId === team1Id ? currentLiveMatch.team2 : currentLiveMatch.team1;
-        const opponentPlayers = [
-          opponentTeam?.player || opponentTeam?.player1,
-          opponentTeam?.player2,
-        ]
-          .map((name) => normalizePlayerName(name))
-          .filter(Boolean);
-        if (opponentPlayers.includes(normalizedReplacement)) {
-          showToast('Cannot pick a player from the current live opposite team. Choose another player.', 'error');
-          return false;
-        }
-      }
+    if (replacementConflictsWithLiveOpponent(teamId, normalizedReplacement)) {
+      showToast('Cannot pick a player from the current live opposite team. Choose another player.', 'error');
+      return false;
     }
 
     const outgoingPlayer = getTeamSlotValue(targetTeam, targetSlot);
     setTeamSlotValue(targetTeam, targetSlot, replacement);
 
-    const teamMap = new Map(updatedTeams.map(team => [String(team.id), team]));
-    const updatedFixtures = fixtures.map((match) => {
-      if (!match || match.completed) return match;
-      const next = { ...match };
-      if (match.team1?.id && teamMap.has(String(match.team1.id))) {
-        next.team1 = { ...teamMap.get(String(match.team1.id)) };
-      }
-      if (match.team2?.id && teamMap.has(String(match.team2.id))) {
-        next.team2 = { ...teamMap.get(String(match.team2.id)) };
-      }
-      return next;
-    });
-    const updatedBracket = bracket.map((round) => (
-      (Array.isArray(round) ? round : []).map((match) => {
-        if (!match || match.completed) return match;
-        const next = { ...match };
-        if (match.team1?.id && teamMap.has(String(match.team1.id))) {
-          next.team1 = { ...teamMap.get(String(match.team1.id)) };
-        }
-        if (match.team2?.id && teamMap.has(String(match.team2.id))) {
-          next.team2 = { ...teamMap.get(String(match.team2.id)) };
-        }
-        return next;
-      })
+    // Rename the outgoing player in incomplete match lineups only.
+    // Do not wholesale-replace team objects from the base roster — that wipes
+    // per-round odd-player rotations (and any other match-specific lineups).
+    const updatedFixtures = (Array.isArray(fixtures) ? fixtures : []).map((match) => (
+      renamePlayerInMatchLineups(match, outgoingPlayer, replacement)
+    ));
+    const updatedBracket = (Array.isArray(bracket) ? bracket : []).map((round) => (
+      (Array.isArray(round) ? round : []).map((match) => (
+        renamePlayerInMatchLineups(match, outgoingPlayer, replacement)
+      ))
     ));
 
     setTeams(updatedTeams);
@@ -2177,6 +2222,81 @@ export const useTournamentActions = ({
     }
 
     showToast(`Updated ${targetTeam.name}: ${outgoingPlayer} → ${replacement}`);
+    return true;
+  };
+
+  const reassignOddPlayerHostTeam = ({
+    matchId,
+    targetTeamId,
+    sitOutSlot = null,
+    sitOutPlayerName = null,
+  } = {}) => {
+    if (!assertCanOperate()) return false;
+    if (champion) {
+      showToast('Odd-player host cannot change after the tournament is complete.', 'error');
+      return false;
+    }
+
+    const matchIndex = (Array.isArray(fixtures) ? fixtures : []).findIndex((match) => (
+      String(match?.id) === String(matchId)
+    ));
+    if (matchIndex === -1) {
+      showToast('Match not found', 'error');
+      return false;
+    }
+
+    const result = reassignOddPlayerHostOnMatch({
+      match: fixtures[matchIndex],
+      targetTeamId,
+      sitOutSlot,
+      sitOutPlayerName,
+    });
+    if (!result.ok) {
+      showToast(result.reason || 'Unable to move odd player', 'error');
+      return false;
+    }
+    if (result.unchanged) {
+      return true;
+    }
+
+    const updatedFixtures = fixtures.map((match, index) => (
+      index === matchIndex ? result.match : match
+    ));
+    setFixtures(updatedFixtures);
+    persistActiveTournamentSnapshot({ fixturesSnapshot: updatedFixtures });
+
+    const syncTournamentId = resolveSyncTournamentId();
+    const lockSnapshot = buildActiveTournamentSnapshot({
+      id: syncTournamentId || null,
+      fixturesSnapshot: updatedFixtures,
+      bracketSnapshot: bracket,
+      championSnapshot: champion,
+      aiSummariesSnapshot: aiMatchSummaries,
+      swapHistorySnapshot: swapHistory,
+    });
+    if (isAppwriteEnabled && syncTournamentId) {
+      if (!currentTournamentId) setCurrentTournamentId(syncTournamentId);
+      queueTournamentSync({
+        tournamentId: syncTournamentId,
+        delayMs: 900,
+        tournamentData: {
+          teams,
+          fixtures: updatedFixtures,
+          bracket,
+          champion,
+          finalMatch: null,
+          aiSummaries: aiMatchSummaries,
+          swapHistory,
+        },
+      });
+    }
+    if (isAppwriteEnabled) {
+      void updateActiveTournamentLock(lockSnapshot, { immediate: true });
+    }
+
+    const hostName = result.match?.oddPlayerMeta?.swapTeamName || 'selected team';
+    const sittingOut = result.match?.oddPlayerMeta?.sittingOutPlayerName || 'a player';
+    showToast(`Odd player now with ${hostName}; ${sittingOut} sits out`);
     return true;
   };
 
@@ -3140,6 +3260,7 @@ export const useTournamentActions = ({
     saveTournamentHistory,
     saveCasualMatch,
     swapTeamMember,
+    reassignOddPlayerHostTeam,
     resetTournament,
     rerunTournament,
     startNextTournament,

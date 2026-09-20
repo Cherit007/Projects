@@ -53,6 +53,89 @@ export const calculatePointsTable = (teams, fixtures) => {
   });
 };
 
+export const countRemainingMatchesForTeam = (teamId, fixtures = []) => {
+  const id = String(teamId ?? '');
+  if (!id) return 0;
+  return (Array.isArray(fixtures) ? fixtures : []).filter((match) => {
+    if (!match || match.completed) return false;
+    return String(match.team1?.id ?? '') === id || String(match.team2?.id ?? '') === id;
+  }).length;
+};
+
+/**
+ * How many league points a team still needs for a realistic Top 2 chase.
+ * Win = 2 points. Returns status: in | chase | out | hidden.
+ */
+export const getTop2PointsChase = ({
+  teamId,
+  pointsTable = [],
+  fixtures = [],
+} = {}) => {
+  const table = Array.isArray(pointsTable) ? pointsTable : [];
+  if (table.length < 2) return { status: 'hidden' };
+
+  const rank = table.findIndex((team) => String(team?.id) === String(teamId)) + 1;
+  if (rank <= 0) return { status: 'hidden' };
+
+  const team = table[rank - 1];
+  if (rank <= 2) {
+    return {
+      status: 'in',
+      rank,
+      points: Number(team.points) || 0,
+      scoreDiff: Number(team.scoreDiff) || 0,
+    };
+  }
+
+  const second = table[1];
+  const remaining = countRemainingMatchesForTeam(teamId, fixtures);
+  const currentPoints = Number(team.points) || 0;
+  const maxReachable = currentPoints + (remaining * 2);
+  const secondPoints = Number(second?.points) || 0;
+
+  const unbeatableAbove = table.filter((other) => (
+    String(other?.id) !== String(teamId)
+    && (Number(other?.points) || 0) > maxReachable
+  )).length;
+  if (unbeatableAbove >= 2) {
+    return { status: 'out', rank, remaining, maxReachable };
+  }
+
+  // Points needed to at least match current 2nd place.
+  let pointsNeeded = Math.max(0, secondPoints - currentPoints);
+  // Tied on points but still outside Top 2 (worse net) → need a win (2 pts).
+  if (pointsNeeded === 0) {
+    pointsNeeded = 2;
+  }
+
+  if (pointsNeeded > remaining * 2) {
+    return { status: 'out', rank, remaining, maxReachable, pointsNeeded };
+  }
+
+  return {
+    status: 'chase',
+    rank,
+    points: currentPoints,
+    scoreDiff: Number(team.scoreDiff) || 0,
+    pointsNeeded,
+    winsNeeded: Math.ceil(pointsNeeded / 2),
+    remaining,
+    maxReachable,
+  };
+};
+
+export const formatTop2ChaseLine = (teamName, chase) => {
+  if (!chase || chase.status === 'hidden' || chase.status === 'out') return null;
+  if (chase.status === 'in') {
+    return `${teamName}: in Top 2 (#${chase.rank})`;
+  }
+  if (chase.status === 'chase') {
+    const winLabel = chase.winsNeeded === 1 ? '1 win' : `${chase.winsNeeded} wins`;
+    return `${teamName}: need ${chase.pointsNeeded} pts (${winLabel}) for Top 2`;
+  }
+  return null;
+};
+
 // Calculate Player Statistics
 export const calculatePlayerStats = (teams, fixtures) => {
   const playerStats = {};
@@ -593,9 +676,13 @@ const generateKnockoutBracketWithByes = (teams) => {
 };
 
 // Generate knockout bracket
-export const generateKnockoutBracket = (teams, format) => {
+export const generateKnockoutBracket = (teams, format, options = {}) => {
   if (format === 'knockoutByes') {
     return generateKnockoutBracketWithByes(teams);
+  }
+
+  if (format === 'doubleElim4') {
+    return generateDoubleElim4Bracket(teams, options);
   }
   
   if (format === 'playInFinal') {
@@ -616,39 +703,163 @@ export const generateKnockoutBracket = (teams, format) => {
   }
 };
 
+/**
+ * 4-team short double-elim (5 matches). Opening matches are randomly paired.
+ * Flow: Opener A/B → Winners Final + Losers Match → Championship Final.
+ */
+export const generateDoubleElim4Bracket = (teams = [], { random = Math.random } = {}) => {
+  const pool = (Array.isArray(teams) ? teams : []).slice(0, 4).filter(Boolean);
+  if (pool.length !== 4) {
+    return [];
+  }
+
+  const shuffled = [...pool];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return [
+    [
+      {
+        id: 1,
+        team1: shuffled[0],
+        team2: shuffled[1],
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 'opener',
+        nextMatchId: 3,
+        nextMatchSlot: 'team1',
+        loserNextMatchId: 4,
+        loserNextMatchSlot: 'team1',
+      },
+      {
+        id: 2,
+        team1: shuffled[2],
+        team2: shuffled[3],
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 'opener',
+        nextMatchId: 3,
+        nextMatchSlot: 'team2',
+        loserNextMatchId: 4,
+        loserNextMatchSlot: 'team2',
+      },
+    ],
+    [
+      {
+        id: 3,
+        team1: null,
+        team2: null,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 'winners-final',
+        nextMatchId: 5,
+        nextMatchSlot: 'team1',
+      },
+      {
+        id: 4,
+        team1: null,
+        team2: null,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 'losers-match',
+        nextMatchId: 5,
+        nextMatchSlot: 'team2',
+      },
+    ],
+    [
+      {
+        id: 5,
+        team1: null,
+        team2: null,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 'final',
+        nextMatchId: null,
+      },
+    ],
+  ];
+};
+
+const placeTeamInMatchSlot = (match, team, slotHint = null) => {
+  if (!match || !team) return;
+  const preferred = slotHint === 'team1' || slotHint === 'team2' ? slotHint : null;
+  if (preferred === 'team1') {
+    if (!match.team1) {
+      match.team1 = team;
+      return;
+    }
+    if (!match.team2 && String(match.team1?.id) !== String(team.id)) {
+      match.team2 = team;
+    }
+    return;
+  }
+  if (preferred === 'team2') {
+    if (!match.team2) {
+      match.team2 = team;
+      return;
+    }
+    if (!match.team1 && String(match.team2?.id) !== String(team.id)) {
+      match.team1 = team;
+    }
+    return;
+  }
+  if (!match.team1) {
+    match.team1 = team;
+  } else if (!match.team2 && String(match.team1?.id) !== String(team.id)) {
+    match.team2 = team;
+  }
+};
+
+const findBracketMatchById = (bracket, matchId) => {
+  for (const round of bracket) {
+    for (const match of (Array.isArray(round) ? round : [])) {
+      if (String(match?.id) === String(matchId)) return match;
+    }
+  }
+  return null;
+};
+
 export const updateBracket = (bracket, matchId, score1, score2) => {
   const updatedBracket = JSON.parse(JSON.stringify(bracket));
   let matchFound = false;
   let winner = null;
+  let loser = null;
+  let sourceMatch = null;
 
   for (let roundIndex = 0; roundIndex < updatedBracket.length; roundIndex++) {
     for (let matchIndex = 0; matchIndex < updatedBracket[roundIndex].length; matchIndex++) {
       const match = updatedBracket[roundIndex][matchIndex];
-      if (match.id === matchId) {
+      if (String(match.id) === String(matchId)) {
         match.score1 = score1;
         match.score2 = score2;
         match.completed = true;
         winner = score1 > score2 ? match.team1 : match.team2;
+        loser = score1 > score2 ? match.team2 : match.team1;
+        sourceMatch = match;
         matchFound = true;
-
-        if (match.nextMatchId) {
-          for (let nextRoundIndex = roundIndex + 1; nextRoundIndex < updatedBracket.length; nextRoundIndex++) {
-            for (let nextMatchIndex = 0; nextMatchIndex < updatedBracket[nextRoundIndex].length; nextMatchIndex++) {
-              const nextMatch = updatedBracket[nextRoundIndex][nextMatchIndex];
-              if (nextMatch.id === match.nextMatchId) {
-                if (nextMatch.team1 === null) {
-                  nextMatch.team1 = winner;
-                } else if (nextMatch.team2 === null) {
-                  nextMatch.team2 = winner;
-                }
-              }
-            }
-          }
-        }
         break;
       }
     }
     if (matchFound) break;
+  }
+
+  if (!matchFound || !sourceMatch) return updatedBracket;
+
+  if (sourceMatch.nextMatchId && winner) {
+    const nextMatch = findBracketMatchById(updatedBracket, sourceMatch.nextMatchId);
+    placeTeamInMatchSlot(nextMatch, winner, sourceMatch.nextMatchSlot || null);
+  }
+
+  if (sourceMatch.loserNextMatchId && loser) {
+    const loserNextMatch = findBracketMatchById(updatedBracket, sourceMatch.loserNextMatchId);
+    placeTeamInMatchSlot(loserNextMatch, loser, sourceMatch.loserNextMatchSlot || null);
   }
 
   return updatedBracket;

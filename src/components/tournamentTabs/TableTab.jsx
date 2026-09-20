@@ -37,10 +37,13 @@ const TableTab = ({
             <span>L</span>
             <span>MP</span>
             <span>Pts</span>
+            <span>Diff</span>
           </div>
 
           {pointsTable.map((team, index) => {
             const movement = pointsTableRankMovement.get(String(team.id));
+            const scoreDiff = Number(team.scoreDiff) || 0;
+            const diffLabel = scoreDiff > 0 ? `+${scoreDiff}` : String(scoreDiff);
             return (
               <MotionDiv
                 key={team.id}
@@ -57,6 +60,13 @@ const TableTab = ({
                 <span className="variant-a-cell-center">{team.lost}</span>
                 <span className="variant-a-cell-center">{team.played}</span>
                 <span className="variant-a-points-cell">{team.points}</span>
+                <span
+                  className={`variant-a-diff-cell ${
+                    scoreDiff > 0 ? 'variant-a-diff-cell-pos' : (scoreDiff < 0 ? 'variant-a-diff-cell-neg' : '')
+                  }`}
+                >
+                  {diffLabel}
+                </span>
 
                 {movement && (
                   <div className="variant-a-table-meta">

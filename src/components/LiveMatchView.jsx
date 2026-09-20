@@ -18,6 +18,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
 import { hapticError, hapticSubmit, hapticSuccess, hapticTap } from '../utils/haptics';
 import LiveNarrativePanel from './live/LiveNarrativePanel';
+import { formatTop2ChaseLine, getTop2PointsChase } from '../utils/calculations';
 
 const QUICK_SCORE_MODE_ENABLED = false;
 
@@ -34,6 +35,8 @@ const LiveMatchView = ({
   syncState = null,
   completedMatchesCount = 0,
   totalMatchesCount = 0,
+  onReassignOddPlayerHostTeam = null,
+  fixtures = [],
 }) => {
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
@@ -310,6 +313,23 @@ const LiveMatchView = ({
     ? `${parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name} wins → moves to rank #${projectedWinnerRank}`
     : 'Enter scores to preview Top 2 movement';
 
+  const team1Top2Chase = useMemo(() => getTop2PointsChase({
+    teamId: currentMatch?.team1?.id,
+    pointsTable,
+    fixtures,
+  }), [currentMatch?.team1?.id, pointsTable, fixtures]);
+  const team2Top2Chase = useMemo(() => getTop2PointsChase({
+    teamId: currentMatch?.team2?.id,
+    pointsTable,
+    fixtures,
+  }), [currentMatch?.team2?.id, pointsTable, fixtures]);
+  const top2ChaseLines = useMemo(() => (
+    [
+      formatTop2ChaseLine(currentMatch?.team1?.name, team1Top2Chase),
+      formatTop2ChaseLine(currentMatch?.team2?.name, team2Top2Chase),
+    ].filter(Boolean)
+  ), [currentMatch?.team1?.name, currentMatch?.team2?.name, team1Top2Chase, team2Top2Chase]);
+
   return (
     <div className="space-y-3 sm:space-y-4 app-screen-live">
       <div className={`variant-a-card variant-a-live-shell submit-feedback-${submitFeedbackState}`}>
@@ -461,10 +481,54 @@ const LiveMatchView = ({
 
         <div className="variant-a-qualify-card">
           {oddPlayerMeta && (
-            <p className="variant-a-qualify-copy mb-2">
-              Odd-player swap: <strong>{oddPlayerMeta.activeOddPlayerName}</strong> in for{' '}
-              <strong>{oddPlayerMeta.swapTeamName}</strong>; <strong>{oddPlayerMeta.sittingOutPlayerName}</strong> sits out.
-            </p>
+            <div className="mb-3 space-y-2">
+              <p className="variant-a-qualify-copy">
+                Odd-player swap: <strong>{oddPlayerMeta.activeOddPlayerName}</strong> in for{' '}
+                <strong>{oddPlayerMeta.swapTeamName}</strong>; <strong>{oddPlayerMeta.sittingOutPlayerName}</strong> sits out.
+              </p>
+              {typeof onReassignOddPlayerHostTeam === 'function' && currentMatch?.team1 && currentMatch?.team2 && (
+                <div className="space-y-1.5" data-no-gesture="true">
+                  <p className="text-xs font-semibold text-slate-600">Odd player plays with</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[currentMatch.team1, currentMatch.team2].map((team) => {
+                      const isActiveHost = String(oddPlayerMeta.swapTeamId) === String(team.id);
+                      return (
+                        <button
+                          key={`odd-host-${team.id}`}
+                          type="button"
+                          disabled={isActiveHost || isSubmitting}
+                          onClick={() => {
+                            onReassignOddPlayerHostTeam({
+                              matchId: currentMatch.id,
+                              targetTeamId: team.id,
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-60 ${
+                            isActiveHost
+                              ? 'bg-cyan-600 text-white border-cyan-600'
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-cyan-400 hover:text-cyan-700'
+                          }`}
+                        >
+                          {team.emoji ? `${team.emoji} ` : ''}{team.name}
+                          {isActiveHost ? ' (current)' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Switch host to restore the other team&apos;s original pair and put the odd player on the selected team.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          {top2ChaseLines.length > 0 && (
+            <div className="mb-3 space-y-1">
+              <p className="variant-a-qualify-title">Points to Top 2</p>
+              {top2ChaseLines.map((line) => (
+                <p key={line} className="variant-a-qualify-copy">{line}</p>
+              ))}
+            </div>
           )}
           <p className="variant-a-qualify-title">Top 2 watch</p>
           <div className="variant-a-qualify-copy">

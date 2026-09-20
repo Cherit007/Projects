@@ -4,6 +4,13 @@ const BracketView = ({ bracket, onMatchClick }) => {
   const getRoundName = (roundIndex) => {
     const totalRounds = bracket.length;
     const firstRoundType = bracket[0]?.[0]?.round;
+    const sampleRoundType = bracket[roundIndex]?.[0]?.round;
+
+    if (sampleRoundType === 'opener') return 'Opening matches';
+    if (sampleRoundType === 'winners-final' || sampleRoundType === 'losers-match') {
+      return 'Winners final · Losers match';
+    }
+    if (sampleRoundType === 'final' && firstRoundType === 'opener') return 'Championship final';
 
     if (firstRoundType === 'playin' && roundIndex === 0) return 'Play-in Match';
 

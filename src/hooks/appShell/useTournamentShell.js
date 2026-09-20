@@ -137,6 +137,7 @@ export const useTournamentShell = ({
   saveBracketMatchResult,
   saveFinalResult,
   swapTeamMember,
+  reassignOddPlayerHostTeam,
   handleHeaderGoHome,
   handleResetTournamentWithHydration,
   rerunTournament,
@@ -355,6 +356,7 @@ export const useTournamentShell = ({
       () => Promise.resolve(saveFinalResult(score1, score2, finalistsOverride))
     ),
     onSwapTeamMember: swapTeamMember,
+    onReassignOddPlayerHostTeam: reassignOddPlayerHostTeam,
     swapHistory,
     onGoHome: handleHeaderGoHome,
     onResetTournament: async () => withActionLock(

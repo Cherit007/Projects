@@ -84,6 +84,7 @@ const formatHintByTournamentFormat = {
   league: 'Round-robin, top 2 advance to final',
   knockoutByes: '2+ teams: knockout bracket with automatic byes',
   semiFinal: '4 teams: 2 semi finals lead to 1 final',
+  doubleElim4: '4 teams: random openers, winners + losers paths, then final (5 games)',
   fullKnockout: '8 teams: quarter finals, semis, then final',
 };
 
@@ -91,6 +92,7 @@ const formatLabelByTournamentFormat = {
   league: 'League + Final',
   knockoutByes: 'Knockout + Byes',
   semiFinal: 'Semi Final + Final',
+  doubleElim4: 'Second Chance (5 games)',
   fullKnockout: 'Full Knockout',
 };
 
@@ -110,6 +112,7 @@ const dashboardFormatOptions = [
   { value: 'league', label: '🏁 League + Final' },
   { value: 'knockoutByes', label: '🏆 Knockout + Byes' },
   { value: 'semiFinal', label: '🎯 Semi Final + Final' },
+  { value: 'doubleElim4', label: '🔁 Second Chance (5)' },
   { value: 'fullKnockout', label: '⚔️ Full Knockout' },
 ];
 
@@ -502,7 +505,7 @@ const SetupScreen = ({
     const nextGameMode = String(template.gameMode || 'doubles').trim() || 'doubles';
     const nextFormatSetting = String(template.format || '1').trim() || '1';
     const parsedNumTeams = Math.max(2, parseInt(template.numTeams, 10) || numTeams || 2);
-    const nextNumTeams = nextFormat === 'semiFinal'
+    const nextNumTeams = nextFormat === 'semiFinal' || nextFormat === 'doubleElim4'
       ? 4
       : nextFormat === 'fullKnockout'
         ? 8
