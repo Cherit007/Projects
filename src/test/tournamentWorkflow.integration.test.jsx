@@ -68,7 +68,7 @@ const startTournament = async (user, tournamentName = 'League Night 1st Tourname
   await user.clear(tournamentNameInput);
   await user.type(tournamentNameInput, tournamentName);
 
-  const numTeamsInput = screen.getByDisplayValue('2');
+  const numTeamsInput = screen.getByDisplayValue('3');
   await user.clear(numTeamsInput);
   await user.type(numTeamsInput, '3');
 

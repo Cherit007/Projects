@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import AutocompleteInput from './AutocompleteInput';
+import FormatFlowGuide from './FormatFlowGuide';
+import {
+  getFixedTeamCountForFormat,
+  isTeamCountLockedForFormat,
+  MIN_NUM_TEAMS,
+} from '../utils/tournamentFormats';
 
 const tournamentFormatOptions = [
   { value: 'league', label: '📊 League + Final' },
-  { value: 'knockoutByes', label: '🏆 Knockout + Byes (2+ teams)' },
+  { value: 'knockoutByes', label: '🏆 Knockout + Byes (3+ teams)' },
   { value: 'semiFinal', label: '🏆 Semi Final + Final (4 teams)' },
+  { value: 'doubleElim4', label: '🔁 Second Chance (5 games, 4 teams)' },
   { value: 'fullKnockout', label: '⚔️ Full Knockout (8 teams)' },
 ];
 
@@ -18,7 +25,7 @@ const createEmptyTeam = (index, gameMode) => ({
 });
 
 const normalizeTeams = (teams, numTeams, gameMode) => {
-  const safeNumTeams = Math.max(2, parseInt(numTeams, 10) || 2);
+  const safeNumTeams = Math.max(MIN_NUM_TEAMS, parseInt(numTeams, 10) || MIN_NUM_TEAMS);
   return Array.from({ length: safeNumTeams }, (_, index) => {
     const team = teams?.[index];
     if (!team) return createEmptyTeam(index, gameMode);
@@ -51,7 +58,7 @@ const buildDraftFromTemplate = (template, currentConfig) => {
     tournamentFormat: base.tournamentFormat || 'league',
     gameMode: base.gameMode || 'doubles',
     format: base.format || '1',
-    numTeams: Math.max(2, parseInt(base.numTeams, 10) || 2),
+    numTeams: Math.max(MIN_NUM_TEAMS, parseInt(base.numTeams, 10) || MIN_NUM_TEAMS),
     teams: normalizeTeams(base.teams, base.numTeams, base.gameMode || 'doubles'),
   };
 };
@@ -81,10 +88,9 @@ const TemplateManager = ({
 
   const setDraftFormat = (value) => {
     let numTeams = draft.numTeams;
-    if (value === 'semiFinal') numTeams = 4;
-    else if (value === 'fullKnockout') numTeams = 8;
-    else if (value === 'knockoutByes') numTeams = Math.max(2, numTeams);
-    else numTeams = Math.max(2, numTeams);
+    const fixedCount = getFixedTeamCountForFormat(value);
+    if (fixedCount) numTeams = fixedCount;
+    else numTeams = Math.max(MIN_NUM_TEAMS, numTeams);
 
     setDraft(prev => ({
       ...prev,
@@ -106,7 +112,7 @@ const TemplateManager = ({
     const parsed = parseInt(value, 10);
     if (Number.isNaN(parsed)) return;
     const maxTeams = draft.tournamentFormat === 'league' ? 12 : 16;
-    const normalized = Math.max(2, Math.min(maxTeams, parsed));
+    const normalized = Math.max(MIN_NUM_TEAMS, Math.min(maxTeams, parsed));
     setDraft(prev => ({
       ...prev,
       numTeams: normalized,
@@ -220,15 +226,22 @@ const TemplateManager = ({
               <option value="singles">Singles</option>
               <option value="mixed">Mixed Doubles</option>
             </select>
-            <select
-              value={draft.tournamentFormat}
-              onChange={(e) => setDraftFormat(e.target.value)}
-              className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-indigo-500 outline-none text-sm"
-            >
-              {tournamentFormatOptions.map(option => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            <div className="template-format-row">
+              <select
+                value={draft.tournamentFormat}
+                onChange={(e) => setDraftFormat(e.target.value)}
+                className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-indigo-500 outline-none text-sm flex-1"
+              >
+                {tournamentFormatOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <FormatFlowGuide
+                format={draft.tournamentFormat}
+                numTeams={draft.numTeams}
+                matchesPerPair={draft.format}
+              />
+            </div>
           </div>
 
           {draft.tournamentFormat === 'league' && (
@@ -246,7 +259,7 @@ const TemplateManager = ({
             type="number"
             min={3}
             max={draft.tournamentFormat === 'league' ? 12 : 16}
-            disabled={draft.tournamentFormat === 'semiFinal' || draft.tournamentFormat === 'fullKnockout'}
+            disabled={isTeamCountLockedForFormat(draft.tournamentFormat)}
             value={draft.numTeams}
             onChange={(e) => setDraftNumTeams(e.target.value)}
             className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-indigo-500 outline-none text-sm disabled:bg-gray-100"

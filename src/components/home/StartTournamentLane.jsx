@@ -1,25 +1,20 @@
 import React from 'react';
 import { Users } from 'lucide-react';
+import FormatFlowGuide from '../FormatFlowGuide';
+import {
+  TOURNAMENT_FORMAT_HINTS,
+  TOURNAMENT_FORMAT_OPTIONS,
+  getFixedTeamCountForFormat,
+  isTeamCountLockedForFormat,
+  DEFAULT_NUM_TEAMS,
+  MIN_NUM_TEAMS,
+} from '../../utils/tournamentFormats';
 
 const gameModeOptions = [
   { value: 'doubles', label: '🏸 Doubles', description: '2 players per team' },
   { value: 'singles', label: '👤 Singles', description: '1 player per team' },
   { value: 'mixed', label: '⚡ Mixed', description: 'Mixed doubles setup' },
 ];
-
-const tournamentFormatOptions = [
-  { value: 'league', label: '🏁 League + Final' },
-  { value: 'knockoutByes', label: '🏆 Knockout + Byes' },
-  { value: 'semiFinal', label: '🎯 Semi Final + Final' },
-  { value: 'fullKnockout', label: '⚔️ Full Knockout' },
-];
-
-const formatHints = {
-  league: 'Round-robin, top 2 advance to final',
-  knockoutByes: '2+ teams: knockout bracket with automatic byes',
-  semiFinal: '4 teams: 2 semi finals lead to 1 final',
-  fullKnockout: '8 teams: quarter finals, semis, then final',
-};
 
 const matchesPerPairOptions = [
   { value: '1', label: '1 Match' },
@@ -32,6 +27,9 @@ const SelectionGrid = ({
   value,
   onChange,
   columns = 2,
+  showFormatInfo = false,
+  numTeams,
+  matchesPerPair = '1',
 }) => (
   <div>
     <label className="block text-sm font-semibold text-gray-700 mb-2">{legend}</label>
@@ -43,19 +41,28 @@ const SelectionGrid = ({
       {options.map((option) => {
         const selected = value === option.value;
         return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onChange(option.value)}
-            className={`setup-selection-btn ${selected ? 'is-selected' : ''}`}
-          >
-            <span>{option.label}</span>
-            {option.description && (
-              <span className="setup-selection-copy">{option.description}</span>
+          <div key={option.value} className="setup-selection-option">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(option.value)}
+              className={`setup-selection-btn ${selected ? 'is-selected' : ''}`}
+            >
+              <span>{option.label}</span>
+              {option.description && (
+                <span className="setup-selection-copy">{option.description}</span>
+              )}
+            </button>
+            {showFormatInfo && (
+              <FormatFlowGuide
+                format={option.value}
+                numTeams={numTeams}
+                matchesPerPair={matchesPerPair}
+                buttonClassName="setup-selection-info"
+              />
             )}
-          </button>
+          </div>
         );
       })}
     </div>
@@ -99,18 +106,23 @@ const StartTournamentLane = ({
           value={tournamentFormat}
           onChange={(nextFormat) => {
             setTournamentFormat(nextFormat);
-            if (nextFormat === 'knockoutByes' || nextFormat === 'semiFinal') {
-              setNumTeams(4);
-              setNumTeamsInput('4');
-            } else if (nextFormat === 'fullKnockout') {
-              setNumTeams(8);
-              setNumTeamsInput('8');
+            const fixedCount = getFixedTeamCountForFormat(nextFormat);
+            if (fixedCount) {
+              setNumTeams(fixedCount);
+              setNumTeamsInput(String(fixedCount));
+            } else if (nextFormat === 'knockoutByes') {
+              const keepCount = Math.max(MIN_NUM_TEAMS, parseInt(numTeamsInput, 10) || MIN_NUM_TEAMS);
+              setNumTeams(keepCount);
+              setNumTeamsInput(String(keepCount));
             } else {
-              setNumTeams(2);
-              setNumTeamsInput('2');
+              setNumTeams(DEFAULT_NUM_TEAMS);
+              setNumTeamsInput(String(DEFAULT_NUM_TEAMS));
             }
           }}
-          options={tournamentFormatOptions}
+          options={TOURNAMENT_FORMAT_OPTIONS}
+          showFormatInfo
+          numTeams={numTeamsInput}
+          matchesPerPair={format}
         />
         {tournamentFormat === 'league' && (
           <div className="mt-3">
@@ -122,7 +134,9 @@ const StartTournamentLane = ({
             />
           </div>
         )}
-        <p className="text-xs text-gray-500 mt-2">{formatHints[tournamentFormat] || formatHints.league}</p>
+        <p className="text-xs text-gray-500 mt-2">
+          {TOURNAMENT_FORMAT_HINTS[tournamentFormat] || TOURNAMENT_FORMAT_HINTS.league}
+        </p>
       </div>
 
       <div>
@@ -143,14 +157,14 @@ const StartTournamentLane = ({
           inputMode="numeric"
           pattern="[0-9]*"
           value={numTeamsInput}
-          disabled={tournamentFormat !== 'league' && tournamentFormat !== 'knockoutByes'}
+          disabled={isTeamCountLockedForFormat(tournamentFormat)}
           onChange={(event) => setNumTeamsInput(event.target.value.replace(/\D/g, ''))}
           className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all disabled:bg-gray-100"
         />
         <p className="text-xs text-gray-500 mt-1">
-          {tournamentFormat === 'league' && 'Min: 2, Max: 12 teams'}
-          {tournamentFormat === 'knockoutByes' && 'Min: 2, Max: 16 teams'}
-          {tournamentFormat !== 'league' && tournamentFormat !== 'knockoutByes' && 'Fixed for this format'}
+          {tournamentFormat === 'league' && `Min: ${MIN_NUM_TEAMS}, Max: 12 teams`}
+          {tournamentFormat === 'knockoutByes' && `Min: ${MIN_NUM_TEAMS}, Max: 16 teams`}
+          {isTeamCountLockedForFormat(tournamentFormat) && 'Fixed for this format'}
         </p>
       </div>
 

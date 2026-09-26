@@ -59,6 +59,7 @@ import {
   isScheduledTournamentAlreadyStarted,
   upsertTournamentInHistory,
 } from './utils/appHelpers';
+import { MIN_NUM_TEAMS } from './utils/tournamentFormats';
 import { clearAutoResumeSuppressedTournamentId } from './utils/autoResumePreference';
 
 const AppModals = lazy(() => import('./components/AppModals'));
@@ -593,7 +594,7 @@ const App = () => {
         teams: normalizeTemplateTeams(
           template.teams || [],
           template.gameMode || 'doubles',
-          template.numTeams || 2
+          template.numTeams || MIN_NUM_TEAMS
         ),
       }));
       const { urls, refs } = hydratePlayerPhotos(appwriteData.playerPhotos || {});
@@ -1388,7 +1389,7 @@ const App = () => {
 
     const templateFormat = normalizeTournamentFormat(templateData.tournamentFormat || tournamentFormat);
     const templateGameMode = templateData.gameMode || gameMode;
-    const templateNumTeams = Math.max(2, parseInt(templateData.numTeams, 10) || numTeams || 2);
+    const templateNumTeams = Math.max(MIN_NUM_TEAMS, parseInt(templateData.numTeams, 10) || numTeams || MIN_NUM_TEAMS);
     const normalizedTeams = normalizeTemplateTeams(
       templateData.teams || [],
       templateGameMode,
@@ -1431,14 +1432,14 @@ const App = () => {
 
     const appliedFormat = normalizeTournamentFormat(template.tournamentFormat || 'league');
     const appliedMode = template.gameMode || 'doubles';
-    const appliedNumTeams = Math.max(2, parseInt(template.numTeams, 10) || 2);
+    const appliedNumTeams = Math.max(MIN_NUM_TEAMS, parseInt(template.numTeams, 10) || MIN_NUM_TEAMS);
     const normalizedTeams = normalizeTemplateTeams(template.teams || [], appliedMode, appliedNumTeams);
 
     setGameMode(appliedMode);
     setTournamentFormat(appliedFormat);
     setFormat(template.format || '1');
 
-    if (appliedFormat === 'semiFinal') {
+    if (appliedFormat === 'semiFinal' || appliedFormat === 'doubleElim4') {
       setNumTeams(4);
     } else if (appliedFormat === 'fullKnockout') {
       setNumTeams(8);
@@ -2542,13 +2543,15 @@ const App = () => {
       ? 'League'
       : formatValue === 'semiFinal'
         ? 'Semi Final'
-        : formatValue === 'fullKnockout'
-          ? 'Full Knockout'
-          : formatValue === 'knockoutByes'
-            ? 'Knockout (Byes)'
-            : formatValue === 'playInFinal'
-              ? 'Play-in + Final'
-              : 'Knockout';
+        : formatValue === 'doubleElim4'
+          ? 'Second Chance (5 games)'
+          : formatValue === 'fullKnockout'
+            ? 'Full Knockout'
+            : formatValue === 'knockoutByes'
+              ? 'Knockout (Byes)'
+              : formatValue === 'playInFinal'
+                ? 'Play-in + Final'
+                : 'Knockout';
     const modeLabel = String(resolvedTournament?.gameMode || 'doubles').toLowerCase() === 'singles'
       ? 'Singles'
       : 'Doubles';

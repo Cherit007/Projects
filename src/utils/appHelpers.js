@@ -1,4 +1,5 @@
 import { updatePlayerRatingsAfterMatch } from './calculations';
+import { MIN_NUM_TEAMS } from './tournamentFormats';
 
 export const normalizeTournamentFormat = (value) => (
   value === 'playInFinal' ? 'knockoutByes' : value
@@ -9,8 +10,8 @@ export const findActiveTournament = (history = []) => {
   return history.find((item) => item?.status === 'active') || null;
 };
 
-export const normalizeTemplateTeams = (teamsData = [], templateGameMode = 'doubles', templateNumTeams = 2) => {
-  const safeNumTeams = Math.max(2, parseInt(templateNumTeams, 10) || 2);
+export const normalizeTemplateTeams = (teamsData = [], templateGameMode = 'doubles', templateNumTeams = MIN_NUM_TEAMS) => {
+  const safeNumTeams = Math.max(MIN_NUM_TEAMS, parseInt(templateNumTeams, 10) || MIN_NUM_TEAMS);
   return Array.from({ length: safeNumTeams }, (_, index) => {
     const rawTeam = teamsData[index] || {};
     const player1 = rawTeam.player1 || rawTeam.player || '';

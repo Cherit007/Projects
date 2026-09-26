@@ -122,7 +122,7 @@ describe('App integration flows', () => {
     await user.clear(tournamentNameInput);
     await user.type(tournamentNameInput, 'Full Flow Cup');
 
-    const numTeamsInput = screen.getByDisplayValue('2');
+    const numTeamsInput = screen.getByDisplayValue('3');
     await user.clear(numTeamsInput);
     await user.type(numTeamsInput, '3');
 

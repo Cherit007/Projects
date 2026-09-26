@@ -1,8 +1,8 @@
 import { useRef, useSyncExternalStore } from 'react';
 import { dedupeTournamentHistory, sortTournamentHistoryByRecent } from '../utils/appHelpers';
+import { DEFAULT_NUM_TEAMS } from '../utils/tournamentFormats';
 
-/** Default league team count — keep in sync with min-team validation (2). */
-export const DEFAULT_NUM_TEAMS = 2;
+export { DEFAULT_NUM_TEAMS, MIN_NUM_TEAMS } from '../utils/tournamentFormats';
 
 const createAppStore = () => {
   const initialState = {

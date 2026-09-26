@@ -24,7 +24,7 @@ import {
   clearAutoResumeSuppressedTournamentId,
   setAutoResumeSuppressedTournamentId,
 } from '../utils/autoResumePreference';
-import { DEFAULT_NUM_TEAMS } from '../store/appStore';
+import { DEFAULT_NUM_TEAMS, MIN_NUM_TEAMS } from '../utils/tournamentFormats';
 
 export const useTournamentActions = ({
   assertCanOperate,
@@ -1371,8 +1371,8 @@ export const useTournamentActions = ({
         showToast('Please enter number of teams', 'error');
         return;
       }
-      if (parsedNumTeams < 2 || parsedNumTeams > 12) {
-        showToast('Number of teams must be between 2 and 12', 'error');
+      if (parsedNumTeams < MIN_NUM_TEAMS || parsedNumTeams > 12) {
+        showToast(`Number of teams must be between ${MIN_NUM_TEAMS} and 12`, 'error');
         return;
       }
       setNumTeams(parsedNumTeams);
@@ -1384,14 +1384,14 @@ export const useTournamentActions = ({
         showToast('Please enter number of teams', 'error');
         return;
       }
-      if (parsedNumTeams < 2 || parsedNumTeams > 16) {
-        showToast('Number of teams must be between 2 and 16', 'error');
+      if (parsedNumTeams < MIN_NUM_TEAMS || parsedNumTeams > 16) {
+        showToast(`Number of teams must be between ${MIN_NUM_TEAMS} and 16`, 'error');
         return;
       }
       setNumTeams(parsedNumTeams);
     }
 
-    if (tournamentFormat === 'semiFinal') {
+    if (tournamentFormat === 'semiFinal' || tournamentFormat === 'doubleElim4') {
       setNumTeams(4);
     } else if (tournamentFormat === 'fullKnockout') {
       setNumTeams(8);

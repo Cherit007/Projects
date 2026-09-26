@@ -155,9 +155,31 @@ describe('SetupScreen mobile dashboard views', () => {
     await user.click(fullKnockoutOption);
     expect(screen.getByDisplayValue('8')).toBeDisabled();
 
+    const secondChanceOption = screen.getByRole('radio', { name: /Second Chance/i });
+    await user.click(secondChanceOption);
+    expect(secondChanceOption).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByDisplayValue('4')).toBeDisabled();
+    expect(screen.getByText(/random openers, winners \+ losers paths/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /How this format works: Second Chance/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Opening matches')).toBeInTheDocument();
+    expect(screen.getByText('Championship final')).toBeInTheDocument();
+    expect(screen.getByText(/4 teams · 5 matches/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Close format guide/i }));
+
     const leagueOption = screen.getByRole('radio', { name: /League \+ Final/i });
     await user.click(leagueOption);
-    expect(screen.getByDisplayValue('2')).not.toBeDisabled();
+    expect(screen.getByDisplayValue('3')).not.toBeDisabled();
+
+    const teamsInput = screen.getByDisplayValue('3');
+    await user.clear(teamsInput);
+    await user.type(teamsInput, '5');
+
+    await user.click(screen.getByRole('button', { name: /How this format works: League \+ Final/i }));
+    expect(screen.getByText(/5 teams · 10 league matches/i)).toBeInTheDocument();
+    expect(screen.getByText('League round 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Close format guide/i }));
 
     const twoMatchesOption = screen.getByRole('radio', { name: /2 Matches/i });
     await user.click(twoMatchesOption);

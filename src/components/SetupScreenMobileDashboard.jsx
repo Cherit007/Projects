@@ -2,10 +2,17 @@ import React from 'react';
 import { MoreVertical } from 'lucide-react';
 import PlayerAvatar from './PlayerAvatar';
 import TemplateManager from './TemplateManager';
+import FormatFlowGuide from './FormatFlowGuide';
 import {
   formatTournamentDateLabel,
   isScheduledTournamentAlreadyStarted,
 } from '../utils/appHelpers';
+import {
+  getFixedTeamCountForFormat,
+  isTeamCountLockedForFormat,
+  DEFAULT_NUM_TEAMS,
+  MIN_NUM_TEAMS,
+} from '../utils/tournamentFormats';
 
 const SetupScreenMobileDashboard = ({
   mobileSetupView,
@@ -296,28 +303,37 @@ const SetupScreenMobileDashboard = ({
                   {dashboardFormatOptions.map((option) => {
                     const selected = tournamentFormat === option.value;
                     return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        className={`dashboard-v2-option ${selected ? 'is-selected' : ''}`}
-                        onClick={() => {
-                          setTournamentFormat(option.value);
-                          if (option.value === 'knockoutByes' || option.value === 'semiFinal') {
-                            setNumTeams(4);
-                            setNumTeamsInput('4');
-                          } else if (option.value === 'fullKnockout') {
-                            setNumTeams(8);
-                            setNumTeamsInput('8');
-                          } else {
-                            setNumTeams(2);
-                            setNumTeamsInput('2');
-                          }
-                        }}
-                      >
-                        {option.label}
-                      </button>
+                      <div key={option.value} className="dashboard-v2-option-wrap">
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          className={`dashboard-v2-option ${selected ? 'is-selected' : ''}`}
+                          onClick={() => {
+                            setTournamentFormat(option.value);
+                            const fixedCount = getFixedTeamCountForFormat(option.value);
+                            if (fixedCount) {
+                              setNumTeams(fixedCount);
+                              setNumTeamsInput(String(fixedCount));
+                            } else if (option.value === 'knockoutByes') {
+                              const keepCount = Math.max(MIN_NUM_TEAMS, parseInt(numTeamsInput, 10) || MIN_NUM_TEAMS);
+                              setNumTeams(keepCount);
+                              setNumTeamsInput(String(keepCount));
+                            } else {
+                              setNumTeams(DEFAULT_NUM_TEAMS);
+                              setNumTeamsInput(String(DEFAULT_NUM_TEAMS));
+                            }
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                        <FormatFlowGuide
+                          format={option.value}
+                          numTeams={numTeamsInput}
+                          matchesPerPair={format}
+                          buttonClassName="dashboard-v2-format-info"
+                        />
+                      </div>
                     );
                   })}
                 </div>
@@ -365,14 +381,14 @@ const SetupScreenMobileDashboard = ({
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={numTeamsInput}
-                  disabled={tournamentFormat !== 'league' && tournamentFormat !== 'knockoutByes'}
+                  disabled={isTeamCountLockedForFormat(tournamentFormat)}
                   onChange={(event) => setNumTeamsInput(event.target.value.replace(/\D/g, ''))}
                   className="dashboard-v2-input"
                 />
                 <p className="dashboard-v2-hint">
-                  {tournamentFormat === 'league' && 'Min: 2 · Max: 12 teams'}
-                  {tournamentFormat === 'knockoutByes' && 'Min: 2 · Max: 16 teams'}
-                  {tournamentFormat !== 'league' && tournamentFormat !== 'knockoutByes' && 'Fixed for this format'}
+                  {tournamentFormat === 'league' && `Min: ${MIN_NUM_TEAMS} · Max: 12 teams`}
+                  {tournamentFormat === 'knockoutByes' && `Min: ${MIN_NUM_TEAMS} · Max: 16 teams`}
+                  {isTeamCountLockedForFormat(tournamentFormat) && 'Fixed for this format'}
                 </p>
               </div>
             </section>

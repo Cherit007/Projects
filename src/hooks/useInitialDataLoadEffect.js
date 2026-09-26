@@ -7,6 +7,7 @@ import {
   dedupeTournamentHistory,
   sortTournamentHistoryByRecent,
 } from '../utils/appHelpers';
+import { MIN_NUM_TEAMS } from '../utils/tournamentFormats';
 import {
   clearAutoResumeSuppressedTournamentId,
   getAutoResumeSuppressedTournamentId,
@@ -88,7 +89,7 @@ export const useInitialDataLoadEffect = ({
                 teams: normalizeTemplateTeams(
                   template.teams || [],
                   template.gameMode || 'doubles',
-                  template.numTeams || 2
+                  template.numTeams || MIN_NUM_TEAMS
                 ),
               }))
             );
@@ -206,7 +207,7 @@ export const useInitialDataLoadEffect = ({
               teams: normalizeTemplateTeams(
                 template.teams || [],
                 template.gameMode || 'doubles',
-                template.numTeams || 2
+                template.numTeams || MIN_NUM_TEAMS
               ),
             }))
           );

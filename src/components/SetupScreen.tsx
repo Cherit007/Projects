@@ -35,6 +35,13 @@ import {
   isScheduledTournamentAlreadyStarted,
   normalizeTournamentFormat,
 } from '../utils/appHelpers';
+import {
+  TOURNAMENT_FORMAT_HINTS as formatHintByTournamentFormat,
+  TOURNAMENT_FORMAT_LABELS as formatLabelByTournamentFormat,
+  TOURNAMENT_FORMAT_OPTIONS as dashboardFormatOptions,
+  getFixedTeamCountForFormat,
+  MIN_NUM_TEAMS,
+} from '../utils/tournamentFormats';
 
 const LoadingRows = ({ rows = 4 }) => (
   <div className="space-y-3 animate-pulse">
@@ -80,20 +87,6 @@ const buildFormSummary = (rawSeries = []) => {
   };
 };
 
-const formatHintByTournamentFormat = {
-  league: 'Round-robin, top 2 advance to final',
-  knockoutByes: '2+ teams: knockout bracket with automatic byes',
-  semiFinal: '4 teams: 2 semi finals lead to 1 final',
-  fullKnockout: '8 teams: quarter finals, semis, then final',
-};
-
-const formatLabelByTournamentFormat = {
-  league: 'League + Final',
-  knockoutByes: 'Knockout + Byes',
-  semiFinal: 'Semi Final + Final',
-  fullKnockout: 'Full Knockout',
-};
-
 const gameModeLabelByType = {
   doubles: 'Doubles',
   singles: 'Singles',
@@ -104,13 +97,6 @@ const dashboardGameModeOptions = [
   { value: 'doubles', label: '🏸 Doubles' },
   { value: 'singles', label: '👤 Singles' },
   { value: 'mixed', label: '⚡ Mixed' },
-];
-
-const dashboardFormatOptions = [
-  { value: 'league', label: '🏁 League + Final' },
-  { value: 'knockoutByes', label: '🏆 Knockout + Byes' },
-  { value: 'semiFinal', label: '🎯 Semi Final + Final' },
-  { value: 'fullKnockout', label: '⚔️ Full Knockout' },
 ];
 
 const dashboardMatchCountOptions = [
@@ -501,12 +487,8 @@ const SetupScreen = ({
     const nextFormat = normalizeTournamentFormat(template.tournamentFormat || 'league');
     const nextGameMode = String(template.gameMode || 'doubles').trim() || 'doubles';
     const nextFormatSetting = String(template.format || '1').trim() || '1';
-    const parsedNumTeams = Math.max(2, parseInt(template.numTeams, 10) || numTeams || 2);
-    const nextNumTeams = nextFormat === 'semiFinal'
-      ? 4
-      : nextFormat === 'fullKnockout'
-        ? 8
-        : parsedNumTeams;
+    const parsedNumTeams = Math.max(MIN_NUM_TEAMS, parseInt(template.numTeams, 10) || numTeams || MIN_NUM_TEAMS);
+    const nextNumTeams = getFixedTeamCountForFormat(nextFormat) || parsedNumTeams;
 
     setGameMode(nextGameMode);
     setTournamentFormat(nextFormat);

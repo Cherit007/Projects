@@ -3,9 +3,11 @@ import { describe, it, expect } from "vitest";
 import {
   calculateCumulativePlayerStats,
   calculatePlayerStats,
+  generateDoubleElim4Bracket,
   generateFixtures,
   generateKnockoutBracket,
   getPlayerLeaderboard,
+  updateBracket,
 } from "../utils/calculations";
 
 const createTeams = (count) =>
@@ -141,6 +143,49 @@ describe("generateKnockoutBracket", () => {
     expect(playMatch).toBeTruthy();
     expect(playMatch.team1).toBeTruthy();
     expect(playMatch.team2).toBeTruthy();
+  });
+
+  it("creates a 5-match double-elim bracket with random openers for 4 teams", () => {
+    const teams = createTeams(4);
+    const bracket = generateDoubleElim4Bracket(teams, { random: () => 0 });
+
+    expect(bracket).toHaveLength(3);
+    expect(bracket.flat()).toHaveLength(5);
+    expect(bracket[0][0].round).toBe("opener");
+    expect(bracket[0][1].round).toBe("opener");
+    expect(bracket[1][0].round).toBe("winners-final");
+    expect(bracket[1][1].round).toBe("losers-match");
+    expect(bracket[2][0].round).toBe("final");
+
+    const openerTeams = [
+      bracket[0][0].team1.id,
+      bracket[0][0].team2.id,
+      bracket[0][1].team1.id,
+      bracket[0][1].team2.id,
+    ];
+    expect(new Set(openerTeams).size).toBe(4);
+
+    let next = updateBracket(bracket, 1, 21, 10);
+    expect(next[1][0].team1?.id).toBe(bracket[0][0].team1.id);
+    expect(next[1][1].team1?.id).toBe(bracket[0][0].team2.id);
+
+    next = updateBracket(next, 2, 21, 8);
+    expect(next[1][0].team2?.id).toBe(bracket[0][1].team1.id);
+    expect(next[1][1].team2?.id).toBe(bracket[0][1].team2.id);
+
+    next = updateBracket(next, 3, 21, 15);
+    expect(next[2][0].team1?.id).toBe(next[1][0].team1.id);
+
+    next = updateBracket(next, 4, 21, 12);
+    expect(next[2][0].team2?.id).toBe(next[1][1].team1.id);
+
+    next = updateBracket(next, 5, 21, 18);
+    expect(next[2][0].completed).toBe(true);
+  });
+
+  it("exposes doubleElim4 through generateKnockoutBracket", () => {
+    const bracket = generateKnockoutBracket(createTeams(4), "doubleElim4", { random: () => 0.5 });
+    expect(bracket.flat()).toHaveLength(5);
   });
 });
 
