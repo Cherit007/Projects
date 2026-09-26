@@ -30,12 +30,14 @@ const FormatFlowGuide = ({
     if (!open) return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    document.body.classList.add('format-flow-modal-open');
     const onKeyDown = (event) => {
       if (event.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.body.classList.remove('format-flow-modal-open');
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);

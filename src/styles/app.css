@@ -3483,6 +3483,12 @@ body[data-theme='light'] .group-hub-empty {
   z-index: 1240;
 }
 
+body.format-flow-modal-open .app-mobile-bottom-command-bar,
+body.format-flow-modal-open .tour-command-bar-shell {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .tour-command-bar {
   max-width: 42rem;
   margin: 0 auto;
@@ -8044,39 +8050,51 @@ body[data-theme='light'] .dashboard-v2-screen .template-manager-editor {
 .format-flow-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: 1400;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0.75rem;
-  background: rgba(15, 23, 42, 0.55);
+  padding:
+    max(0.55rem, env(safe-area-inset-top, 0px))
+    0.55rem
+    max(0.55rem, env(safe-area-inset-bottom, 0px));
+  background: rgba(15, 23, 42, 0.58);
   overscroll-behavior: contain;
+  touch-action: none;
 }
 
 .format-flow-modal {
   display: flex;
   flex-direction: column;
   width: min(34rem, 100%);
-  max-height: min(90vh, 46rem);
+  height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1.1rem));
+  max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1.1rem));
   overflow: hidden;
   border-radius: 1.15rem 1.15rem 0.85rem 0.85rem;
   border: 1px solid rgba(226, 232, 240, 0.95);
   background: #ffffff;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  touch-action: auto;
 }
 
 @media (min-width: 640px) {
   .format-flow-modal-overlay {
     align-items: center;
     padding: 1rem;
+    touch-action: auto;
   }
 
   .format-flow-modal {
+    height: auto;
+    max-height: min(86vh, 46rem);
     border-radius: 1.15rem;
   }
 }
 
 .format-flow-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
@@ -8135,7 +8153,8 @@ body[data-theme='light'] .dashboard-v2-screen .template-manager-editor {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0.85rem 1rem 1.2rem;
+  touch-action: pan-y;
+  padding: 0.85rem 1rem calc(1.35rem + env(safe-area-inset-bottom, 0px));
 }
 
 .format-flow-modal-summary,
