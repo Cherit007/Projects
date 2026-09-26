@@ -32,9 +32,21 @@ const SelectionGrid = ({
   matchesPerPair = '1',
 }) => (
   <div>
-    <label className="block text-sm font-semibold text-gray-700 mb-2">{legend}</label>
+    <div className="setup-format-legend-row">
+      <label className="block text-sm font-semibold text-gray-700">{legend}</label>
+      {showFormatInfo && (
+        <FormatFlowGuide
+          format={value}
+          numTeams={numTeams}
+          matchesPerPair={matchesPerPair}
+          buttonClassName="format-flow-info-btn-inline"
+          label="How this format works"
+          showText
+        />
+      )}
+    </div>
     <div
-      className={`grid gap-2 ${columns === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}
+      className={`grid gap-2 mt-2 ${columns === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}
       role="radiogroup"
       aria-label={legend}
     >

@@ -298,7 +298,17 @@ const SetupScreenMobileDashboard = ({
               </div>
 
               <div className="dashboard-v2-form-group">
-                <p className="dashboard-v2-form-label">Tournament Format</p>
+                <div className="setup-format-legend-row">
+                  <p className="dashboard-v2-form-label">Tournament Format</p>
+                  <FormatFlowGuide
+                    format={tournamentFormat}
+                    numTeams={numTeamsInput}
+                    matchesPerPair={format}
+                    buttonClassName="format-flow-info-btn-inline"
+                    label="How this format works"
+                    showText
+                  />
+                </div>
                 <div className="dashboard-v2-option-grid" role="radiogroup" aria-label="Tournament Format">
                   {dashboardFormatOptions.map((option) => {
                     const selected = tournamentFormat === option.value;

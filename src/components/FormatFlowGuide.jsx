@@ -9,6 +9,7 @@ const FormatFlowGuide = ({
   className = '',
   buttonClassName = '',
   label = 'How this format works',
+  showText = false,
 }) => {
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -30,15 +31,16 @@ const FormatFlowGuide = ({
     <>
       <button
         type="button"
-        className={`format-flow-info-btn ${buttonClassName}`.trim()}
-        aria-label={`${label}: ${flow.title}`}
+        className={`format-flow-info-btn ${showText ? 'is-text' : ''} ${buttonClassName}`.trim()}
+        aria-label={showText ? `How selected format works: ${flow.title}` : `${label}: ${flow.title}`}
         title={`${label} (${flow.exampleLabel})`}
         onClick={(event) => {
           event.stopPropagation();
           setOpen(true);
         }}
       >
-        <Info size={14} aria-hidden="true" />
+        <Info size={showText ? 15 : 14} aria-hidden="true" />
+        {showText && <span>How it works</span>}
       </button>
 
       {open && (

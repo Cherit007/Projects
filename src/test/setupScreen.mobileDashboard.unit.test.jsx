@@ -161,7 +161,7 @@ describe('SetupScreen mobile dashboard views', () => {
     expect(screen.getByDisplayValue('4')).toBeDisabled();
     expect(screen.getByText(/random openers, winners \+ losers paths/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /How this format works: Second Chance/i }));
+    await user.click(screen.getByRole('button', { name: /How selected format works: Second Chance/i }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Opening matches')).toBeInTheDocument();
     expect(screen.getByText('Championship final')).toBeInTheDocument();
@@ -176,7 +176,7 @@ describe('SetupScreen mobile dashboard views', () => {
     await user.clear(teamsInput);
     await user.type(teamsInput, '5');
 
-    await user.click(screen.getByRole('button', { name: /How this format works: League \+ Final/i }));
+    await user.click(screen.getByRole('button', { name: /How selected format works: League \+ Final/i }));
     expect(screen.getByText(/5 teams · 10 league matches/i)).toBeInTheDocument();
     expect(screen.getByText('League round 1')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Close format guide/i }));

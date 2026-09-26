@@ -7978,6 +7978,17 @@ body[data-theme='light'] .dashboard-v2-screen .template-manager-editor {
   padding-right: 2.1rem;
 }
 
+.setup-format-legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.setup-format-legend-row .dashboard-v2-form-label {
+  margin: 0;
+}
+
 .format-flow-info-btn {
   position: absolute;
   top: 0.45rem;
@@ -7986,22 +7997,38 @@ body[data-theme='light'] .dashboard-v2-screen .template-manager-editor {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.55rem;
-  height: 1.55rem;
+  width: 1.7rem;
+  height: 1.7rem;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  background: rgba(255, 255, 255, 0.92);
-  color: #475569;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: #eff6ff;
+  color: #1d4ed8;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.format-flow-info-btn.is-text,
+.format-flow-info-btn-inline {
+  position: static;
+  width: auto;
+  height: auto;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.7rem;
+  gap: 0.3rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .format-flow-info-btn:hover,
 .format-flow-info-btn:focus-visible {
   outline: none;
-  color: #0f172a;
-  border-color: rgba(59, 130, 246, 0.55);
-  background: #eff6ff;
+  color: #1e3a8a;
+  border-color: rgba(37, 99, 235, 0.7);
+  background: #dbeafe;
+  transform: translateY(-1px);
 }
 
 .template-format-row {
@@ -8163,16 +8190,16 @@ body[data-theme='light'] .dashboard-v2-screen .template-manager-editor {
 }
 
 body[data-theme='dark'] .format-flow-info-btn {
-  background: rgba(15, 23, 42, 0.88);
-  border-color: rgba(100, 116, 139, 0.55);
-  color: #cbd5e1;
+  background: rgba(30, 58, 138, 0.45);
+  border-color: rgba(96, 165, 250, 0.55);
+  color: #bfdbfe;
 }
 
 body[data-theme='dark'] .format-flow-info-btn:hover,
 body[data-theme='dark'] .format-flow-info-btn:focus-visible {
-  background: rgba(30, 58, 138, 0.55);
-  border-color: rgba(96, 165, 250, 0.55);
-  color: #e2e8f0;
+  background: rgba(37, 99, 235, 0.55);
+  border-color: rgba(147, 197, 253, 0.8);
+  color: #eff6ff;
 }
 
 body[data-theme='dark'] .format-flow-modal {
