@@ -321,7 +321,9 @@ const LiveMatchView = ({
             <span>LIVE NOW</span>
           </div>
           <span className="variant-a-context-chip">
-            Match {displayCurrentMatchNumber} of {displayTotalMatches}
+            {currentMatch?.label
+              ? currentMatch.label
+              : `Match ${displayCurrentMatchNumber} of ${displayTotalMatches}`}
           </span>
         </div>
 
@@ -526,7 +528,12 @@ const LiveMatchView = ({
         <div className="variant-a-card variant-a-upcoming-shell">
           <p className="variant-a-section-label">Coming up</p>
           <div className="variant-a-upcoming-head">
-            <span className="variant-a-meta-copy">Round {primaryUpcomingMatch.round} · Match {primaryUpcomingMatch.id}</span>
+            <span className="variant-a-meta-copy">
+              {primaryUpcomingMatch.label
+                || (primaryUpcomingMatch.round != null
+                  ? `Round ${primaryUpcomingMatch.round} · Match ${primaryUpcomingMatch.id}`
+                  : `Match ${primaryUpcomingMatch.id}`)}
+            </span>
             <span className="variant-a-badge">Next up</span>
           </div>
 
@@ -732,7 +739,12 @@ const LiveMatchView = ({
               >
                 <div>
                   <p className="variant-a-history-title">{match.team1?.name} vs {match.team2?.name}</p>
-                  <p className="variant-a-history-copy">Round {match.round} · Match {match.id}</p>
+                  <p className="variant-a-history-copy">
+                    {match.label
+                      || (match.round != null
+                        ? `Round ${match.round} · Match ${match.id}`
+                        : `Match ${match.id}`)}
+                  </p>
                 </div>
                 <span className="variant-a-meta-copy">Live now</span>
               </button>

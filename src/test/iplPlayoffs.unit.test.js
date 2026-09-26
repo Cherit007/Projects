@@ -2,9 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import { generateKnockoutBracket, updateBracket } from '../utils/calculations';
 import {
+  computeBallOrbit,
   computeWheelRotation,
+  flattenBracketMatches,
   generateIplPlayoffBracket,
+  getCompletedBracketMatches,
   getOrdinalLabel,
+  getPlayableBracketMatches,
   pickSpinIndex,
 } from '../utils/iplPlayoffs';
 
@@ -78,5 +82,22 @@ describe('ipl playoff helpers', () => {
     expect(getOrdinalLabel(2)).toBe('2nd');
     expect(getOrdinalLabel(3)).toBe('3rd');
     expect(getOrdinalLabel(4)).toBe('4th');
+  });
+
+  it('lists playable and completed bracket matches for live scoring', () => {
+    const bracket = generateIplPlayoffBracket(createTeams(4));
+    expect(getPlayableBracketMatches(bracket)).toHaveLength(2);
+    expect(flattenBracketMatches(bracket)).toHaveLength(4);
+
+    const afterQ1 = updateBracket(bracket, 1, 21, 10);
+    expect(getCompletedBracketMatches(afterQ1)).toHaveLength(1);
+    expect(getPlayableBracketMatches(afterQ1).map((match) => match.round)).toContain('eliminator');
+  });
+
+  it('computes ball orbit that settles back under the top marker', () => {
+    const angle = computeBallOrbit({ currentAngle: 90, extraSpins: 3 });
+    const normalized = ((angle % 360) + 360) % 360;
+    expect(normalized).toBeCloseTo(0, 5);
+    expect(angle).toBeLessThan(90);
   });
 });

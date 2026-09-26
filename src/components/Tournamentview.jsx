@@ -26,6 +26,11 @@ import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildPlayerGamification } from '../utils/playerGamification';
 import { filterLeaderboardRowsByRecordedMatches } from '../utils/dashboardAnalytics';
 import PlayerAvatar from './PlayerAvatar';
+import {
+  flattenBracketMatches,
+  getCompletedBracketMatches,
+  getPlayableBracketMatches,
+} from '../utils/iplPlayoffs';
 
 const parseActivityTimestamp = (value) => {
   if (!value) return null;
@@ -117,6 +122,7 @@ const TournamentView = ({
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempTournamentName, setTempTournamentName] = useState(tournamentName);
   const [selectedBracketMatch, setSelectedBracketMatch] = useState(null);
+  const [preferredBracketMatchId, setPreferredBracketMatchId] = useState(null);
   const [selectedPlayerName, setSelectedPlayerName] = useState(null);
   const [showNextTournamentModal, setShowNextTournamentModal] = useState(false);
   const [nextTournamentName, setNextTournamentName] = useState('');
@@ -222,19 +228,70 @@ const TournamentView = ({
     }
   }, []);
 
-  // Find current match (first incomplete)
-  const currentMatch = useMemo(() => (
-    tournamentFormat === 'league'
-      ? fixtures.find((m) => !m.completed)
-      : null
-  ), [tournamentFormat, fixtures]);
+  // Find current / upcoming matches (league fixtures or playable bracket slots)
+  const playableBracketMatches = useMemo(
+    () => (tournamentFormat === 'league' ? [] : getPlayableBracketMatches(bracket)),
+    [tournamentFormat, bracket]
+  );
+  const completedBracketMatches = useMemo(
+    () => (tournamentFormat === 'league' ? [] : getCompletedBracketMatches(bracket)),
+    [tournamentFormat, bracket]
+  );
+  const allBracketMatches = useMemo(
+    () => (tournamentFormat === 'league' ? [] : flattenBracketMatches(bracket)),
+    [tournamentFormat, bracket]
+  );
 
-  // Get next matches
-  const nextMatches = useMemo(() => (
-    tournamentFormat === 'league'
-      ? fixtures.filter((m) => !m.completed).slice(1)
-      : []
-  ), [tournamentFormat, fixtures]);
+  const currentMatch = useMemo(() => {
+    if (tournamentFormat === 'league') {
+      return fixtures.find((m) => !m.completed) || null;
+    }
+    if (playableBracketMatches.length === 0) return null;
+    const preferred = playableBracketMatches.find(
+      (match) => String(match.id) === String(preferredBracketMatchId)
+    );
+    return preferred || playableBracketMatches[0];
+  }, [tournamentFormat, fixtures, playableBracketMatches, preferredBracketMatchId]);
+
+  useEffect(() => {
+    if (tournamentFormat === 'league') return;
+    if (!preferredBracketMatchId) return;
+    const stillPlayable = playableBracketMatches.some(
+      (match) => String(match.id) === String(preferredBracketMatchId)
+    );
+    if (!stillPlayable) setPreferredBracketMatchId(null);
+  }, [tournamentFormat, preferredBracketMatchId, playableBracketMatches]);
+
+  const nextMatches = useMemo(() => {
+    if (tournamentFormat === 'league') {
+      return fixtures.filter((m) => !m.completed).slice(1);
+    }
+    const currentId = currentMatch?.id;
+    return playableBracketMatches.filter((match) => String(match.id) !== String(currentId));
+  }, [tournamentFormat, fixtures, playableBracketMatches, currentMatch]);
+
+  const handleSelectLiveMatch = useCallback((matchId) => {
+    if (tournamentFormat === 'league') {
+      onPrioritizeMatch?.(matchId);
+      return;
+    }
+    const target = playableBracketMatches.find((match) => String(match.id) === String(matchId));
+    if (target) {
+      setPreferredBracketMatchId(String(matchId));
+      setSelectedBracketMatch(null);
+    }
+  }, [tournamentFormat, onPrioritizeMatch, playableBracketMatches]);
+
+  const handleBracketMatchClick = useCallback((match) => {
+    if (!match) return;
+    const isReady = Boolean(match.team1 && match.team2) && !match.completed;
+    if (isReady) {
+      setPreferredBracketMatchId(String(match.id));
+      setSelectedBracketMatch(null);
+      return;
+    }
+    setSelectedBracketMatch(match);
+  }, []);
 
   const pointsTable = useMemo(() => (
     tournamentFormat === 'league' ? calculatePointsTable(teams, fixtures) : []
@@ -1394,7 +1451,7 @@ const TournamentView = ({
               currentMatch={currentMatch}
               onSaveMatchResult={handleSaveMatchResult}
               nextMatches={nextMatches}
-              onPrioritizeMatch={onPrioritizeMatch}
+              onPrioritizeMatch={handleSelectLiveMatch}
               playerRatings={playerRatings}
               playerPhotos={playerPhotos}
               pointsTable={pointsTable}
@@ -1404,8 +1461,11 @@ const TournamentView = ({
               liveActivityEvents={liveActivityEvents}
               fixtures={fixtures}
               bracket={bracket}
+              completedBracketMatches={completedBracketMatches}
+              totalBracketMatches={allBracketMatches.length}
               selectedBracketMatch={selectedBracketMatch}
               setSelectedBracketMatch={setSelectedBracketMatch}
+              onBracketMatchClick={handleBracketMatchClick}
               onSaveBracketResult={handleSaveBracketResult}
               leagueMatchesComplete={leagueMatchesComplete}
               onGoToFinal={() => setActiveTab('final')}

@@ -60,6 +60,12 @@ const TeamEntry = ({
     }).filter(item => item.value)
   ), [teams, gameMode]);
 
+  const selectedTeamPlayerNames = useMemo(
+    () => new Set(selectedPlayerSlots.map((item) => item.value)),
+    [selectedPlayerSlots]
+  );
+  const normalizedOddPlayerName = normalizeValue(oddPlayerName);
+
   const getTeamNameSuggestions = (teamIndex) => {
     const currentValue = normalizeValue(teams[teamIndex]?.name);
     const usedByOthers = new Set(
@@ -82,10 +88,39 @@ const TeamEntry = ({
         .filter(item => item.key !== key && item.value !== currentValue)
         .map(item => item.value)
     );
+    // Keep odd player out of team-player dropdowns when rotation mode is on.
+    if (oddPlayerEnabled && normalizedOddPlayerName && normalizedOddPlayerName !== currentValue) {
+      usedByOthers.add(normalizedOddPlayerName);
+    }
     return (playerDatabase || []).filter((name) => {
       const normalized = normalizeValue(name);
       return !normalized || !usedByOthers.has(normalized) || normalized === currentValue;
     });
+  };
+
+  const getOddPlayerSuggestions = () => {
+    const currentValue = normalizedOddPlayerName;
+    return (playerDatabase || []).filter((name) => {
+      const normalized = normalizeValue(name);
+      if (!normalized) return false;
+      if (normalized === currentValue) return true;
+      return !selectedTeamPlayerNames.has(normalized);
+    });
+  };
+
+  const clearOddPlayerIfTaken = (nextPlayerName) => {
+    if (!oddPlayerEnabled) return;
+    const nextNormalized = normalizeValue(nextPlayerName);
+    if (nextNormalized && nextNormalized === normalizedOddPlayerName) {
+      setOddPlayerName('');
+    }
+  };
+
+  const updateTeamPlayer = (teamIndex, field, value) => {
+    clearOddPlayerIfTaken(value);
+    setTeams((prev) => prev.map((team, index) => (
+      index === teamIndex ? { ...team, [field]: value } : team
+    )));
   };
 
   const slotsPerTeam = gameMode === 'singles' ? 1 : 2;
@@ -118,7 +153,9 @@ const TeamEntry = ({
       );
       const leftoverPlayers = pool.filter((name) => !draftedPlayers.has(normalizeValue(name)));
 
-      if (!oddPlayerName.trim() && leftoverPlayers.length > 0) {
+      if (normalizedOddPlayerName && draftedPlayers.has(normalizedOddPlayerName)) {
+        setOddPlayerName(leftoverPlayers[0] || '');
+      } else if (!oddPlayerName.trim() && leftoverPlayers.length > 0) {
         setOddPlayerName(leftoverPlayers[0]);
       }
     }
@@ -126,9 +163,16 @@ const TeamEntry = ({
     setDraftError('');
   };
 
+  const oddPlayerConflictsWithTeam = Boolean(
+    oddPlayerEnabled
+    && normalizedOddPlayerName
+    && selectedTeamPlayerNames.has(normalizedOddPlayerName)
+  );
+
   const canGenerate = !generatePending
     && !teams.some(t => !t.name || (!t.player && !t.player1) || (gameMode !== 'singles' && !t.player2))
-    && (!(gameMode !== 'singles' && oddPlayerEnabled) || oddPlayerName.trim());
+    && (!(gameMode !== 'singles' && oddPlayerEnabled) || oddPlayerName.trim())
+    && !oddPlayerConflictsWithTeam;
 
   const buildGeneratePayload = () => ({
     oddPlayerEnabled,
@@ -210,6 +254,7 @@ const TeamEntry = ({
                       <AutocompleteInput
                         value={team.player || team.player1}
                         onChange={(value) => {
+                          clearOddPlayerIfTaken(value);
                           const newTeams = [...teams];
                           newTeams[index].player = value;
                           newTeams[index].player1 = value;
@@ -228,11 +273,7 @@ const TeamEntry = ({
                         </label>
                         <AutocompleteInput
                           value={team.player1}
-                          onChange={(value) => {
-                            const newTeams = [...teams];
-                            newTeams[index].player1 = value;
-                            setTeams(newTeams);
-                          }}
+                          onChange={(value) => updateTeamPlayer(index, 'player1', value)}
                           placeholder="Player 1 Name"
                           playerDatabase={getPlayerSuggestions(index, 'player1')}
                         />
@@ -244,11 +285,7 @@ const TeamEntry = ({
                         </label>
                         <AutocompleteInput
                           value={team.player2}
-                          onChange={(value) => {
-                            const newTeams = [...teams];
-                            newTeams[index].player2 = value;
-                            setTeams(newTeams);
-                          }}
+                          onChange={(value) => updateTeamPlayer(index, 'player2', value)}
                           placeholder="Player 2 Name"
                           playerDatabase={getPlayerSuggestions(index, 'player2')}
                         />
@@ -322,8 +359,13 @@ const TeamEntry = ({
                     value={oddPlayerName}
                     onChange={setOddPlayerName}
                     placeholder="Odd player name"
-                    playerDatabase={playerDatabase}
+                    playerDatabase={getOddPlayerSuggestions()}
                   />
+                  {oddPlayerConflictsWithTeam && (
+                    <p className="mt-1 text-xs font-semibold text-red-600">
+                      Odd player must be different from all team players above.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

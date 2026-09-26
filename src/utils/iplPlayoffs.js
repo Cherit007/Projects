@@ -132,6 +132,27 @@ export const orderTeamsBySeedMap = (teams = [], seedByTeamId = {}) => {
   });
 };
 
+/** Flatten bracket rounds into a single ordered match list. */
+export const flattenBracketMatches = (bracket = []) => (
+  (Array.isArray(bracket) ? bracket : []).flatMap((round) => (
+    Array.isArray(round) ? round.filter(Boolean) : []
+  ))
+);
+
+/**
+ * Matches that are ready to score: both sides filled and not completed.
+ * Used to drive the same Live score page as league fixtures.
+ */
+export const getPlayableBracketMatches = (bracket = []) => (
+  flattenBracketMatches(bracket).filter((match) => (
+    Boolean(match?.team1 && match?.team2) && !match.completed
+  ))
+);
+
+export const getCompletedBracketMatches = (bracket = []) => (
+  flattenBracketMatches(bracket).filter((match) => Boolean(match?.completed))
+);
+
 export const getOrdinalLabel = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
@@ -169,8 +190,6 @@ export const computeWheelRotation = ({
   const segmentAngle = 360 / count;
   // Center of segment index, measured clockwise from top.
   const targetCenterFromTop = index * segmentAngle + segmentAngle / 2;
-  // Wheel rotates clockwise in CSS when angle increases... actually CSS rotate is clockwise for positive.
-  // Pointer is fixed at top. We want segment center to land at top → rotate so that center moves to 0.
   const normalize = (deg) => {
     const value = deg % 360;
     return value < 0 ? value + 360 : value;
@@ -181,4 +200,23 @@ export const computeWheelRotation = ({
   if (delta < 0) delta += 360;
   const spins = Math.max(3, Number(extraSpins) || 5);
   return currentRotation + spins * 360 + delta;
+};
+
+/**
+ * Ball travels the outer track opposite the wheel and settles under the top marker.
+ */
+export const computeBallOrbit = ({
+  currentAngle = 0,
+  extraSpins = 7,
+} = {}) => {
+  const normalize = (deg) => {
+    const value = deg % 360;
+    return value < 0 ? value + 360 : value;
+  };
+  const spins = Math.max(2, Number(extraSpins) || 7);
+  const currentMod = normalize(currentAngle);
+  let delta = -currentMod;
+  if (delta === 0) delta = -360;
+  if (delta > 0) delta -= 360;
+  return currentAngle + delta - spins * 360;
 };

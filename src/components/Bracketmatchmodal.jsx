@@ -72,7 +72,7 @@ const BracketMatchModal = ({ match, onSave, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 app-modal-shell bracket-modal-shell">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold">Match {match.id}</h3>
+          <h3 className="text-2xl font-bold">{match.label || `Match ${match.id}`}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
