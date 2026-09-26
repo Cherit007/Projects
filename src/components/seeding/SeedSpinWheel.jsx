@@ -3,6 +3,8 @@ import {
   computeBallOrbit,
   computeWheelRotation,
   getOrdinalLabel,
+  getWheelFretAngle,
+  getWheelSegmentCenterAngle,
   pickSpinIndex,
 } from '../../utils/iplPlayoffs';
 
@@ -160,7 +162,6 @@ const SeedSpinWheel = ({
   };
 
   const busy = disabled || isAnimating || spinning || segments.length === 0;
-  const slice = segments.length > 0 ? 360 / segments.length : 90;
 
   return (
     <div className="seed-spin-wheel">
@@ -194,12 +195,12 @@ const SeedSpinWheel = ({
             <span
               key={`fret-${index}`}
               className="seed-spin-wheel-fret"
-              style={{ transform: `rotate(${-90 + index * slice}deg) translateY(-50%)` }}
+              style={{ transform: `rotate(${getWheelFretAngle(segments.length, index)}deg) translateY(-50%)` }}
               aria-hidden="true"
             />
           ))}
           {segments.map((segment, index) => {
-            const angle = -90 + index * slice + slice / 2;
+            const angle = getWheelSegmentCenterAngle(segments.length, index);
             return (
               <span
                 key={`${segment.value}-${index}`}

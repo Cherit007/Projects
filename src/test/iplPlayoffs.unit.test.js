@@ -9,6 +9,7 @@ import {
   getCompletedBracketMatches,
   getOrdinalLabel,
   getPlayableBracketMatches,
+  getWheelSegmentCenterAngle,
   pickSpinIndex,
 } from '../utils/iplPlayoffs';
 
@@ -77,6 +78,13 @@ describe('ipl playoff helpers', () => {
     const normalized = ((rotation % 360) + 360) % 360;
     // Segment 1 center is at 135deg from top clockwise → wheel rotation 360-135=225
     expect(normalized).toBeCloseTo(225, 5);
+    // After that rotation, segment-center angle + wheel rotation ≡ 0 (top) for the landing index.
+    const center = getWheelSegmentCenterAngle(4, 1);
+    expect(normalizeAngle(center + normalized)).toBeCloseTo(0, 5);
+    // Labels must use the same clockwise-from-top centers (not -90 offset),
+    // otherwise the ball can sit on "3rd" while we assign "2nd".
+    expect(getWheelSegmentCenterAngle(4, 0)).toBeCloseTo(45, 5);
+    expect(getWheelSegmentCenterAngle(4, 2)).toBeCloseTo(225, 5);
     expect(pickSpinIndex(4, () => 0.99)).toBe(3);
     expect(getOrdinalLabel(1)).toBe('1st');
     expect(getOrdinalLabel(2)).toBe('2nd');
@@ -101,3 +109,8 @@ describe('ipl playoff helpers', () => {
     expect(angle).toBeLessThan(90);
   });
 });
+
+const normalizeAngle = (deg) => {
+  const value = deg % 360;
+  return value < 0 ? value + 360 : value;
+};

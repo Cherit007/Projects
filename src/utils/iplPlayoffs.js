@@ -176,8 +176,25 @@ export const pickSpinIndex = (segmentCount, random = Math.random) => {
 };
 
 /**
+ * Absolute angle (CSS degrees, clockwise from top) for a segment center or fret.
+ * Must stay in sync with conic-gradient(from -90deg) segment layout.
+ */
+export const getWheelSegmentCenterAngle = (segmentCount, index) => {
+  const count = Math.max(1, Number(segmentCount) || 1);
+  const safeIndex = Math.max(0, Math.min(count - 1, Number(index) || 0));
+  const segmentAngle = 360 / count;
+  return safeIndex * segmentAngle + segmentAngle / 2;
+};
+
+export const getWheelFretAngle = (segmentCount, index) => {
+  const count = Math.max(1, Number(segmentCount) || 1);
+  const safeIndex = Math.max(0, Math.min(count - 1, Number(index) || 0));
+  return safeIndex * (360 / count);
+};
+
+/**
  * Compute final wheel rotation (degrees) so segment `landingIndex` stops under the top pointer.
- * Segments are drawn clockwise starting at -90deg (top).
+ * Segments are drawn clockwise starting at top (conic-gradient from -90deg).
  */
 export const computeWheelRotation = ({
   segmentCount,
@@ -185,11 +202,7 @@ export const computeWheelRotation = ({
   currentRotation = 0,
   extraSpins = 5,
 } = {}) => {
-  const count = Math.max(1, Number(segmentCount) || 1);
-  const index = Math.max(0, Math.min(count - 1, Number(landingIndex) || 0));
-  const segmentAngle = 360 / count;
-  // Center of segment index, measured clockwise from top.
-  const targetCenterFromTop = index * segmentAngle + segmentAngle / 2;
+  const targetCenterFromTop = getWheelSegmentCenterAngle(segmentCount, landingIndex);
   const normalize = (deg) => {
     const value = deg % 360;
     return value < 0 ? value + 360 : value;
