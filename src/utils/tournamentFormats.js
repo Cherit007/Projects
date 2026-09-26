@@ -60,6 +60,8 @@ const makeTeamLabels = (count) => (
   Array.from({ length: count }, (_, index) => String.fromCharCode(65 + index))
 );
 
+const ODD_PLAYER_LABEL = 'Z';
+
 const getNextPowerOfTwo = (value) => {
   let power = 1;
   while (power < value) power *= 2;
@@ -108,39 +110,86 @@ const getKnockoutRoundTitle = (roundIndex, totalRounds, teamCount) => {
   return `Round ${roundIndex + 1}`;
 };
 
-const buildLeagueFlow = (teamCount, matchesPerPair = 1) => {
+const annotateMatchWithOddPlayer = (matchLabel, includeOddPlayer) => {
+  if (!includeOddPlayer) return matchLabel;
+  if (String(matchLabel).includes('bye')) return matchLabel;
+  return `${matchLabel} · ${ODD_PLAYER_LABEL} rotates in`;
+};
+
+const buildOddPlayerSetupStage = (teamCount, format) => {
+  const rosterSize = teamCount * 2;
+  const isLeague = format === 'league';
+  return {
+    title: 'Odd player setup',
+    matches: [
+      `${teamCount} teams · ${rosterSize} roster players + odd ${ODD_PLAYER_LABEL}`,
+      `Total pool: ${rosterSize + 1} players`,
+    ],
+    note: isLeague
+      ? `Each league match reshuffles active pairs, swaps ${ODD_PLAYER_LABEL} into one playing slot, and benches one player.`
+      : `Guide preview: before each knockout match, ${ODD_PLAYER_LABEL} can rotate into one active side while one player sits.`,
+  };
+};
+
+const buildLeagueFlow = (teamCount, matchesPerPair = 1, includeOddPlayer = false) => {
   const teams = makeTeamLabels(teamCount);
   const rounds = buildRoundRobinRounds(teams);
   const pairCount = (teamCount * (teamCount - 1)) / 2;
   const totalMatches = pairCount * matchesPerPair;
-  const stages = rounds.map((matches, index) => ({
-    title: `League round ${index + 1}`,
-    matches,
-    note: index === 0 && teamCount % 2 === 1
-      ? 'Odd team count: one team sits out each round.'
-      : null,
-  }));
+  const stages = [];
+
+  if (includeOddPlayer) {
+    stages.push(buildOddPlayerSetupStage(teamCount, 'league'));
+  }
+
+  rounds.forEach((matches, index) => {
+    stages.push({
+      title: `League round ${index + 1}`,
+      matches: matches.map((match) => annotateMatchWithOddPlayer(match, includeOddPlayer)),
+      note: includeOddPlayer
+        ? `For each fixture: reshuffle the ${teamCount * 2} roster players, bring ${ODD_PLAYER_LABEL} in, one player sits out.`
+        : (index === 0 && teamCount % 2 === 1
+          ? 'Odd team count: one team sits out each round.'
+          : null),
+    });
+  });
 
   stages.push({
     title: 'Points table',
     matches: ['Rank all teams by wins / points'],
     note: 'Top 2 qualify for the final.',
   });
-  stages.push({
-    title: 'Final',
-    matches: ['1st place vs 2nd place'],
-    note: 'Winner is champion.',
-  });
+
+  if (includeOddPlayer) {
+    stages.push({
+      title: 'Final with odd player check',
+      matches: [
+        '1st place vs 2nd place',
+        `If ${ODD_PLAYER_LABEL} leads individual points → joins a finalist team`,
+      ],
+      note: `${ODD_PLAYER_LABEL} replaces the lower individual-points player on the finalist side they’ve played with more.`,
+    });
+  } else {
+    stages.push({
+      title: 'Final',
+      matches: ['1st place vs 2nd place'],
+      note: 'Winner is champion.',
+    });
+  }
 
   return {
     title: TOURNAMENT_FORMAT_LABELS.league,
-    summary: 'Every team plays every other team. Top 2 on the table meet in the final.',
-    exampleLabel: `${teamCount} teams · ${totalMatches} league match${totalMatches === 1 ? '' : 'es'}${matchesPerPair > 1 ? ` (${matchesPerPair} per pair)` : ''} → final`,
+    summary: includeOddPlayer
+      ? `League with odd-player rotation. Extra player ${ODD_PLAYER_LABEL} rotates into fixtures; may join the final on top individual points.`
+      : 'Every team plays every other team. Top 2 on the table meet in the final.',
+    exampleLabel: includeOddPlayer
+      ? `${teamCount} teams + odd ${ODD_PLAYER_LABEL} · ${totalMatches} league match${totalMatches === 1 ? '' : 'es'} → final`
+      : `${teamCount} teams · ${totalMatches} league match${totalMatches === 1 ? '' : 'es'}${matchesPerPair > 1 ? ` (${matchesPerPair} per pair)` : ''} → final`,
     stages,
   };
 };
 
-const buildKnockoutFlow = (teamCount) => {
+const buildKnockoutFlow = (teamCount, includeOddPlayer = false) => {
   const teams = makeTeamLabels(teamCount);
   const bracketSize = getNextPowerOfTwo(teamCount);
   const totalRounds = Math.log2(bracketSize);
@@ -165,15 +214,21 @@ const buildKnockoutFlow = (teamCount) => {
     }
   }
 
-  const stages = [
-    {
-      title: getKnockoutRoundTitle(0, totalRounds, teamCount),
-      matches: firstMatches,
-      note: byeCount > 0
+  const stages = [];
+  if (includeOddPlayer) {
+    stages.push(buildOddPlayerSetupStage(teamCount, 'knockoutByes'));
+  }
+
+  stages.push({
+    title: getKnockoutRoundTitle(0, totalRounds, teamCount),
+    matches: firstMatches.map((match) => annotateMatchWithOddPlayer(match, includeOddPlayer)),
+    note: [
+      byeCount > 0
         ? `${byeCount} bye${byeCount === 1 ? '' : 's'} auto-advance into the next round.`
         : 'No byes — every team plays in round 1.',
-    },
-  ];
+      includeOddPlayer ? `${ODD_PLAYER_LABEL} can rotate into one playing side before each contested match.` : null,
+    ].filter(Boolean).join(' '),
+  });
 
   for (let roundIndex = 1; roundIndex < totalRounds; roundIndex += 1) {
     const nextAdvancing = [];
@@ -186,77 +241,135 @@ const buildKnockoutFlow = (teamCount) => {
     }
     stages.push({
       title: getKnockoutRoundTitle(roundIndex, totalRounds, teamCount),
-      matches,
-      note: roundIndex === totalRounds - 1 ? 'Winner is champion.' : null,
+      matches: matches.map((match) => annotateMatchWithOddPlayer(match, includeOddPlayer)),
+      note: roundIndex === totalRounds - 1
+        ? (includeOddPlayer
+          ? `Winner is champion. ${ODD_PLAYER_LABEL} only plays if rotated into a finalist side beforehand.`
+          : 'Winner is champion.')
+        : (includeOddPlayer ? `${ODD_PLAYER_LABEL} may rotate again before this round’s matches.` : null),
     });
     advancing = nextAdvancing;
   }
 
   return {
     title: TOURNAMENT_FORMAT_LABELS.knockoutByes,
-    summary: 'Single-elimination bracket. Extra bracket slots become automatic byes.',
-    exampleLabel: `${teamCount} teams · bracket size ${bracketSize}${byeCount > 0 ? ` · ${byeCount} bye${byeCount === 1 ? '' : 's'}` : ''}`,
+    summary: includeOddPlayer
+      ? `Knockout bracket with optional odd-player rotation (${ODD_PLAYER_LABEL}) on contested matches.`
+      : 'Single-elimination bracket. Extra bracket slots become automatic byes.',
+    exampleLabel: includeOddPlayer
+      ? `${teamCount} teams + odd ${ODD_PLAYER_LABEL} · bracket size ${bracketSize}`
+      : `${teamCount} teams · bracket size ${bracketSize}${byeCount > 0 ? ` · ${byeCount} bye${byeCount === 1 ? '' : 's'}` : ''}`,
     stages,
   };
 };
 
-const buildSemiFinalFlow = () => {
+const buildSemiFinalFlow = (includeOddPlayer = false) => {
   const teams = makeTeamLabels(4);
+  const stages = [];
+  if (includeOddPlayer) {
+    stages.push(buildOddPlayerSetupStage(4, 'semiFinal'));
+  }
+  stages.push(
+    {
+      title: 'Semi-finals',
+      matches: [
+        annotateMatchWithOddPlayer(`${teams[0]} vs ${teams[1]}`, includeOddPlayer),
+        annotateMatchWithOddPlayer(`${teams[2]} vs ${teams[3]}`, includeOddPlayer),
+      ],
+      note: includeOddPlayer
+        ? `Losers are eliminated. ${ODD_PLAYER_LABEL} can rotate into one side of each semi.`
+        : 'Losers are eliminated.',
+    },
+    {
+      title: 'Final',
+      matches: [
+        annotateMatchWithOddPlayer(
+          `W(${teams[0]}/${teams[1]}) vs W(${teams[2]}/${teams[3]})`,
+          includeOddPlayer
+        ),
+      ],
+      note: includeOddPlayer
+        ? `Winner is champion. ${ODD_PLAYER_LABEL} may rotate into the final pairing if selected.`
+        : 'Winner is champion.',
+    }
+  );
+
   return {
     title: TOURNAMENT_FORMAT_LABELS.semiFinal,
-    summary: 'Compact 4-team knockout: two semis, then one final. Three matches total.',
-    exampleLabel: '4 teams · 3 matches',
-    stages: [
-      {
-        title: 'Semi-finals',
-        matches: [`${teams[0]} vs ${teams[1]}`, `${teams[2]} vs ${teams[3]}`],
-        note: 'Losers are eliminated.',
-      },
-      {
-        title: 'Final',
-        matches: [`W(${teams[0]}/${teams[1]}) vs W(${teams[2]}/${teams[3]})`],
-        note: 'Winner is champion.',
-      },
-    ],
+    summary: includeOddPlayer
+      ? `4-team knockout with odd-player ${ODD_PLAYER_LABEL} rotation on each contested match.`
+      : 'Compact 4-team knockout: two semis, then one final. Three matches total.',
+    exampleLabel: includeOddPlayer ? `4 teams + odd ${ODD_PLAYER_LABEL} · 3 matches` : '4 teams · 3 matches',
+    stages,
   };
 };
 
-const buildDoubleElim4Flow = () => {
+const buildDoubleElim4Flow = (includeOddPlayer = false) => {
   const teams = makeTeamLabels(4);
+  const stages = [];
+  if (includeOddPlayer) {
+    stages.push(buildOddPlayerSetupStage(4, 'doubleElim4'));
+  }
+  stages.push(
+    {
+      title: 'Opening matches',
+      matches: [
+        annotateMatchWithOddPlayer(`${teams[0]} vs ${teams[1]}`, includeOddPlayer),
+        annotateMatchWithOddPlayer(`${teams[2]} vs ${teams[3]}`, includeOddPlayer),
+      ],
+      note: includeOddPlayer
+        ? `Pairings are randomized. ${ODD_PLAYER_LABEL} can rotate into either opener.`
+        : 'Pairings are randomized when you generate.',
+    },
+    {
+      title: 'Winners final · Losers match',
+      matches: [
+        annotateMatchWithOddPlayer(
+          `W(${teams[0]}/${teams[1]}) vs W(${teams[2]}/${teams[3]})`,
+          includeOddPlayer
+        ),
+        annotateMatchWithOddPlayer(
+          `L(${teams[0]}/${teams[1]}) vs L(${teams[2]}/${teams[3]})`,
+          includeOddPlayer
+        ),
+      ],
+      note: includeOddPlayer
+        ? `Second-chance path stays. ${ODD_PLAYER_LABEL} may rotate again before these matches.`
+        : 'Losers get a second chance instead of being eliminated immediately.',
+    },
+    {
+      title: 'Championship final',
+      matches: [
+        annotateMatchWithOddPlayer(
+          'Winners-final winner vs Losers-match winner',
+          includeOddPlayer
+        ),
+      ],
+      note: includeOddPlayer
+        ? `Winner is champion. ${ODD_PLAYER_LABEL} can still rotate into the final side if enabled.`
+        : 'Winner is champion.',
+    }
+  );
+
   return {
     title: TOURNAMENT_FORMAT_LABELS.doubleElim4,
-    summary: '4-team short double-elim. Opener losers get one more match before the championship final.',
-    exampleLabel: '4 teams · 5 matches',
-    stages: [
-      {
-        title: 'Opening matches',
-        matches: [`${teams[0]} vs ${teams[1]}`, `${teams[2]} vs ${teams[3]}`],
-        note: 'Pairings are randomized when you generate.',
-      },
-      {
-        title: 'Winners final · Losers match',
-        matches: [
-          `W(${teams[0]}/${teams[1]}) vs W(${teams[2]}/${teams[3]})`,
-          `L(${teams[0]}/${teams[1]}) vs L(${teams[2]}/${teams[3]})`,
-        ],
-        note: 'Losers get a second chance instead of being eliminated immediately.',
-      },
-      {
-        title: 'Championship final',
-        matches: ['Winners-final winner vs Losers-match winner'],
-        note: 'Winner is champion.',
-      },
-    ],
+    summary: includeOddPlayer
+      ? `Second Chance bracket with odd-player ${ODD_PLAYER_LABEL} rotation on contested matches.`
+      : '4-team short double-elim. Opener losers get one more match before the championship final.',
+    exampleLabel: includeOddPlayer ? `4 teams + odd ${ODD_PLAYER_LABEL} · 5 matches` : '4 teams · 5 matches',
+    stages,
   };
 };
 
-const buildFullKnockoutFlow = () => {
-  const flow = buildKnockoutFlow(8);
+const buildFullKnockoutFlow = (includeOddPlayer = false) => {
+  const flow = buildKnockoutFlow(8, includeOddPlayer);
   return {
     ...flow,
     title: TOURNAMENT_FORMAT_LABELS.fullKnockout,
-    summary: 'Classic 8-team single-elimination: quarters → semis → final. Seven matches total.',
-    exampleLabel: '8 teams · 7 matches',
+    summary: includeOddPlayer
+      ? `8-team knockout with odd-player ${ODD_PLAYER_LABEL} rotation on contested matches.`
+      : 'Classic 8-team single-elimination: quarters → semis → final. Seven matches total.',
+    exampleLabel: includeOddPlayer ? `8 teams + odd ${ODD_PLAYER_LABEL} · 7 matches` : '8 teams · 7 matches',
   };
 };
 
@@ -267,13 +380,15 @@ export const buildTournamentFormatFlow = ({
   format = 'league',
   numTeams = DEFAULT_NUM_TEAMS,
   matchesPerPair = 1,
+  includeOddPlayer = false,
 } = {}) => {
   const teamCount = resolveFormatTeamCount(format, numTeams);
   const pairCount = Math.max(1, parseInt(matchesPerPair, 10) || 1);
+  const withOdd = Boolean(includeOddPlayer);
 
-  if (format === 'semiFinal') return buildSemiFinalFlow();
-  if (format === 'doubleElim4') return buildDoubleElim4Flow();
-  if (format === 'fullKnockout') return buildFullKnockoutFlow();
-  if (format === 'knockoutByes' || format === 'playInFinal') return buildKnockoutFlow(teamCount);
-  return buildLeagueFlow(teamCount, pairCount);
+  if (format === 'semiFinal') return buildSemiFinalFlow(withOdd);
+  if (format === 'doubleElim4') return buildDoubleElim4Flow(withOdd);
+  if (format === 'fullKnockout') return buildFullKnockoutFlow(withOdd);
+  if (format === 'knockoutByes' || format === 'playInFinal') return buildKnockoutFlow(teamCount, withOdd);
+  return buildLeagueFlow(teamCount, pairCount, withOdd);
 };

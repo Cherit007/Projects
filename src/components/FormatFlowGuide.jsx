@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Info, X } from 'lucide-react';
 import { buildTournamentFormatFlow } from '../utils/tournamentFormats';
 
@@ -12,71 +13,89 @@ const FormatFlowGuide = ({
   showText = false,
 }) => {
   const [open, setOpen] = useState(false);
+  const [includeOddPlayer, setIncludeOddPlayer] = useState(false);
   const titleId = useId();
+  const oddToggleId = useId();
   const flow = useMemo(
-    () => buildTournamentFormatFlow({ format, numTeams, matchesPerPair }),
-    [format, numTeams, matchesPerPair]
+    () => buildTournamentFormatFlow({
+      format,
+      numTeams,
+      matchesPerPair,
+      includeOddPlayer,
+    }),
+    [format, numTeams, matchesPerPair, includeOddPlayer]
   );
 
   useEffect(() => {
     if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const onKeyDown = (event) => {
       if (event.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, [open]);
 
-  return (
-    <>
-      <button
-        type="button"
-        className={`format-flow-info-btn ${showText ? 'is-text' : ''} ${buttonClassName}`.trim()}
-        aria-label={showText ? `How selected format works: ${flow.title}` : `${label}: ${flow.title}`}
-        title={`${label} (${flow.exampleLabel})`}
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen(true);
-        }}
+  useEffect(() => {
+    if (!open) setIncludeOddPlayer(false);
+  }, [open, format]);
+
+  const modal = open ? createPortal(
+    (
+      <div
+        className={`format-flow-modal-overlay ${className}`.trim()}
+        role="presentation"
+        onClick={() => setOpen(false)}
       >
-        <Info size={showText ? 15 : 14} aria-hidden="true" />
-        {showText && <span>How it works</span>}
-      </button>
-
-      {open && (
         <div
-          className={`format-flow-modal-overlay ${className}`.trim()}
-          role="presentation"
-          onClick={() => setOpen(false)}
+          className="format-flow-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={(event) => event.stopPropagation()}
         >
-          <div
-            className="format-flow-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="format-flow-modal-header">
-              <div>
-                <p className="format-flow-modal-kicker">Format guide</p>
-                <h3 id={titleId} className="format-flow-modal-title">{flow.title}</h3>
-              </div>
-              <button
-                type="button"
-                className="format-flow-modal-close"
-                aria-label="Close format guide"
-                onClick={() => setOpen(false)}
-              >
-                <X size={16} />
-              </button>
+          <div className="format-flow-modal-header">
+            <div className="format-flow-modal-heading">
+              <p className="format-flow-modal-kicker">Format guide</p>
+              <h3 id={titleId} className="format-flow-modal-title">{flow.title}</h3>
             </div>
+            <button
+              type="button"
+              className="format-flow-modal-close"
+              aria-label="Close format guide"
+              onClick={() => setOpen(false)}
+            >
+              <X size={18} strokeWidth={2.5} />
+            </button>
+          </div>
 
+          <div className="format-flow-modal-body">
             <p className="format-flow-modal-summary">{flow.summary}</p>
             <p className="format-flow-modal-example">{flow.exampleLabel}</p>
 
-            <div className="format-flow-chart" aria-label={`${flow.title} match flow for ${flow.exampleLabel}`}>
+            <label className="format-flow-odd-toggle" htmlFor={oddToggleId}>
+              <input
+                id={oddToggleId}
+                type="checkbox"
+                checked={includeOddPlayer}
+                onChange={(event) => setIncludeOddPlayer(event.target.checked)}
+              />
+              <span>
+                Include odd player (Z)
+                <em>Show rotation + sit-out flow in this guide</em>
+              </span>
+            </label>
+
+            <div
+              className="format-flow-chart"
+              aria-label={`${flow.title} match flow for ${flow.exampleLabel}`}
+            >
               {flow.stages.map((stage, index) => (
-                <React.Fragment key={`${flow.title}-${stage.title}-${index}`}>
+                <React.Fragment key={`${flow.title}-${stage.title}-${index}-${includeOddPlayer ? 'odd' : 'base'}`}>
                   {index > 0 && (
                     <div className="format-flow-arrow" aria-hidden="true">
                       <span />
@@ -98,7 +117,27 @@ const FormatFlowGuide = ({
             </div>
           </div>
         </div>
-      )}
+      </div>
+    ),
+    document.body
+  ) : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`format-flow-info-btn ${showText ? 'is-text' : ''} ${buttonClassName}`.trim()}
+        aria-label={showText ? `How selected format works: ${flow.title}` : `${label}: ${flow.title}`}
+        title={`${label} (${flow.exampleLabel})`}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
+      >
+        <Info size={showText ? 15 : 14} aria-hidden="true" />
+        {showText && <span>How it works</span>}
+      </button>
+      {modal}
     </>
   );
 };

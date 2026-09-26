@@ -45,6 +45,28 @@ describe('buildTournamentFormatFlow', () => {
     const full = buildTournamentFormatFlow({ format: 'fullKnockout', numTeams: 3 });
     expect(full.exampleLabel).toContain('8 teams');
   });
+  it('builds an odd-player league flowchart when enabled', () => {
+    const flow = buildTournamentFormatFlow({
+      format: 'league',
+      numTeams: 3,
+      matchesPerPair: 1,
+      includeOddPlayer: true,
+    });
+    expect(flow.exampleLabel).toContain('odd Z');
+    expect(flow.stages[0].title).toBe('Odd player setup');
+    expect(flow.stages.some((stage) => stage.title === 'Final with odd player check')).toBe(true);
+    expect(flow.stages[1].matches.some((match) => match.includes('Z rotates in'))).toBe(true);
+  });
+
+  it('annotates knockout stages when odd player is included', () => {
+    const flow = buildTournamentFormatFlow({
+      format: 'semiFinal',
+      includeOddPlayer: true,
+    });
+    expect(flow.exampleLabel).toContain('odd Z');
+    expect(flow.stages[0].title).toBe('Odd player setup');
+    expect(flow.stages[1].matches[0]).toContain('Z rotates in');
+  });
 });
 
 describe('FormatFlowGuide', () => {
@@ -73,5 +95,19 @@ describe('FormatFlowGuide', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       unmount();
     }
+  });
+
+  it('updates the flowchart when odd player checkbox is toggled', async () => {
+    const user = userEvent.setup();
+    render(<FormatFlowGuide format="league" numTeams={3} matchesPerPair="1" />);
+
+    await user.click(screen.getByRole('button', { name: /How this format works: League \+ Final/i }));
+    expect(screen.getByLabelText(/Include odd player/i)).not.toBeChecked();
+    expect(screen.queryByText('Odd player setup')).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText(/Include odd player/i));
+    expect(screen.getByLabelText(/Include odd player/i)).toBeChecked();
+    expect(screen.getByText('Odd player setup')).toBeInTheDocument();
+    expect(screen.getByText(/3 teams \+ odd Z/i)).toBeInTheDocument();
   });
 });
