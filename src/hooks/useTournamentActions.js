@@ -1391,8 +1391,19 @@ export const useTournamentActions = ({
       setNumTeams(parsedNumTeams);
     }
 
-    if (tournamentFormat === 'semiFinal' || tournamentFormat === 'doubleElim4') {
+    if (tournamentFormat === 'semiFinal') {
       setNumTeams(4);
+    } else if (tournamentFormat === 'iplPlayoffs' || tournamentFormat === 'doubleElim4') {
+      const parsedNumTeams = parseInt(rawNumTeamsInput, 10);
+      if (Number.isNaN(parsedNumTeams)) {
+        showToast('Please enter number of teams', 'error');
+        return;
+      }
+      if (parsedNumTeams < 3 || parsedNumTeams > 4) {
+        showToast('IPL Playoffs supports 3 or 4 teams', 'error');
+        return;
+      }
+      setNumTeams(parsedNumTeams);
     } else if (tournamentFormat === 'fullKnockout') {
       setNumTeams(8);
     }

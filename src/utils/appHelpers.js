@@ -1,9 +1,11 @@
 import { updatePlayerRatingsAfterMatch } from './calculations';
 import { MIN_NUM_TEAMS } from './tournamentFormats';
 
-export const normalizeTournamentFormat = (value) => (
-  value === 'playInFinal' ? 'knockoutByes' : value
-);
+export const normalizeTournamentFormat = (value) => {
+  if (value === 'playInFinal') return 'knockoutByes';
+  if (value === 'doubleElim4') return 'iplPlayoffs';
+  return value;
+};
 
 export const findActiveTournament = (history = []) => {
   if (!Array.isArray(history)) return null;

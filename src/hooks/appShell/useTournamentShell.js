@@ -297,6 +297,7 @@ export const useTournamentShell = ({
     teams,
     setTeams,
     gameMode,
+    tournamentFormat,
     playerDatabase: suggestionPlayerDatabase,
     teamNameDatabase,
     onGenerate: async (params) => withActionLock(

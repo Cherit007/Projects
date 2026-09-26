@@ -592,89 +592,12 @@ const generateKnockoutBracketWithByes = (teams) => {
   return autoAdvanceByeWinners(bracket);
 };
 
-/**
- * 4-team short double-elim (5 matches). Opening matches are randomly paired.
- * Flow: Opener A/B → Winners Final + Losers Match → Championship Final.
- */
-export const generateDoubleElim4Bracket = (teams = [], { random = Math.random } = {}) => {
-  const pool = (Array.isArray(teams) ? teams : []).slice(0, 4).filter(Boolean);
-  if (pool.length !== 4) {
-    return [];
-  }
+import { generateIplPlayoffBracket } from './iplPlayoffs';
 
-  const shuffled = [...pool];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
-
-  return [
-    [
-      {
-        id: 1,
-        team1: shuffled[0],
-        team2: shuffled[1],
-        score1: null,
-        score2: null,
-        completed: false,
-        round: 'opener',
-        nextMatchId: 3,
-        nextMatchSlot: 'team1',
-        loserNextMatchId: 4,
-        loserNextMatchSlot: 'team1',
-      },
-      {
-        id: 2,
-        team1: shuffled[2],
-        team2: shuffled[3],
-        score1: null,
-        score2: null,
-        completed: false,
-        round: 'opener',
-        nextMatchId: 3,
-        nextMatchSlot: 'team2',
-        loserNextMatchId: 4,
-        loserNextMatchSlot: 'team2',
-      },
-    ],
-    [
-      {
-        id: 3,
-        team1: null,
-        team2: null,
-        score1: null,
-        score2: null,
-        completed: false,
-        round: 'winners-final',
-        nextMatchId: 5,
-        nextMatchSlot: 'team1',
-      },
-      {
-        id: 4,
-        team1: null,
-        team2: null,
-        score1: null,
-        score2: null,
-        completed: false,
-        round: 'losers-match',
-        nextMatchId: 5,
-        nextMatchSlot: 'team2',
-      },
-    ],
-    [
-      {
-        id: 5,
-        team1: null,
-        team2: null,
-        score1: null,
-        score2: null,
-        completed: false,
-        round: 'final',
-        nextMatchId: null,
-      },
-    ],
-  ];
-};
+/** @deprecated Use generateIplPlayoffBracket — kept as alias for older imports/tests. */
+export const generateDoubleElim4Bracket = (teams = [], options = {}) => (
+  generateIplPlayoffBracket(Array.isArray(teams) ? teams.slice(0, 4) : [])
+);
 
 const placeTeamInMatchSlot = (match, team, slotHint = null) => {
   if (!match || !team) return;
@@ -721,8 +644,8 @@ export const generateKnockoutBracket = (teams, format, options = {}) => {
     return generateKnockoutBracketWithByes(teams);
   }
 
-  if (format === 'doubleElim4') {
-    return generateDoubleElim4Bracket(teams, options);
+  if (format === 'iplPlayoffs' || format === 'doubleElim4') {
+    return generateIplPlayoffBracket(teams, options);
   }
 
   if (format === 'playInFinal') {

@@ -12,6 +12,9 @@ import {
   isTeamCountLockedForFormat,
   DEFAULT_NUM_TEAMS,
   MIN_NUM_TEAMS,
+  IPL_MAX_TEAMS,
+  getMinTeamsForFormat,
+  getMaxTeamsForFormat,
 } from '../utils/tournamentFormats';
 
 const SetupScreenMobileDashboard = ({
@@ -325,6 +328,9 @@ const SetupScreenMobileDashboard = ({
                             if (fixedCount) {
                               setNumTeams(fixedCount);
                               setNumTeamsInput(String(fixedCount));
+                            } else if (option.value === 'iplPlayoffs') {
+                              setNumTeams(IPL_MAX_TEAMS);
+                              setNumTeamsInput(String(IPL_MAX_TEAMS));
                             } else if (option.value === 'knockoutByes') {
                               const keepCount = Math.max(MIN_NUM_TEAMS, parseInt(numTeamsInput, 10) || MIN_NUM_TEAMS);
                               setNumTeams(keepCount);
@@ -398,6 +404,7 @@ const SetupScreenMobileDashboard = ({
                 <p className="dashboard-v2-hint">
                   {tournamentFormat === 'league' && `Min: ${MIN_NUM_TEAMS} · Max: 12 teams`}
                   {tournamentFormat === 'knockoutByes' && `Min: ${MIN_NUM_TEAMS} · Max: 16 teams`}
+                  {tournamentFormat === 'iplPlayoffs' && `Min: ${getMinTeamsForFormat('iplPlayoffs')} · Max: ${getMaxTeamsForFormat('iplPlayoffs')} teams`}
                   {isTeamCountLockedForFormat(tournamentFormat) && 'Fixed for this format'}
                 </p>
               </div>

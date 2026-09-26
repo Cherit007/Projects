@@ -155,17 +155,17 @@ describe('SetupScreen mobile dashboard views', () => {
     await user.click(fullKnockoutOption);
     expect(screen.getByDisplayValue('8')).toBeDisabled();
 
-    const secondChanceOption = screen.getByRole('radio', { name: /Second Chance/i });
+    const secondChanceOption = screen.getByRole('radio', { name: /IPL Playoffs/i });
     await user.click(secondChanceOption);
     expect(secondChanceOption).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByDisplayValue('4')).toBeDisabled();
-    expect(screen.getByText(/random openers, winners \+ losers paths/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('4')).not.toBeDisabled();
+    expect(screen.getByText(/IPL-style Qualifier \/ Eliminator playoffs/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /How selected format works: Second Chance/i }));
+    await user.click(screen.getByRole('button', { name: /How selected format works: IPL Playoffs/i }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Opening matches')).toBeInTheDocument();
-    expect(screen.getByText('Championship final')).toBeInTheDocument();
-    expect(screen.getByText(/4 teams · 5 matches/i)).toBeInTheDocument();
+    expect(screen.getByText(/Seed positions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Qualifier 1 · Eliminator/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 teams · seeded IPL playoffs/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Close format guide/i }));
 
     const leagueOption = screen.getByRole('radio', { name: /League \+ Final/i });

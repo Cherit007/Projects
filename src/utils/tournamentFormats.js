@@ -2,19 +2,22 @@ export const TOURNAMENT_FORMAT_OPTIONS = [
   { value: 'league', label: '🏁 League + Final' },
   { value: 'knockoutByes', label: '🏆 Knockout + Byes' },
   { value: 'semiFinal', label: '🎯 Semi Final + Final' },
-  { value: 'doubleElim4', label: '🔁 Second Chance (5 games)' },
+  { value: 'iplPlayoffs', label: '🏏 IPL Playoffs' },
   { value: 'fullKnockout', label: '⚔️ Full Knockout' },
 ];
 
 /** Minimum teams for formats that allow choosing a count (league / knockout+byes). */
 export const MIN_NUM_TEAMS = 3;
 export const DEFAULT_NUM_TEAMS = MIN_NUM_TEAMS;
+export const IPL_MIN_TEAMS = 3;
+export const IPL_MAX_TEAMS = 4;
 
 export const TOURNAMENT_FORMAT_HINTS = {
   league: 'Round-robin, top 2 advance to final',
   knockoutByes: '3+ teams: knockout bracket with automatic byes',
   semiFinal: '4 teams: 2 semi finals lead to 1 final',
-  doubleElim4: '4 teams: random openers, winners + losers paths, then final (5 games)',
+  iplPlayoffs: '3–4 teams: IPL-style Qualifier / Eliminator playoffs (spin or manual seeds)',
+  doubleElim4: '3–4 teams: IPL-style Qualifier / Eliminator playoffs (spin or manual seeds)',
   fullKnockout: '8 teams: quarter finals, semis, then final',
 };
 
@@ -22,7 +25,8 @@ export const TOURNAMENT_FORMAT_LABELS = {
   league: 'League + Final',
   knockoutByes: 'Knockout + Byes',
   semiFinal: 'Semi Final + Final',
-  doubleElim4: 'Second Chance (5 games)',
+  iplPlayoffs: 'IPL Playoffs',
+  doubleElim4: 'IPL Playoffs',
   fullKnockout: 'Full Knockout',
   playInFinal: 'Knockout + Byes',
 };
@@ -32,28 +36,35 @@ export const getTournamentFormatLabel = (format) => (
 );
 
 export const getFixedTeamCountForFormat = (format) => {
-  if (format === 'semiFinal' || format === 'doubleElim4') return 4;
+  if (format === 'semiFinal') return 4;
   if (format === 'fullKnockout') return 8;
   return null;
 };
 
 export const isTeamCountLockedForFormat = (format) => (
-  format === 'semiFinal' || format === 'doubleElim4' || format === 'fullKnockout'
+  format === 'semiFinal' || format === 'fullKnockout'
 );
 
 export const getMaxTeamsForFormat = (format) => {
   if (format === 'league') return 12;
   if (format === 'knockoutByes') return 16;
+  if (format === 'iplPlayoffs' || format === 'doubleElim4') return IPL_MAX_TEAMS;
   return getFixedTeamCountForFormat(format) || 16;
+};
+
+export const getMinTeamsForFormat = (format) => {
+  if (format === 'iplPlayoffs' || format === 'doubleElim4') return IPL_MIN_TEAMS;
+  return MIN_NUM_TEAMS;
 };
 
 export const resolveFormatTeamCount = (format, numTeams) => {
   const fixed = getFixedTeamCountForFormat(format);
   if (fixed) return fixed;
   const parsed = parseInt(numTeams, 10);
-  const fallback = Number.isFinite(parsed) ? parsed : MIN_NUM_TEAMS;
+  const fallback = Number.isFinite(parsed) ? parsed : getMinTeamsForFormat(format);
+  const min = getMinTeamsForFormat(format);
   const max = getMaxTeamsForFormat(format);
-  return Math.max(MIN_NUM_TEAMS, Math.min(max, fallback));
+  return Math.max(min, Math.min(max, fallback));
 };
 
 const makeTeamLabels = (count) => (
@@ -304,59 +315,65 @@ const buildSemiFinalFlow = (includeOddPlayer = false) => {
   };
 };
 
-const buildDoubleElim4Flow = (includeOddPlayer = false) => {
-  const teams = makeTeamLabels(4);
+const buildIplPlayoffsFlow = (teamCount = 4, includeOddPlayer = false) => {
+  const count = teamCount === 3 ? 3 : 4;
+  const teams = makeTeamLabels(count);
   const stages = [];
+
+  stages.push({
+    title: 'Seed positions',
+    matches: ['Spin wheel or set manual seeds (1st → last)'],
+    note: 'Last remaining team receives the final position automatically.',
+  });
+
   if (includeOddPlayer) {
-    stages.push(buildOddPlayerSetupStage(4, 'doubleElim4'));
+    stages.push(buildOddPlayerSetupStage(count, 'iplPlayoffs'));
   }
-  stages.push(
-    {
-      title: 'Opening matches',
-      matches: [
-        annotateMatchWithOddPlayer(`${teams[0]} vs ${teams[1]}`, includeOddPlayer),
-        annotateMatchWithOddPlayer(`${teams[2]} vs ${teams[3]}`, includeOddPlayer),
-      ],
-      note: includeOddPlayer
-        ? `Pairings are randomized. ${ODD_PLAYER_LABEL} can rotate into either opener.`
-        : 'Pairings are randomized when you generate.',
-    },
-    {
-      title: 'Winners final · Losers match',
-      matches: [
-        annotateMatchWithOddPlayer(
-          `W(${teams[0]}/${teams[1]}) vs W(${teams[2]}/${teams[3]})`,
-          includeOddPlayer
-        ),
-        annotateMatchWithOddPlayer(
-          `L(${teams[0]}/${teams[1]}) vs L(${teams[2]}/${teams[3]})`,
-          includeOddPlayer
-        ),
-      ],
-      note: includeOddPlayer
-        ? `Second-chance path stays. ${ODD_PLAYER_LABEL} may rotate again before these matches.`
-        : 'Losers get a second chance instead of being eliminated immediately.',
-    },
-    {
-      title: 'Championship final',
-      matches: [
-        annotateMatchWithOddPlayer(
-          'Winners-final winner vs Losers-match winner',
-          includeOddPlayer
-        ),
-      ],
-      note: includeOddPlayer
-        ? `Winner is champion. ${ODD_PLAYER_LABEL} can still rotate into the final side if enabled.`
-        : 'Winner is champion.',
-    }
-  );
+
+  if (count === 3) {
+    stages.push(
+      {
+        title: 'Eliminator',
+        matches: [annotateMatchWithOddPlayer(`${teams[1]} vs ${teams[2]}`, includeOddPlayer)],
+        note: '2nd vs 3rd. Loser is out.',
+      },
+      {
+        title: 'Final',
+        matches: [annotateMatchWithOddPlayer(`${teams[0]} vs Eliminator winner`, includeOddPlayer)],
+        note: '1st place waits in the final (bye advantage).',
+      }
+    );
+  } else {
+    stages.push(
+      {
+        title: 'Qualifier 1 · Eliminator',
+        matches: [
+          annotateMatchWithOddPlayer(`${teams[0]} vs ${teams[1]}`, includeOddPlayer),
+          annotateMatchWithOddPlayer(`${teams[2]} vs ${teams[3]}`, includeOddPlayer),
+        ],
+        note: 'Q1 winner → Final. Q1 loser → Qualifier 2. Eliminator winner → Qualifier 2.',
+      },
+      {
+        title: 'Qualifier 2',
+        matches: [annotateMatchWithOddPlayer('Q1 loser vs Eliminator winner', includeOddPlayer)],
+        note: 'Winner reaches the Final. Loser is out.',
+      },
+      {
+        title: 'Final',
+        matches: [annotateMatchWithOddPlayer('Q1 winner vs Q2 winner', includeOddPlayer)],
+        note: 'Winner is champion.',
+      }
+    );
+  }
 
   return {
-    title: TOURNAMENT_FORMAT_LABELS.doubleElim4,
-    summary: includeOddPlayer
-      ? `Second Chance bracket with odd-player ${ODD_PLAYER_LABEL} rotation on contested matches.`
-      : '4-team short double-elim. Opener losers get one more match before the championship final.',
-    exampleLabel: includeOddPlayer ? `4 teams + odd ${ODD_PLAYER_LABEL} · 5 matches` : '4 teams · 5 matches',
+    title: TOURNAMENT_FORMAT_LABELS.iplPlayoffs,
+    summary: count === 3
+      ? 'IPL-style mini playoffs: 2nd vs 3rd eliminator, then 1st plays the winner in the final.'
+      : 'IPL-style playoffs: Qualifier 1, Eliminator, Qualifier 2, then Final.',
+    exampleLabel: includeOddPlayer
+      ? `${count} teams + odd ${ODD_PLAYER_LABEL} · seeded playoffs`
+      : `${count} teams · seeded IPL playoffs`,
     stages,
   };
 };
@@ -385,10 +402,11 @@ export const buildTournamentFormatFlow = ({
   const teamCount = resolveFormatTeamCount(format, numTeams);
   const pairCount = Math.max(1, parseInt(matchesPerPair, 10) || 1);
   const withOdd = Boolean(includeOddPlayer);
+  const normalized = format === 'doubleElim4' ? 'iplPlayoffs' : format;
 
-  if (format === 'semiFinal') return buildSemiFinalFlow(withOdd);
-  if (format === 'doubleElim4') return buildDoubleElim4Flow(withOdd);
-  if (format === 'fullKnockout') return buildFullKnockoutFlow(withOdd);
-  if (format === 'knockoutByes' || format === 'playInFinal') return buildKnockoutFlow(teamCount, withOdd);
+  if (normalized === 'semiFinal') return buildSemiFinalFlow(withOdd);
+  if (normalized === 'iplPlayoffs') return buildIplPlayoffsFlow(teamCount, withOdd);
+  if (normalized === 'fullKnockout') return buildFullKnockoutFlow(withOdd);
+  if (normalized === 'knockoutByes' || normalized === 'playInFinal') return buildKnockoutFlow(teamCount, withOdd);
   return buildLeagueFlow(teamCount, pairCount, withOdd);
 };

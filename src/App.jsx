@@ -1439,8 +1439,10 @@ const App = () => {
     setTournamentFormat(appliedFormat);
     setFormat(template.format || '1');
 
-    if (appliedFormat === 'semiFinal' || appliedFormat === 'doubleElim4') {
+    if (appliedFormat === 'semiFinal') {
       setNumTeams(4);
+    } else if (appliedFormat === 'iplPlayoffs') {
+      setNumTeams(Math.max(3, Math.min(4, appliedNumTeams)));
     } else if (appliedFormat === 'fullKnockout') {
       setNumTeams(8);
     } else {
@@ -2543,8 +2545,8 @@ const App = () => {
       ? 'League'
       : formatValue === 'semiFinal'
         ? 'Semi Final'
-        : formatValue === 'doubleElim4'
-          ? 'Second Chance (5 games)'
+        : formatValue === 'iplPlayoffs'
+          ? 'IPL Playoffs'
           : formatValue === 'fullKnockout'
             ? 'Full Knockout'
             : formatValue === 'knockoutByes'

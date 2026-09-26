@@ -6,8 +6,11 @@ import {
   TOURNAMENT_FORMAT_OPTIONS,
   getFixedTeamCountForFormat,
   isTeamCountLockedForFormat,
+  getMinTeamsForFormat,
+  getMaxTeamsForFormat,
   DEFAULT_NUM_TEAMS,
   MIN_NUM_TEAMS,
+  IPL_MAX_TEAMS,
 } from '../../utils/tournamentFormats';
 
 const gameModeOptions = [
@@ -122,6 +125,9 @@ const StartTournamentLane = ({
             if (fixedCount) {
               setNumTeams(fixedCount);
               setNumTeamsInput(String(fixedCount));
+            } else if (nextFormat === 'iplPlayoffs') {
+              setNumTeams(IPL_MAX_TEAMS);
+              setNumTeamsInput(String(IPL_MAX_TEAMS));
             } else if (nextFormat === 'knockoutByes') {
               const keepCount = Math.max(MIN_NUM_TEAMS, parseInt(numTeamsInput, 10) || MIN_NUM_TEAMS);
               setNumTeams(keepCount);
@@ -176,6 +182,7 @@ const StartTournamentLane = ({
         <p className="text-xs text-gray-500 mt-1">
           {tournamentFormat === 'league' && `Min: ${MIN_NUM_TEAMS}, Max: 12 teams`}
           {tournamentFormat === 'knockoutByes' && `Min: ${MIN_NUM_TEAMS}, Max: 16 teams`}
+          {tournamentFormat === 'iplPlayoffs' && `Min: ${getMinTeamsForFormat('iplPlayoffs')}, Max: ${getMaxTeamsForFormat('iplPlayoffs')} teams`}
           {isTeamCountLockedForFormat(tournamentFormat) && 'Fixed for this format'}
         </p>
       </div>

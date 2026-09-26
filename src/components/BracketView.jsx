@@ -5,12 +5,22 @@ const BracketView = ({ bracket, onMatchClick }) => {
     const totalRounds = bracket.length;
     const firstRoundType = bracket[0]?.[0]?.round;
     const sampleRoundType = bracket[roundIndex]?.[0]?.round;
+    const sampleLabel = bracket[roundIndex]?.[0]?.label;
 
+    if (sampleRoundType === 'qualifier1' && (bracket[roundIndex]?.length || 0) > 1) {
+      return 'Qualifier 1 · Eliminator';
+    }
+    if (sampleRoundType === 'qualifier1') return sampleLabel || 'Qualifier 1';
+    if (sampleRoundType === 'eliminator') return sampleLabel || 'Eliminator';
+    if (sampleRoundType === 'qualifier2') return sampleLabel || 'Qualifier 2';
+    if (sampleLabel) return sampleLabel;
     if (sampleRoundType === 'opener') return 'Opening matches';
     if (sampleRoundType === 'winners-final' || sampleRoundType === 'losers-match') {
       return 'Winners final · Losers match';
     }
-    if (sampleRoundType === 'final' && firstRoundType === 'opener') return 'Championship final';
+    if (sampleRoundType === 'final' && (firstRoundType === 'opener' || firstRoundType === 'qualifier1' || firstRoundType === 'eliminator')) {
+      return 'Final';
+    }
 
     if (firstRoundType === 'playin' && roundIndex === 0) return 'Play-in Match';
 

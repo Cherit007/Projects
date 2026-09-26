@@ -11,7 +11,7 @@ const tournamentFormatOptions = [
   { value: 'league', label: '📊 League + Final' },
   { value: 'knockoutByes', label: '🏆 Knockout + Byes (3+ teams)' },
   { value: 'semiFinal', label: '🏆 Semi Final + Final (4 teams)' },
-  { value: 'doubleElim4', label: '🔁 Second Chance (5 games, 4 teams)' },
+  { value: 'iplPlayoffs', label: '🏏 IPL Playoffs (3–4 teams)' },
   { value: 'fullKnockout', label: '⚔️ Full Knockout (8 teams)' },
 ];
 
@@ -90,6 +90,7 @@ const TemplateManager = ({
     let numTeams = draft.numTeams;
     const fixedCount = getFixedTeamCountForFormat(value);
     if (fixedCount) numTeams = fixedCount;
+    else if (value === 'iplPlayoffs') numTeams = Math.max(3, Math.min(4, numTeams || 4));
     else numTeams = Math.max(MIN_NUM_TEAMS, numTeams);
 
     setDraft(prev => ({

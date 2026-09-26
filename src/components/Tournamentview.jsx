@@ -1167,7 +1167,8 @@ const TournamentView = ({
     if (tournamentFormat === 'league') return 'League + Final';
     if (tournamentFormat === 'knockoutByes' || tournamentFormat === 'playInFinal') return 'Knockout + Byes';
     if (tournamentFormat === 'semiFinal') return 'Semi Final + Final';
-    if (tournamentFormat === 'doubleElim4') return 'Second Chance (5 games)';
+    if (tournamentFormat === 'doubleElim4') return 'IPL Playoffs';
+    if (tournamentFormat === 'iplPlayoffs') return 'IPL Playoffs';
     if (tournamentFormat === 'fullKnockout') return 'Full Knockout';
     return 'Tournament';
   })();

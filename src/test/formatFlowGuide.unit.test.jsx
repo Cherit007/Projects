@@ -38,9 +38,9 @@ describe('buildTournamentFormatFlow', () => {
     expect(semi.exampleLabel).toContain('4 teams');
     expect(semi.stages[0].matches).toHaveLength(2);
 
-    const secondChance = buildTournamentFormatFlow({ format: 'doubleElim4', numTeams: 3 });
-    expect(secondChance.exampleLabel).toContain('5 matches');
-    expect(secondChance.stages).toHaveLength(3);
+    const secondChance = buildTournamentFormatFlow({ format: 'iplPlayoffs', numTeams: 4 });
+    expect(secondChance.exampleLabel).toContain('4 teams');
+    expect(secondChance.stages.some((stage) => stage.title.includes('Qualifier'))).toBe(true);
 
     const full = buildTournamentFormatFlow({ format: 'fullKnockout', numTeams: 3 });
     expect(full.exampleLabel).toContain('8 teams');

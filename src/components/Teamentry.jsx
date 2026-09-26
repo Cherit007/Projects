@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
 import AutocompleteInput from './AutocompleteInput';
+import PlayoffSeedingPanel from './seeding/PlayoffSeedingPanel';
 import { parsePlayerPool, runSnakeDraft } from '../utils/draft';
+import { normalizeTournamentFormat } from '../utils/appHelpers';
 
 const TeamEntry = ({
   teams,
   setTeams,
   gameMode,
+  tournamentFormat = 'league',
   playerDatabase,
   teamNameDatabase = [],
   onGenerate,
@@ -24,6 +27,10 @@ const TeamEntry = ({
   const [draftError, setDraftError] = useState('');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
+  const [showPlayoffSeeding, setShowPlayoffSeeding] = useState(false);
+
+  const normalizedFormat = normalizeTournamentFormat(tournamentFormat);
+  const needsPlayoffSeeding = normalizedFormat === 'iplPlayoffs';
 
   const isActionPending = (actionKey) => Boolean(getActionPending?.(actionKey));
   const generatePending = Boolean(loading || isActionPending('teams.generate'));
@@ -122,6 +129,24 @@ const TeamEntry = ({
   const canGenerate = !generatePending
     && !teams.some(t => !t.name || (!t.player && !t.player1) || (gameMode !== 'singles' && !t.player2))
     && (!(gameMode !== 'singles' && oddPlayerEnabled) || oddPlayerName.trim());
+
+  const buildGeneratePayload = () => ({
+    oddPlayerEnabled,
+    oddPlayerName: oddPlayerName.trim(),
+    oddPlayerConfig: {
+      oddPlayerEnabled,
+      oddPlayerName: oddPlayerName.trim(),
+    },
+  });
+
+  const handleGenerateClick = () => {
+    if (!canGenerate) return;
+    if (needsPlayoffSeeding) {
+      setShowPlayoffSeeding(true);
+      return;
+    }
+    onGenerate(buildGeneratePayload());
+  };
 
   return (
     <div className="theme-page py-8 px-4">
@@ -306,18 +331,13 @@ const TeamEntry = ({
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
             <button
-              onClick={() => onGenerate({
-                oddPlayerEnabled,
-                oddPlayerName: oddPlayerName.trim(),
-                oddPlayerConfig: {
-                  oddPlayerEnabled,
-                  oddPlayerName: oddPlayerName.trim(),
-                },
-              })}
+              onClick={handleGenerateClick}
               disabled={!canGenerate}
               className="btn-brand w-full py-4 rounded-xl font-semibold text-lg hover:shadow-xl transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               <Calendar size={20} />
-              {generatePending ? 'Generating...' : 'Generate Tournament'}
+              {generatePending
+                ? 'Generating...'
+                : (needsPlayoffSeeding ? 'Set Seeds & Generate' : 'Generate Tournament')}
             </button>
 
             <button
@@ -331,6 +351,27 @@ const TeamEntry = ({
           </div>
         </div>
       </div>
+
+      {showPlayoffSeeding && (
+        <div className="fixed inset-0 bg-black/55 flex items-end sm:items-center justify-center z-[1400] p-3 sm:p-4 app-overlay">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto app-modal-shell">
+            <PlayoffSeedingPanel
+              teams={teams}
+              pending={generatePending}
+              confirmLabel="Generate Playoffs"
+              onCancel={() => setShowPlayoffSeeding(false)}
+              onConfirm={(orderedTeams) => {
+                setTeams(orderedTeams);
+                setShowPlayoffSeeding(false);
+                onGenerate({
+                  ...buildGeneratePayload(),
+                  teamsOverride: orderedTeams,
+                });
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {showScheduleModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[240] p-4 app-overlay">
