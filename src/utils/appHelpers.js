@@ -462,6 +462,9 @@ export const sortTournamentHistoryByRecent = (entries = []) => {
   });
 };
 
+// Same latest→oldest timestamp ranking for casual match history lists.
+export const sortCasualMatchesByRecent = (entries = []) => sortTournamentHistoryByRecent(entries);
+
 export const formatTournamentDateLabel = (value, fallback = 'TBA') => {
   const timestamp = parseTournamentDateMs(value);
   if (!Number.isFinite(timestamp)) {

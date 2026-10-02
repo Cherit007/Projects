@@ -5,6 +5,7 @@ import {
   dedupeTournamentHistory,
   getTournamentProgressScore,
   pickPreferredTournament,
+  sortCasualMatchesByRecent,
   sortTournamentHistoryByRecent,
   upsertTournamentInHistory,
 } from '../utils/appHelpers';
@@ -487,5 +488,29 @@ describe('sortTournamentHistoryByRecent', () => {
 
     expect(sorted[0].id).toBe('by-update');
     expect(sorted[1].id).toBe('by-date');
+  });
+});
+
+describe('sortCasualMatchesByRecent', () => {
+  it('sorts casual matches latest to oldest using completedAt/createdAt', () => {
+    const sorted = sortCasualMatchesByRecent([
+      {
+        id: 'older',
+        date: '10/2/2026',
+        createdAt: '2026-10-02T09:00:00.000Z',
+      },
+      {
+        id: 'newer',
+        date: '10/2/2026',
+        completedAt: '2026-10-02T20:00:00.000Z',
+      },
+      {
+        id: 'mid',
+        date: '10/2/2026',
+        createdAt: '2026-10-02T14:00:00.000Z',
+      },
+    ]);
+
+    expect(sorted.map((item) => item.id)).toEqual(['newer', 'mid', 'older']);
   });
 });

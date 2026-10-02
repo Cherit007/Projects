@@ -34,6 +34,7 @@ import {
   formatTournamentDateLabel,
   isScheduledTournamentAlreadyStarted,
   normalizeTournamentFormat,
+  sortCasualMatchesByRecent,
   sortTournamentHistoryByRecent,
 } from '../utils/appHelpers';
 import {
@@ -423,9 +424,12 @@ const SetupScreen = ({
       : (tournamentHistory || []);
     return sortTournamentHistoryByRecent(source);
   }, [historyLoading, tournamentHistory]);
-  const displayCasualMatches = casualLoading && (casualMatches || []).length === 0
-    ? casualCacheRef.current
-    : (casualMatches || []);
+  const displayCasualMatches = useMemo(() => {
+    const source = casualLoading && (casualMatches || []).length === 0
+      ? casualCacheRef.current
+      : (casualMatches || []);
+    return sortCasualMatchesByRecent(source);
+  }, [casualLoading, casualMatches]);
   const displayAllTimeStats = statsLoading && (allTimeStats || []).length === 0
     ? allTimeStatsCacheRef.current
     : (allTimeStats || []);

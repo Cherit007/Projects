@@ -57,6 +57,7 @@ import {
   dedupeLiveTournaments,
   removeTournamentFromList,
   isScheduledTournamentAlreadyStarted,
+  sortTournamentHistoryByRecent,
   upsertTournamentInHistory,
 } from './utils/appHelpers';
 import { MIN_NUM_TEAMS } from './utils/tournamentFormats';
@@ -1589,7 +1590,9 @@ const App = () => {
   }, [eloLeaderboard, currentUserMember?.name]);
 
   const scheduledTournaments = useMemo(
-    () => (tournamentHistory || []).filter((item) => item?.status === 'scheduled'),
+    () => sortTournamentHistoryByRecent(
+      (tournamentHistory || []).filter((item) => item?.status === 'scheduled')
+    ),
     [tournamentHistory]
   );
 
@@ -1597,9 +1600,10 @@ const App = () => {
     () => {
       const fromHistory = dedupeLiveTournaments(tournamentHistory || []);
       const lockTournament = buildTournamentFromLock(activeTournamentLock);
-      if (!lockTournament) return fromHistory;
-
-      return dedupeLiveTournaments([...fromHistory, lockTournament]);
+      const merged = lockTournament
+        ? dedupeLiveTournaments([...fromHistory, lockTournament])
+        : fromHistory;
+      return sortTournamentHistoryByRecent(merged);
     },
     [tournamentHistory, activeTournamentLock]
   );

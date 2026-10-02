@@ -308,4 +308,30 @@ describe('appStore tournament history guard', () => {
     expect(live[0].name).toBe('Club Night 2');
     expect(live[0].teams).toHaveLength(3);
   });
+
+  it('sorts casual matches latest to oldest when setting casualMatches', () => {
+    appStore.setCasualMatches([
+      {
+        id: 'older',
+        date: '10/2/2026',
+        createdAt: '2026-10-02T09:00:00.000Z',
+      },
+      {
+        id: 'newer',
+        date: '10/2/2026',
+        completedAt: '2026-10-02T20:00:00.000Z',
+      },
+      {
+        id: 'mid',
+        date: '10/2/2026',
+        createdAt: '2026-10-02T14:00:00.000Z',
+      },
+    ]);
+
+    expect(appStore.getState().casualMatches.map((item) => item.id)).toEqual([
+      'newer',
+      'mid',
+      'older',
+    ]);
+  });
 });

@@ -1,5 +1,9 @@
 import { useRef, useSyncExternalStore } from 'react';
-import { dedupeTournamentHistory, sortTournamentHistoryByRecent } from '../utils/appHelpers';
+import {
+  dedupeTournamentHistory,
+  sortCasualMatchesByRecent,
+  sortTournamentHistoryByRecent,
+} from '../utils/appHelpers';
 import { DEFAULT_NUM_TEAMS } from '../utils/tournamentFormats';
 
 export { DEFAULT_NUM_TEAMS, MIN_NUM_TEAMS } from '../utils/tournamentFormats';
@@ -101,7 +105,14 @@ const createAppStore = () => {
         tournamentHistory: sortTournamentHistoryByRecent(deduped),
       };
     }),
-    setCasualMatches: (value) => setField('casualMatches', value),
+    setCasualMatches: (value) => setState((prev) => {
+      const nextValue = typeof value === 'function'
+        ? value(prev.casualMatches)
+        : value;
+      return {
+        casualMatches: sortCasualMatchesByRecent(nextValue),
+      };
+    }),
     setTournamentTemplates: (value) => setField('tournamentTemplates', value),
     setPlayerPhotos: (value) => setField('playerPhotos', value),
     setPlayerPhotoRefs: (value) => setField('playerPhotoRefs', value),
