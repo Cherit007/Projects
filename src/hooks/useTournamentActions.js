@@ -19,6 +19,7 @@ import {
   getTournamentIdCandidates,
   matchesTournamentId,
   normalizeTournamentName,
+  sortTournamentHistoryByRecent,
 } from '../utils/appHelpers';
 import {
   clearAutoResumeSuppressedTournamentId,
@@ -465,8 +466,14 @@ export const useTournamentActions = ({
 
   const upsertTournamentHistory = (history, tournament) => {
     const list = Array.isArray(history) ? history : [];
-    if (!tournament) return dedupeTournamentHistory(list);
-    return dedupeTournamentHistory([tournament, ...list]);
+    if (!tournament) return sortTournamentHistoryByRecent(dedupeTournamentHistory(list));
+    const nowIso = new Date().toISOString();
+    const stamped = {
+      ...tournament,
+      createdAt: tournament.createdAt || nowIso,
+      updatedAt: nowIso,
+    };
+    return sortTournamentHistoryByRecent(dedupeTournamentHistory([stamped, ...list]));
   };
 
   const persistActiveTournamentSnapshot = ({
@@ -485,12 +492,15 @@ export const useTournamentActions = ({
       && !isLikelyLocalTournamentId(normalizedCurrentId)
     ) ? normalizedCurrentId : null;
 
+    const nowIso = new Date().toISOString();
     const snapshot = {
       id: localTournamentId || appwriteId || normalizedCurrentId || Date.now(),
       legacyTournamentId: localTournamentId || null,
       appwriteId,
       name: tournamentName,
       date: new Date().toLocaleDateString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
       teams: Array.isArray(teamsSnapshot) ? teamsSnapshot : [],
       fixtures: Array.isArray(fixturesSnapshot) ? fixturesSnapshot : [],
       bracket: Array.isArray(bracketSnapshot) ? bracketSnapshot : [],

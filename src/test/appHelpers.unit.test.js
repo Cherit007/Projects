@@ -5,6 +5,7 @@ import {
   dedupeTournamentHistory,
   getTournamentProgressScore,
   pickPreferredTournament,
+  sortTournamentHistoryByRecent,
   upsertTournamentInHistory,
 } from '../utils/appHelpers';
 
@@ -441,5 +442,50 @@ describe('upsertTournamentInHistory', () => {
 
     expect(next[0].teams[0].name).toBe('Original Team');
     expect(next[0].fixtures[0].completed).toBe(false);
+  });
+});
+
+describe('sortTournamentHistoryByRecent', () => {
+  it('sorts latest to oldest using updatedAt when date is same-day locale text', () => {
+    const sorted = sortTournamentHistoryByRecent([
+      {
+        id: 'older',
+        name: 'Morning Cup',
+        date: '10/2/2026',
+        updatedAt: '2026-10-02T09:00:00.000Z',
+      },
+      {
+        id: 'newer',
+        name: 'Evening Cup',
+        date: '10/2/2026',
+        updatedAt: '2026-10-02T20:00:00.000Z',
+      },
+      {
+        id: 'mid',
+        name: 'Afternoon Cup',
+        date: '10/2/2026',
+        createdAt: '2026-10-02T14:00:00.000Z',
+      },
+    ]);
+
+    expect(sorted.map((item) => item.id)).toEqual(['newer', 'mid', 'older']);
+  });
+
+  it('prefers the most recent of updatedAt/createdAt/date', () => {
+    const sorted = sortTournamentHistoryByRecent([
+      {
+        id: 'by-date',
+        date: '2026-09-01T12:00:00.000Z',
+        createdAt: '2026-09-01T12:00:00.000Z',
+      },
+      {
+        id: 'by-update',
+        date: '2026-08-01T12:00:00.000Z',
+        updatedAt: '2026-10-01T12:00:00.000Z',
+      },
+    ]);
+
+    expect(sorted[0].id).toBe('by-update');
+    expect(sorted[1].id).toBe('by-date');
   });
 });

@@ -436,28 +436,26 @@ export const sortTournamentHistoryByRecent = (entries = []) => {
     const parsed = parseTournamentDateMs(value);
     return Number.isFinite(parsed) ? parsed : null;
   };
-  const toFallbackMs = (item) => {
-    const updated = Date.parse(String(item?.updatedAt || ''));
-    if (Number.isFinite(updated)) return updated;
-    const created = Date.parse(String(item?.createdAt || ''));
-    if (Number.isFinite(created)) return created;
-    return 0;
-  };
+  // Prefer timestamps that include time-of-day. `date` is often locale date-only
+  // (e.g. toLocaleDateString), which collapses same-day tournaments into one bucket.
   const toSortMs = (item) => {
-    const dateMs = toMs(item?.dateLabel || item?.date);
-    if (Number.isFinite(dateMs)) return dateMs;
-    const created = Date.parse(String(item?.createdAt || ''));
-    if (Number.isFinite(created)) return created;
-    return 0;
+    const candidates = [
+      toMs(item?.updatedAt),
+      toMs(item?.createdAt),
+      toMs(item?.migratedAt),
+      toMs(item?.completedAt),
+      toMs(item?.sourceUpdatedAt),
+      toMs(item?.sourceCreatedAt),
+      toMs(item?.dateLabel || item?.date),
+    ].filter((value) => Number.isFinite(value));
+    if (candidates.length === 0) return 0;
+    return Math.max(...candidates);
   };
 
   return [...list].sort((a, b) => {
     const aTime = toSortMs(a);
     const bTime = toSortMs(b);
     if (aTime !== bTime) return bTime - aTime;
-    const aFallback = toFallbackMs(a);
-    const bFallback = toFallbackMs(b);
-    if (aFallback !== bFallback) return bFallback - aFallback;
     const aId = String(a?.id || a?.appwriteId || a?.legacyTournamentId || '');
     const bId = String(b?.id || b?.appwriteId || b?.legacyTournamentId || '');
     return bId.localeCompare(aId);

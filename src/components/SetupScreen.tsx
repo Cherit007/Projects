@@ -34,6 +34,7 @@ import {
   formatTournamentDateLabel,
   isScheduledTournamentAlreadyStarted,
   normalizeTournamentFormat,
+  sortTournamentHistoryByRecent,
 } from '../utils/appHelpers';
 import {
   TOURNAMENT_FORMAT_HINTS as formatHintByTournamentFormat,
@@ -416,9 +417,12 @@ const SetupScreen = ({
       }),
     ])
   ), [eloLeaderboard, tournamentHistory, casualMatches]);
-  const displayTournamentHistory = historyLoading && (tournamentHistory || []).length === 0
-    ? historyCacheRef.current
-    : (tournamentHistory || []);
+  const displayTournamentHistory = useMemo(() => {
+    const source = historyLoading && (tournamentHistory || []).length === 0
+      ? historyCacheRef.current
+      : (tournamentHistory || []);
+    return sortTournamentHistoryByRecent(source);
+  }, [historyLoading, tournamentHistory]);
   const displayCasualMatches = casualLoading && (casualMatches || []).length === 0
     ? casualCacheRef.current
     : (casualMatches || []);
