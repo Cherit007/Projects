@@ -18,6 +18,11 @@ import PlayerAvatar from './PlayerAvatar';
 import { predictMatchOutcome, getUpsetAlert } from '../utils/matchPredictions';
 import { hapticError, hapticSubmit, hapticSuccess, hapticTap } from '../utils/haptics';
 import LiveNarrativePanel from './live/LiveNarrativePanel';
+import {
+  formatThisMatchTop2Line,
+  formatTop2ChaseLine,
+  getTop2PointsChase,
+} from '../utils/calculations';
 
 const QUICK_SCORE_MODE_ENABLED = false;
 
@@ -34,6 +39,7 @@ const LiveMatchView = ({
   syncState = null,
   completedMatchesCount = 0,
   totalMatchesCount = 0,
+  fixtures = [],
 }) => {
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
@@ -306,9 +312,38 @@ const LiveMatchView = ({
   const leadTeam = hasValidProjection
     ? (parsedScore1 > parsedScore2 ? 1 : 2)
     : null;
+  const team1Top2Chase = useMemo(() => getTop2PointsChase({
+    teamId: currentMatch?.team1?.id,
+    pointsTable,
+    fixtures,
+  }), [currentMatch?.team1?.id, pointsTable, fixtures]);
+  const team2Top2Chase = useMemo(() => getTop2PointsChase({
+    teamId: currentMatch?.team2?.id,
+    pointsTable,
+    fixtures,
+  }), [currentMatch?.team2?.id, pointsTable, fixtures]);
+  const top2ChaseLines = useMemo(() => (
+    [
+      formatTop2ChaseLine(currentMatch?.team1?.name, team1Top2Chase),
+      formatTop2ChaseLine(currentMatch?.team2?.name, team2Top2Chase),
+    ].filter(Boolean)
+  ), [currentMatch?.team1?.name, currentMatch?.team2?.name, team1Top2Chase, team2Top2Chase]);
+  const thisMatchTop2Lines = useMemo(() => (
+    [
+      formatThisMatchTop2Line(currentMatch?.team1?.name, team1Top2Chase, team1MinMargin),
+      formatThisMatchTop2Line(currentMatch?.team2?.name, team2Top2Chase, team2MinMargin),
+    ].filter(Boolean)
+  ), [
+    currentMatch?.team1?.name,
+    currentMatch?.team2?.name,
+    team1Top2Chase,
+    team2Top2Chase,
+    team1MinMargin,
+    team2MinMargin,
+  ]);
   const topTwoWatchCopy = hasValidProjection
     ? `${parsedScore1 > parsedScore2 ? currentMatch.team1.name : currentMatch.team2.name} wins → moves to rank #${projectedWinnerRank}`
-    : 'Enter scores to preview Top 2 movement';
+    : (thisMatchTop2Lines[0] || top2ChaseLines[0] || 'Live Top 2 targets update as scores change');
 
   return (
     <div className="space-y-3 sm:space-y-4 app-screen-live">
@@ -467,6 +502,17 @@ const LiveMatchView = ({
               Odd-player swap: <strong>{oddPlayerMeta.activeOddPlayerName}</strong> in for{' '}
               <strong>{oddPlayerMeta.swapTeamName}</strong>; <strong>{oddPlayerMeta.sittingOutPlayerName}</strong> sits out.
             </p>
+          )}
+          {(top2ChaseLines.length > 0 || thisMatchTop2Lines.length > 0) && (
+            <div className="mb-3 space-y-1">
+              <p className="variant-a-qualify-title">Points to Top 2</p>
+              {top2ChaseLines.map((line) => (
+                <p key={line} className="variant-a-qualify-copy">{line}</p>
+              ))}
+              {thisMatchTop2Lines.map((line) => (
+                <p key={`match-${line}`} className="variant-a-qualify-copy">{line}</p>
+              ))}
+            </div>
           )}
           <p className="variant-a-qualify-title">Top 2 watch</p>
           <div className="variant-a-qualify-copy">

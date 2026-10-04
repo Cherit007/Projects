@@ -85,6 +85,7 @@ const FixturesTab = ({
           syncState={getInlineSyncState(currentMatch?.id, isLeague ? 'score' : 'bracket')}
           completedMatchesCount={completedMatches.length}
           totalMatchesCount={totalMatchesCount}
+          fixtures={isLeague ? fixtures : []}
         />
       )}
 
