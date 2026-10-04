@@ -200,10 +200,10 @@ const TeamEntry = ({
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Enter Team Details</h2>
               <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                {playerDatabase.length > 0 || teamNameDatabase.length > 0 ? (
+                {(playerDatabase?.length || 0) > 0 || (teamNameDatabase?.length || 0) > 0 ? (
                   <>
                     <ChevronDown size={14} className="text-blue-500" />
-                    Suggestions: {playerDatabase.length} players, {teamNameDatabase.length} team names
+                    Suggestions: {playerDatabase?.length || 0} players, {teamNameDatabase?.length || 0} team names
                   </>
                 ) : (
                   'Player and team names will be saved for future use'

@@ -142,6 +142,21 @@ describe('AppViewRouter integration workflows', () => {
     expect(await screen.findByTestId('team-entry')).toHaveTextContent('teams:teams');
   });
 
+  it('prefers live teams step over a stale setup routeKey (Start Tournament blank page)', async () => {
+    render(
+      <AppViewRouter
+        {...baseProps}
+        routeKey="setup"
+        setupScreenProps={{ step: 'teams' }}
+        teamEntryProps={{ step: 'teams' }}
+        tournamentViewProps={{ step: 'none' }}
+      />
+    );
+
+    expect(await screen.findByTestId('team-entry')).toBeInTheDocument();
+    expect(screen.queryByTestId('setup-screen')).not.toBeInTheDocument();
+  });
+
   it('renders tournament workflow and casual modal when active', async () => {
     render(
       <AppViewRouter

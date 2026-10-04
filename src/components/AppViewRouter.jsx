@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import BadmintonLoader from './BadmintonLoader';
-import { APP_ROUTE_KEYS } from '../utils/appRoutes';
+import { APP_ROUTE_KEYS, isWorkspaceRouteKey } from '../utils/appRoutes';
 
 const SetupScreen = lazy(() => import('./SetupScreen'));
 const TeamEntry = lazy(() => import('./Teamentry'));
@@ -67,13 +67,28 @@ const AppViewRouter = ({
   appModals,
   isMobileViewport = false,
 }) => {
-  const currentRouteKey = routeKey || (() => {
+  // Hash routeKey can lag one (or more) frames behind in-app setStep('teams'|'tournament').
+  // Prefer live step props for workspace screens so Start Tournament never lands on an empty shell.
+  const stepRouteKey = (() => {
+    if (tournamentViewProps?.step === 'tournament') return APP_ROUTE_KEYS.TOURNAMENT;
+    if (teamEntryProps?.step === 'teams') return APP_ROUTE_KEYS.TEAMS;
+    if (setupScreenProps?.step === 'setup') return APP_ROUTE_KEYS.SETUP;
+    return null;
+  })();
+
+  const currentRouteKey = (() => {
     if (requiresAuth && !currentUser && !isGuestViewer) return APP_ROUTE_KEYS.AUTH;
     if (requiresAuth && groupRole === 'admin' && showRequestCenter) return APP_ROUTE_KEYS.GROUP_REQUESTS;
     if (requiresAuth && !activeGroup) return APP_ROUTE_KEYS.GROUPS;
     if (isViewerMode) return APP_ROUTE_KEYS.VIEWER;
-    if (tournamentViewProps.step === 'tournament') return APP_ROUTE_KEYS.TOURNAMENT;
-    if (teamEntryProps.step === 'teams') return APP_ROUTE_KEYS.TEAMS;
+
+    if (routeKey && !isWorkspaceRouteKey(routeKey)) {
+      return routeKey;
+    }
+
+    if (stepRouteKey) return stepRouteKey;
+
+    if (routeKey) return routeKey;
     return APP_ROUTE_KEYS.SETUP;
   })();
 

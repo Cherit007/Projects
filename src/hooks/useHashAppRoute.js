@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   APP_ROUTE_KEYS,
   deriveRouteKeyFromAppState,
@@ -172,7 +172,9 @@ export const useHashAppRoute = ({
     };
   }, [isReady]);
 
-  useEffect(() => {
+  // Layout effect so Start Tournament / step changes update the active screen
+  // before paint — avoids a blank/stale setup shell while hash routeKey lags.
+  useLayoutEffect(() => {
     if (!isReady || typeof window === 'undefined') return;
 
     const previousDerived = previousDerivedRouteRef.current;
