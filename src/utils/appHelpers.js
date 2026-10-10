@@ -396,6 +396,41 @@ export const upsertTournamentInHistory = (history = [], tournament = null) => {
 
 export const normalizeTournamentName = (value) => String(value || '').trim().toLowerCase();
 
+const NUMERIC_DATE_PATTERN = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?)?$/i;
+
+// Dates are written with toLocaleDateString()/toLocaleString(), which yields d/m/yyyy on
+// the app's devices. Date.parse would read those as m/d/yyyy, so parse them explicitly.
+const parseNumericLocaleDateMs = (raw) => {
+  const match = NUMERIC_DATE_PATTERN.exec(raw);
+  if (!match) return null;
+  const [, first, second, yearText, hourText, minuteText, secondText, meridiem] = match;
+  const a = Number(first);
+  const b = Number(second);
+  const dayFirst = a > 12 || b <= 12;
+  const day = dayFirst ? a : b;
+  const month = dayFirst ? b : a;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  let hours = Number(hourText || 0);
+  const isPm = /^p/i.test(meridiem || '');
+  if (meridiem) {
+    if (hours === 12) hours = 0;
+    if (isPm) hours += 12;
+  }
+  const date = new Date(
+    Number(yearText),
+    month - 1,
+    day,
+    hours,
+    Number(minuteText || 0),
+    Number(secondText || 0)
+  );
+  if (date.getDate() !== day || date.getMonth() !== month - 1) return null;
+  return date.getTime();
+};
+
+const hasTimeOfDay = (value) => typeof value === 'number' || /\d{1,2}:\d{2}/.test(String(value || ''));
+
 export const parseTournamentDateMs = (value) => {
   if (value === null || value === undefined) return null;
 
@@ -405,6 +440,9 @@ export const parseTournamentDateMs = (value) => {
 
   const raw = String(value).trim();
   if (!raw) return null;
+
+  const numericLocale = parseNumericLocaleDateMs(raw);
+  if (Number.isFinite(numericLocale)) return numericLocale;
 
   const direct = Date.parse(raw);
   if (Number.isFinite(direct)) return direct;
@@ -436,26 +474,51 @@ export const sortTournamentHistoryByRecent = (entries = []) => {
     const parsed = parseTournamentDateMs(value);
     return Number.isFinite(parsed) ? parsed : null;
   };
-  // Prefer timestamps that include time-of-day. `date` is often locale date-only
-  // (e.g. toLocaleDateString), which collapses same-day tournaments into one bucket.
-  const toSortMs = (item) => {
-    const candidates = [
-      toMs(item?.updatedAt),
-      toMs(item?.createdAt),
-      toMs(item?.migratedAt),
-      toMs(item?.completedAt),
-      toMs(item?.sourceUpdatedAt),
-      toMs(item?.sourceCreatedAt),
-      toMs(item?.dateLabel || item?.date),
-    ].filter((value) => Number.isFinite(value));
-    if (candidates.length === 0) return 0;
-    return Math.max(...candidates);
+  const toDayStartMs = (ms) => {
+    const day = new Date(ms);
+    day.setHours(0, 0, 0, 0);
+    return day.getTime();
+  };
+  // Only nearby stamps may order same-day entries: edits, syncs and cloud migrations
+  // rewrite updatedAt/sourceCreatedAt long after the tournament was played.
+  const SAME_DAY_WINDOW_BEFORE_MS = 14 * 60 * 60 * 1000;
+  const SAME_DAY_WINDOW_AFTER_MS = 38 * 60 * 60 * 1000;
+  // The played date decides the order; time-of-day stamps only break same-day ties.
+  const toSortKey = (item) => {
+    const rawDate = item?.dateLabel || item?.date;
+    const dateMs = toMs(rawDate);
+    const playedStamps = [item?.completedAt, item?.createdAt, item?.sourceCreatedAt]
+      .map(toMs)
+      .filter((value) => Number.isFinite(value));
+
+    if (Number.isFinite(dateMs)) {
+      const dayMs = toDayStartMs(dateMs);
+      const nearby = [...playedStamps, toMs(item?.updatedAt)]
+        .filter((value) => (
+          Number.isFinite(value)
+          && value >= dayMs - SAME_DAY_WINDOW_BEFORE_MS
+          && value < dayMs + SAME_DAY_WINDOW_AFTER_MS
+        ));
+      const detailMs = hasTimeOfDay(rawDate) ? dateMs : null;
+      const detailCandidates = [detailMs, ...nearby].filter((value) => Number.isFinite(value));
+      return {
+        dayMs,
+        detailMs: detailCandidates.length ? Math.max(...detailCandidates) : dayMs,
+      };
+    }
+
+    const fallbackMs = playedStamps.length
+      ? Math.min(...playedStamps)
+      : toMs(item?.updatedAt);
+    if (!Number.isFinite(fallbackMs)) return { dayMs: 0, detailMs: 0 };
+    return { dayMs: toDayStartMs(fallbackMs), detailMs: fallbackMs };
   };
 
   return [...list].sort((a, b) => {
-    const aTime = toSortMs(a);
-    const bTime = toSortMs(b);
-    if (aTime !== bTime) return bTime - aTime;
+    const aKey = toSortKey(a);
+    const bKey = toSortKey(b);
+    if (aKey.dayMs !== bKey.dayMs) return bKey.dayMs - aKey.dayMs;
+    if (aKey.detailMs !== bKey.detailMs) return bKey.detailMs - aKey.detailMs;
     const aId = String(a?.id || a?.appwriteId || a?.legacyTournamentId || '');
     const bId = String(b?.id || b?.appwriteId || b?.legacyTournamentId || '');
     return bId.localeCompare(aId);
@@ -471,7 +534,9 @@ export const formatTournamentDateLabel = (value, fallback = 'TBA') => {
     const raw = String(value || '').trim();
     return raw || fallback;
   }
-  return new Date(timestamp).toLocaleString();
+  return hasTimeOfDay(value)
+    ? new Date(timestamp).toLocaleString()
+    : new Date(timestamp).toLocaleDateString();
 };
 
 export const removeTournamentFromList = (

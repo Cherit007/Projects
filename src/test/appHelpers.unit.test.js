@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   dedupeLiveTournaments,
   dedupeTournamentHistory,
+  formatTournamentDateLabel,
   getTournamentProgressScore,
+  parseTournamentDateMs,
   pickPreferredTournament,
   sortCasualMatchesByRecent,
   sortTournamentHistoryByRecent,
@@ -452,19 +454,19 @@ describe('sortTournamentHistoryByRecent', () => {
       {
         id: 'older',
         name: 'Morning Cup',
-        date: '10/2/2026',
+        date: '2/10/2026',
         updatedAt: '2026-10-02T09:00:00.000Z',
       },
       {
         id: 'newer',
         name: 'Evening Cup',
-        date: '10/2/2026',
+        date: '2/10/2026',
         updatedAt: '2026-10-02T20:00:00.000Z',
       },
       {
         id: 'mid',
         name: 'Afternoon Cup',
-        date: '10/2/2026',
+        date: '2/10/2026',
         createdAt: '2026-10-02T14:00:00.000Z',
       },
     ]);
@@ -472,22 +474,70 @@ describe('sortTournamentHistoryByRecent', () => {
     expect(sorted.map((item) => item.id)).toEqual(['newer', 'mid', 'older']);
   });
 
-  it('prefers the most recent of updatedAt/createdAt/date', () => {
+  it('keeps played date order even when an older tournament was edited or migrated later', () => {
     const sorted = sortTournamentHistoryByRecent([
       {
-        id: 'by-date',
+        id: 'played-sep',
         date: '2026-09-01T12:00:00.000Z',
         createdAt: '2026-09-01T12:00:00.000Z',
       },
       {
-        id: 'by-update',
+        id: 'played-aug-edited-oct',
         date: '2026-08-01T12:00:00.000Z',
         updatedAt: '2026-10-01T12:00:00.000Z',
+        sourceCreatedAt: '2026-10-01T12:00:00.000Z',
+        migratedAt: '2026-10-01T12:00:00.000Z',
       },
     ]);
 
-    expect(sorted[0].id).toBe('by-update');
-    expect(sorted[1].id).toBe('by-date');
+    expect(sorted.map((item) => item.id)).toEqual(['played-sep', 'played-aug-edited-oct']);
+  });
+
+  it('reads d/m/yyyy locale dates day-first so October sorts above September', () => {
+    const sorted = sortTournamentHistoryByRecent([
+      { id: 'sep-26', name: 'Sep 26 3rd', date: '26/9/2026' },
+      { id: 'oct-4', name: 'Oct 4 2nd', date: '4/10/2026' },
+      { id: 'sep-5', name: 'Sep 5', date: '5/9/2026' },
+      { id: 'oct-10', name: 'Oct 10', date: '10/10/2026' },
+    ]);
+
+    expect(sorted.map((item) => item.id)).toEqual(['oct-10', 'oct-4', 'sep-26', 'sep-5']);
+  });
+
+  it('orders same-day tournaments by their own timestamps', () => {
+    const sorted = sortTournamentHistoryByRecent([
+      { id: 'oct-4-1st', date: '4/10/2026', createdAt: '2026-10-04T10:00:00.000Z' },
+      { id: 'oct-4-3rd', date: '4/10/2026', completedAt: '2026-10-04T15:00:00.000Z' },
+      { id: 'oct-4-2nd', date: '4/10/2026', createdAt: '2026-10-04T12:00:00.000Z' },
+      { id: 'sep-26', date: '26/9/2026', updatedAt: '2026-10-09T12:00:00.000Z' },
+    ]);
+
+    expect(sorted.map((item) => item.id)).toEqual(['oct-4-3rd', 'oct-4-2nd', 'oct-4-1st', 'sep-26']);
+  });
+});
+
+describe('parseTournamentDateMs', () => {
+  it('parses d/m/yyyy and locale date-times day-first', () => {
+    expect(new Date(parseTournamentDateMs('4/10/2026')).toDateString())
+      .toBe(new Date(2026, 9, 4).toDateString());
+    expect(new Date(parseTournamentDateMs('26/9/2026')).toDateString())
+      .toBe(new Date(2026, 8, 26).toDateString());
+    expect(parseTournamentDateMs('4/10/2026, 6:30:00 pm'))
+      .toBe(new Date(2026, 9, 4, 18, 30, 0).getTime());
+  });
+
+  it('falls back to month-first only when the day-first reading is impossible', () => {
+    expect(parseTournamentDateMs('9/26/2026')).toBe(new Date(2026, 8, 26).getTime());
+  });
+
+  it('still parses ISO strings', () => {
+    expect(parseTournamentDateMs('2026-10-04T10:00:00.000Z')).toBe(Date.parse('2026-10-04T10:00:00.000Z'));
+  });
+});
+
+describe('formatTournamentDateLabel', () => {
+  it('omits a fake midnight time for date-only values', () => {
+    expect(formatTournamentDateLabel('4/10/2026')).toBe(new Date(2026, 9, 4).toLocaleDateString());
   });
 });
 
@@ -496,17 +546,17 @@ describe('sortCasualMatchesByRecent', () => {
     const sorted = sortCasualMatchesByRecent([
       {
         id: 'older',
-        date: '10/2/2026',
+        date: '2/10/2026',
         createdAt: '2026-10-02T09:00:00.000Z',
       },
       {
         id: 'newer',
-        date: '10/2/2026',
+        date: '2/10/2026',
         completedAt: '2026-10-02T20:00:00.000Z',
       },
       {
         id: 'mid',
-        date: '10/2/2026',
+        date: '2/10/2026',
         createdAt: '2026-10-02T14:00:00.000Z',
       },
     ]);

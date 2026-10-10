@@ -313,17 +313,17 @@ describe('appStore tournament history guard', () => {
     appStore.setCasualMatches([
       {
         id: 'older',
-        date: '10/2/2026',
+        date: '2/10/2026',
         createdAt: '2026-10-02T09:00:00.000Z',
       },
       {
         id: 'newer',
-        date: '10/2/2026',
+        date: '2/10/2026',
         completedAt: '2026-10-02T20:00:00.000Z',
       },
       {
         id: 'mid',
-        date: '10/2/2026',
+        date: '2/10/2026',
         createdAt: '2026-10-02T14:00:00.000Z',
       },
     ]);
