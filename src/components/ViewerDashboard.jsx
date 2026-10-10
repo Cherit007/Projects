@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { sortTournamentHistoryByRecent } from '../utils/appHelpers';
 
 const formatTeam = (team) => {
   if (!team) return 'TBD';
@@ -84,6 +85,11 @@ const ViewerDashboard = ({
     history: tournamentHistory,
   }), [step, champion, tournamentFormat, fixtures, bracket, tournamentName, tournamentHistory]);
 
+  const recentTournamentHistory = useMemo(
+    () => sortTournamentHistoryByRecent(tournamentHistory).slice(0, 12),
+    [tournamentHistory]
+  );
+
   const statsRows = useMemo(() => {
     if (Array.isArray(allTimeStats) && allTimeStats.length > 0) {
       return allTimeStats.slice(0, 10).map((player) => ({
@@ -148,9 +154,9 @@ const ViewerDashboard = ({
         <div className="grid lg:grid-cols-2 gap-4 sm:gap-5">
           <section className="theme-card viewer-dashboard-card rounded-2xl p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-slate-900">Tournament History</h2>
-            {tournamentHistory?.length ? (
+            {recentTournamentHistory.length ? (
               <div className="mt-3 grid gap-2 max-h-[340px] overflow-auto pr-1">
-                {tournamentHistory.slice(0, 12).map((tournament) => (
+                {recentTournamentHistory.map((tournament) => (
                   <div key={tournament.id || tournament.appwriteId} className="rounded-xl border border-slate-200 bg-white/70 px-3 py-2 viewer-dashboard-row">
                     <p className="font-semibold text-slate-900">{tournament.name}</p>
                     <p className="text-xs text-slate-600">{tournament.date} • {tournament.teams?.length || 0} teams</p>
