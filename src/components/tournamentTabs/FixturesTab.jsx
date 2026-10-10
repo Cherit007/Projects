@@ -51,6 +51,7 @@ const FixturesTab = ({
   onSaveBracketResult,
   leagueMatchesComplete,
   onGoToFinal,
+  onReassignOddPlayerHostTeam = null,
 }) => {
   if (!isActive) return null;
 
@@ -86,6 +87,7 @@ const FixturesTab = ({
           completedMatchesCount={completedMatches.length}
           totalMatchesCount={totalMatchesCount}
           fixtures={isLeague ? fixtures : []}
+          onReassignOddPlayerHostTeam={isLeague ? onReassignOddPlayerHostTeam : null}
         />
       )}
 

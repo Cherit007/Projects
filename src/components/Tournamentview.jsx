@@ -93,6 +93,7 @@ const TournamentView = ({
   onSaveBracketResult,
   onSaveFinalResult,
   onSwapTeamMember,
+  onReassignOddPlayerHostTeam = null,
   swapHistory = [],
   onGoHome,
   onResetTournament,
@@ -131,6 +132,8 @@ const TournamentView = ({
   const [swapCurrentPlayer, setSwapCurrentPlayer] = useState('');
   const [swapReplacementPlayer, setSwapReplacementPlayer] = useState('');
   const [swapError, setSwapError] = useState('');
+  const [swapPending, setSwapPending] = useState(false);
+  const [swapDuplicateWarning, setSwapDuplicateWarning] = useState('');
   const [showDuplicatePlayerModal, setShowDuplicatePlayerModal] = useState(false);
   const [duplicatePlayers, setDuplicatePlayers] = useState([]);
   const [showFutureClashModal, setShowFutureClashModal] = useState(false);
@@ -292,6 +295,17 @@ const TournamentView = ({
     }
     setSelectedBracketMatch(match);
   }, []);
+
+  const canSwapMembers = useMemo(() => {
+    if (champion) return false;
+    const flatBracket = (Array.isArray(bracket) ? bracket : []).flatMap((round) => (
+      Array.isArray(round) ? round : []
+    ));
+    if (flatBracket.length > 0 && flatBracket.every((match) => match?.completed)) {
+      return false;
+    }
+    return true;
+  }, [champion, bracket]);
 
   const pointsTable = useMemo(() => (
     tournamentFormat === 'league' ? calculatePointsTable(teams, fixtures) : []
@@ -988,13 +1002,15 @@ const TournamentView = ({
 
   const openSwapMemberModal = () => {
     setShowHeaderMenu(false);
-    if (!teams.length) return;
+    if (!canSwapMembers || !teams.length) return;
     const firstTeam = teams[0];
     const firstTeamPlayers = getTeamPlayers(firstTeam);
     setSwapTeamId(String(firstTeam.id));
     setSwapCurrentPlayer(firstTeamPlayers[0] || '');
     setSwapReplacementPlayer('');
     setSwapError('');
+    setSwapDuplicateWarning('');
+    setSwapPending(false);
     setShowSwapMemberModal(true);
   };
 
@@ -1017,35 +1033,44 @@ const TournamentView = ({
     const nextPlayers = getTeamPlayers(nextTeam);
     setSwapCurrentPlayer(nextPlayers[0] || '');
     setSwapError('');
+    setSwapDuplicateWarning('');
+  };
+
+  const findTeamsAlreadyUsingPlayer = (playerName) => {
+    const needle = String(playerName || '').trim().toLowerCase();
+    if (!needle) return [];
+    return (Array.isArray(teams) ? teams : [])
+      .filter((team) => String(team.id) !== String(swapTeamId))
+      .filter((team) => getTeamPlayers(team).some((name) => String(name || '').trim().toLowerCase() === needle))
+      .map((team) => team.name || 'Another team');
   };
 
   const handleConfirmSwap = () => {
-    const replacementNormalized = String(swapReplacementPlayer || '').trim().toLowerCase();
+    if (swapPending || !canSwapMembers) return;
+    const replacementRaw = String(swapReplacementPlayer || '').trim();
+    const replacementNormalized = replacementRaw.toLowerCase();
     if (blockedOpponentPlayers.includes(replacementNormalized)) {
       setSwapError('Cannot pick a player from the current live opposite team. Choose another player.');
       return;
     }
 
-    const success = onSwapTeamMember({
-      teamId: swapTeamId,
-      currentPlayerName: swapCurrentPlayer,
-      replacementPlayerName: swapReplacementPlayer,
-    });
-    if (success) {
-      const replacementNormalized = String(swapReplacementPlayer || '').trim().toLowerCase();
-      const futureLeagueMatches = (fixtures || []).filter((match) => {
-        if (!match || match.completed) return false;
-        const team1Id = String(match.team1?.id || '');
-        const team2Id = String(match.team2?.id || '');
-        const selectedTeamId = String(swapTeamId || '');
-        if (team1Id !== selectedTeamId && team2Id !== selectedTeamId) return false;
-        const opponentTeam = team1Id === selectedTeamId ? match.team2 : match.team1;
-        const opponentPlayers = getTeamPlayers(opponentTeam).map((name) => String(name || '').trim().toLowerCase());
-        return opponentPlayers.includes(replacementNormalized);
+    const teamsWithPlayer = findTeamsAlreadyUsingPlayer(replacementRaw);
+    if (teamsWithPlayer.length > 0 && !swapDuplicateWarning) {
+      setSwapDuplicateWarning(
+        `${replacementRaw} is already on ${teamsWithPlayer.join(', ')}. Confirm again to swap anyway.`
+      );
+      return;
+    }
+
+    setSwapPending(true);
+    try {
+      const success = onSwapTeamMember({
+        teamId: swapTeamId,
+        currentPlayerName: swapCurrentPlayer,
+        replacementPlayerName: replacementRaw,
       });
-      const futureBracketMatches = (Array.isArray(bracket) ? bracket : [])
-        .flatMap((round) => (Array.isArray(round) ? round : []))
-        .filter((match) => {
+      if (success) {
+        const futureLeagueMatches = (fixtures || []).filter((match) => {
           if (!match || match.completed) return false;
           const team1Id = String(match.team1?.id || '');
           const team2Id = String(match.team2?.id || '');
@@ -1055,21 +1080,37 @@ const TournamentView = ({
           const opponentPlayers = getTeamPlayers(opponentTeam).map((name) => String(name || '').trim().toLowerCase());
           return opponentPlayers.includes(replacementNormalized);
         });
-      const clashMatches = [...futureLeagueMatches, ...futureBracketMatches];
+        const futureBracketMatches = (Array.isArray(bracket) ? bracket : [])
+          .flatMap((round) => (Array.isArray(round) ? round : []))
+          .filter((match) => {
+            if (!match || match.completed) return false;
+            const team1Id = String(match.team1?.id || '');
+            const team2Id = String(match.team2?.id || '');
+            const selectedTeamId = String(swapTeamId || '');
+            if (team1Id !== selectedTeamId && team2Id !== selectedTeamId) return false;
+            const opponentTeam = team1Id === selectedTeamId ? match.team2 : match.team1;
+            const opponentPlayers = getTeamPlayers(opponentTeam).map((name) => String(name || '').trim().toLowerCase());
+            return opponentPlayers.includes(replacementNormalized);
+          });
+        const clashMatches = [...futureLeagueMatches, ...futureBracketMatches];
 
-      setSwapReplacementPlayer('');
-      setSwapError('');
-      setShowSwapMemberModal(false);
-      if (clashMatches.length > 0) {
-        setFutureClashPlayer(String(swapReplacementPlayer || '').trim());
-        setFutureClashMatches(clashMatches.map((match) => ({
-          id: match.id,
-          round: match.round,
-          team1: match.team1?.name || 'Team 1',
-          team2: match.team2?.name || 'Team 2',
-        })));
-        setShowFutureClashModal(true);
+        setSwapReplacementPlayer('');
+        setSwapError('');
+        setSwapDuplicateWarning('');
+        setShowSwapMemberModal(false);
+        if (clashMatches.length > 0) {
+          setFutureClashPlayer(replacementRaw);
+          setFutureClashMatches(clashMatches.map((match) => ({
+            id: match.id,
+            round: match.round,
+            team1: match.team1?.name || 'Team 1',
+            team2: match.team2?.name || 'Team 2',
+          })));
+          setShowFutureClashModal(true);
+        }
       }
+    } finally {
+      setSwapPending(false);
     }
   };
 
@@ -1315,11 +1356,13 @@ const TournamentView = ({
                   <span>{nextTournamentPending ? 'Starting...' : 'Next Tournament'}</span>
                 </button>
               )}
-              <button onClick={openSwapMemberModal}
-                className="variant-a-header-action tour-action-btn tour-action-cyan flex items-center gap-2">
-                <Users size={18} />
-                <span>Swap Team Member</span>
-              </button>
+              {canSwapMembers && (
+                <button onClick={openSwapMemberModal}
+                  className="variant-a-header-action tour-action-btn tour-action-cyan flex items-center gap-2">
+                  <Users size={18} />
+                  <span>Swap Team Member</span>
+                </button>
+              )}
               <button onClick={onResetTournament}
                 disabled={resetPending || rematchPending || nextTournamentPending}
                 className="variant-a-header-action tour-action-btn tour-action-red flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
@@ -1377,12 +1420,14 @@ const TournamentView = ({
                       {nextTournamentPending ? 'Starting...' : 'Next Tournament'}
                     </button>
                   )}
-                  <button
-                    onClick={openSwapMemberModal}
-                    className="w-full text-left px-3 py-2 rounded-lg tour-actions-item"
-                  >
-                    Swap Team Member
-                  </button>
+                  {canSwapMembers && (
+                    <button
+                      onClick={openSwapMemberModal}
+                      className="w-full text-left px-3 py-2 rounded-lg tour-actions-item"
+                    >
+                      Swap Team Member
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setShowHeaderMenu(false);
@@ -1469,6 +1514,7 @@ const TournamentView = ({
               onSaveBracketResult={handleSaveBracketResult}
               leagueMatchesComplete={leagueMatchesComplete}
               onGoToFinal={() => setActiveTab('final')}
+              onReassignOddPlayerHostTeam={onReassignOddPlayerHostTeam}
             />
           )}
 
@@ -1689,6 +1735,7 @@ const TournamentView = ({
                   onChange={(value) => {
                     setSwapReplacementPlayer(value);
                     if (swapError) setSwapError('');
+                    if (swapDuplicateWarning) setSwapDuplicateWarning('');
                   }}
                   placeholder="Type or pick player name"
                   playerDatabase={filteredSwapCandidatePlayers}
@@ -1696,6 +1743,11 @@ const TournamentView = ({
               </div>
               {swapError && (
                 <p className="text-sm text-red-600">{swapError}</p>
+              )}
+              {swapDuplicateWarning && (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  {swapDuplicateWarning}
+                </p>
               )}
 
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 max-h-32 overflow-y-auto">
@@ -1718,16 +1770,20 @@ const TournamentView = ({
                   onClick={() => {
                     setShowSwapMemberModal(false);
                     setSwapError('');
+                    setSwapDuplicateWarning('');
+                    setSwapPending(false);
                   }}
-                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  disabled={swapPending}
+                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-60"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmSwap}
-                  className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 font-semibold"
+                  disabled={swapPending || !swapReplacementPlayer.trim()}
+                  className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 font-semibold disabled:opacity-60"
                 >
-                  Swap
+                  {swapPending ? 'Swapping...' : (swapDuplicateWarning ? 'Confirm Swap Anyway' : 'Swap')}
                 </button>
               </div>
             </div>

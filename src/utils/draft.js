@@ -197,6 +197,154 @@ export const applyRandomOddPlayerSwapToLeagueFixtures = ({
   };
 };
 
+/**
+ * Move the odd player from the current host team to the other team in a live match.
+ * Restores the sitting-out player on the old host so that team's pairing plays intact.
+ */
+export const reassignOddPlayerHostOnMatch = ({
+  match = null,
+  targetTeamId = null,
+  sitOutSlot = null,
+  sitOutPlayerName = null,
+} = {}) => {
+  if (!match || match.completed) {
+    return { ok: false, reason: 'Odd-player host can only change on an incomplete match' };
+  }
+
+  const meta = match.oddPlayerMeta && typeof match.oddPlayerMeta === 'object'
+    ? match.oddPlayerMeta
+    : null;
+  const oddPlayerName = normalizePlayerName(meta?.activeOddPlayerName);
+  if (!oddPlayerName) {
+    return { ok: false, reason: 'This match has no odd-player assignment to move' };
+  }
+
+  const team1Id = String(match.team1?.id ?? '');
+  const team2Id = String(match.team2?.id ?? '');
+  const targetId = String(targetTeamId ?? '').trim();
+  if (!targetId || (targetId !== team1Id && targetId !== team2Id)) {
+    return { ok: false, reason: 'Odd player can only join one of the two teams in this match' };
+  }
+
+  const currentHostId = String(meta.swapTeamId ?? '');
+  const getSideKey = (teamId) => {
+    if (String(teamId) === team1Id) return 'team1';
+    if (String(teamId) === team2Id) return 'team2';
+    return null;
+  };
+
+  const findSlotWithPlayer = (side, playerName) => {
+    const needle = normalizePlayerName(playerName).toLowerCase();
+    if (!needle || !side) return null;
+    const p1 = normalizePlayerName(side.player1 || side.player).toLowerCase();
+    const p2 = normalizePlayerName(side.player2).toLowerCase();
+    if (p1 === needle) return 'player1';
+    if (p2 === needle) return 'player2';
+    return null;
+  };
+
+  const setSideSlot = (side, slot, playerName) => {
+    const next = { ...side };
+    const value = normalizePlayerName(playerName);
+    if (slot === 'player1') {
+      next.player1 = value;
+      next.player = value;
+    } else if (slot === 'player2') {
+      next.player2 = value;
+    }
+    return next;
+  };
+
+  const hostKey = getSideKey(currentHostId)
+    || (findSlotWithPlayer(match.team1, oddPlayerName) ? 'team1' : null)
+    || (findSlotWithPlayer(match.team2, oddPlayerName) ? 'team2' : null);
+  if (!hostKey) {
+    return { ok: false, reason: 'Could not find the odd player in this match lineup' };
+  }
+
+  const targetKey = getSideKey(targetId);
+  if (!targetKey) {
+    return { ok: false, reason: 'Target team is not part of this match' };
+  }
+
+  const sittingOutPlayerName = normalizePlayerName(meta.sittingOutPlayerName);
+  const working = {
+    team1: { ...match.team1 },
+    team2: { ...match.team2 },
+  };
+
+  const oddSlot = findSlotWithPlayer(working[hostKey], oddPlayerName)
+    || (meta.swapSlot === 'player2' ? 'player2' : 'player1');
+
+  // 1) Restore sitting-out player onto the current host (that team's pair plays intact).
+  if (sittingOutPlayerName) {
+    working[hostKey] = setSideSlot(working[hostKey], oddSlot, sittingOutPlayerName);
+  }
+
+  // 2) Choose which player sits out on the target team.
+  let resolvedSitOutSlot = sitOutSlot === 'player1' || sitOutSlot === 'player2'
+    ? sitOutSlot
+    : null;
+  if (!resolvedSitOutSlot && sitOutPlayerName) {
+    resolvedSitOutSlot = findSlotWithPlayer(working[targetKey], sitOutPlayerName);
+  }
+  if (!resolvedSitOutSlot) {
+    resolvedSitOutSlot = 'player1';
+  }
+
+  const newSittingOutPlayer = normalizePlayerName(
+    resolvedSitOutSlot === 'player1'
+      ? (working[targetKey].player1 || working[targetKey].player)
+      : working[targetKey].player2
+  );
+  if (!newSittingOutPlayer) {
+    return { ok: false, reason: 'Target team has no player available to sit out' };
+  }
+  if (newSittingOutPlayer.toLowerCase() === oddPlayerName.toLowerCase()) {
+    return { ok: true, match, unchanged: true };
+  }
+
+  // 3) Put odd player onto the target team.
+  working[targetKey] = setSideSlot(working[targetKey], resolvedSitOutSlot, oddPlayerName);
+
+  const targetTeam = working[targetKey];
+  const nextMeta = {
+    ...meta,
+    activeOddPlayerName: oddPlayerName,
+    sittingOutPlayerName: newSittingOutPlayer,
+    swapTeamId: targetTeam?.id ?? targetId,
+    swapTeamName: targetTeam?.name || meta.swapTeamName || '',
+    swapSlot: resolvedSitOutSlot,
+  };
+
+  const nextRoundTeams = Array.isArray(match.roundTeams)
+    ? match.roundTeams.map((team) => {
+      const teamId = String(team?.id ?? '');
+      if (teamId === team1Id) return { ...working.team1 };
+      if (teamId === team2Id) return { ...working.team2 };
+      return { ...team };
+    })
+    : match.roundTeams;
+
+  const unchanged = (
+    String(nextMeta.swapTeamId) === String(meta.swapTeamId)
+    && String(nextMeta.sittingOutPlayerName).toLowerCase() === String(meta.sittingOutPlayerName || '').toLowerCase()
+    && String(nextMeta.swapSlot) === String(meta.swapSlot)
+  );
+
+  return {
+    ok: true,
+    unchanged,
+    match: {
+      ...match,
+      team1: working.team1,
+      team2: working.team2,
+      oddPlayerMeta: nextMeta,
+      ...(Array.isArray(nextRoundTeams) ? { roundTeams: nextRoundTeams } : {}),
+    },
+  };
+};
+
 export const runSnakeDraft = ({
   teams = [],
   gameMode = 'doubles',

@@ -4,6 +4,7 @@ import {
   applyRandomOddPlayerSwapToLeagueFixtures,
   buildRandomOddPlayerSwapRound,
   parsePlayerPool,
+  reassignOddPlayerHostOnMatch,
   runSnakeDraft,
 } from '../utils/draft';
 
@@ -88,5 +89,43 @@ describe('draft utilities', () => {
     expect(result.fixtures.every((fixture) => (
       [fixture.team1.player1, fixture.team1.player2, fixture.team2.player1, fixture.team2.player2].includes('Z9')
     ))).toBe(true);
+  });
+
+  it('moves odd player from team B to team A and restores team B original pair', () => {
+    const match = {
+      id: 1,
+      completed: false,
+      team1: { id: 1, name: 'Team A', player1: 'A1', player: 'A1', player2: 'A2' },
+      team2: { id: 2, name: 'Team B', player1: 'B1', player: 'B1', player2: 'Z9' },
+      oddPlayerMeta: {
+        activeOddPlayerName: 'Z9',
+        sittingOutPlayerName: 'B2',
+        swapTeamId: 2,
+        swapTeamName: 'Team B',
+        swapSlot: 'player2',
+      },
+    };
+
+    const result = reassignOddPlayerHostOnMatch({
+      match,
+      targetTeamId: 1,
+      sitOutSlot: 'player2',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.unchanged).toBe(false);
+    // Team B restored to original pair.
+    expect(result.match.team2.player1).toBe('B1');
+    expect(result.match.team2.player2).toBe('B2');
+    // Team A hosts odd player; A2 sits out.
+    expect(result.match.team1.player1).toBe('A1');
+    expect(result.match.team1.player2).toBe('Z9');
+    expect(result.match.oddPlayerMeta).toMatchObject({
+      activeOddPlayerName: 'Z9',
+      sittingOutPlayerName: 'A2',
+      swapTeamId: 1,
+      swapTeamName: 'Team A',
+      swapSlot: 'player2',
+    });
   });
 });
