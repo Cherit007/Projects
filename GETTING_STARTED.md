@@ -77,7 +77,8 @@ src/
                   UPI notification parser
   data/           SQLite migrations, repositories and queries
   services/upi/   Bridges the native listener to the database
-  services/cloud/ Appwrite sign-in and sync
+  services/cloud/ Sign-in and sync; backend-neutral, with the Appwrite
+                  adapter in services/cloud/appwrite/
   components/     Shared UI
   theme/          Colours and category icons
   hooks/          Shared React hooks

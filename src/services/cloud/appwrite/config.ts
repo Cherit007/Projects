@@ -10,7 +10,7 @@ export const cloudConfig = {
   databaseId: 'finance',
 };
 
-export const isCloudConfigured = Boolean(cloudConfig.endpoint && cloudConfig.projectId);
+export const isAppwriteConfigured = Boolean(cloudConfig.endpoint && cloudConfig.projectId);
 
 /**
  * Appwrite checks requests against the platforms registered in the console:

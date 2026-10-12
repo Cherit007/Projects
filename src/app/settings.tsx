@@ -84,7 +84,7 @@ export default function SettingsScreen() {
           <View style={styles.flex}>
             <Text style={styles.title}>Sync is not set up</Text>
             <Text style={styles.muted}>
-              This build has no Appwrite project configured. Everything is saved on this device only.
+              This build has no cloud backend configured. Everything is saved on this device only.
             </Text>
           </View>
         </View>

@@ -97,6 +97,38 @@ device settings never leave the phone.
   cloud copies, so a second device does not duplicate them. Then all local
   rows are queued for upload.
 - **Sign-out** keeps local data and forgets the sync position.
+
+### Swapping the backend
+
+Appwrite is an adapter, not a dependency of the app. The sync engine
+(`src/services/cloud/sync.ts`), the sign-in UI and the local database only
+use the interfaces in `src/services/cloud/backend.ts`; all Appwrite code
+lives in `src/services/cloud/appwrite/`. To move to another backend (for
+example Postgres on AWS behind an API):
+
+1. Add a folder such as `src/services/cloud/rest/` that implements
+   `CloudBackend` (`auth` + `sync`), and return it from `cloudBackend()`
+   in `src/services/cloud/index.ts`. Nothing else in the app changes.
+2. The server must provide, per user and per table
+   (`accounts`, `categories`, `transactions`, `budgets`; columns in
+   `src/services/cloud/schema.json`):
+   - **Pull:** rows whose server-assigned update time is at or after a
+     cursor, oldest first, including tombstones (`deleted = true`). In
+     Postgres: an `updated_at_server timestamptz` set by a trigger
+     (`clock_timestamp()`), indexed with `(user_id, updated_at_server, id)`.
+   - **Push:** upsert by `id`, storing the client's values as given
+     (including the client's `updated_at`), and never deleting rows,
+     only marking them `deleted`.
+   - **Isolation:** every row belongs to one user, and the API only
+     returns or changes that user's rows (e.g. Postgres row-level
+     security, or `WHERE user_id = <authenticated user>`).
+   - **Auth:** Google sign-in that yields a session; return a 401 for an
+     expired session (the adapter turns it into `SessionExpiredError`).
+3. To move existing users' data, copy the rows across with their ids and
+   `updated_at` values unchanged; devices then continue syncing normally.
+
+The app never talks to a database directly: a direct connection would
+need database credentials in the app, which anyone could extract.
 - **Secrets:** the app only contains the public endpoint and project ID.
   The server API key is used once, from the shell, by
   `scripts/setup-appwrite.mjs`.

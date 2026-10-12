@@ -3,26 +3,25 @@ import schema from './schema.json';
 
 export type ColumnKind = 'text' | 'int' | 'bool';
 type LocalRow = Record<string, unknown> & { id: string };
-type RemoteRow = Record<string, unknown> & { $id: string };
 
 export function columnsOf(table: SyncedTable): [string, ColumnKind][] {
   return Object.entries(schema[table]).map(([name, spec]) => [name, spec.split(':')[0] as ColumnKind]);
 }
 
-/** SQLite stores booleans as 0/1; Appwrite uses real booleans. */
+/** Column values as JSON for the cloud: SQLite's 0/1 booleans become true/false. */
 export function toRemote(table: SyncedTable, row: LocalRow): Record<string, unknown> {
-  const data: Record<string, unknown> = { deleted: false };
+  const values: Record<string, unknown> = {};
   for (const [name, kind] of columnsOf(table)) {
     const value = row[name];
-    data[name] = kind === 'bool' ? value === 1 || value === true : (value ?? null);
+    values[name] = kind === 'bool' ? value === 1 || value === true : (value ?? null);
   }
-  return data;
+  return values;
 }
 
-export function toLocal(table: SyncedTable, remote: RemoteRow): LocalRow {
-  const row: LocalRow = { id: remote.$id };
+export function toLocal(table: SyncedTable, id: string, values: Record<string, unknown>): LocalRow {
+  const row: LocalRow = { id };
   for (const [name, kind] of columnsOf(table)) {
-    const value = remote[name];
+    const value = values[name];
     row[name] = kind === 'bool' ? (value ? 1 : 0) : (value ?? null);
   }
   return row;

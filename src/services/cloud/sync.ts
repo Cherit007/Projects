@@ -1,10 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { Permission, Query, Role, type Models, type TablesDB } from 'react-native-appwrite';
 
 import { nowIso } from '../../data/local/ids';
 import { SYNCED_TABLES, type SyncedTable } from '../../data/local/migrations';
-import { cloud } from './client';
-import { cloudConfig } from './config';
+import type { RemoteRow, SyncBackend } from './backend';
 import {
   accountMergeKey,
   categoryMergeKey,
@@ -14,7 +12,6 @@ import {
   toRemote,
 } from './rows';
 
-type RemoteRow = Models.DefaultRow & Record<string, unknown>;
 type LocalRow = Record<string, unknown> & { id: string };
 
 const PAGE_SIZE = 100;
@@ -29,24 +26,19 @@ export interface SyncResult {
  * Two-way sync for the signed-in user: pushes the local outbox, then pulls
  * rows changed in the cloud since the last pull. Safe to call repeatedly.
  */
-export async function syncNow(db: SQLiteDatabase, userId: string): Promise<SyncResult> {
-  const services = cloud();
-  if (!services) {
-    throw new Error('Cloud sync is not configured.');
-  }
-  const { tables } = services;
+export async function syncNow(db: SQLiteDatabase, remote: SyncBackend, userId: string): Promise<SyncResult> {
   const meta = await db.getFirstAsync<{ user_id: string | null }>('SELECT user_id FROM sync_meta WHERE id = 1');
   if (meta?.user_id !== userId) {
     await db.runAsync('DELETE FROM sync_cursors');
-    await mergeWithCloud(db, tables);
+    await mergeWithCloud(db, remote);
     await enqueueAllLocalRows(db);
   }
 
   let pulled = 0;
   for (const table of SYNCED_TABLES) {
-    pulled += await pullTable(db, tables, table);
+    pulled += await pullTable(db, remote, table);
   }
-  const pushed = await pushOutbox(db, tables, userId);
+  const pushed = await pushOutbox(db, remote, userId);
   await db.runAsync('UPDATE sync_meta SET user_id = ?, last_synced_at = ? WHERE id = 1', userId, nowIso());
   return { pushed, pulled };
 }
@@ -67,31 +59,6 @@ export async function lastSyncedAt(db: SQLiteDatabase): Promise<string | null> {
 export async function pendingChangeCount(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM sync_outbox');
   return row?.count ?? 0;
-}
-
-async function listAllRemote(tables: TablesDB, table: SyncedTable, since: string | null): Promise<RemoteRow[]> {
-  const rows: RemoteRow[] = [];
-  let lastId: string | undefined;
-  for (;;) {
-    const queries = [Query.orderAsc('$updatedAt'), Query.orderAsc('$id'), Query.limit(PAGE_SIZE)];
-    if (since) {
-      queries.push(Query.greaterThanEqual('$updatedAt', since));
-    }
-    if (lastId) {
-      queries.push(Query.cursorAfter(lastId));
-    }
-    const page = await tables.listRows<RemoteRow>({
-      databaseId: cloudConfig.databaseId,
-      tableId: table,
-      queries,
-      total: false,
-    });
-    rows.push(...page.rows);
-    if (page.rows.length < PAGE_SIZE) {
-      return rows;
-    }
-    lastId = page.rows[page.rows.length - 1].$id;
-  }
 }
 
 /**
@@ -128,29 +95,29 @@ async function upsertLocal(db: SQLiteDatabase, table: SyncedTable, row: LocalRow
 async function applyRemoteRow(db: SQLiteDatabase, table: SyncedTable, remote: RemoteRow): Promise<boolean> {
   const local = await db.getFirstAsync<{ updated_at: string }>(
     `SELECT updated_at FROM ${table} WHERE id = ?`,
-    remote.$id,
+    remote.id,
   );
-  if (!shouldApplyRemote(local?.updated_at ?? null, (remote.updated_at as string | null) ?? null)) {
+  if (!shouldApplyRemote(local?.updated_at ?? null, (remote.values.updated_at as string | null) ?? null)) {
     return false;
   }
   if (remote.deleted) {
     if (!local) {
       return false;
     }
-    await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, remote.$id);
+    await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, remote.id);
   } else {
-    await upsertLocal(db, table, toLocal(table, remote));
+    await upsertLocal(db, table, toLocal(table, remote.id, remote.values));
   }
-  await db.runAsync('DELETE FROM sync_outbox WHERE table_name = ? AND row_id = ?', table, remote.$id);
+  await db.runAsync('DELETE FROM sync_outbox WHERE table_name = ? AND row_id = ?', table, remote.id);
   return true;
 }
 
-async function pullTable(db: SQLiteDatabase, tables: TablesDB, table: SyncedTable): Promise<number> {
+async function pullTable(db: SQLiteDatabase, backend: SyncBackend, table: SyncedTable): Promise<number> {
   const cursor = await db.getFirstAsync<{ pulled_until: string }>(
     'SELECT pulled_until FROM sync_cursors WHERE table_name = ?',
     table,
   );
-  const rows = await listAllRemote(tables, table, cursor?.pulled_until ?? null);
+  const rows = await backend.pullChanges(table, cursor?.pulled_until ?? null);
   if (rows.length === 0) {
     return 0;
   }
@@ -164,15 +131,13 @@ async function pullTable(db: SQLiteDatabase, tables: TablesDB, table: SyncedTabl
     await db.runAsync(
       'INSERT OR REPLACE INTO sync_cursors (table_name, pulled_until) VALUES (?, ?)',
       table,
-      rows[rows.length - 1].$updatedAt,
+      rows[rows.length - 1].serverUpdatedAt,
     );
   });
   return changed;
 }
 
-async function pushOutbox(db: SQLiteDatabase, tables: TablesDB, userId: string): Promise<number> {
-  const user = Role.user(userId);
-  const permissions = [Permission.read(user), Permission.update(user), Permission.delete(user)];
+async function pushOutbox(db: SQLiteDatabase, backend: SyncBackend, userId: string): Promise<number> {
   let pushed = 0;
   for (let batch = 0; batch < MAX_PUSH_BATCHES; batch++) {
     const entries = await db.getAllAsync<{ table_name: SyncedTable; row_id: string; changed_at: string }>(
@@ -184,12 +149,12 @@ async function pushOutbox(db: SQLiteDatabase, tables: TablesDB, userId: string):
     }
     for (const entry of entries) {
       const row = await db.getFirstAsync<LocalRow>(`SELECT * FROM ${entry.table_name} WHERE id = ?`, entry.row_id);
-      await tables.upsertRow({
-        databaseId: cloudConfig.databaseId,
-        tableId: entry.table_name,
-        rowId: entry.row_id,
-        data: row ? toRemote(entry.table_name, row) : { deleted: true, updated_at: nowIso() },
-        permissions,
+      await backend.push({
+        table: entry.table_name,
+        id: entry.row_id,
+        userId,
+        deleted: !row,
+        values: row ? toRemote(entry.table_name, row) : { updated_at: nowIso() },
       });
       await db.runAsync(
         'DELETE FROM sync_outbox WHERE table_name = ? AND row_id = ? AND changed_at = ?',
@@ -219,10 +184,10 @@ async function enqueueAllLocalRows(db: SQLiteDatabase): Promise<void> {
  * and folds local defaults (seeded with different ids on every install) into
  * the matching cloud rows, moving their transactions and budgets across.
  */
-async function mergeWithCloud(db: SQLiteDatabase, tables: TablesDB): Promise<void> {
+async function mergeWithCloud(db: SQLiteDatabase, backend: SyncBackend): Promise<void> {
   const [remoteAccounts, remoteCategories] = await Promise.all([
-    listAllRemote(tables, 'accounts', null),
-    listAllRemote(tables, 'categories', null),
+    backend.pullChanges('accounts', null),
+    backend.pullChanges('categories', null),
   ]);
   const liveAccounts = remoteAccounts.filter(r => !r.deleted);
   const liveCategories = remoteCategories.filter(r => !r.deleted);
@@ -230,20 +195,21 @@ async function mergeWithCloud(db: SQLiteDatabase, tables: TablesDB): Promise<voi
     return;
   }
 
-  const remoteCategoryName = new Map(liveCategories.map(r => [r.$id, r.name as string]));
+  const remoteCategoryName = new Map(liveCategories.map(r => [r.id, r.values.name as string]));
   const remoteCategoryByKey = new Map<string, string>();
   for (const r of liveCategories) {
-    const parentName = r.parent_id ? (remoteCategoryName.get(r.parent_id as string) ?? null) : null;
-    const key = categoryMergeKey(r.type as string, r.name as string, parentName);
+    const parentId = r.values.parent_id as string | null;
+    const parentName = parentId ? (remoteCategoryName.get(parentId) ?? null) : null;
+    const key = categoryMergeKey(r.values.type as string, r.values.name as string, parentName);
     if (!remoteCategoryByKey.has(key)) {
-      remoteCategoryByKey.set(key, r.$id);
+      remoteCategoryByKey.set(key, r.id);
     }
   }
   const remoteAccountByKey = new Map<string, string>();
   for (const r of liveAccounts) {
-    const key = accountMergeKey(r.type as string, r.name as string);
+    const key = accountMergeKey(r.values.type as string, r.values.name as string);
     if (!remoteAccountByKey.has(key)) {
-      remoteAccountByKey.set(key, r.$id);
+      remoteAccountByKey.set(key, r.id);
     }
   }
 
@@ -254,7 +220,7 @@ async function mergeWithCloud(db: SQLiteDatabase, tables: TablesDB): Promise<voi
   const localAccounts = await db.getAllAsync<{ id: string; name: string; type: string }>(
     'SELECT id, name, type FROM accounts',
   );
-  const remoteIds = new Set([...liveAccounts, ...liveCategories].map(r => r.$id));
+  const remoteIds = new Set([...liveAccounts, ...liveCategories].map(r => r.id));
 
   await applyingRemote(db, async () => {
     for (const remote of liveAccounts) {
