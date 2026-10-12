@@ -1,0 +1,25 @@
+import type { CategoryType } from '../types';
+
+export const DEFAULT_CATEGORIES: readonly { name: string; type: CategoryType }[] =
+  [
+    { name: 'Food and dining', type: 'expense' },
+    { name: 'Groceries', type: 'expense' },
+    { name: 'Rent and housing', type: 'expense' },
+    { name: 'Utilities and bills', type: 'expense' },
+    { name: 'Transport', type: 'expense' },
+    { name: 'Shopping', type: 'expense' },
+    { name: 'Healthcare', type: 'expense' },
+    { name: 'Entertainment', type: 'expense' },
+    { name: 'Education', type: 'expense' },
+    { name: 'Travel', type: 'expense' },
+    { name: 'Family', type: 'expense' },
+    { name: 'Loan interest and fees', type: 'expense' },
+    { name: 'Other', type: 'expense' },
+    { name: 'Salary', type: 'income' },
+    { name: 'Freelance', type: 'income' },
+    { name: 'Business', type: 'income' },
+    { name: 'Rental income', type: 'income' },
+    { name: 'Interest', type: 'income' },
+    { name: 'Dividends', type: 'income' },
+    { name: 'Other income', type: 'income' },
+  ];
