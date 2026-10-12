@@ -153,13 +153,14 @@ const SHORTCUT_STEPS = [
 
 function shortcutPrompt(captureLink: string): string {
   return [
-    'Create a shortcut named "Capture payment" that receives text; if there is no input, ask me for text.',
-    `It should URL-encode the input, append it to the end of this exact text with no space: ${captureLink}`,
-    'and then open that URL.',
-    'Then create three personal automations that run when I receive a message containing "debited",',
-    'one for "credited" and one for "Sent Rs". Each should run immediately without notifying me, and run',
-    'the "Capture payment" shortcut with the message content as its input.',
-  ].join(' ');
+    'Make a shortcut called "Capture payment":',
+    '1. Take the text I give it (ask me if there is none).',
+    '2. URL-encode it.',
+    `3. Open this link with the encoded text added at the end: ${captureLink}`,
+    '',
+    'Then make 3 automations: when I get a message containing "debited", "credited" or "Sent Rs",',
+    'run "Capture payment" with the message text. Run immediately, without notifying me.',
+  ].join('\n');
 }
 
 function SmsShortcutGuide() {
