@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { PermissionsAndroid, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { PermissionsAndroid, Platform, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { haptic } from '@/components/PressableScale';
@@ -151,8 +151,20 @@ const SHORTCUT_STEPS = [
   'Repeat for messages containing credited and Sent Rs, used by some banks.',
 ];
 
+function shortcutPrompt(captureLink: string): string {
+  return [
+    'Create a shortcut named "Capture payment" that receives text; if there is no input, ask me for text.',
+    `It should URL-encode the input, append it to the end of this exact text with no space: ${captureLink}`,
+    'and then open that URL.',
+    'Then create three personal automations that run when I receive a message containing "debited",',
+    'one for "credited" and one for "Sent Rs". Each should run immediately without notifying me, and run',
+    'the "Capture payment" shortcut with the message content as its input.',
+  ].join(' ');
+}
+
 function SmsShortcutGuide() {
   const captureLink = `${Linking.createURL('capture')}?text=`;
+  const prompt = shortcutPrompt(captureLink);
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Animated.View entering={FadeInDown.duration(300)}>
@@ -170,8 +182,22 @@ function SmsShortcutGuide() {
         </Card>
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.delay(40).duration(300)} style={styles.section}>
+        <SectionTitle title="Quick setup with AI" />
+        <Card style={styles.privacy}>
+          <Text style={styles.muted}>
+            Copy this prompt into the Shortcuts app&apos;s AI assistant. If it cannot create the automations, add them
+            using the steps below.
+          </Text>
+          <Text selectable style={styles.pointText}>
+            {prompt}
+          </Text>
+          <Button title="Copy prompt" icon="copy-outline" onPress={() => Share.share({ message: prompt })} />
+        </Card>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
-        <SectionTitle title="One-time setup" />
+        <SectionTitle title="Manual setup" />
         <Card style={styles.privacy}>
           {SHORTCUT_STEPS.map((step, index) => (
             <View key={step} style={styles.point}>
