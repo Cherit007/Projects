@@ -10,6 +10,11 @@ import {
   View,
 } from 'react-native';
 
+import Ionicons from '@expo/vector-icons/Ionicons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+
+import { CategoryIcon } from '@/components/CategoryIcon';
+import { haptic, PressableScale } from '@/components/PressableScale';
 import {
   Button,
   Card,
@@ -19,6 +24,7 @@ import {
   Input,
   LoadingState,
   Segmented,
+  typeColor,
 } from '@/components/ui';
 import {
   createCategory,
@@ -28,7 +34,8 @@ import {
 } from '@/data/repositories/categories';
 import type { Category, CategoryType } from '@/domain/types';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
-import { colors } from '@/theme/colors';
+import { categoryStyle } from '@/theme/categoryStyle';
+import { colors, radius, shadow } from '@/theme/colors';
 
 const typeOptions = [
   { value: 'expense', label: 'Expense' },
@@ -90,10 +97,11 @@ export default function CategoriesScreen() {
     setEditingId(null);
   };
 
-  const renderRow = (category: Category, isChild: boolean) => {
+  const renderRow = (category: Category, parentName: string | null) => {
     const editing = editingId === category.id;
     return (
-      <View key={category.id} style={[styles.row, isChild && styles.childRow]}>
+      <View key={category.id} style={[styles.row, parentName !== null && styles.childRow]}>
+        <CategoryIcon name={parentName ?? category.name} type={type} size={parentName ? 30 : 36} />
         {editing ? (
           <>
             <Input
@@ -103,29 +111,34 @@ export default function CategoriesScreen() {
               onSubmitEditing={() => saveRename(category)}
               style={styles.editInput}
             />
-            <Pressable onPress={() => saveRename(category)} hitSlop={8}>
-              <Text style={styles.link}>Save</Text>
-            </Pressable>
+            <PressableScale accessibilityLabel="Save name" hitSlop={8} onPress={() => saveRename(category)}>
+              <Ionicons name="checkmark-circle" size={26} color={colors.primary} />
+            </PressableScale>
           </>
         ) : (
           <>
             <Pressable
               style={styles.rowName}
               onPress={() => {
+                haptic('selection');
                 setEditingId(category.id);
                 setEditName(category.name);
               }}
             >
-              <Text style={[styles.name, category.isArchived && styles.archived]}>
-                {category.name}
-              </Text>
+              <Text style={[styles.name, category.isArchived && styles.archived]}>{category.name}</Text>
             </Pressable>
-            <Pressable
+            <PressableScale
+              accessibilityLabel={category.isArchived ? 'Restore category' : 'Archive category'}
               hitSlop={8}
+              hapticKind="light"
               onPress={() => run(() => setCategoryArchived(db, category.id, !category.isArchived))}
             >
-              <Text style={styles.link}>{category.isArchived ? 'Restore' : 'Archive'}</Text>
-            </Pressable>
+              <Ionicons
+                name={category.isArchived ? 'arrow-undo-outline' : 'archive-outline'}
+                size={20}
+                color={colors.textMuted}
+              />
+            </PressableScale>
           </>
         )}
       </View>
@@ -137,6 +150,7 @@ export default function CategoriesScreen() {
       <Segmented
         options={typeOptions}
         value={type}
+        tint={value => typeColor[value]}
         onChange={value => {
           setType(value);
           setParentId(null);
@@ -150,25 +164,42 @@ export default function CategoriesScreen() {
         <Text style={styles.hint}>Parent (optional)</Text>
         <View style={styles.chips}>
           <Chip label="None" selected={parentId === null} onPress={() => setParentId(null)} />
-          {activeParents.map(p => (
-            <Chip key={p.id} label={p.name} selected={parentId === p.id} onPress={() => setParentId(p.id)} />
-          ))}
+          {activeParents.map(p => {
+            const style = categoryStyle(p.name, type);
+            return (
+              <Chip
+                key={p.id}
+                label={p.name}
+                icon={style.icon}
+                color={style.color}
+                selected={parentId === p.id}
+                onPress={() => setParentId(p.id)}
+              />
+            );
+          })}
         </View>
-        <Button title="Add category" onPress={add} disabled={!newName.trim()} />
+        <Button title="Add category" icon="add" onPress={add} disabled={!newName.trim()} hapticKind="success" />
       </Card>
 
       <View style={styles.archivedToggle}>
-        <Text style={styles.hint}>Show archived</Text>
-        <Switch value={showArchived} onValueChange={setShowArchived} />
+        <Text style={styles.hint}>Tap a name to rename it.</Text>
+        <View style={styles.switchRow}>
+          <Text style={styles.hint}>Show archived</Text>
+          <Switch
+            value={showArchived}
+            onValueChange={setShowArchived}
+            trackColor={{ true: colors.primary, false: colors.border }}
+            thumbColor="#fff"
+          />
+        </View>
       </View>
-      <Text style={styles.hint}>Tap a name to rename it.</Text>
 
       <View style={styles.list}>
-        {parents.map(parent => (
-          <View key={parent.id}>
-            {renderRow(parent, false)}
-            {childrenOf(parent.id).map(child => renderRow(child, true))}
-          </View>
+        {parents.map((parent, index) => (
+          <Animated.View key={parent.id} entering={FadeInDown.delay(Math.min(index, 10) * 30).duration(250)}>
+            {renderRow(parent, null)}
+            {childrenOf(parent.id).map(child => renderRow(child, parent.name))}
+          </Animated.View>
         ))}
       </View>
     </ScrollView>
@@ -176,31 +207,30 @@ export default function CategoriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 12 },
+  content: { padding: 16, gap: 14, paddingBottom: 48 },
   addCard: { gap: 10 },
   hint: { color: colors.textMuted, fontSize: 13 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   archivedToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   list: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
     overflow: 'hidden',
+    ...shadow,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  childRow: { paddingLeft: 34 },
-  rowName: { flex: 1 },
-  name: { fontSize: 16, color: colors.text },
+  childRow: { paddingLeft: 38 },
+  rowName: { flex: 1, paddingVertical: 4 },
+  name: { fontSize: 16, color: colors.text, fontWeight: '500' },
   archived: { color: colors.textMuted, textDecorationLine: 'line-through' },
-  link: { color: colors.primary, fontWeight: '600' },
   editInput: { flex: 1, paddingVertical: 6 },
 });

@@ -24,12 +24,14 @@ interface TransactionRow {
 }
 
 interface TransactionListRow extends TransactionRow {
+  source: TransactionSource;
   account_name: string;
   to_account_name: string | null;
   category_name: string | null;
 }
 
 export interface TransactionListItem extends Transaction {
+  source: TransactionSource;
   accountName: string;
   toAccountName: string | null;
   categoryName: string | null;
@@ -108,6 +110,7 @@ export async function listTransactions(
   );
   return rows.map(row => ({
     ...toTransaction(row),
+    source: row.source,
     accountName: row.account_name,
     toAccountName: row.to_account_name,
     categoryName: row.category_name,
@@ -135,9 +138,15 @@ function normalize(input: TransactionInput) {
   };
 }
 
+export type TransactionSource = 'manual' | 'upi_notification';
+
 export async function createTransaction(
   db: SQLiteDatabase,
   input: TransactionInput,
+  meta: { source: TransactionSource; externalReference: string | null } = {
+    source: 'manual',
+    externalReference: null,
+  },
 ): Promise<string> {
   const id = newId();
   const now = nowIso();
@@ -145,8 +154,9 @@ export async function createTransaction(
   await db.runAsync(
     `INSERT INTO transactions
        (id, type, amount_minor, occurred_at, account_id, to_account_id,
-        category_id, counterparty, note, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        category_id, counterparty, note, source, external_reference,
+        created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.type,
     input.amountMinor,
@@ -156,10 +166,30 @@ export async function createTransaction(
     n.categoryId,
     n.counterparty,
     n.note,
+    meta.source,
+    meta.externalReference,
     now,
     now,
   );
   return id;
+}
+
+/** Category used the last time this payee appeared, for quick categorisation. */
+export async function suggestCategory(
+  db: SQLiteDatabase,
+  counterparty: string,
+  type: 'income' | 'expense',
+): Promise<string | null> {
+  const row = await db.getFirstAsync<{ category_id: string }>(
+    `SELECT t.category_id FROM transactions t
+     JOIN categories c ON c.id = t.category_id AND c.is_archived = 0
+     WHERE t.type = ? AND LOWER(t.counterparty) = LOWER(?)
+     ORDER BY t.occurred_at DESC
+     LIMIT 1`,
+    type,
+    counterparty.trim(),
+  );
+  return row?.category_id ?? null;
 }
 
 export async function updateTransaction(
@@ -187,9 +217,22 @@ export async function updateTransaction(
   );
 }
 
+/**
+ * A deleted transaction that came from a detected payment sends the payment
+ * back to the review list instead of leaving it marked as added.
+ */
 export async function deleteTransaction(
   db: SQLiteDatabase,
   id: string,
 ): Promise<void> {
-  await db.runAsync('DELETE FROM transactions WHERE id = ?', id);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE upi_candidates
+       SET review_state = 'needs_review', transaction_id = NULL, updated_at = ?
+       WHERE transaction_id = ?`,
+      nowIso(),
+      id,
+    );
+    await db.runAsync('DELETE FROM transactions WHERE id = ?', id);
+  });
 }

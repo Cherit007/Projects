@@ -1,29 +1,40 @@
-import { router } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, Stack } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { AddTransactionButton } from '@/components/AddButton';
+import { CategoryIcon } from '@/components/CategoryIcon';
+import { PressableScale } from '@/components/PressableScale';
 import { TransactionRow } from '@/components/TransactionRow';
 import {
-  Amount,
   Button,
   Card,
   ErrorState,
   LoadingState,
   MonthSelector,
+  SectionTitle,
+  TextLink,
 } from '@/components/ui';
 import { loadMonth } from '@/data/queries/monthSummary';
 import { getAccountFlows, listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
-import {
-  accountBalance,
-  spendingByCategory,
-} from '@/domain/accounting/accounting';
+import { accountBalance, spendingByCategory } from '@/domain/accounting/accounting';
 import { formatMinor, sumMinor } from '@/domain/money/money';
 import { monthKeyOf, type MonthKey } from '@/domain/period';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
-import { colors } from '@/theme/colors';
+import { useUpi } from '@/services/upi/UpiProvider';
+import { categoryStyle } from '@/theme/categoryStyle';
+import { colors, radius, shadow } from '@/theme/colors';
 
 async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
   const [monthData, accounts, flows, categories] = await Promise.all([
@@ -41,9 +52,27 @@ async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
 
 export default function DashboardScreen() {
   const [month, setMonth] = useState<MonthKey>(() => monthKeyOf(new Date()));
+  const upi = useUpi();
   const { data, error, isLoading, reload } = useFocusQuery(
     useCallback((db: SQLiteDatabase) => loadDashboard(db, month), [month]),
   );
+
+  const header = upi.available ? (
+    <Stack.Screen
+      options={{
+        headerRight: () => (
+          <PressableScale
+            accessibilityLabel="Payment detection settings"
+            hitSlop={10}
+            onPress={() => router.push('/upi-settings')}
+            style={styles.headerButton}
+          >
+            <Ionicons name="flash-outline" size={22} color={colors.primary} />
+          </PressableScale>
+        ),
+      }}
+    />
+  ) : null;
 
   if (error) {
     return <ErrorState error={error} onRetry={reload} />;
@@ -60,102 +89,211 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
+      {header}
       <ScrollView contentContainerStyle={styles.content}>
         <MonthSelector value={month} onChange={setMonth} />
 
-        <Card style={styles.netCard}>
-          <Text style={styles.muted}>Net cash flow</Text>
-          <Amount
-            amountMinor={summary.netMinor}
-            style={[styles.big, { color: summary.netMinor < 0 ? colors.expense : colors.income }]}
-          />
-          <View style={styles.split}>
-            <View style={styles.splitItem}>
-              <Text style={styles.muted}>Income</Text>
-              <Amount amountMinor={summary.incomeMinor} style={{ color: colors.income }} />
+        <Animated.View entering={FadeInDown.duration(350)}>
+          <LinearGradient
+            colors={[colors.heroStart, colors.heroEnd]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.hero}
+          >
+            <Text style={styles.heroLabel}>Net cash flow</Text>
+            <Text style={styles.heroAmount}>{formatMinor(summary.netMinor)}</Text>
+            <View style={styles.heroPills}>
+              <HeroPill icon="arrow-down" label="Income" amount={summary.incomeMinor} />
+              <HeroPill icon="arrow-up" label="Expenses" amount={summary.expenseMinor} />
             </View>
-            <View style={styles.splitItem}>
-              <Text style={styles.muted}>Expenses</Text>
-              <Amount amountMinor={summary.expenseMinor} style={{ color: colors.expense }} />
+            <View style={styles.heroDivider} />
+            <View style={styles.heroFooter}>
+              <Ionicons name="wallet-outline" size={16} color="#E0E7FF" />
+              <Text style={styles.heroFooterText}>Cash and bank balance</Text>
+              <Text style={styles.heroFooterAmount}>{formatMinor(data.totalBalanceMinor)}</Text>
             </View>
-          </View>
-        </Card>
+          </LinearGradient>
+        </Animated.View>
 
-        <Card style={styles.balanceCard}>
-          <Text style={styles.muted}>Cash and bank balance</Text>
-          <Amount amountMinor={data.totalBalanceMinor} style={styles.medium} />
-        </Card>
-
-        <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Spending by category</Text>
-          {spending.length === 0 ? (
-            <Text style={styles.muted}>No expenses this month.</Text>
-          ) : (
-            spending.map(item => (
-              <View key={item.categoryId ?? 'none'} style={styles.barRow}>
-                <View style={styles.barLabels}>
-                  <Text style={styles.barName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.barAmount}>{formatMinor(item.amountMinor)}</Text>
-                </View>
-                <View style={styles.barTrack}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      { width: `${maxSpend ? (item.amountMinor / maxSpend) * 100 : 0}%` },
-                    ]}
-                  />
-                </View>
+        {upi.available && upi.pendingCount > 0 && (
+          <Animated.View entering={FadeInDown.delay(80).duration(350)}>
+            <PressableScale hapticKind="light" onPress={() => router.push('/upi-review')} style={styles.reviewBanner}>
+              <View style={styles.reviewIcon}>
+                <Ionicons name="flash" size={20} color={colors.primary} />
               </View>
-            ))
-          )}
-        </Card>
+              <View style={styles.reviewText}>
+                <Text style={styles.reviewTitle}>
+                  {upi.pendingCount} detected payment{upi.pendingCount === 1 ? '' : 's'} to review
+                </Text>
+                <Text style={styles.reviewBody}>Tap to categorise them in a few seconds</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+            </PressableScale>
+          </Animated.View>
+        )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent transactions</Text>
+        <Animated.View entering={FadeInDown.delay(140).duration(350)}>
+          <Card style={styles.section}>
+            <SectionTitle title="Spending by category" />
+            {spending.length === 0 ? (
+              <Text style={styles.muted}>No expenses this month.</Text>
+            ) : (
+              spending.map((item, index) => (
+                <SpendingBar
+                  key={item.categoryId ?? 'none'}
+                  name={item.name}
+                  amountMinor={item.amountMinor}
+                  share={maxSpend ? item.amountMinor / maxSpend : 0}
+                  percent={summary.expenseMinor ? Math.round((item.amountMinor / summary.expenseMinor) * 100) : 0}
+                  index={index}
+                />
+              ))
+            )}
+          </Card>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(200).duration(350)} style={styles.section}>
+          <SectionTitle
+            title="Recent transactions"
+            action={transactions.length > 0 ? <TextLink label="See all" onPress={() => router.push('/transactions')} /> : undefined}
+          />
           {transactions.length === 0 ? (
             <Card style={styles.emptyCard}>
               <Text style={styles.muted}>Nothing recorded this month yet.</Text>
-              <Button title="Add transaction" onPress={() => router.push('/transaction/new')} />
+              <Button title="Add transaction" icon="add" onPress={() => router.push('/transaction/new')} />
             </Card>
           ) : (
             <View style={styles.recent}>
               {transactions.slice(0, 5).map(item => (
-                <TransactionRow key={item.id} item={item} />
+                <TransactionRow key={item.id} item={item} showDate />
               ))}
             </View>
           )}
-        </View>
+        </Animated.View>
       </ScrollView>
       <AddTransactionButton />
     </View>
   );
 }
 
+function HeroPill({ icon, label, amount }: { icon: 'arrow-down' | 'arrow-up'; label: string; amount: number }) {
+  return (
+    <View style={styles.heroPill}>
+      <View style={styles.heroPillIcon}>
+        <Ionicons name={icon} size={14} color="#fff" />
+      </View>
+      <View>
+        <Text style={styles.heroPillLabel}>{label}</Text>
+        <Text style={styles.heroPillAmount}>{formatMinor(amount)}</Text>
+      </View>
+    </View>
+  );
+}
+
+function SpendingBar({
+  name,
+  amountMinor,
+  share,
+  percent,
+  index,
+}: {
+  name: string;
+  amountMinor: number;
+  share: number;
+  percent: number;
+  index: number;
+}) {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.set(withDelay(150 + index * 60, withTiming(share, { duration: 600 })));
+  }, [progress, share, index]);
+  const fillStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
+  const { color } = categoryStyle(name, 'expense');
+
+  return (
+    <View style={styles.barRow}>
+      <CategoryIcon name={name} type="expense" size={34} />
+      <View style={styles.barBody}>
+        <View style={styles.barLabels}>
+          <Text style={styles.barName} numberOfLines={1}>
+            {name}
+          </Text>
+          <Text style={styles.barAmount}>{formatMinor(amountMinor)}</Text>
+        </View>
+        <View style={styles.barTrackRow}>
+          <View style={styles.barTrack}>
+            <Animated.View style={[styles.barFill, { backgroundColor: color }, fillStyle]} />
+          </View>
+          <Text style={styles.barPercent}>{percent}%</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 16, gap: 12, paddingBottom: 96 },
+  content: { padding: 16, gap: 16, paddingBottom: 110 },
   muted: { color: colors.textMuted },
-  netCard: { gap: 4 },
-  big: { fontSize: 32 },
-  medium: { fontSize: 22 },
-  split: { flexDirection: 'row', marginTop: 12, gap: 12 },
-  splitItem: { flex: 1, gap: 2 },
-  balanceCard: { gap: 4 },
-  section: { gap: 10 },
-  sectionTitle: { fontSize: 17, fontWeight: '600', color: colors.text },
-  barRow: { gap: 4 },
-  barLabels: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  barName: { flex: 1, color: colors.text },
-  barAmount: { color: colors.text, fontVariant: ['tabular-nums'] },
-  barTrack: { height: 8, backgroundColor: colors.background, borderRadius: 4, overflow: 'hidden' },
-  barFill: { height: 8, backgroundColor: colors.expense, borderRadius: 4 },
-  emptyCard: { gap: 12, alignItems: 'flex-start' },
-  recent: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
+  headerButton: { marginRight: 16, padding: 4 },
+  hero: { borderRadius: radius.lg, padding: 20, gap: 6, ...shadow },
+  heroLabel: { color: '#E0E7FF', fontWeight: '600' },
+  heroAmount: { color: '#fff', fontSize: 36, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  heroPills: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  heroPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: radius.md,
+    padding: 10,
   },
+  heroPillIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroPillLabel: { color: '#E0E7FF', fontSize: 12 },
+  heroPillAmount: { color: '#fff', fontWeight: '700', fontVariant: ['tabular-nums'] },
+  heroDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.18)', marginVertical: 10 },
+  heroFooter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroFooterText: { color: '#E0E7FF', flex: 1 },
+  heroFooterAmount: { color: '#fff', fontWeight: '700', fontVariant: ['tabular-nums'] },
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#D9DCFF',
+  },
+  reviewIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewText: { flex: 1, gap: 2 },
+  reviewTitle: { fontWeight: '700', color: colors.text },
+  reviewBody: { color: colors.textMuted, fontSize: 13 },
+  section: { gap: 14 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  barBody: { flex: 1, gap: 6 },
+  barLabels: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  barName: { flex: 1, color: colors.text, fontWeight: '600' },
+  barAmount: { color: colors.text, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  barTrackRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  barTrack: { flex: 1, height: 8, backgroundColor: colors.surfaceMuted, borderRadius: 4, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 4 },
+  barPercent: { width: 36, textAlign: 'right', fontSize: 12, color: colors.textMuted },
+  emptyCard: { gap: 12, alignItems: 'flex-start' },
+  recent: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, ...shadow },
 });

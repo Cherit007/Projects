@@ -66,6 +66,31 @@ const MIGRATIONS: readonly Migration[] = [
       nowIso(),
     );
   },
+  async db => {
+    await db.execAsync(`
+      ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE transactions ADD COLUMN external_reference TEXT;
+
+      CREATE TABLE upi_candidates (
+        id TEXT PRIMARY KEY NOT NULL,
+        package_name TEXT NOT NULL,
+        source_app TEXT NOT NULL,
+        status TEXT NOT NULL,
+        direction TEXT,
+        amount_minor INTEGER,
+        counterparty TEXT,
+        reference TEXT,
+        detected_at TEXT NOT NULL,
+        dedupe_key TEXT NOT NULL UNIQUE,
+        review_state TEXT NOT NULL,
+        transaction_id TEXT REFERENCES transactions (id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_upi_candidates_review ON upi_candidates (review_state, detected_at);
+    `);
+  },
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
