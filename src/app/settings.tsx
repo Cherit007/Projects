@@ -122,7 +122,7 @@ export default function SettingsScreen() {
       <>
         <View style={styles.row}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(cloud.user.name || cloud.user.email).charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>{(cloud.user.name || cloud.user.email || '?').charAt(0).toUpperCase()}</Text>
           </View>
           <View style={styles.flex}>
             <Text style={styles.title}>{cloud.user.name || 'Signed in'}</Text>
