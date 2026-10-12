@@ -61,14 +61,16 @@ export async function createAccount(
   input: AccountInput,
 ): Promise<string> {
   const id = newId();
+  const now = nowIso();
   await db.runAsync(
-    `INSERT INTO accounts (id, name, type, opening_balance_minor, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO accounts (id, name, type, opening_balance_minor, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     id,
     input.name.trim(),
     input.type,
     input.openingBalanceMinor,
-    nowIso(),
+    now,
+    now,
   );
   return id;
 }
@@ -79,11 +81,12 @@ export async function updateAccount(
   input: AccountInput,
 ): Promise<void> {
   await db.runAsync(
-    `UPDATE accounts SET name = ?, type = ?, opening_balance_minor = ?
+    `UPDATE accounts SET name = ?, type = ?, opening_balance_minor = ?, updated_at = ?
      WHERE id = ?`,
     input.name.trim(),
     input.type,
     input.openingBalanceMinor,
+    nowIso(),
     id,
   );
 }
@@ -94,8 +97,9 @@ export async function setAccountArchived(
   archived: boolean,
 ): Promise<void> {
   await db.runAsync(
-    'UPDATE accounts SET is_archived = ? WHERE id = ?',
+    'UPDATE accounts SET is_archived = ?, updated_at = ? WHERE id = ?',
     archived ? 1 : 0,
+    nowIso(),
     id,
   );
 }

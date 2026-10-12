@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Category, CategoryType } from '../../domain/types';
-import { newId } from '../local/ids';
+import { newId, nowIso } from '../local/ids';
 
 interface CategoryRow {
   id: string;
@@ -44,14 +44,17 @@ export async function createCategory(
   const max = await db.getFirstAsync<{ next: number }>(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM categories',
   );
+  const now = nowIso();
   await db.runAsync(
-    `INSERT INTO categories (id, name, type, parent_id, sort_order)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO categories (id, name, type, parent_id, sort_order, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.name.trim(),
     input.type,
     input.parentId,
     max?.next ?? 0,
+    now,
+    now,
   );
   return id;
 }
@@ -62,8 +65,9 @@ export async function renameCategory(
   name: string,
 ): Promise<void> {
   await db.runAsync(
-    'UPDATE categories SET name = ? WHERE id = ?',
+    'UPDATE categories SET name = ?, updated_at = ? WHERE id = ?',
     name.trim(),
+    nowIso(),
     id,
   );
 }
@@ -75,8 +79,9 @@ export async function setCategoryArchived(
   archived: boolean,
 ): Promise<void> {
   await db.runAsync(
-    'UPDATE categories SET is_archived = ? WHERE id = ? OR parent_id = ?',
+    'UPDATE categories SET is_archived = ?, updated_at = ? WHERE id = ? OR parent_id = ?',
     archived ? 1 : 0,
+    nowIso(),
     id,
     id,
   );

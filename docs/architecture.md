@@ -65,6 +65,42 @@ within 30 minutes.
 The native module is optional: on iOS and in Expo Go it is `null` and the
 feature is hidden.
 
+## Budgets
+
+One monthly limit per top-level expense category; spending in its
+subcategories counts towards it. A budget is "warning" once spending
+reaches the warn threshold (70/80/90%, default 80%, a device setting) and
+"over" once it exceeds the limit. Saving an expense compares the budget
+before and after, and alerts only when a threshold is newly crossed.
+
+## Cloud sync (Appwrite)
+
+The device database stays the source of truth; the app works fully
+without an account. When signed in (Google OAuth via Appwrite), the
+`accounts`, `categories`, `transactions` and `budgets` tables sync to an
+Appwrite database. UPI candidates (which hold notification text) and
+device settings never leave the phone.
+
+- **Change tracking:** SQLite triggers record every local insert, update
+  and delete in `sync_outbox`, except while remote changes are being
+  applied (`sync_meta.applying_remote`).
+- **Push:** each outbox row is upserted with its full current values, or
+  as a tombstone (`deleted = true`) if the local row is gone. Rows carry
+  per-user read/update/delete permissions; tables only grant `create` to
+  signed-in users, so no user can see another user's rows.
+- **Pull:** per table, rows with `$updatedAt` at or after the last cursor
+  are applied in one transaction with foreign keys deferred.
+- **Conflicts:** last writer wins on the client-written `updated_at`; ties
+  keep the local copy.
+- **First sign-in on a device:** default accounts and categories that
+  already exist in the cloud (same type and name) are merged onto the
+  cloud copies, so a second device does not duplicate them. Then all local
+  rows are queued for upload.
+- **Sign-out** keeps local data and forgets the sync position.
+- **Secrets:** the app only contains the public endpoint and project ID.
+  The server API key is used once, from the shell, by
+  `scripts/setup-appwrite.mjs`.
+
 ## Platform constraints
 
 - Android can read payment-app notifications only after the user grants

@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 
 import { LoadingState } from '@/components/ui';
 import { migrateDbIfNeeded } from '@/data/local/migrations';
+import { CloudProvider } from '@/services/cloud/CloudProvider';
 import { UpiProvider } from '@/services/upi/UpiProvider';
 import { colors } from '@/theme/colors';
 
@@ -12,6 +13,7 @@ export default function RootLayout() {
   return (
     <Suspense fallback={<LoadingState />}>
       <SQLiteProvider databaseName="finance.db" onInit={migrateDbIfNeeded} useSuspense>
+        <CloudProvider>
         <UpiProvider>
           <StatusBar style="dark" />
           <Stack
@@ -28,8 +30,10 @@ export default function RootLayout() {
             <Stack.Screen name="account/[id]" options={{ presentation: 'modal' }} />
             <Stack.Screen name="upi-review" options={{ title: 'Review payments' }} />
             <Stack.Screen name="upi-settings" options={{ title: 'Payment detection' }} />
+            <Stack.Screen name="settings" options={{ title: 'Settings' }} />
           </Stack>
         </UpiProvider>
+        </CloudProvider>
       </SQLiteProvider>
     </Suspense>
   );

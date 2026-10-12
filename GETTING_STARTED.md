@@ -67,7 +67,8 @@ instantly.
 ```text
 src/
   app/            Screens (Expo Router: every file is a route)
-    (tabs)/       Dashboard, Transactions, Accounts, Categories
+    (tabs)/       Dashboard, Transactions, Budgets, Accounts, Categories
+    settings      Sign-in, sync status, feature links
     transaction/  Add/edit transaction form
     account/      Add/edit account form
     upi-review    Review list for detected payments
@@ -76,6 +77,7 @@ src/
                   UPI notification parser
   data/           SQLite migrations, repositories and queries
   services/upi/   Bridges the native listener to the database
+  services/cloud/ Appwrite sign-in and sync
   components/     Shared UI
   theme/          Colours and category icons
   hooks/          Shared React hooks
@@ -128,8 +130,9 @@ of Expo Go.
 
 To test detection without real payment apps (development builds only):
 
-1. In the app, tap the lightning icon on the Dashboard, turn on
-   **Detect UPI payments** and grant notification access.
+1. In the app, tap the person icon on the Dashboard, open
+   **Payment detection**, turn on **Detect UPI payments** and grant
+   notification access.
 2. Post a fake payment notification from the Mac:
 
    ```bash
@@ -149,9 +152,51 @@ emulator sometimes drops the listener during an update), turn the app's
 notification access off and on again, or run:
 
 ```bash
-C=com.anonymous.FinanceTracker/expo.modules.upinotifications.UpiNotificationListenerService
+C=com.cherit.financetracker/expo.modules.upinotifications.UpiNotificationListenerService
 adb shell cmd notification disallow_listener $C && adb shell cmd notification allow_listener $C
 ```
+
+## Cloud backup and sync (Appwrite)
+
+Sign-in is optional. Without an Appwrite project the app runs fully offline
+and the Settings screen says sync is not set up. To turn sync on:
+
+1. **Create the project.** Sign in at [cloud.appwrite.io](https://cloud.appwrite.io),
+   create a project, and note its **Project ID** and **API endpoint**
+   (Project settings; it is region-specific, e.g. `https://fra.cloud.appwrite.io/v1`).
+2. **Configure the app.** Copy `.env.example` to `.env.local` and fill in
+   `EXPO_PUBLIC_APPWRITE_ENDPOINT` and `EXPO_PUBLIC_APPWRITE_PROJECT_ID`.
+   Both are public identifiers; restart `npm start` after changing them.
+3. **Register the app platforms** (Overview → Add platform). Appwrite only
+   accepts requests from registered apps:
+   - Android: package `com.cherit.financetracker`
+   - Apple: bundle ID `com.cherit.financetracker`
+   - Expo Go (for testing on the iPhone): add an Android *and* an Apple
+     platform with `host.exp.exponent`
+4. **Enable Google sign-in.**
+   - In Appwrite: Auth → Settings → Google → enable, and copy the
+     redirect URI it shows.
+   - In [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
+     configure the OAuth consent screen, then create an OAuth client ID of
+     type **Web application** with that redirect URI as an authorised
+     redirect URI.
+   - Paste the Google client ID and secret back into Appwrite.
+5. **Create the database tables** with a server API key (Overview → API
+   keys; scopes `databases.*`, `tables.*`, `columns.*`). Pass the key in the
+   shell only; never put it in an `.env` file:
+
+   ```bash
+   APPWRITE_API_KEY=<key> npm run setup:appwrite
+   ```
+
+   The script is safe to re-run. Delete the key afterwards if you like.
+6. **Rebuild the Android app** (`npm run android`) so it registers the
+   `appwrite-callback-<project id>` link that Google sign-in returns to.
+   Expo Go needs no rebuild.
+
+Then open Settings (person icon on the Dashboard) → **Sign in with Google**.
+Accounts, categories, transactions and budgets sync; detected payment
+notifications and device settings stay on the phone.
 
 ## Notes for later milestones
 

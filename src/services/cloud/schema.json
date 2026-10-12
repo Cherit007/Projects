@@ -1,0 +1,41 @@
+{
+  "accounts": {
+    "name": "text:100",
+    "type": "text:10",
+    "opening_balance_minor": "int",
+    "currency": "text:3",
+    "is_archived": "bool",
+    "created_at": "text:40",
+    "updated_at": "text:40"
+  },
+  "categories": {
+    "name": "text:100",
+    "type": "text:10",
+    "parent_id": "text:36",
+    "sort_order": "int",
+    "is_archived": "bool",
+    "created_at": "text:40",
+    "updated_at": "text:40"
+  },
+  "transactions": {
+    "type": "text:10",
+    "amount_minor": "int",
+    "currency": "text:3",
+    "occurred_at": "text:40",
+    "account_id": "text:36",
+    "to_account_id": "text:36",
+    "category_id": "text:36",
+    "counterparty": "text:200",
+    "note": "text:1000",
+    "source": "text:30",
+    "external_reference": "text:100",
+    "created_at": "text:40",
+    "updated_at": "text:40"
+  },
+  "budgets": {
+    "category_id": "text:36",
+    "amount_minor": "int",
+    "created_at": "text:40",
+    "updated_at": "text:40"
+  }
+}

@@ -17,6 +17,7 @@ import {
   Segmented,
   typeColor,
 } from '@/components/ui';
+import { budgetAlert, loadBudgetSummary } from '@/data/queries/budgetSummary';
 import { listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
 import {
@@ -34,6 +35,7 @@ import {
 } from '@/data/repositories/upiCandidates';
 import { validateTransaction, type ValidationErrors } from '@/domain/accounting/accounting';
 import { parseToMinor } from '@/domain/money/money';
+import { monthKeyOf } from '@/domain/period';
 import type { Account, Category, Transaction, TransactionInput, TransactionType } from '@/domain/types';
 import { useUpi } from '@/services/upi/UpiProvider';
 import { categoryStyle } from '@/theme/categoryStyle';
@@ -222,6 +224,8 @@ export default function TransactionForm() {
     }
     setSaving(true);
     try {
+      const budgetMonth = monthKeyOf(new Date(input.occurredAt));
+      const before = type === 'expense' ? await loadBudgetSummary(db, budgetMonth) : null;
       if (candidate) {
         await confirmCandidate(db, candidate, input);
         await upi.refresh();
@@ -230,8 +234,16 @@ export default function TransactionForm() {
       } else {
         await updateTransaction(db, id, input);
       }
-      haptic('success');
+      const category = loaded.categories.find(c => c.id === input.categoryId);
+      const alert =
+        before && category
+          ? budgetAlert(before, await loadBudgetSummary(db, budgetMonth), category.parentId ?? category.id)
+          : null;
+      haptic(alert ? 'warning' : 'success');
       router.back();
+      if (alert) {
+        Alert.alert(alert.title, alert.message);
+      }
     } catch (err) {
       haptic('warning');
       Alert.alert('Could not save transaction', err instanceof Error ? err.message : String(err));

@@ -25,6 +25,8 @@ import {
   SectionTitle,
   TextLink,
 } from '@/components/ui';
+import { ProgressBar, levelColor } from '@/components/ProgressBar';
+import { loadBudgetSummary } from '@/data/queries/budgetSummary';
 import { loadMonth } from '@/data/queries/monthSummary';
 import { getAccountFlows, listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
@@ -37,14 +39,16 @@ import { categoryStyle } from '@/theme/categoryStyle';
 import { colors, radius, shadow } from '@/theme/colors';
 
 async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
-  const [monthData, accounts, flows, categories] = await Promise.all([
+  const [monthData, accounts, flows, categories, budgets] = await Promise.all([
     loadMonth(db, month),
     listAccounts(db),
     getAccountFlows(db),
     listCategories(db, { includeArchived: true }),
+    loadBudgetSummary(db, month),
   ]);
   return {
     ...monthData,
+    budgets: budgets.progress.slice(0, 3),
     totalBalanceMinor: sumMinor(accounts.map(a => accountBalance(a, flows.get(a.id)))),
     spending: spendingByCategory(monthData.transactions, categories),
   };
@@ -57,22 +61,22 @@ export default function DashboardScreen() {
     useCallback((db: SQLiteDatabase) => loadDashboard(db, month), [month]),
   );
 
-  const header = upi.available ? (
+  const header = (
     <Stack.Screen
       options={{
         headerRight: () => (
           <PressableScale
-            accessibilityLabel="Payment detection settings"
+            accessibilityLabel="Settings"
             hitSlop={10}
-            onPress={() => router.push('/upi-settings')}
+            onPress={() => router.push('/settings')}
             style={styles.headerButton}
           >
-            <Ionicons name="flash-outline" size={22} color={colors.primary} />
+            <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
           </PressableScale>
         ),
       }}
     />
-  ) : null;
+  );
 
   if (error) {
     return <ErrorState error={error} onRetry={reload} />;
@@ -129,6 +133,32 @@ export default function DashboardScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.primary} />
             </PressableScale>
+          </Animated.View>
+        )}
+
+        {data.budgets.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(110).duration(350)}>
+            <Card style={styles.section}>
+              <SectionTitle
+                title="Budgets"
+                action={<TextLink label="Manage" onPress={() => router.push('/budgets')} />}
+              />
+              {data.budgets.map(budget => (
+                <View key={budget.budgetId} style={styles.budgetRow}>
+                  <View style={styles.barLabels}>
+                    <Text style={styles.barName} numberOfLines={1}>
+                      {budget.name}
+                    </Text>
+                    <Text style={[styles.budgetLeft, { color: levelColor[budget.level] }]}>
+                      {budget.remainingMinor >= 0
+                        ? `${formatMinor(budget.remainingMinor)} left`
+                        : `${formatMinor(-budget.remainingMinor)} over`}
+                    </Text>
+                  </View>
+                  <ProgressBar ratio={budget.ratio} color={levelColor[budget.level]} />
+                </View>
+              ))}
+            </Card>
           </Animated.View>
         )}
 
@@ -295,5 +325,7 @@ const styles = StyleSheet.create({
   barFill: { height: 8, borderRadius: 4 },
   barPercent: { width: 36, textAlign: 'right', fontSize: 12, color: colors.textMuted },
   emptyCard: { gap: 12, alignItems: 'flex-start' },
+  budgetRow: { gap: 6 },
+  budgetLeft: { fontWeight: '700', fontVariant: ['tabular-nums'] },
   recent: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, ...shadow },
 });

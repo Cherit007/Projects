@@ -30,6 +30,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarIcon: icon('pie-chart', 'pie-chart-outline') }} />
       <Tabs.Screen name="transactions" options={{ title: 'Transactions', tabBarIcon: icon('list', 'list-outline') }} />
+      <Tabs.Screen name="budgets" options={{ title: 'Budgets', tabBarIcon: icon('speedometer', 'speedometer-outline') }} />
       <Tabs.Screen name="accounts" options={{ title: 'Accounts', tabBarIcon: icon('wallet', 'wallet-outline') }} />
       <Tabs.Screen
         name="categories"

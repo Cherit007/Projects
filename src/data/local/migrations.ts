@@ -91,7 +91,76 @@ const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX idx_upi_candidates_review ON upi_candidates (review_state, detected_at);
     `);
   },
+  async db => {
+    const now = nowIso();
+    await db.execAsync(`
+      ALTER TABLE accounts ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+      ALTER TABLE categories ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+      ALTER TABLE categories ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+
+      CREATE TABLE budgets (
+        id TEXT PRIMARY KEY NOT NULL,
+        category_id TEXT NOT NULL UNIQUE REFERENCES categories (id),
+        amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE settings (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE sync_meta (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        applying_remote INTEGER NOT NULL DEFAULT 0,
+        user_id TEXT,
+        last_synced_at TEXT
+      );
+      INSERT INTO sync_meta (id) VALUES (1);
+
+      CREATE TABLE sync_cursors (
+        table_name TEXT PRIMARY KEY NOT NULL,
+        pulled_until TEXT NOT NULL
+      );
+
+      CREATE TABLE sync_outbox (
+        table_name TEXT NOT NULL,
+        row_id TEXT NOT NULL,
+        changed_at TEXT NOT NULL,
+        PRIMARY KEY (table_name, row_id)
+      );
+    `);
+    await db.runAsync('UPDATE accounts SET updated_at = created_at');
+    await db.runAsync('UPDATE categories SET created_at = ?, updated_at = ?', now, now);
+    for (const table of SYNCED_TABLES) {
+      await db.execAsync(outboxTriggers(table));
+    }
+  },
 ];
+
+/** Tables mirrored to the cloud when the user is signed in. */
+export const SYNCED_TABLES = ['accounts', 'categories', 'transactions', 'budgets'] as const;
+export type SyncedTable = (typeof SYNCED_TABLES)[number];
+
+/**
+ * Records every local change in `sync_outbox`, except changes written by the
+ * sync engine itself while applying remote data.
+ */
+function outboxTriggers(table: SyncedTable): string {
+  const guard = 'WHEN (SELECT applying_remote FROM sync_meta WHERE id = 1) = 0';
+  const record = (row: 'NEW' | 'OLD') =>
+    `INSERT OR REPLACE INTO sync_outbox (table_name, row_id, changed_at)
+     VALUES ('${table}', ${row}.id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));`;
+  return `
+    CREATE TRIGGER ${table}_outbox_insert AFTER INSERT ON ${table} ${guard}
+    BEGIN ${record('NEW')} END;
+    CREATE TRIGGER ${table}_outbox_update AFTER UPDATE ON ${table} ${guard}
+    BEGIN ${record('NEW')} END;
+    CREATE TRIGGER ${table}_outbox_delete AFTER DELETE ON ${table} ${guard}
+    BEGIN ${record('OLD')} END;
+  `;
+}
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA foreign_keys = ON');
