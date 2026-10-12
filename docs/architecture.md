@@ -133,9 +133,21 @@ need database credentials in the app, which anyone could extract.
   The server API key is used once, from the shell, by
   `scripts/setup-appwrite.mjs`.
 
+## Bank SMS capture (iOS)
+
+iOS has no API for reading notifications or SMS, so detection there relies
+on the user's own Shortcuts automation ("When I get a message containing
+debited → open `financetracker://capture?text=…`"). `parseBankSms` turns
+the message into the same candidate shape as an app notification
+(`package_name = 'sms'`), so it shares the review list, the duplicate key
+(UPI reference) and the rule that failed payments and requests are never
+suggested. Only the extracted fields are stored, never the message text.
+Confirmed transactions get `source = 'bank_sms'`. The capture link works
+on Android too.
+
 ## Platform constraints
 
 - Android can read payment-app notifications only after the user grants
   notification access; formats vary and detection is best-effort.
 - iOS apps cannot read other apps' notifications. iOS relies on quick manual
-  entry and imports.
+  entry and bank SMS forwarded by a Shortcuts automation.

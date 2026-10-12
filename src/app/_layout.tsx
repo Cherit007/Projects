@@ -31,6 +31,7 @@ export default function RootLayout() {
             <Stack.Screen name="upi-review" options={{ title: 'Review payments' }} />
             <Stack.Screen name="upi-settings" options={{ title: 'Payment detection' }} />
             <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+            <Stack.Screen name="capture" options={{ title: 'Capture payment' }} />
           </Stack>
         </UpiProvider>
         </CloudProvider>

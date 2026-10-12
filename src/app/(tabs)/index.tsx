@@ -119,7 +119,7 @@ export default function DashboardScreen() {
           </LinearGradient>
         </Animated.View>
 
-        {upi.available && upi.pendingCount > 0 && (
+        {upi.pendingCount > 0 && (
           <Animated.View entering={FadeInDown.delay(80).duration(350)}>
             <PressableScale hapticKind="light" onPress={() => router.push('/upi-review')} style={styles.reviewBanner}>
               <View style={styles.reviewIcon}>

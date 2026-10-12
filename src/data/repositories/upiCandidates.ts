@@ -8,6 +8,7 @@ import {
   type UpiDirection,
   type UpiStatus,
 } from '../../domain/upi/parser';
+import { SMS_SOURCE } from '../../domain/upi/bankSms';
 import type { TransactionInput } from '../../domain/types';
 import { newId, nowIso } from '../local/ids';
 import { createTransaction } from './transactions';
@@ -56,19 +57,20 @@ function toCandidate(row: CandidateRow): UpiCandidate {
   };
 }
 
-/** Returns false when the notification duplicates an existing candidate. */
+/** Returns the new candidate's id, or null when it duplicates an existing candidate. */
 export async function insertCandidate(
   db: SQLiteDatabase,
   parsed: ParsedUpiNotification,
-): Promise<boolean> {
+): Promise<string | null> {
   const now = nowIso();
+  const id = newId();
   const result = await db.runAsync(
     `INSERT OR IGNORE INTO upi_candidates
        (id, package_name, source_app, status, direction, amount_minor,
         counterparty, reference, detected_at, dedupe_key, review_state,
         created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    newId(),
+    id,
     parsed.packageName,
     parsed.sourceApp,
     parsed.status,
@@ -82,7 +84,7 @@ export async function insertCandidate(
     now,
     now,
   );
-  return result.changes > 0;
+  return result.changes > 0 ? id : null;
 }
 
 export async function listCandidates(
@@ -146,7 +148,7 @@ export async function confirmCandidate(
       throw new Error('This payment has already been added.');
     }
     transactionId = await createTransaction(db, input, {
-      source: 'upi_notification',
+      source: candidate.packageName === SMS_SOURCE ? 'bank_sms' : 'upi_notification',
       externalReference: candidate.reference,
     });
     await db.runAsync(

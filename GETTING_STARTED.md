@@ -157,6 +157,26 @@ C=com.cherit.financetracker/expo.modules.upinotifications.UpiNotificationListene
 adb shell cmd notification disallow_listener $C && adb shell cmd notification allow_listener $C
 ```
 
+## iPhone: capture payments from bank SMS
+
+iOS apps cannot read notifications or SMS. Instead, a Shortcuts automation
+forwards each bank SMS to the app through the link
+`financetracker://capture?text=<message>`. The app parses it on the phone
+(HDFC, SBI, ICICI, Axis, Kotak and similar formats), drops OTPs, and opens
+the payment ready to confirm. Duplicates are recognised by the UPI
+reference, as on Android.
+
+The step-by-step setup is in the app: **Settings → Payment detection** on
+the iPhone, with the exact link to paste and a **Try a sample message**
+button. The link needs an installed iOS build; in Expo Go the screen shows
+an `exp://` link that only works while `npm start` is running.
+
+To test the capture screen from the Mac on the Android emulator:
+
+```bash
+adb shell am start -a android.intent.action.VIEW -d "'financetracker://capture?text=Sent%20Rs.250.00%20From%20HDFC%20Bank%20A%2FC%20*1234%20To%20SWIGGY%20Ref%20412345678909'"
+```
+
 ## Cloud backup and sync (Appwrite)
 
 Sign-in is optional. Without an Appwrite project the app runs fully offline

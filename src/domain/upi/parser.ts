@@ -30,8 +30,8 @@ export interface ParsedUpiNotification {
   postedAt: number;
 }
 
-const SENSITIVE = /\b(otp|one[\s-]?time\s+password|upi\s+pin|mpin|cvv)\b/i;
-const AMOUNT = /(?:₹|\bRs\.?|\bINR)\s*([\d,]+(?:\.\d{1,2})?)/i;
+export const SENSITIVE = /\b(otp|one[\s-]?time\s+password|upi\s+pin|mpin|cvv)\b/i;
+export const AMOUNT = /(?:₹|\bRs\.?|\bINR)\s*([\d,]+(?:\.\d{1,2})?)/i;
 const REFERENCE =
   /\b(?:UPI\s*)?(?:Ref(?:erence)?\.?\s*(?:No\.?|ID|#)?|UTR|Txn\.?\s*ID|Transaction\s*ID)[\s:#-]*([A-Za-z0-9]{6,})/i;
 

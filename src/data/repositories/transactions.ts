@@ -138,7 +138,7 @@ function normalize(input: TransactionInput) {
   };
 }
 
-export type TransactionSource = 'manual' | 'upi_notification';
+export type TransactionSource = 'manual' | 'upi_notification' | 'bank_sms';
 
 export async function createTransaction(
   db: SQLiteDatabase,

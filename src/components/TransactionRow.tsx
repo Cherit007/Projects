@@ -23,7 +23,7 @@ export function TransactionRow({ item, showDate = false }: { item: TransactionLi
       new Date(item.occurredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
     );
   }
-  const isDetected = item.source === 'upi_notification';
+  const isDetected = item.source === 'upi_notification' || item.source === 'bank_sms';
 
   return (
     <PressableScale

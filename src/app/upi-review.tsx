@@ -84,7 +84,7 @@ export default function UpiReviewScreen() {
         <EmptyState
           icon="checkmark-done-circle"
           title="All caught up"
-          body="Payments detected from your UPI apps will appear here for a quick review."
+          body="Payments detected from your UPI apps or bank SMS will appear here for a quick review."
         />
       ) : (
         <Text style={styles.intro}>

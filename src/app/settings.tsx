@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { haptic, PressableScale } from '@/components/PressableScale';
@@ -56,7 +56,7 @@ export default function SettingsScreen() {
         <Card style={styles.card}>{renderAccount()}</Card>
       </Animated.View>
 
-      {upi.available && (
+      {(upi.available || Platform.OS === 'ios') && (
         <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
           <SectionTitle title="Features" />
           <PressableScale hapticKind="light" onPress={() => router.push('/upi-settings')}>
@@ -66,7 +66,9 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.flex}>
                 <Text style={styles.title}>Payment detection</Text>
-                <Text style={styles.muted}>{upi.enabled ? 'On' : 'Off'}</Text>
+                <Text style={styles.muted}>
+                  {upi.available ? (upi.enabled ? 'On' : 'Off') : 'From bank SMS with Shortcuts'}
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </Card>

@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { PermissionsAndroid, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -24,6 +25,9 @@ export default function UpiSettingsScreen() {
     }
   }, [upi.accessGranted]);
 
+  if (!upi.available && Platform.OS === 'ios') {
+    return <SmsShortcutGuide />;
+  }
   if (!upi.available) {
     return (
       <EmptyState
@@ -135,6 +139,77 @@ export default function UpiSettingsScreen() {
   );
 }
 
+const SAMPLE_SMS =
+  'Sent Rs.250.00 From HDFC Bank A/C *1234 To SWIGGY On 12/10/26 Ref 412345678901 Not You? Call 18002586161';
+
+const SHORTCUT_STEPS = [
+  'Open the Shortcuts app → Automation → New Automation → Message.',
+  'Set "Message Contains" to debited, choose Run Immediately, turn off Notify When Run, then tap Next → New Blank Automation.',
+  'Add the action "URL Encode" and set its input to Shortcut Input → Content.',
+  'Add a "Text" action containing the link below, followed by the URL Encoded Text variable.',
+  'Add "Open URLs" and set it to that Text. Done.',
+  'Repeat for messages containing credited and Sent Rs, used by some banks.',
+];
+
+function SmsShortcutGuide() {
+  const captureLink = `${Linking.createURL('capture')}?text=`;
+  return (
+    <ScrollView contentContainerStyle={styles.content}>
+      <Animated.View entering={FadeInDown.duration(300)}>
+        <Card style={styles.toggleCard}>
+          <View style={styles.toggleIcon}>
+            <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
+          </View>
+          <View style={styles.toggleText}>
+            <Text style={styles.toggleTitle}>Capture payments from bank SMS</Text>
+            <Text style={styles.muted}>
+              iPhone apps cannot read notifications. Instead, a Shortcuts automation sends each bank SMS to this
+              app, which opens with the payment ready to confirm.
+            </Text>
+          </View>
+        </Card>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
+        <SectionTitle title="One-time setup" />
+        <Card style={styles.privacy}>
+          {SHORTCUT_STEPS.map((step, index) => (
+            <View key={step} style={styles.point}>
+              <Text style={styles.stepNumber}>{index + 1}</Text>
+              <Text style={styles.pointText}>{step}</Text>
+            </View>
+          ))}
+        </Card>
+        <Card style={styles.dev}>
+          <Text style={styles.devTitle}>Link for step 4</Text>
+          <Text selectable style={styles.devText}>
+            {captureLink}
+          </Text>
+        </Card>
+        <Button
+          title="Try a sample message"
+          variant="secondary"
+          icon="flask-outline"
+          onPress={() => router.push({ pathname: '/capture', params: { text: SAMPLE_SMS } })}
+        />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(120).duration(300)} style={styles.section}>
+        <SectionTitle title="Your privacy" />
+        <Card style={styles.privacy}>
+          <PrivacyPoint icon="phone-portrait-outline" text="Messages are read only on this phone. The text is never saved or uploaded." />
+          <PrivacyPoint icon="key-outline" text="Messages that look like OTPs or PINs are discarded immediately." />
+          <PrivacyPoint icon="hand-left-outline" text="Nothing is saved until you review and confirm it." />
+          <PrivacyPoint
+            icon="information-circle-outline"
+            text="Detection is best effort. Bank message formats vary, so check each payment before saving."
+          />
+        </Card>
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
 function StatusRow({
   ok,
   title,
@@ -204,6 +279,7 @@ const styles = StyleSheet.create({
   privacy: { gap: 14 },
   point: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   pointText: { flex: 1, color: colors.text, lineHeight: 20 },
+  stepNumber: { width: 18, fontWeight: '800', color: colors.primary, lineHeight: 20 },
   dev: { gap: 6, backgroundColor: colors.surfaceMuted },
   devTitle: { fontWeight: '700', color: colors.textMuted },
   devText: { fontFamily: Platform.select({ android: 'monospace', default: 'Menlo' }), fontSize: 12, color: colors.text },
