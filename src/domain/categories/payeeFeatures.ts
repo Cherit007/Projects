@@ -34,7 +34,7 @@ export const UNKNOWN_CLASS = '__unknown__';
 export const PERSON_CLASS = '__person__';
 /** A payee is treated as a person when this likely or more. */
 export const MIN_PERSON_PROBABILITY = 0.55;
-/** A business gets a category when this share of the business probability agrees; else Other. */
+/** A business gets a category when more than this share of the business probability agrees; else Other. */
 export const MIN_CATEGORY_CONFIDENCE = 0.5;
 
 /** UPI IDs made of a mobile number belong to people; merchants use QR or named IDs. */
@@ -79,7 +79,7 @@ export function decidePayee(
   });
   const business = 1 - (probability[classes.indexOf(PERSON_CLASS)] ?? 0);
   const confidence = best < 0 || business <= 0 ? 0 : probability[best] / business;
-  return { person: false, category: confidence >= MIN_CATEGORY_CONFIDENCE ? classes[best] : null };
+  return { person: false, category: confidence > MIN_CATEGORY_CONFIDENCE ? classes[best] : null };
 }
 
 /**

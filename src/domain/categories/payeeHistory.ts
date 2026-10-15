@@ -9,14 +9,17 @@ function words(name: string): string[] {
     .filter(Boolean);
 }
 
+/** Honorifics banks put before names ("MR CHERIT REDDY"). */
+const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'shri', 'sri', 'smt', 'kumari', 'master']);
+
 /**
  * Whether a payee is the user themself, e.g. "CHERIT REDDY", "Reddy Cherit"
  * or "CHERIT R" for the name "Cherit Reddy": every word of the payee is one
  * of the user's names or its initial, and at least one full name matches.
  */
 export function isOwnName(payee: string | null, ownerName: string | null): boolean {
-  const own = words(ownerName ?? '');
-  const theirs = words(payee ?? '');
+  const own = words(ownerName ?? '').filter(word => !TITLES.has(word));
+  const theirs = words(payee ?? '').filter(word => !TITLES.has(word));
   if (own.length === 0 || theirs.length === 0) {
     return false;
   }
