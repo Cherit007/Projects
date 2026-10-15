@@ -20,3 +20,12 @@ export async function getBudgetWarnPercent(db: SQLiteDatabase): Promise<number> 
 export async function setBudgetWarnPercent(db: SQLiteDatabase, percent: number): Promise<void> {
   await setSetting(db, 'budget_warn_percent', String(percent));
 }
+
+/** Whether detected payments with a recognised category are added without review. On by default. */
+export async function getAutoAddPayments(db: SQLiteDatabase): Promise<boolean> {
+  return (await getSetting(db, 'auto_add_payments')) !== '0';
+}
+
+export async function setAutoAddPayments(db: SQLiteDatabase, enabled: boolean): Promise<void> {
+  await setSetting(db, 'auto_add_payments', enabled ? '1' : '0');
+}

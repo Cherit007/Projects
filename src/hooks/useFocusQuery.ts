@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface QueryState<T> {
   data: T | undefined;
@@ -12,9 +12,11 @@ export interface QueryState<T> {
 /**
  * Runs `load` whenever the screen gains focus or `load` changes, so screens
  * show fresh data after edits made elsewhere. Wrap `load` in `useCallback`.
+ * A change of `refreshKey` also reloads, for data changed in the background.
  */
 export function useFocusQuery<T>(
   load: (db: SQLiteDatabase) => Promise<T>,
+  refreshKey?: unknown,
 ): QueryState<T> {
   const db = useSQLiteContext();
   const [data, setData] = useState<T>();
@@ -45,6 +47,14 @@ export function useFocusQuery<T>(
   }, [db, load]);
 
   useFocusEffect(run);
+
+  const lastRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (lastRefreshKey.current !== refreshKey) {
+      lastRefreshKey.current = refreshKey;
+      run();
+    }
+  }, [refreshKey, run]);
 
   return { data, error, isLoading, reload: run };
 }

@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState, type ReactNode } from 'react';
 import { PermissionsAndroid, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -7,6 +8,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { haptic } from '@/components/PressableScale';
 import { ShortcutSetupGuide } from '@/components/ShortcutSetupGuide';
 import { Button, Card, EmptyState, SectionTitle } from '@/components/ui';
+import { getAutoAddPayments, setAutoAddPayments } from '@/data/repositories/settings';
 import { SUPPORTED_UPI_APPS } from '@/domain/upi/parser';
 import { bankSmsNative } from '@/services/upi/bankSmsSync';
 import { upiNative } from '@/services/upi/upiSync';
@@ -19,6 +21,7 @@ const needsPostPermission = Platform.OS === 'android' && Number(Platform.Version
 export default function UpiSettingsScreen() {
   const upi = useUpi();
   const [canNotify, setCanNotify] = useState(!needsPostPermission);
+  const [autoAdd, setAutoAdd] = useAutoAdd();
 
   useEffect(() => {
     if (needsPostPermission) {
@@ -50,7 +53,7 @@ export default function UpiSettingsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Animated.View entering={FadeInDown.duration(300)}>
+      <Animated.View entering={FadeInDown.duration(300)} style={styles.section}>
         <Card style={styles.toggleCard}>
           <View style={styles.toggleIcon}>
             <Ionicons name="flash" size={22} color={colors.primary} />
@@ -66,6 +69,7 @@ export default function UpiSettingsScreen() {
             thumbColor="#fff"
           />
         </Card>
+        {upi.enabled && <AutoAddCard enabled={autoAdd} onChange={setAutoAdd} />}
       </Animated.View>
 
       {upi.enabled && (
@@ -118,7 +122,7 @@ export default function UpiSettingsScreen() {
         <Card style={styles.privacy}>
           <PrivacyPoint icon="phone-portrait-outline" text="Notifications are read and processed only on this device." />
           <PrivacyPoint icon="key-outline" text="Messages that look like OTPs or PINs are discarded immediately." />
-          <PrivacyPoint icon="hand-left-outline" text="Nothing is saved until you review and confirm it." />
+          <ReviewPrivacyPoint autoAdd={autoAdd} />
           <PrivacyPoint icon="ban-outline" text="This app never asks for your UPI PIN and never makes payments." />
           <PrivacyPoint
             icon="information-circle-outline"
@@ -141,9 +145,10 @@ export default function UpiSettingsScreen() {
 }
 
 function SmsShortcutGuide() {
+  const [autoAdd, setAutoAdd] = useAutoAdd();
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Animated.View entering={FadeInDown.duration(300)}>
+      <Animated.View entering={FadeInDown.duration(300)} style={styles.section}>
         <Card style={styles.toggleCard}>
           <View style={styles.toggleIcon}>
             <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
@@ -157,6 +162,7 @@ function SmsShortcutGuide() {
             </Text>
           </View>
         </Card>
+        {bankSmsNative && <AutoAddCard enabled={autoAdd} onChange={setAutoAdd} />}
       </Animated.View>
 
       <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
@@ -183,7 +189,7 @@ function SmsShortcutGuide() {
                 : 'Messages that look like OTPs or PINs are discarded immediately.'
             }
           />
-          <PrivacyPoint icon="hand-left-outline" text="Nothing is saved until you review and confirm it." />
+          <ReviewPrivacyPoint autoAdd={bankSmsNative != null && autoAdd} />
           <PrivacyPoint
             icon="information-circle-outline"
             text="Detection is best effort. Bank message formats vary, so check each payment before saving."
@@ -191,6 +197,56 @@ function SmsShortcutGuide() {
         </Card>
       </Animated.View>
     </ScrollView>
+  );
+}
+
+function useAutoAdd(): [boolean, (next: boolean) => void] {
+  const db = useSQLiteContext();
+  const [enabled, setEnabled] = useState(true);
+  useEffect(() => {
+    getAutoAddPayments(db).then(setEnabled);
+  }, [db]);
+  const update = (next: boolean) => {
+    haptic('selection');
+    setEnabled(next);
+    setAutoAddPayments(db, next);
+  };
+  return [enabled, update];
+}
+
+function AutoAddCard({ enabled, onChange }: { enabled: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <Card style={styles.toggleCard}>
+      <View style={styles.toggleIcon}>
+        <Ionicons name="sparkles" size={22} color={colors.primary} />
+      </View>
+      <View style={styles.toggleText}>
+        <Text style={styles.toggleTitle}>Add payments automatically</Text>
+        <Text style={styles.muted}>
+          When the category is clear (a payee you have used before, or a known merchant like Swiggy or Uber). Others
+          wait in the review list.
+        </Text>
+      </View>
+      <Switch
+        value={enabled}
+        onValueChange={onChange}
+        trackColor={{ true: colors.primary, false: colors.border }}
+        thumbColor="#fff"
+      />
+    </Card>
+  );
+}
+
+function ReviewPrivacyPoint({ autoAdd }: { autoAdd: boolean }) {
+  return (
+    <PrivacyPoint
+      icon="hand-left-outline"
+      text={
+        autoAdd
+          ? 'Only payments with a clear category are added on their own; you can edit or delete them. Everything else waits for you.'
+          : 'Nothing is saved until you review and confirm it.'
+      }
+    />
   );
 }
 

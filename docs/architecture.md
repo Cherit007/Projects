@@ -154,6 +154,18 @@ suggested. Only the extracted fields are stored, never the message text.
 Confirmed transactions get `source = 'bank_sms'`. The capture link works
 on Android too.
 
+## Adding detected payments automatically
+
+`autoAddCandidates` runs after every detection sync (Android notifications
+and iOS bank SMS) unless the user turns off **Add payments automatically**
+(`settings.auto_add_payments`). A new candidate is confirmed without review
+only when it is a successful payment with an amount and direction, nothing
+similar was already recorded (`findPossibleDuplicate`), and a category is
+known: the payee's last category (`suggestCategory`), else a well-known
+merchant from `guessCategoryName` (pure, tested). It goes to the first
+non-cash account. Everything else, such as payments to people, stays in the
+review list.
+
 ## Platform constraints
 
 - Android can read payment-app notifications only after the user grants

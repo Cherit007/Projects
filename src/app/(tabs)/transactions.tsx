@@ -21,6 +21,7 @@ import { summarize } from '@/domain/accounting/accounting';
 import { monthKeyOf, type MonthKey } from '@/domain/period';
 import type { TransactionType } from '@/domain/types';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
+import { useUpi } from '@/services/upi/UpiProvider';
 import { colors, radius, shadow } from '@/theme/colors';
 import { toLocalDateInput } from '@/utils/dates';
 
@@ -67,8 +68,11 @@ export default function TransactionsScreen() {
   const [month, setMonth] = useState<MonthKey>(() => monthKeyOf(new Date()));
   const [search, setSearch] = useState('');
   const [type, setType] = useState<TransactionType | null>(null);
+  const { lastSyncAt } = useUpi();
+  // Detection syncs may add payments automatically, so they reload the list too.
   const { data, error, isLoading, reload } = useFocusQuery(
     useCallback((db: SQLiteDatabase) => loadMonth(db, month), [month]),
+    lastSyncAt,
   );
 
   const sections = useMemo(() => {

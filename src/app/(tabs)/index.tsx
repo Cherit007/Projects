@@ -57,8 +57,10 @@ async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
 export default function DashboardScreen() {
   const [month, setMonth] = useState<MonthKey>(() => monthKeyOf(new Date()));
   const upi = useUpi();
+  // Detection syncs may add payments automatically, so they reload the dashboard too.
   const { data, error, isLoading, reload } = useFocusQuery(
     useCallback((db: SQLiteDatabase) => loadDashboard(db, month), [month]),
+    upi.lastSyncAt,
   );
 
   const header = (
