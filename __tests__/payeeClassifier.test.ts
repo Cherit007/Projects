@@ -21,35 +21,65 @@ const EXPECTED: [string, string][] = [
   ['Bright Coaching Centre', 'Education'],
 ];
 
-const PEOPLE = ['RAHUL SHARMA', 'Priya Venkatesh', 'K SRINIVASA RAO', 'MOHAMMED IRFAN', 'Anjali Deshmukh'];
+// People, including names that double as shop prefixes ("Sai", "Durga") and UPI IDs.
+const PEOPLE = [
+  'RAHUL SHARMA',
+  'Priya Venkatesh',
+  'K SRINIVASA RAO',
+  'MOHAMMED IRFAN',
+  'Anjali Deshmukh',
+  'Mrs Kavitha Reddy',
+  'Ramana Reddy',
+  'Sai Krishna',
+  'Durga Prasad',
+  'Kiran Kumar Reddy',
+  'JOHN MATHEW',
+  'Fatima Begum',
+  'rahul.sharma@okaxis',
+  '9876543210@ybl',
+];
+
+// Businesses whose name says nothing about the spending, banks and payment gateways.
+const VAGUE_BUSINESSES = [
+  'SRI LAKSHMI ENTERPRISES',
+  'Kumar Traders',
+  'Patel Brothers',
+  'HDFC BANK',
+  'KOTAK MAHINDRA BANK',
+  'RAZORPAY SOFTWARE',
+  'paytmqr281005050101@paytm',
+  'Q123456789@ybl',
+];
 
 describe('classifyPayee', () => {
-  it('categorises most realistic shop names correctly', () => {
+  it('categorises realistic shop names correctly', () => {
     const results = EXPECTED.map(([payee, category]) => ({ payee, category, got: classifyPayee(payee) }));
     const correct = results.filter(r => r.got === r.category).length;
     const wrong = results.filter(r => r.got !== null && r.got !== r.category);
     expect(wrong).toEqual([]);
-    expect(correct / EXPECTED.length).toBeGreaterThanOrEqual(0.75);
+    expect(correct / EXPECTED.length).toBeGreaterThanOrEqual(0.9);
   });
 
-  it('does not give people a shop category', () => {
-    for (const payee of PEOPLE) {
+  it('does not give people or vague businesses a shop category', () => {
+    for (const payee of [...PEOPLE, ...VAGUE_BUSINESSES]) {
       expect(classifyPayee(payee)).toBeNull();
-    }
-  });
-
-  it('recognises people, and not shops or vague businesses', () => {
-    const people = [...PEOPLE, 'rahul.sharma', 'Mrs Kavitha Reddy'].filter(isPersonPayee);
-    expect(people.length).toBeGreaterThanOrEqual(5);
-    for (const payee of ['BALAJI MEDICAL HALL', 'Sri Lakshmi Enterprises', 'KUMAR PETROLEUM', 'Vinayaka Agencies']) {
-      expect(isPersonPayee(payee)).toBe(false);
     }
   });
 
   it('handles empty input', () => {
     expect(classifyPayee(null)).toBeNull();
     expect(classifyPayee('  ')).toBeNull();
-    expect(classifyPayee('9876543210@ybl')).toBeNull();
+  });
+});
+
+describe('isPersonPayee', () => {
+  it('recognises people', () => {
+    expect(PEOPLE.filter(payee => !isPersonPayee(payee))).toEqual([]);
+  });
+
+  it('does not take shops, banks or vague businesses for people', () => {
+    const businesses = [...EXPECTED.map(([payee]) => payee), ...VAGUE_BUSINESSES, 'KUMAR PETROLEUM', 'Reddy Medicals'];
+    expect(businesses.filter(isPersonPayee)).toEqual([]);
   });
 });
 
@@ -59,13 +89,17 @@ describe('predictCategoryName', () => {
     expect(predictCategoryName('RAHUL SHARMA', 'income')).toBe('Friends');
   });
 
-  it('prefers merchant rules and shop categories over Friends', () => {
+  it('uses merchant rules and shop categories', () => {
     expect(predictCategoryName('SWIGGY', 'expense')).toBe('Food and dining');
     expect(predictCategoryName('BALAJI MEDICAL HALL', 'expense')).toBe('Healthcare');
+    expect(predictCategoryName('KUMAR PETROLEUM', 'expense')).toBe('Transport');
     expect(predictCategoryName('ACME PAYROLL', 'income')).toBe('Salary');
   });
 
-  it('still asks about vague business names', () => {
-    expect(predictCategoryName('SRI LAKSHMI ENTERPRISES', 'expense')).toBeNull();
+  it('files everything else under Other, so every payment can be added', () => {
+    for (const payee of [...VAGUE_BUSINESSES, null]) {
+      expect(predictCategoryName(payee, 'expense')).toBe('Other');
+      expect(predictCategoryName(payee, 'income')).toBe('Other income');
+    }
   });
 });

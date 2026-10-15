@@ -158,16 +158,16 @@ on Android too.
 
 `autoAddCandidates` runs after every detection sync (Android notifications
 and iOS bank SMS) unless the user turns off **Add payments automatically**
-(`settings.auto_add_payments`). A new candidate is confirmed without review
-only when it is a successful payment with an amount and direction, nothing
-similar was already recorded (`findPossibleDuplicate`), and a category is
-known: the payee's last category (`suggestCategory`), else a well-known
-merchant from `guessCategoryName`, else the on-device payee classifier
-(`classifyPayee`, expenses only, confidence ≥ 0.6), else **Friends** when
-the payee looks like a person (`isPersonPayee`, confidence ≥ 0.7). The same
-order pre-fills the category when a payment is reviewed by hand. It goes to
-the first non-cash account. Everything else, such as vague business names,
-stays in the review list.
+(`settings.auto_add_payments`). Each waiting candidate, including ones
+detected earlier, is confirmed without review
+when it is a successful payment with an amount and direction and nothing
+similar was already recorded (`findPossibleDuplicate`). The category is the
+payee's last category (`suggestCategory`), else a well-known merchant from
+`guessCategoryName`, else **Friends** when the payee is a person, else the
+on-device classifier's shop category, else **Other** / **Other income**
+(`predictCategoryName`). The same order pre-fills the category when a
+payment is reviewed by hand. It goes to the first non-cash account. Correcting
+a category teaches it for that payee, since the payee's last category wins.
 
 ### Friends
 
@@ -180,14 +180,20 @@ The Dashboard shows the top three; `/people` lists everyone and
 
 ### Payee classifier
 
-A naive Bayes model over words and 3–4 letter fragments of the payee name
-(`payeeFeatures.ts`), with classes for people (`__person__`) and vague names (`__unknown__`)
-so it can abstain or route to Friends. A known word counts once; an unknown word counts as the average of
-its fragments. `node scripts/train-payee-classifier.mts` generates labelled
-Indian payee names, prints held-out accuracy and writes
-`src/domain/categories/payeeModel.json` (about 0.5 MB, runs in
-milliseconds, fully offline). Retrain after editing the word lists in the
-script.
+A naive Bayes model over words, their 3–4 letter fragments and the last word
+of the payee name (`payeeFeatures.ts`), with classes for each shop category,
+people (`__person__`) and vague businesses, banks and payment gateways
+(`__unknown__`). A known word counts once; an unknown word counts as the
+average of its fragments. `decidePayee` treats the payee as a person at
+probability ≥ 0.4 (mobile-number UPI IDs always), otherwise gives the best
+shop category when it holds ≥ 0.35 of the business probability.
+
+`node scripts/train-payee-classifier.mts [--verbose]` generates labelled
+Indian payee names, evaluates on held-out rows (people with names never seen
+in training: about 74% recognised, under 1% of businesses taken for people,
+85% of shops categorised with 98% correct), then trains on everything and
+writes `src/domain/categories/payeeModel.json` (about 0.8 MB, runs in
+milliseconds, fully offline). Retrain after editing the word lists.
 
 ## Platform constraints
 

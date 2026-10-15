@@ -11,7 +11,7 @@ export function payeeFeatures(payee: string): string[][] {
     .replace(/[^a-z]+/g, ' ')
     .split(' ')
     .filter(word => word.length > 1);
-  return [...new Set(words)].map(word => {
+  const groups = [...new Set(words)].map(word => {
     const padded = `<${word}>`;
     const features = [`w:${word}`];
     for (const size of [3, 4]) {
@@ -21,6 +21,55 @@ export function payeeFeatures(payee: string): string[][] {
     }
     return features;
   });
+  // The last word tells most: a surname for people, "stores" or "petroleum" for shops.
+  if (words.length > 1) {
+    groups.push([`l:${words[words.length - 1]}`]);
+  }
+  return groups;
+}
+
+/** Class the model uses for businesses whose name says nothing about the spending (incl. banks). */
+export const UNKNOWN_CLASS = '__unknown__';
+/** Class the model uses for people's names. */
+export const PERSON_CLASS = '__person__';
+/** A payee is treated as a person when this likely or more. */
+export const MIN_PERSON_PROBABILITY = 0.4;
+/** A business gets a category when this share of the business probability agrees; else Other. */
+export const MIN_CATEGORY_CONFIDENCE = 0.35;
+
+/** UPI IDs made of a mobile number belong to people; merchants use QR or named IDs. */
+const MOBILE_VPA = /^(\+?91)?[6-9]\d{9}@[a-z.]+$/i;
+
+export interface PayeeDecision {
+  person: boolean;
+  /** Expense category for a business, or null when unsure (vague names, banks). */
+  category: string | null;
+}
+
+/** Reads person vs business and the business category from the class scores of scorePayee. */
+export function decidePayee(payee: string, classes: readonly string[], scores: readonly number[]): PayeeDecision {
+  if (MOBILE_VPA.test(payee.trim())) {
+    return { person: true, category: null };
+  }
+  if (payeeFeatures(payee).length === 0) {
+    return { person: false, category: null };
+  }
+  const top = Math.max(...scores);
+  const weights = scores.map(score => Math.exp(score - top));
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  const probability = weights.map(w => w / total);
+  const personProbability = probability[classes.indexOf(PERSON_CLASS)] ?? 0;
+  if (personProbability >= MIN_PERSON_PROBABILITY) {
+    return { person: true, category: null };
+  }
+  let best = -1;
+  classes.forEach((name, c) => {
+    if (name !== PERSON_CLASS && name !== UNKNOWN_CLASS && (best < 0 || probability[c] > probability[best])) {
+      best = c;
+    }
+  });
+  const confidence = best < 0 ? 0 : probability[best] / (1 - personProbability);
+  return { person: false, category: confidence >= MIN_CATEGORY_CONFIDENCE ? classes[best] : null };
 }
 
 /**

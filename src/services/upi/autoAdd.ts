@@ -12,10 +12,9 @@ import {
 import { predictCategoryName } from '../../domain/categories/autoCategory';
 
 /**
- * Adds newly detected payments whose category can be worked out: the payee's
- * last category, else a well-known merchant, else the on-device payee
- * classifier when it is confident. Anything uncertain (unknown
- * payee, possible duplicate, failed or pending payment) stays in the review
+ * Adds detected payments with the payee's last category, else the predicted
+ * one (Friends for people, a shop category, or Other). Failed or pending
+ * payments, possible duplicates and archived categories stay in the review
  * list. Returns how many were added.
  */
 export async function autoAddCandidates(db: SQLiteDatabase, candidateIds: readonly string[]): Promise<number> {

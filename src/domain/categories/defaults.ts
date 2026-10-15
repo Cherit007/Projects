@@ -2,6 +2,9 @@ import type { CategoryType } from '../types';
 
 /** Category for money sent to or received from people; the People screen lists its payees. */
 export const FRIENDS_CATEGORY = 'Friends';
+/** Fallbacks for payees that cannot be categorised more precisely. */
+export const OTHER_CATEGORY = 'Other';
+export const OTHER_INCOME_CATEGORY = 'Other income';
 
 export const DEFAULT_CATEGORIES: readonly { name: string; type: CategoryType }[] =
   [
