@@ -2,6 +2,8 @@ import { Stack } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { Suspense } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LoadingState } from '@/components/ui';
 import { migrateDbIfNeeded } from '@/data/local/migrations';
@@ -12,6 +14,7 @@ import { colors } from '@/theme/colors';
 
 export default function RootLayout() {
   return (
+    <GestureHandlerRootView style={StyleSheet.absoluteFill}>
     <Suspense fallback={<LoadingState />}>
       <SQLiteProvider databaseName="finance.db" onInit={migrateDbIfNeeded} useSuspense>
         <CloudProvider>
@@ -46,5 +49,6 @@ export default function RootLayout() {
         </CloudProvider>
       </SQLiteProvider>
     </Suspense>
+    </GestureHandlerRootView>
   );
 }

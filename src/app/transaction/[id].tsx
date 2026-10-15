@@ -25,7 +25,6 @@ import { createRecurringRule } from '@/data/repositories/recurring';
 import { getOwnerName } from '@/data/repositories/settings';
 import {
   createTransaction,
-  deleteTransaction,
   getTransaction,
   listCategorisedPayees,
   suggestCategory,
@@ -46,6 +45,7 @@ import { FREQUENCY_LABEL, type Frequency } from '@/domain/recurring';
 import { isUpiAccount, type Account, type Category, type Transaction, type TransactionInput, type TransactionType } from '@/domain/types';
 import { deleteReceiptPhoto, pickReceiptPhoto, storeReceiptPhoto } from '@/services/receipts';
 import { useRecurring } from '@/services/RecurringProvider';
+import { removeTransaction } from '@/services/removeTransaction';
 import { useUpi } from '@/services/upi/UpiProvider';
 import { categoryStyle, type IconName } from '@/theme/categoryStyle';
 import { colors, radius, shadow } from '@/theme/colors';
@@ -312,8 +312,7 @@ export default function TransactionForm() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await deleteTransaction(db, id);
-          await deleteReceiptPhoto(loaded.receiptUri).catch(() => undefined);
+          await removeTransaction(db, id);
           await upi.refresh();
           router.back();
         },

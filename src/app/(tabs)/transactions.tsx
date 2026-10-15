@@ -157,7 +157,7 @@ export default function TransactionsScreen() {
                 index === section.data.length - 1 && styles.itemLast,
               ]}
             >
-              <TransactionRow item={item} />
+              <TransactionRow item={item} onDeleted={reload} />
             </Animated.View>
           )}
           contentContainerStyle={styles.list}

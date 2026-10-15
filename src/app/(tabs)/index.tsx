@@ -260,7 +260,7 @@ export default function DashboardScreen() {
           ) : (
             <View style={styles.recent}>
               {transactions.slice(0, 5).map(item => (
-                <TransactionRow key={item.id} item={item} showDate />
+                <TransactionRow key={item.id} item={item} showDate onDeleted={reload} />
               ))}
             </View>
           )}

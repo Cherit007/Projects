@@ -81,7 +81,7 @@ export default function PersonScreen() {
       </Text>
       <View style={styles.list}>
         {transactions.map(item => (
-          <TransactionRow key={item.id} item={item} showDate />
+          <TransactionRow key={item.id} item={item} showDate onDeleted={reload} />
         ))}
       </View>
     </ScrollView>
