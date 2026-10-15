@@ -70,6 +70,19 @@ function buildSteps(captureLink: string): Step[] {
   ];
 }
 
+function aiPrompts(captureLink: string) {
+  return [
+    {
+      label: '1. Create the shortcut',
+      value: `Make a shortcut named Capture payment that takes text, URL encodes it, and opens the URL ${captureLink} followed by the encoded text.`,
+    },
+    {
+      label: '2. Create the automation',
+      value: 'When I receive a message containing debited, run the Capture payment shortcut with the message.',
+    },
+  ];
+}
+
 async function copy(value: string) {
   // Loaded on demand: older Android development builds do not include this native module.
   const Clipboard = await import('expo-clipboard');
@@ -110,6 +123,34 @@ export function ShortcutSetupGuide() {
 
   return (
     <View style={styles.container}>
+      <Card style={styles.step}>
+        <View style={styles.stepHeader}>
+          <View style={styles.stepIcon}>
+            <Ionicons name="sparkles" size={22} color={colors.primary} />
+          </View>
+          <Text style={styles.stepCount}>Quickest</Text>
+        </View>
+        <Text style={styles.stepTitle}>Ask the Shortcuts AI</Text>
+        <Text style={styles.stepBody}>
+          Copy each prompt, paste it into the Shortcuts app&apos;s AI one at a time, and repeat prompt 2 with credited
+          and Sent Rs. If the AI declines, use the steps below.
+        </Text>
+        {aiPrompts(captureLink).map(prompt => (
+          <View key={prompt.label} style={styles.prompt}>
+            <Text style={styles.promptLabel}>{prompt.label}</Text>
+            <Text selectable style={styles.promptText}>
+              {prompt.value}
+            </Text>
+            <PressableScale onPress={() => copyValue(prompt.value)} style={styles.chip}>
+              <Ionicons name={copied === prompt.value ? 'checkmark' : 'copy-outline'} size={16} color={colors.primary} />
+              <Text style={styles.chipText}>{copied === prompt.value ? 'Copied' : 'Copy prompt'}</Text>
+            </PressableScale>
+          </View>
+        ))}
+        <Button title="Open Shortcuts" variant="secondary" icon="open-outline" onPress={() => Linking.openURL('shortcuts://')} />
+      </Card>
+
+      <Text style={styles.orText}>Or set it up step by step</Text>
       <Button
         title="Copy link & open Shortcuts"
         icon="flash"
@@ -227,6 +268,16 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   chipText: { color: colors.primary, fontWeight: '700' },
+  prompt: {
+    gap: 8,
+    padding: 12,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'flex-start',
+  },
+  promptLabel: { fontWeight: '700', color: colors.textMuted, fontSize: 13 },
+  promptText: { color: colors.text, lineHeight: 20 },
+  orText: { textAlign: 'center', color: colors.textMuted, fontWeight: '600', marginTop: 4 },
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
   dots: { flexDirection: 'row', gap: 6 },
   dot: {
