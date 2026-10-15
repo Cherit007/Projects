@@ -34,6 +34,7 @@ import {
   type UpiCandidate,
 } from '@/data/repositories/upiCandidates';
 import { validateTransaction, type ValidationErrors } from '@/domain/accounting/accounting';
+import { predictCategoryName } from '@/domain/categories/autoCategory';
 import { parseToMinor } from '@/domain/money/money';
 import { monthKeyOf } from '@/domain/period';
 import type { Account, Category, Transaction, TransactionInput, TransactionType } from '@/domain/types';
@@ -125,7 +126,11 @@ export default function TransactionForm() {
           setDate(toLocalDateInput(candidate.detectedAt));
           setCounterparty(candidate.counterparty ?? '');
           if (candidate.counterparty) {
-            const suggestion = await suggestCategory(db, candidate.counterparty, candidateType);
+            const predicted = predictCategoryName(candidate.counterparty, candidateType);
+            const suggestion =
+              (await suggestCategory(db, candidate.counterparty, candidateType)) ??
+              result.categories.find(c => !c.isArchived && c.type === candidateType && c.name === predicted)?.id ??
+              null;
             setCategoryId(suggestion);
             setSuggestedCategoryId(suggestion);
           }

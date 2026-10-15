@@ -162,9 +162,22 @@ and iOS bank SMS) unless the user turns off **Add payments automatically**
 only when it is a successful payment with an amount and direction, nothing
 similar was already recorded (`findPossibleDuplicate`), and a category is
 known: the payee's last category (`suggestCategory`), else a well-known
-merchant from `guessCategoryName` (pure, tested). It goes to the first
+merchant from `guessCategoryName`, else the on-device payee classifier
+(`classifyPayee`, expenses only, confidence ≥ 0.6). The same order pre-fills
+the category when a payment is reviewed by hand. It goes to the first
 non-cash account. Everything else, such as payments to people, stays in the
 review list.
+
+### Payee classifier
+
+A naive Bayes model over words and 3–4 letter fragments of the payee name
+(`payeeFeatures.ts`), with a class for people and vague names so it can
+abstain. A known word counts once; an unknown word counts as the average of
+its fragments. `node scripts/train-payee-classifier.mts` generates labelled
+Indian payee names, prints held-out accuracy and writes
+`src/domain/categories/payeeModel.json` (about 0.5 MB, runs in
+milliseconds, fully offline). Retrain after editing the word lists in the
+script.
 
 ## Platform constraints
 

@@ -223,8 +223,8 @@ function AutoAddCard({ enabled, onChange }: { enabled: boolean; onChange: (next:
       <View style={styles.toggleText}>
         <Text style={styles.toggleTitle}>Add payments automatically</Text>
         <Text style={styles.muted}>
-          When the category is clear (a payee you have used before, or a known merchant like Swiggy or Uber). Others
-          wait in the review list.
+          When the category is clear: a payee you have used before, a known merchant like Swiggy, or a shop name the
+          built-in model recognises, like &quot;Balaji Medicals&quot;. Others wait in the review list.
         </Text>
       </View>
       <Switch

@@ -9,11 +9,12 @@ import {
   findPossibleDuplicate,
   getCandidate,
 } from '../../data/repositories/upiCandidates';
-import { guessCategoryName } from '../../domain/categories/autoCategory';
+import { predictCategoryName } from '../../domain/categories/autoCategory';
 
 /**
  * Adds newly detected payments whose category can be worked out: the payee's
- * last category, else a well-known merchant. Anything uncertain (unknown
+ * last category, else a well-known merchant, else the on-device payee
+ * classifier when it is confident. Anything uncertain (unknown
  * payee, possible duplicate, failed or pending payment) stays in the review
  * list. Returns how many were added.
  */
@@ -43,7 +44,7 @@ export async function autoAddCandidates(db: SQLiteDatabase, candidateIds: readon
     const type = candidate.direction === 'credit' ? 'income' : 'expense';
     let categoryId = candidate.counterparty ? await suggestCategory(db, candidate.counterparty, type) : null;
     if (!categoryId) {
-      const name = guessCategoryName(candidate.counterparty, type);
+      const name = predictCategoryName(candidate.counterparty, type);
       categoryId = categories.find(c => c.type === type && c.name === name)?.id ?? null;
     }
     if (!categoryId) {
