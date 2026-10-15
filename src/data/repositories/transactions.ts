@@ -59,6 +59,8 @@ export interface TransactionFilter {
   type?: TransactionType;
   accountId?: string;
   categoryId?: string;
+  /** Exact payee, ignoring case and surrounding spaces. */
+  counterparty?: string;
   search?: string;
   limit?: number;
   offset?: number;
@@ -85,6 +87,10 @@ export async function listTransactions(
   if (filter.categoryId) {
     where.push('(t.category_id = ? OR c.parent_id = ?)');
     params.push(filter.categoryId, filter.categoryId);
+  }
+  if (filter.counterparty) {
+    where.push('LOWER(TRIM(t.counterparty)) = LOWER(TRIM(?))');
+    params.push(filter.counterparty);
   }
   const search = filter.search?.trim();
   if (search) {

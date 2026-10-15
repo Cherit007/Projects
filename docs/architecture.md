@@ -163,16 +163,26 @@ only when it is a successful payment with an amount and direction, nothing
 similar was already recorded (`findPossibleDuplicate`), and a category is
 known: the payee's last category (`suggestCategory`), else a well-known
 merchant from `guessCategoryName`, else the on-device payee classifier
-(`classifyPayee`, expenses only, confidence ≥ 0.6). The same order pre-fills
-the category when a payment is reviewed by hand. It goes to the first
-non-cash account. Everything else, such as payments to people, stays in the
-review list.
+(`classifyPayee`, expenses only, confidence ≥ 0.6), else **Friends** when
+the payee looks like a person (`isPersonPayee`, confidence ≥ 0.7). The same
+order pre-fills the category when a payment is reviewed by hand. It goes to
+the first non-cash account. Everything else, such as vague business names,
+stays in the review list.
+
+### Friends
+
+`Friends` is a default expense and income category (migration 4 adds it to
+existing databases). `listPeople` groups every payee that has at least one
+Friends transaction by name (case-insensitive) with sent and received totals.
+The Dashboard shows the top three; `/people` lists everyone and
+`/people/[name]` shows one person's transactions (`counterparty` filter on
+`listTransactions`) and the net balance.
 
 ### Payee classifier
 
 A naive Bayes model over words and 3–4 letter fragments of the payee name
-(`payeeFeatures.ts`), with a class for people and vague names so it can
-abstain. A known word counts once; an unknown word counts as the average of
+(`payeeFeatures.ts`), with classes for people (`__person__`) and vague names (`__unknown__`)
+so it can abstain or route to Friends. A known word counts once; an unknown word counts as the average of
 its fragments. `node scripts/train-payee-classifier.mts` generates labelled
 Indian payee names, prints held-out accuracy and writes
 `src/domain/categories/payeeModel.json` (about 0.5 MB, runs in

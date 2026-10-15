@@ -1,5 +1,8 @@
 import type { CategoryType } from '../types';
 
+/** Category for money sent to or received from people; the People screen lists its payees. */
+export const FRIENDS_CATEGORY = 'Friends';
+
 export const DEFAULT_CATEGORIES: readonly { name: string; type: CategoryType }[] =
   [
     { name: 'Food and dining', type: 'expense' },
@@ -13,6 +16,7 @@ export const DEFAULT_CATEGORIES: readonly { name: string; type: CategoryType }[]
     { name: 'Education', type: 'expense' },
     { name: 'Travel', type: 'expense' },
     { name: 'Family', type: 'expense' },
+    { name: 'Friends', type: 'expense' },
     { name: 'Loan interest and fees', type: 'expense' },
     { name: 'Other', type: 'expense' },
     { name: 'Salary', type: 'income' },
@@ -21,5 +25,6 @@ export const DEFAULT_CATEGORIES: readonly { name: string; type: CategoryType }[]
     { name: 'Rental income', type: 'income' },
     { name: 'Interest', type: 'income' },
     { name: 'Dividends', type: 'income' },
+    { name: 'Friends', type: 'income' },
     { name: 'Other income', type: 'income' },
   ];

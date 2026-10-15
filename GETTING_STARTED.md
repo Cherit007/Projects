@@ -72,6 +72,7 @@ src/
     transaction/  Add/edit transaction form
     account/      Add/edit account form
     upi-review    Review list for detected payments
+    people/       Friends: everyone you pay or get paid by, and their transactions
     upi-settings  Payment detection settings
   domain/         Pure finance logic: money, accounting rules, months,
                   UPI notification parser

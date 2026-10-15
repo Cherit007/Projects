@@ -23,6 +23,7 @@ const RULES: readonly [RegExp, CategoryStyle][] = [
   [/entertain|movie|music|game/i, { icon: 'film', color: '#A855F7' }],
   [/educat|course|school|book/i, { icon: 'school', color: '#2563EB' }],
   [/trip|flight|hotel|vacation/i, { icon: 'airplane', color: '#06B6D4' }],
+  [/friend/i, { icon: 'people-circle', color: '#0EA5E9' }],
   [/family|kids|gift/i, { icon: 'people', color: '#F43F5E' }],
   [/loan|interest|fee|emi/i, { icon: 'card', color: '#64748B' }],
   [/salary|payroll/i, { icon: 'briefcase', color: '#0E9F6E' }],

@@ -12,6 +12,9 @@ import { writeFileSync } from 'node:fs';
 import { payeeFeatures, scorePayee } from '../src/domain/categories/payeeFeatures.ts';
 
 const UNKNOWN = '__unknown__';
+const PERSON = '__person__';
+/** Keep in sync with MIN_PERSON_CONFIDENCE in payeeClassifier.ts. */
+const MIN_PERSON_CONFIDENCE = 0.7;
 /** Keep in sync with MIN_CONFIDENCE in payeeClassifier.ts. */
 const MIN_CONFIDENCE = 0.6;
 
@@ -71,7 +74,11 @@ function vary(name: string): string {
 function person(): string {
   const first = pick(FIRST_NAMES);
   const last = pick(LAST_NAMES);
-  switch (Math.floor(random() * 6)) {
+  switch (Math.floor(random() * 8)) {
+    case 6:
+      return `${first}.${last}`;
+    case 7:
+      return `mrs ${first} ${last}`;
     case 0:
       return `${first[0]} ${last}`;
     case 1:
@@ -103,7 +110,7 @@ function dataset(): [string, string][] {
     }
   }
   for (let i = 0; i < 1800; i++) {
-    rows.push([vary(person()), UNKNOWN]);
+    rows.push([vary(person()), PERSON]);
   }
   for (let i = 0; i < 900; i++) {
     rows.push([vary(`${pick(PREFIXES)} ${pick(VAGUE)}`), UNKNOWN]);
@@ -170,13 +177,19 @@ let correct = 0;
 let confident = 0;
 let confidentCorrect = 0;
 let wronglyAdded = 0;
+let people = 0;
+let notPeople = 0;
 for (const [text, label] of heldOut) {
   const { label: predicted, confidence } = predict(trial, text);
   correct += predicted === label ? 1 : 0;
-  if (confidence >= MIN_CONFIDENCE && predicted !== UNKNOWN) {
+  if (confidence >= MIN_CONFIDENCE && predicted !== UNKNOWN && predicted !== PERSON) {
     confident += 1;
     confidentCorrect += predicted === label ? 1 : 0;
-    wronglyAdded += label === UNKNOWN ? 1 : 0;
+    wronglyAdded += label === UNKNOWN || label === PERSON ? 1 : 0;
+  }
+  if (predicted === PERSON && confidence >= MIN_PERSON_CONFIDENCE) {
+    people += 1;
+    notPeople += label === PERSON ? 0 : 1;
   }
 }
 if (process.argv.includes('--verbose')) {
@@ -185,7 +198,7 @@ if (process.argv.includes('--verbose')) {
     let wrong = 0;
     for (const [text, label] of heldOut) {
       const p = predict(trial, text);
-      if (p.confidence >= threshold && p.label !== UNKNOWN) {
+      if (p.confidence >= threshold && p.label !== UNKNOWN && p.label !== PERSON) {
         added += 1;
         if (p.label !== label) {
           wrong += 1;
@@ -205,4 +218,5 @@ console.log(
 const model = train(rows);
 const json = JSON.stringify(model);
 writeFileSync(new URL('../src/domain/categories/payeeModel.json', import.meta.url), `${json}\n`);
+console.log(`treated as people at >=${MIN_PERSON_CONFIDENCE}: ${people}, of which not people: ${notPeople}`);
 console.log(`features: ${Object.keys(model.features).length}, model size: ${(json.length / 1024).toFixed(0)} KB`);

@@ -1,5 +1,6 @@
 import type { CategoryType } from '../types';
-import { classifyPayee } from './payeeClassifier';
+import { FRIENDS_CATEGORY } from './defaults';
+import { classifyPayee, isPersonPayee } from './payeeClassifier';
 
 /**
  * Well-known payees mapped to default category names. Matched against the
@@ -89,8 +90,13 @@ export function guessCategoryName(payee: string | null, type: CategoryType): str
 
 /**
  * Best category name for a payee without history: a known merchant, else the
- * on-device classifier (expenses only). Null means "ask the user".
+ * on-device classifier (shops, expenses only), else Friends for a person.
+ * Null means "ask the user".
  */
 export function predictCategoryName(payee: string | null, type: CategoryType): string | null {
-  return guessCategoryName(payee, type) ?? (type === 'expense' ? classifyPayee(payee) : null);
+  return (
+    guessCategoryName(payee, type) ??
+    (type === 'expense' ? classifyPayee(payee) : null) ??
+    (isPersonPayee(payee) ? FRIENDS_CATEGORY : null)
+  );
 }

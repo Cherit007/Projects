@@ -1,10 +1,13 @@
 import model from './payeeModel.json';
 import { scorePayee } from './payeeFeatures';
 
-/** Class the model uses for people and names that say nothing about the spending. */
+/** Class the model uses for names that say nothing about the spending. */
 export const UNKNOWN_CLASS = '__unknown__';
+/** Class the model uses for people's names. */
+export const PERSON_CLASS = '__person__';
 
 const MIN_CONFIDENCE = 0.6;
+const MIN_PERSON_CONFIDENCE = 0.7;
 
 interface PayeeModel {
   classes: string[];
@@ -37,5 +40,14 @@ export function classifyPayee(payee: string | null): string | null {
     return null;
   }
   const { category, confidence } = predictPayee(payee);
-  return category !== UNKNOWN_CLASS && confidence >= MIN_CONFIDENCE ? category : null;
+  return category !== UNKNOWN_CLASS && category !== PERSON_CLASS && confidence >= MIN_CONFIDENCE ? category : null;
+}
+
+/** Whether the payee is most likely a person rather than a business. */
+export function isPersonPayee(payee: string | null): boolean {
+  if (!payee?.trim()) {
+    return false;
+  }
+  const { category, confidence } = predictPayee(payee);
+  return category === PERSON_CLASS && confidence >= MIN_PERSON_CONFIDENCE;
 }

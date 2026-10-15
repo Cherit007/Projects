@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { DEFAULT_CATEGORIES } from '../../domain/categories/defaults';
+import { DEFAULT_CATEGORIES, FRIENDS_CATEGORY } from '../../domain/categories/defaults';
 import { newId, nowIso } from './ids';
 
 type Migration = (db: SQLiteDatabase) => Promise<void>;
@@ -135,6 +135,27 @@ const MIGRATIONS: readonly Migration[] = [
     await db.runAsync('UPDATE categories SET created_at = ?, updated_at = ?', now, now);
     for (const table of SYNCED_TABLES) {
       await db.execAsync(outboxTriggers(table));
+    }
+  },
+  async db => {
+    // New installs already got these from DEFAULT_CATEGORIES in the first migration.
+    const now = nowIso();
+    for (const type of ['expense', 'income'] as const) {
+      await db.runAsync(
+        `INSERT INTO categories (id, name, type, sort_order, created_at, updated_at)
+         SELECT ?, ?, ?, next_order, ?, ?
+         FROM (SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM categories)
+         WHERE NOT EXISTS (
+           SELECT 1 FROM categories WHERE type = ? AND LOWER(name) = LOWER(?) AND parent_id IS NULL
+         )`,
+        newId(),
+        FRIENDS_CATEGORY,
+        type,
+        now,
+        now,
+        type,
+        FRIENDS_CATEGORY,
+      );
     }
   },
 ];

@@ -14,6 +14,7 @@ import Animated, {
 
 import { AddTransactionButton } from '@/components/AddButton';
 import { CategoryIcon } from '@/components/CategoryIcon';
+import { PersonRow } from '@/components/PersonRow';
 import { PressableScale } from '@/components/PressableScale';
 import { TransactionRow } from '@/components/TransactionRow';
 import {
@@ -30,6 +31,7 @@ import { loadBudgetSummary } from '@/data/queries/budgetSummary';
 import { loadMonth } from '@/data/queries/monthSummary';
 import { getAccountFlows, listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
+import { listPeople } from '@/data/repositories/people';
 import { accountBalance, spendingByCategory } from '@/domain/accounting/accounting';
 import { formatMinor, sumMinor } from '@/domain/money/money';
 import { monthKeyOf, type MonthKey } from '@/domain/period';
@@ -39,15 +41,17 @@ import { categoryStyle } from '@/theme/categoryStyle';
 import { colors, radius, shadow } from '@/theme/colors';
 
 async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
-  const [monthData, accounts, flows, categories, budgets] = await Promise.all([
+  const [monthData, accounts, flows, categories, budgets, people] = await Promise.all([
     loadMonth(db, month),
     listAccounts(db),
     getAccountFlows(db),
     listCategories(db, { includeArchived: true }),
     loadBudgetSummary(db, month),
+    listPeople(db),
   ]);
   return {
     ...monthData,
+    people: people.slice(0, 3),
     budgets: budgets.progress.slice(0, 3),
     totalBalanceMinor: sumMinor(accounts.map(a => accountBalance(a, flows.get(a.id)))),
     spending: spendingByCategory(monthData.transactions, categories),
@@ -183,6 +187,17 @@ export default function DashboardScreen() {
             )}
           </Card>
         </Animated.View>
+
+        {data.people.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(170).duration(350)} style={styles.section}>
+            <SectionTitle title="Friends" action={<TextLink label="See all" onPress={() => router.push('/people')} />} />
+            <View style={styles.recent}>
+              {data.people.map(person => (
+                <PersonRow key={person.name.toLowerCase()} person={person} />
+              ))}
+            </View>
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeInDown.delay(200).duration(350)} style={styles.section}>
           <SectionTitle
