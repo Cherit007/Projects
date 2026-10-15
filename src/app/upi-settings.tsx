@@ -175,7 +175,14 @@ function SmsShortcutGuide() {
                 : 'Messages are read only on this phone. The text is never saved or uploaded.'
             }
           />
-          <PrivacyPoint icon="key-outline" text="Messages that look like OTPs or PINs are discarded immediately." />
+          <PrivacyPoint
+            icon="key-outline"
+            text={
+              bankSmsNative
+                ? 'Texts that are not payments, and anything that looks like an OTP or PIN, are discarded immediately.'
+                : 'Messages that look like OTPs or PINs are discarded immediately.'
+            }
+          />
           <PrivacyPoint icon="hand-left-outline" text="Nothing is saved until you review and confirm it." />
           <PrivacyPoint
             icon="information-circle-outline"

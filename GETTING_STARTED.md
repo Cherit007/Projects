@@ -160,13 +160,13 @@ adb shell cmd notification disallow_listener $C && adb shell cmd notification al
 ## iPhone: capture payments from bank SMS
 
 iOS apps cannot read notifications or SMS, and Apple does not let apps
-create automations. The user creates one Shortcuts automation per keyword
-(debited, credited, Sent Rs) once, and it hands each bank SMS to the app.
+create automations. The user creates one Shortcuts automation once (its trigger phrase is a
+single space, which matches every text), and it hands each message to the app.
 There are two ways it does so:
 
 - **Installed iOS build (recommended).** The app adds its own Shortcuts
   action, **Capture bank SMS** (an App Intent from `modules/bank-sms`). The
-  automation is just *Message contains "debited" → Capture bank SMS
+  automation is just *Message contains " " → Capture bank SMS
   (Message = Shortcut Input)*. It runs in the background without opening
   the app, discards anything that is not a bank alert (including OTPs),
   queues the rest on the phone and shows a "Payment detected"
@@ -184,7 +184,8 @@ reference, as on Android.
 
 The setup is guided in the app: **Settings → Payment detection** on the
 iPhone. In an installed build it asks for notification permission, shows
-a four-step card guide (the Shortcuts AI cannot create automations), and a status
+a card guide for the iOS 27 Shortcuts layout (Library → Automation; the
+AI cannot create automations) or the older Automation tab, and a status
 ("Waiting for your first bank text" / "Working"). In Expo Go it shows the
 six-step link guide with a **Copy link & open Shortcuts** button.
 **Test with a sample message** checks the parser in both.
