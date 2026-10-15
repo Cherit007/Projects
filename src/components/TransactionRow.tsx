@@ -39,6 +39,7 @@ export function TransactionRow({ item, showDate = false }: { item: TransactionLi
         </Text>
         <View style={styles.metaRow}>
           {isDetected && <Ionicons name="flash" size={12} color={colors.primary} />}
+          {item.source === 'recurring' && <Ionicons name="repeat" size={12} color={colors.primary} />}
           <Text style={styles.meta} numberOfLines={1}>
             {parts.filter(Boolean).join(' · ')}
           </Text>

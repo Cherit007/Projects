@@ -19,6 +19,7 @@ const typeInfo: Record<AccountType, { label: string; icon: IconName; color: stri
   cash: { label: 'Cash', icon: 'cash-outline', color: colors.income },
   bank: { label: 'Bank account', icon: 'business-outline', color: colors.primary },
   wallet: { label: 'Wallet', icon: 'wallet-outline', color: '#D97706' },
+  card: { label: 'Credit card', icon: 'card-outline', color: '#DB2777' },
 };
 
 async function loadAccounts(db: SQLiteDatabase) {
@@ -67,7 +68,7 @@ export default function AccountsScreen() {
         </Animated.View>
       }
       ListEmptyComponent={
-        <EmptyState icon="wallet-outline" title="No accounts yet" body="Add a cash or bank account to start tracking." />
+        <EmptyState icon="wallet-outline" title="No accounts yet" body="Add a cash, bank or credit card account to start tracking." />
       }
       renderItem={({ item, index }) => {
         const info = typeInfo[item.type];
@@ -85,11 +86,12 @@ export default function AccountsScreen() {
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.meta}>
                   {info.label}
+                  {item.type === 'card' ? (item.balanceMinor < 0 ? ' · Due' : ' · Nothing due') : ''}
                   {item.isArchived ? ' · Archived' : ''}
                 </Text>
               </View>
               <Amount
-                amountMinor={item.balanceMinor}
+                amountMinor={item.type === 'card' ? Math.abs(item.balanceMinor) : item.balanceMinor}
                 style={item.balanceMinor < 0 ? { color: colors.expense } : undefined}
               />
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

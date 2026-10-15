@@ -28,6 +28,15 @@
       "expo-router",
       "expo-sqlite",
       "expo-web-browser",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attach a photo of a receipt to a transaction. Photos stay on this device.",
+          "cameraPermission": "Take a photo of a receipt to attach to a transaction. Photos stay on this device.",
+          "microphonePermission": false
+        }
+      ],
       "./modules/bank-sms/app.plugin.js",
       "./plugins/withIosSceneLifecycle.js"
     ]

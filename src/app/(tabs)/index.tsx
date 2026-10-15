@@ -36,6 +36,7 @@ import { accountBalance, spendingByCategory } from '@/domain/accounting/accounti
 import { formatMinor, sumMinor } from '@/domain/money/money';
 import { monthKeyOf, type MonthKey } from '@/domain/period';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
+import { useRecurring } from '@/services/RecurringProvider';
 import { useUpi } from '@/services/upi/UpiProvider';
 import { categoryStyle } from '@/theme/categoryStyle';
 import { colors, radius, shadow } from '@/theme/colors';
@@ -53,7 +54,10 @@ async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
     ...monthData,
     people: people.slice(0, 3),
     budgets: budgets.progress.slice(0, 3),
-    totalBalanceMinor: sumMinor(accounts.map(a => accountBalance(a, flows.get(a.id)))),
+    totalBalanceMinor: sumMinor(accounts.filter(a => a.type !== 'card').map(a => accountBalance(a, flows.get(a.id)))),
+    cardDueMinor: -sumMinor(
+      accounts.filter(a => a.type === 'card').map(a => Math.min(0, accountBalance(a, flows.get(a.id)))),
+    ),
     spending: spendingByCategory(monthData.transactions, categories),
   };
 }
@@ -61,10 +65,11 @@ async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
 export default function DashboardScreen() {
   const [month, setMonth] = useState<MonthKey>(() => monthKeyOf(new Date()));
   const upi = useUpi();
-  // Detection syncs may add payments automatically, so they reload the dashboard too.
+  const recurring = useRecurring();
+  // Detection syncs and repeating transactions add entries in the background, so they reload the dashboard too.
   const { data, error, isLoading, reload } = useFocusQuery(
     useCallback((db: SQLiteDatabase) => loadDashboard(db, month), [month]),
-    upi.lastSyncAt,
+    `${upi.lastSyncAt}|${recurring.lastAddedAt}`,
   );
 
   const header = (
@@ -122,7 +127,29 @@ export default function DashboardScreen() {
               <Text style={styles.heroFooterText}>Cash and bank balance</Text>
               <Text style={styles.heroFooterAmount}>{formatMinor(data.totalBalanceMinor)}</Text>
             </View>
+            {data.cardDueMinor > 0 && (
+              <View style={styles.heroFooter}>
+                <Ionicons name="card-outline" size={16} color="#E0E7FF" />
+                <Text style={styles.heroFooterText}>Credit card dues</Text>
+                <Text style={styles.heroFooterAmount}>{formatMinor(data.cardDueMinor)}</Text>
+              </View>
+            )}
           </LinearGradient>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(60).duration(350)}>
+          <PressableScale hapticKind="light" onPress={() => router.push('/reports')}>
+            <Card style={styles.linkCard}>
+              <View style={[styles.reviewIcon, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="bar-chart" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.reviewText}>
+                <Text style={styles.reviewTitle}>Reports</Text>
+                <Text style={styles.reviewBody}>Month and year totals, categories and top payees</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </Card>
+          </PressableScale>
         </Animated.View>
 
         {upi.pendingCount > 0 && (
@@ -329,6 +356,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reviewText: { flex: 1, gap: 2 },
+  linkCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   reviewTitle: { fontWeight: '700', color: colors.text },
   reviewBody: { color: colors.textMuted, fontSize: 13 },
   section: { gap: 14 },

@@ -1,6 +1,12 @@
 import type { MinorUnits } from './money/money';
 
-export type AccountType = 'cash' | 'bank' | 'wallet';
+/** `card` is a credit card: its balance is negative while money is owed on it. */
+export type AccountType = 'cash' | 'bank' | 'wallet' | 'card';
+
+/** Bank and wallet accounts are where UPI payments come from and go to. */
+export function isUpiAccount(account: Pick<Account, 'type'>): boolean {
+  return account.type === 'bank' || account.type === 'wallet';
+}
 
 export interface Account {
   id: string;

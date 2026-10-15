@@ -56,25 +56,24 @@ export default function SettingsScreen() {
         <Card style={styles.card}>{renderAccount()}</Card>
       </Animated.View>
 
-      {(upi.available || Platform.OS === 'ios') && (
-        <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
-          <SectionTitle title="Features" />
-          <PressableScale hapticKind="light" onPress={() => router.push('/upi-settings')}>
-            <Card style={styles.linkRow}>
-              <View style={styles.icon}>
-                <Ionicons name="flash" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.flex}>
-                <Text style={styles.title}>Payment detection</Text>
-                <Text style={styles.muted}>
-                  {upi.available ? (upi.enabled ? 'On' : 'Off') : 'From bank SMS with Shortcuts'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-            </Card>
-          </PressableScale>
-        </Animated.View>
-      )}
+      <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
+        <SectionTitle title="Features" />
+        {(upi.available || Platform.OS === 'ios') && (
+          <LinkRow
+            icon="flash"
+            title="Payment detection"
+            detail={upi.available ? (upi.enabled ? 'On' : 'Off') : 'From bank SMS with Shortcuts'}
+            href="/upi-settings"
+          />
+        )}
+        <LinkRow icon="repeat" title="Repeating transactions" detail="Rent, subscriptions, salary" href="/recurring" />
+        <LinkRow icon="bar-chart" title="Reports" detail="Month and year totals" href="/reports" />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(120).duration(300)} style={styles.section}>
+        <SectionTitle title="Your data" />
+        <LinkRow icon="document-outline" title="Backup and restore" detail="Save everything to a file" href="/backup" />
+      </Animated.View>
     </ScrollView>
   );
 
@@ -161,6 +160,33 @@ export default function SettingsScreen() {
       </>
     );
   }
+}
+
+function LinkRow({
+  icon,
+  title,
+  detail,
+  href,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  title: string;
+  detail: string;
+  href: '/upi-settings' | '/recurring' | '/reports' | '/backup';
+}) {
+  return (
+    <PressableScale hapticKind="light" onPress={() => router.push(href)}>
+      <Card style={styles.linkRow}>
+        <View style={styles.icon}>
+          <Ionicons name={icon} size={20} color={colors.primary} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.muted}>{detail}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+      </Card>
+    </PressableScale>
+  );
 }
 
 const styles = StyleSheet.create({

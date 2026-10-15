@@ -253,31 +253,35 @@ marketing or expanding the feature set.
 
 ### P0 --- Must have for the first usable release
 
--   [ ] Local SQLite schema and migrations.
--   [ ] Income and expense transactions.
--   [ ] Categories and subcategories.
--   [ ] Cash and bank accounts.
--   [ ] Transaction list and edit flows.
--   [ ] Monthly dashboard.
--   [ ] Correct totals and accounting rules.
--   [ ] Unit tests for financial calculations.
--   [ ] Android notification detection proof of concept.
--   [ ] Manual review and duplicate handling for detected events.
--   [ ] Privacy explanation and notification-access settings.
--   [ ] Useful iOS manual entry experience.
+-   [x] Local SQLite schema and migrations.
+-   [x] Income and expense transactions.
+-   [x] Categories and subcategories.
+-   [x] Cash and bank accounts.
+-   [x] Transaction list and edit flows.
+-   [x] Monthly dashboard.
+-   [x] Correct totals and accounting rules.
+-   [x] Unit tests for financial calculations.
+-   [x] Android notification detection proof of concept.
+-   [x] Manual review and duplicate handling for detected events.
+-   [x] Privacy explanation and notification-access settings.
+-   [x] Useful iOS manual entry experience.
 
 ### P1 --- Core product completion
 
--   [ ] Appwrite Account and user-specific data permissions.
--   [ ] Offline-to-cloud synchronization.
--   [ ] Multiple accounts and transfers.
--   [ ] Budgets and spending alerts.
--   [ ] Monthly and yearly reports.
--   [ ] CSV import/export.
--   [ ] Recurring transactions.
--   [ ] Credit-card purchases and repayments.
--   [ ] Receipts and notes.
--   [ ] Backup and restore.
+-   [x] Appwrite Account and user-specific data permissions.
+-   [x] Offline-to-cloud synchronization.
+-   [x] Multiple accounts and transfers.
+-   [x] Budgets and spending alerts.
+-   [x] Monthly and yearly reports.
+-   [x] Recurring transactions.
+-   [x] Credit-card purchases and repayments.
+-   [x] Receipts and notes.
+-   [x] Backup and restore.
+
+Deferred from P1:
+
+-   [ ] CSV import/export. Full data portability is covered by the JSON
+    backup file for now.
 
 ### P2 --- Full personal finance management
 

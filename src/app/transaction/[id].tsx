@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { haptic } from '@/components/PressableScale';
@@ -20,6 +20,8 @@ import {
 import { budgetAlert, loadBudgetSummary } from '@/data/queries/budgetSummary';
 import { listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
+import { getReceiptUri, setReceiptUri } from '@/data/repositories/receipts';
+import { createRecurringRule } from '@/data/repositories/recurring';
 import { getOwnerName } from '@/data/repositories/settings';
 import {
   createTransaction,
@@ -40,9 +42,12 @@ import { predictCategoryName } from '@/domain/categories/autoCategory';
 import { isOwnName, learnedCategoryId, learnWords } from '@/domain/categories/payeeHistory';
 import { parseToMinor } from '@/domain/money/money';
 import { monthKeyOf } from '@/domain/period';
-import type { Account, Category, Transaction, TransactionInput, TransactionType } from '@/domain/types';
+import { FREQUENCY_LABEL, type Frequency } from '@/domain/recurring';
+import { isUpiAccount, type Account, type Category, type Transaction, type TransactionInput, type TransactionType } from '@/domain/types';
+import { deleteReceiptPhoto, pickReceiptPhoto, storeReceiptPhoto } from '@/services/receipts';
+import { useRecurring } from '@/services/RecurringProvider';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { categoryStyle } from '@/theme/categoryStyle';
+import { categoryStyle, type IconName } from '@/theme/categoryStyle';
 import { colors, radius, shadow } from '@/theme/colors';
 import { formatDisplayDate, fromLocalDateInput, toLocalDateInput } from '@/utils/dates';
 
@@ -58,13 +63,22 @@ interface Loaded {
   existing: Transaction | null;
   candidate: UpiCandidate | null;
   duplicate: { counterparty: string | null; occurredAt: string } | null;
+  receiptUri: string | null;
 }
+
+const repeatOptions: { value: Frequency | null; label: string }[] = [
+  { value: null, label: 'Never' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+];
 
 export default function TransactionForm() {
   const { id, candidateId } = useLocalSearchParams<{ id: string; candidateId?: string }>();
   const isNew = id === 'new';
   const db = useSQLiteContext();
   const upi = useUpi();
+  const recurring = useRecurring();
 
   const [loaded, setLoaded] = useState<Loaded>();
   const [loadError, setLoadError] = useState<Error>();
@@ -77,6 +91,8 @@ export default function TransactionForm() {
   const [date, setDate] = useState(toLocalDateInput(new Date().toISOString()));
   const [counterparty, setCounterparty] = useState('');
   const [note, setNote] = useState('');
+  const [repeat, setRepeat] = useState<Frequency | null>(null);
+  const [receiptUri, setReceiptUriState] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [saving, setSaving] = useState(false);
   const [{ today, yesterday }] = useState(() => {
@@ -97,13 +113,15 @@ export default function TransactionForm() {
         isNew && candidateId ? getCandidate(db, candidateId) : Promise.resolve(null),
       ]);
       const duplicate = candidate ? await findPossibleDuplicate(db, candidate) : null;
-      return { accounts, categories, existing, candidate, duplicate };
+      const receipt = existing ? await getReceiptUri(db, existing.id) : null;
+      return { accounts, categories, existing, candidate, duplicate, receiptUri: receipt };
     };
 
     load()
       .then(async result => {
         setLoaded(result);
         const { accounts, existing, candidate } = result;
+        setReceiptUriState(result.receiptUri);
         if (existing) {
           setType(existing.type);
           setAmount((existing.amountMinor / 100).toFixed(2));
@@ -116,7 +134,7 @@ export default function TransactionForm() {
           return;
         }
         const active = accounts.filter(a => !a.isArchived);
-        const defaultAccount = (candidate && active.find(a => a.type !== 'cash')) || active[0];
+        const defaultAccount = (candidate && active.find(isUpiAccount)) || active.find(a => a.type !== 'card') || active[0];
         if (defaultAccount) {
           setAccountId(defaultAccount.id);
         }
@@ -130,7 +148,7 @@ export default function TransactionForm() {
           setCounterparty(candidate.counterparty ?? '');
           if (isOwnName(candidate.counterparty, await getOwnerName(db))) {
             setType('transfer');
-            const other = active.filter(a => a.type !== 'cash' && a.id !== defaultAccount?.id);
+            const other = active.filter(a => isUpiAccount(a) && a.id !== defaultAccount?.id);
             if (other.length === 1 && defaultAccount) {
               const outgoing = candidate.direction !== 'credit';
               setAccountId(outgoing ? defaultAccount.id : other[0].id);
@@ -243,13 +261,31 @@ export default function TransactionForm() {
     try {
       const budgetMonth = monthKeyOf(new Date(input.occurredAt));
       const before = type === 'expense' ? await loadBudgetSummary(db, budgetMonth) : null;
+      let savedId = id;
       if (candidate) {
-        await confirmCandidate(db, candidate, input);
+        savedId = await confirmCandidate(db, candidate, input);
         await upi.refresh();
       } else if (isNew) {
-        await createTransaction(db, input);
+        await db.withTransactionAsync(async () => {
+          savedId = await createTransaction(db, input);
+          if (repeat) {
+            await createRecurringRule(db, input, repeat);
+          }
+        });
+        if (repeat) {
+          await recurring.run();
+        }
       } else {
         await updateTransaction(db, id, input);
+      }
+      if (receiptUri !== loaded.receiptUri) {
+        try {
+          const stored = receiptUri ? storeReceiptPhoto(receiptUri, savedId) : null;
+          await setReceiptUri(db, savedId, stored);
+          deleteReceiptPhoto(loaded.receiptUri);
+        } catch (err) {
+          Alert.alert('Saved without the receipt', err instanceof Error ? err.message : String(err));
+        }
       }
       const category = loaded.categories.find(c => c.id === input.categoryId);
       const alert =
@@ -277,12 +313,26 @@ export default function TransactionForm() {
         style: 'destructive',
         onPress: async () => {
           await deleteTransaction(db, id);
+          deleteReceiptPhoto(loaded.receiptUri);
           await upi.refresh();
           router.back();
         },
       },
     ]);
   };
+
+  const attachReceipt = async (source: 'camera' | 'library') => {
+    try {
+      const uri = await pickReceiptPhoto(source);
+      if (uri) {
+        setReceiptUriState(uri);
+      }
+    } catch (err) {
+      Alert.alert('Could not add receipt', err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const hasCard = accountOptions.some(a => a.type === 'card');
 
   const title = candidate ? 'Add detected payment' : isNew ? 'New transaction' : 'Edit transaction';
 
@@ -380,6 +430,9 @@ export default function TransactionForm() {
               ))}
             </View>
             {accountOptions.length < 2 && <Text style={styles.hint}>Add a second account to make transfers.</Text>}
+            {hasCard && (
+              <Text style={styles.hint}>Paying a credit card bill? Transfer from your bank account to the card.</Text>
+            )}
           </Field>
         )}
 
@@ -401,6 +454,43 @@ export default function TransactionForm() {
           <Input value={note} onChangeText={setNote} multiline placeholder="Anything to remember" />
         </Field>
 
+        {isNew && !candidate && (
+          <Field label="Repeat">
+            <View style={styles.chips}>
+              {repeatOptions.map(option => (
+                <Chip
+                  key={option.label}
+                  label={option.label}
+                  icon={option.value ? 'repeat' : undefined}
+                  selected={repeat === option.value}
+                  onPress={() => setRepeat(option.value)}
+                />
+              ))}
+            </View>
+            {repeat && (
+              <Text style={styles.hint}>
+                {FREQUENCY_LABEL[repeat]} from this date, this transaction is added again on its own. Stop it any
+                time under Settings › Repeating transactions.
+              </Text>
+            )}
+          </Field>
+        )}
+
+        <Field label="Receipt (optional)">
+          {receiptUri ? (
+            <View style={styles.receipt}>
+              <Image source={{ uri: receiptUri }} style={styles.receiptImage} resizeMode="cover" accessibilityLabel="Receipt photo" />
+              <Button title="Remove photo" variant="secondary" icon="trash-outline" onPress={() => setReceiptUriState(null)} />
+            </View>
+          ) : (
+            <View style={styles.chips}>
+              <Chip label="Take photo" icon="camera-outline" selected={false} onPress={() => attachReceipt('camera')} />
+              <Chip label="Choose photo" icon="image-outline" selected={false} onPress={() => attachReceipt('library')} />
+            </View>
+          )}
+          <Text style={styles.hint}>Photos stay on this phone and are not synced.</Text>
+        </Field>
+
         <Button
           title={saving ? 'Saving…' : candidate ? 'Add transaction' : 'Save'}
           icon="checkmark"
@@ -415,8 +505,15 @@ export default function TransactionForm() {
   );
 }
 
-function accountIcon(type: Account['type']) {
-  return type === 'cash' ? 'cash-outline' : type === 'wallet' ? 'wallet-outline' : 'business-outline';
+const ACCOUNT_ICONS: Record<Account['type'], IconName> = {
+  cash: 'cash-outline',
+  bank: 'business-outline',
+  wallet: 'wallet-outline',
+  card: 'card-outline',
+};
+
+function accountIcon(type: Account['type']): IconName {
+  return ACCOUNT_ICONS[type];
 }
 
 const styles = StyleSheet.create({
@@ -449,4 +546,6 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontSize: 13, marginTop: -10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   hint: { color: colors.textMuted, fontSize: 13 },
+  receipt: { gap: 10 },
+  receiptImage: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
 });

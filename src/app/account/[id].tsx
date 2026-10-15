@@ -1,7 +1,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { Button, ErrorState, Field, Input, LoadingState, Segmented } from '@/components/ui';
 import {
@@ -12,11 +12,13 @@ import {
 } from '@/data/repositories/accounts';
 import { parseToMinor } from '@/domain/money/money';
 import type { Account, AccountType } from '@/domain/types';
+import { colors } from '@/theme/colors';
 
 const typeOptions = [
   { value: 'cash', label: 'Cash' },
   { value: 'bank', label: 'Bank' },
   { value: 'wallet', label: 'Wallet' },
+  { value: 'card', label: 'Card' },
 ] as const;
 
 export default function AccountForm() {
@@ -41,7 +43,8 @@ export default function AccountForm() {
         if (found) {
           setName(found.name);
           setType(found.type);
-          setOpening((found.openingBalanceMinor / 100).toFixed(2));
+          const shown = found.type === 'card' ? -found.openingBalanceMinor : found.openingBalanceMinor;
+          setOpening((shown / 100).toFixed(2));
         }
       })
       .catch(setLoadError);
@@ -69,7 +72,7 @@ export default function AccountForm() {
     }
     setSaving(true);
     try {
-      const input = { name, type, openingBalanceMinor: openingMinor };
+      const input = { name, type, openingBalanceMinor: type === 'card' ? -openingMinor : openingMinor };
       if (isNew) {
         await createAccount(db, input);
       } else {
@@ -99,9 +102,15 @@ export default function AccountForm() {
       <Field label="Type">
         <Segmented options={typeOptions} value={type} onChange={setType} />
       </Field>
-      <Field label="Opening balance (₹)" error={errors.opening}>
+      <Field label={type === 'card' ? 'Amount owed now (₹)' : 'Opening balance (₹)'} error={errors.opening}>
         <Input value={opening} onChangeText={setOpening} keyboardType="decimal-pad" />
       </Field>
+      {type === 'card' && (
+        <Text style={styles.hint}>
+          Record card purchases as expenses on this card. When you pay the bill, add a transfer from your bank
+          account to the card.
+        </Text>
+      )}
       <Button title={saving ? 'Saving…' : 'Save'} onPress={save} disabled={saving} />
       {account && (
         <Button
@@ -116,4 +125,5 @@ export default function AccountForm() {
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 16 },
+  hint: { color: colors.textMuted, fontSize: 13, lineHeight: 18, marginTop: -6 },
 });

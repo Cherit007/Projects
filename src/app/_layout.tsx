@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { LoadingState } from '@/components/ui';
 import { migrateDbIfNeeded } from '@/data/local/migrations';
 import { CloudProvider } from '@/services/cloud/CloudProvider';
+import { RecurringProvider } from '@/services/RecurringProvider';
 import { UpiProvider } from '@/services/upi/UpiProvider';
 import { colors } from '@/theme/colors';
 
@@ -15,6 +16,7 @@ export default function RootLayout() {
       <SQLiteProvider databaseName="finance.db" onInit={migrateDbIfNeeded} useSuspense>
         <CloudProvider>
         <UpiProvider>
+        <RecurringProvider>
           <StatusBar style="dark" />
           <Stack
             screenOptions={{
@@ -34,7 +36,11 @@ export default function RootLayout() {
             <Stack.Screen name="capture" options={{ title: 'Capture payment' }} />
             <Stack.Screen name="people/index" options={{ title: 'Friends and family' }} />
             <Stack.Screen name="people/[name]" options={{ title: '' }} />
+            <Stack.Screen name="reports" options={{ title: 'Reports' }} />
+            <Stack.Screen name="recurring" options={{ title: 'Repeating transactions' }} />
+            <Stack.Screen name="backup" options={{ title: 'Backup and restore' }} />
           </Stack>
+        </RecurringProvider>
         </UpiProvider>
         </CloudProvider>
       </SQLiteProvider>

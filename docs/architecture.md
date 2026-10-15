@@ -33,6 +33,48 @@ force for Milestone 1:
 - An expense decreases an account balance and increases the expense total.
 - A transfer moves money between two owned accounts and is neither income
   nor expense.
+- A credit card is an account of type `card` whose balance is negative while
+  money is owed. Purchases are expenses on the card, counted when made;
+  paying the bill is a transfer from a bank account to the card, so it is
+  not counted as spending a second time. Detected UPI payments never
+  default to a card.
+
+## Reports
+
+`src/domain/reports.ts` derives month and year reports from the same
+transactions and rules as the dashboard: monthly totals, totals by
+top-level category with shares, top payees and the savings rate.
+
+## Repeating transactions
+
+A rule in `recurring_rules` stores a transaction template, a frequency
+(weekly, monthly, yearly), its start and how many repeats exist. Repeat `n`
+is computed from the start, so monthly rules keep their day and use the
+last day of shorter months (31 Jan, 28 Feb, 31 Mar). Due repeats are
+created when the app starts or returns to the foreground, at most 60 at a
+time, in one transaction per rule. Rules are local only, so two signed-in
+devices never both add the same repeat.
+
+## Receipts
+
+A receipt photo is copied into the app's document folder and linked in the
+local `receipts` table (deleted with its transaction). Photos are never
+synced or included in backups.
+
+## Backup and restore
+
+A backup is one JSON file (`src/domain/backup.ts`) with every row of
+accounts, categories, transactions, budgets, repeating rules, receipt links
+and settings, plus the schema version. Detected payment messages are never
+included. Restoring checks the file, then replaces all data in one
+transaction with deferred foreign keys: if anything is inconsistent,
+nothing changes. Unknown columns are dropped and missing ones get defaults,
+so older backups restore; backups from newer versions are refused. When
+signed in, the restore syncs like any other change.
+
+Migrations run with foreign keys off (SQLite needs this to rebuild a
+table, e.g. to allow the `card` type), check `PRAGMA foreign_key_check`
+before committing each step, and turn them back on.
 
 ## Time
 

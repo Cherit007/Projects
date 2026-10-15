@@ -236,6 +236,7 @@ async function mergeWithCloud(db: SQLiteDatabase, backend: SyncBackend): Promise
         continue;
       }
       await db.runAsync('UPDATE transactions SET category_id = ? WHERE category_id = ?', target, local.id);
+      await db.runAsync('UPDATE recurring_rules SET category_id = ? WHERE category_id = ?', target, local.id);
       await db.runAsync('UPDATE categories SET parent_id = ? WHERE parent_id = ?', target, local.id);
       await db.runAsync('UPDATE OR IGNORE budgets SET category_id = ? WHERE category_id = ?', target, local.id);
       await db.runAsync('DELETE FROM budgets WHERE category_id = ?', local.id);
@@ -248,6 +249,8 @@ async function mergeWithCloud(db: SQLiteDatabase, backend: SyncBackend): Promise
       }
       await db.runAsync('UPDATE transactions SET account_id = ? WHERE account_id = ?', target, local.id);
       await db.runAsync('UPDATE transactions SET to_account_id = ? WHERE to_account_id = ?', target, local.id);
+      await db.runAsync('UPDATE recurring_rules SET account_id = ? WHERE account_id = ?', target, local.id);
+      await db.runAsync('UPDATE recurring_rules SET to_account_id = ? WHERE to_account_id = ?', target, local.id);
       await db.runAsync('DELETE FROM accounts WHERE id = ?', local.id);
     }
   });

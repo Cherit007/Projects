@@ -149,6 +149,48 @@ const MIGRATIONS: readonly Migration[] = [
       await addCategoryIfMissing(db, name, type);
     }
   },
+  async db => {
+    // SQLite cannot change a CHECK constraint, so the table is rebuilt to allow credit cards.
+    await db.execAsync(`
+      CREATE TABLE accounts_new (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('cash', 'bank', 'wallet', 'card')),
+        opening_balance_minor INTEGER NOT NULL DEFAULT 0,
+        currency TEXT NOT NULL DEFAULT 'INR',
+        is_archived INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT ''
+      );
+      INSERT INTO accounts_new (id, name, type, opening_balance_minor, currency, is_archived, created_at, updated_at)
+        SELECT id, name, type, opening_balance_minor, currency, is_archived, created_at, updated_at FROM accounts;
+      DROP TABLE accounts;
+      ALTER TABLE accounts_new RENAME TO accounts;
+
+      CREATE TABLE recurring_rules (
+        id TEXT PRIMARY KEY NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
+        amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+        account_id TEXT NOT NULL REFERENCES accounts (id),
+        to_account_id TEXT REFERENCES accounts (id),
+        category_id TEXT REFERENCES categories (id),
+        counterparty TEXT,
+        note TEXT,
+        frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
+        start_at TEXT NOT NULL,
+        occurrences INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE receipts (
+        transaction_id TEXT PRIMARY KEY NOT NULL REFERENCES transactions (id) ON DELETE CASCADE,
+        uri TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+    await db.execAsync(outboxTriggers('accounts'));
+  },
 ];
 
 async function addCategoryIfMissing(db: SQLiteDatabase, name: string, type: 'expense' | 'income'): Promise<void> {
@@ -193,21 +235,30 @@ function outboxTriggers(table: SyncedTable): string {
   `;
 }
 
-export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
-  await db.execAsync('PRAGMA foreign_keys = ON');
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
+export async function migrateDbIfNeeded(db: SQLiteDatabase, targetVersion = MIGRATIONS.length): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>(
     'PRAGMA user_version',
   );
   let version = row?.user_version ?? 0;
+  // Table rebuilds drop tables that others reference, so foreign keys are
+  // checked once at the end instead (the pragma is ignored inside a transaction).
+  await db.execAsync('PRAGMA foreign_keys = OFF');
   // Runs inside SQLiteProvider's onInit, before any other query, so a regular
   // transaction cannot interleave with other work.
-  while (version < MIGRATIONS.length) {
+  while (version < targetVersion) {
     const migration = MIGRATIONS[version];
     const next = version + 1;
     await db.withTransactionAsync(async () => {
       await migration(db);
+      const broken = await db.getFirstAsync('PRAGMA foreign_key_check');
+      if (broken) {
+        throw new Error(`Migration ${next} broke a foreign key: ${JSON.stringify(broken)}`);
+      }
       await db.execAsync(`PRAGMA user_version = ${next}`);
     });
     version = next;
   }
+  await db.execAsync('PRAGMA foreign_keys = ON');
 }

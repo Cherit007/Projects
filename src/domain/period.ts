@@ -23,6 +23,14 @@ export function monthRange({ year, month }: MonthKey): DateRange {
   };
 }
 
+/** Year boundaries in the device's local timezone, expressed in UTC. */
+export function yearRange(year: number): DateRange {
+  return {
+    startIso: new Date(year, 0, 1).toISOString(),
+    endIso: new Date(year + 1, 0, 1).toISOString(),
+  };
+}
+
 export function addMonths({ year, month }: MonthKey, delta: number): MonthKey {
   const date = new Date(year, month + delta, 1);
   return monthKeyOf(date);

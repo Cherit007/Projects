@@ -13,7 +13,7 @@ import {
 import { predictCategoryName } from '../../domain/categories/autoCategory';
 import { FRIENDS_CATEGORY, RENT_CATEGORY } from '../../domain/categories/defaults';
 import { isOwnName, learnedCategoryId, learnWords, type LearnedWords } from '../../domain/categories/payeeHistory';
-import type { Account, Category, TransactionInput } from '../../domain/types';
+import { isUpiAccount, type Account, type Category, type TransactionInput } from '../../domain/types';
 
 /** Regular payments to a person from this amount (₹3,000) up are taken for rent. */
 const RENT_MIN_MINOR = 300_000;
@@ -62,7 +62,7 @@ async function chooseCategory(db: SQLiteDatabase, candidate: UpiCandidate, conte
  * wallet account to pair it with; otherwise null (left for review).
  */
 function ownTransfer(candidate: UpiCandidate, account: Account, context: Context): TransactionInput | null {
-  const other = context.accounts.filter(a => a.type !== 'cash' && a.id !== account.id);
+  const other = context.accounts.filter(a => isUpiAccount(a) && a.id !== account.id);
   if (other.length !== 1 || candidate.amountMinor === null) {
     return null;
   }
@@ -95,7 +95,7 @@ export async function autoAddCandidates(db: SQLiteDatabase, candidateIds: readon
     listCategorisedPayees(db),
     getOwnerName(db),
   ]);
-  const account = accounts.find(a => a.type !== 'cash') ?? accounts[0];
+  const account = accounts.find(isUpiAccount) ?? accounts.find(a => a.type === 'cash');
   if (!account) {
     return 0;
   }
