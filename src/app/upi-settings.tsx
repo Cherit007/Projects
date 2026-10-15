@@ -223,9 +223,11 @@ function AutoAddCard({ enabled, onChange }: { enabled: boolean; onChange: (next:
       <View style={styles.toggleText}>
         <Text style={styles.toggleTitle}>Add payments automatically</Text>
         <Text style={styles.muted}>
-          When the category is clear: a payee you have used before, a known merchant like Swiggy, or a shop name the
-          built-in model recognises, like &quot;Balaji Medicals&quot;. Others wait in the review list.
+          Successful payments are added with a category: the one you last used for that payee, Friends for people,
+          or the shop type the built-in model recognises, like &quot;Balaji Medicals&quot;. Anything unclear goes to
+          Other. Failed payments and possible duplicates wait in the review list.
         </Text>
+        <Text style={styles.credit}>Model trained partly on © OpenStreetMap contributors data (ODbL).</Text>
       </View>
       <Switch
         value={enabled}
@@ -243,7 +245,7 @@ function ReviewPrivacyPoint({ autoAdd }: { autoAdd: boolean }) {
       icon="hand-left-outline"
       text={
         autoAdd
-          ? 'Only payments with a clear category are added on their own; you can edit or delete them. Everything else waits for you.'
+          ? 'Successful payments are added on their own, and you can edit or delete them. Failed payments and possible duplicates wait for you.'
           : 'Nothing is saved until you review and confirm it.'
       }
     />
@@ -292,6 +294,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 20, paddingBottom: 48 },
   section: { gap: 10 },
   muted: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  credit: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   toggleCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   toggleIcon: {
     width: 44,

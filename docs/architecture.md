@@ -183,17 +183,30 @@ The Dashboard shows the top three; `/people` lists everyone and
 A naive Bayes model over words, their 3–4 letter fragments and the last word
 of the payee name (`payeeFeatures.ts`), with classes for each shop category,
 people (`__person__`) and vague businesses, banks and payment gateways
-(`__unknown__`). A known word counts once; an unknown word counts as the
-average of its fragments. `decidePayee` treats the payee as a person at
-probability ≥ 0.4 (mobile-number UPI IDs always), otherwise gives the best
-shop category when it holds ≥ 0.35 of the business probability.
+(`__unknown__`). Likelihoods are the share of each class's examples that
+have a feature, smoothed towards its overall share, so the large person class
+stays comparable to small shop classes. A known word counts once; an unknown
+word counts as the known words it ends with (run-together UPI IDs like
+`maharajarestaurant@oksbi`), else the average of its fragments.
+`decidePayee` treats the payee as a person at probability ≥ 0.55
+(mobile-number UPI IDs always), otherwise gives the best shop category when
+it holds ≥ 0.5 of the business probability, else none (Other).
 
-`node scripts/train-payee-classifier.mts [--verbose]` generates labelled
-Indian payee names, evaluates on held-out rows (people with names never seen
-in training: about 74% recognised, under 1% of businesses taken for people,
-85% of shops categorised with 98% correct), then trains on everything and
-writes `src/domain/categories/payeeModel.json` (about 0.8 MB, runs in
-milliseconds, fully offline). Retrain after editing the word lists.
+Training data:
+
+- generated names from hand-made lists (brands, shop keywords, banks,
+  gateways, Indian first names and surnames) in `train-payee-classifier.mts`
+- real names, when downloaded with `node scripts/fetch-payee-data.mts` into
+  `scripts/data/` (not committed): Indian businesses with their type from
+  OpenStreetMap (© OpenStreetMap contributors, ODbL; credited in the app) and
+  people's names from Wikidata (CC0)
+
+`node scripts/train-payee-classifier.mts [--verbose]` evaluates on names left
+out of training, then trains on everything and writes
+`src/domain/categories/payeeModel.json` (about 0.8 MB, runs in milliseconds,
+fully offline). On real held-out names: about 88% of people recognised, 5% of
+businesses taken for people (mostly shops named like a person), 69% of shops
+categorised with 87% correct; the rest go to Other.
 
 ## Platform constraints
 

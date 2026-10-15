@@ -4,12 +4,13 @@
  *
  *   node scripts/train-payee-classifier.mts [--verbose]
  *
- * Generates labelled Indian payee names (brands, descriptive shop names,
- * banks, people), trains a naive Bayes model on payeeFeatures, evaluates it
- * on held-out rows (people use names never seen in training) and writes
- * src/domain/categories/payeeModel.json.
+ * Combines generated Indian payee names (brands, descriptive shop names,
+ * banks, people) with real names from scripts/fetch-payee-data.mts when
+ * downloaded (OpenStreetMap businesses, Wikidata people), trains a naive
+ * Bayes model on payeeFeatures, evaluates it on names left out of training
+ * and writes src/domain/categories/payeeModel.json.
  */
-import { writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 import {
   decidePayee,
@@ -64,6 +65,12 @@ const HANDLES = ['ybl', 'okaxis', 'oksbi', 'okhdfcbank', 'okicici', 'paytm', 'ib
 const TITLES = ['mr', 'mrs', 'ms', 'smt', 'shri', 'sri', 'kumari', 'dr', 'md', 'syed', 'sk', 'mohd'];
 
 const PERSON_PRIOR = 0.4;
+/** Rarer features (other than curated words) are dropped: they mostly memorise single names and grow the model. */
+const MIN_DOCUMENT_FREQUENCY = 25;
+/** Features whose weights differ less than this between classes are dropped. */
+const MIN_SPREAD = 1.5;
+/** Strength of the pull towards a feature's overall share, in examples. */
+const SMOOTHING = 200;
 const UNKNOWN_PRIOR = 0.1;
 
 let seed = 42;
@@ -154,37 +161,54 @@ function dataset(first: readonly string[], last: readonly string[]): [string, st
   return rows;
 }
 
+/** Words from the hand-made lists are kept even when rare in the data. */
+const CURATED_FEATURES = new Set(
+  [
+    ...Object.values(BRANDS).flat(),
+    ...Object.values(KEYWORDS).flat(),
+    ...BANKS,
+    ...GATEWAYS,
+    ...VAGUE,
+    ...FIRST_NAMES,
+    ...LAST_NAMES,
+  ].flatMap(name => payeeFeatures(name).map(([word]) => word)),
+);
+
 interface Model {
   classes: string[];
   logPriors: number[];
   features: Record<string, number[]>;
 }
 
+/**
+ * Naive Bayes over the share of each class's examples that have a feature,
+ * smoothed towards the feature's overall share (a Dirichlet prior). Unlike
+ * word-count shares, this keeps big classes (people) comparable to small
+ * ones, and a class that never saw a feature falls back to "no evidence".
+ */
 function train(rows: [string, string][]): Model {
   const classes = [...new Set(rows.map(([, label]) => label))].sort();
-  const featureTotals = classes.map(() => 0);
+  const classRows = classes.map(() => 0);
   const counts = new Map<string, number[]>();
-  const documentFrequency = new Map<string, number>();
   for (const [text, label] of rows) {
     const c = classes.indexOf(label);
-    for (const feature of payeeFeatures(text).flat()) {
-      documentFrequency.set(feature, (documentFrequency.get(feature) ?? 0) + 1);
+    classRows[c] += 1;
+    for (const feature of new Set(payeeFeatures(text).flat())) {
       const perClass = counts.get(feature) ?? classes.map(() => 0);
       perClass[c] += 1;
-      featureTotals[c] += 1;
       counts.set(feature, perClass);
     }
   }
-  const vocabulary = [...counts.keys()].filter(feature => (documentFrequency.get(feature) ?? 0) >= 3);
-  const alpha = 0.5;
   const features: Record<string, number[]> = {};
-  for (const feature of vocabulary) {
-    const perClass = counts.get(feature)!;
-    const weights = perClass.map((count, c) =>
-      Math.log((count + alpha) / (featureTotals[c] + alpha * vocabulary.length)),
-    );
+  for (const [feature, perClass] of counts) {
+    const total = perClass.reduce((sum, n) => sum + n, 0);
+    if (!CURATED_FEATURES.has(feature) && total < MIN_DOCUMENT_FREQUENCY) {
+      continue;
+    }
+    const background = total / rows.length;
+    const weights = perClass.map((n, c) => Math.log((n + SMOOTHING * background) / (classRows[c] + SMOOTHING)));
     // Features that barely differ between classes only add noise and size.
-    if (Math.max(...weights) - Math.min(...weights) >= 1) {
+    if (Math.max(...weights) - Math.min(...weights) >= MIN_SPREAD) {
       features[feature] = weights.map(w => Math.round(w * 10) / 10);
     }
   }
@@ -208,50 +232,173 @@ function shuffle<T>(items: T[]): T[] {
   return items;
 }
 
-// Evaluate a model trained without some names, then ship one trained on all of them.
-const rows = shuffle(dataset(TRAIN_FIRST, TRAIN_LAST));
-const split = Math.floor(rows.length * 0.85);
-const trial = train(rows.slice(0, split));
-const businesses = rows.slice(split).filter(([, label]) => label !== PERSON);
-const unseenPeople = Array.from({ length: 1000 }, () => person(TEST_FIRST, TEST_LAST));
+// ---------------------------------------------------------------------------
+// Real names from scripts/fetch-payee-data.mts, when downloaded.
+
+type Place = Record<string, string>;
+
+/** OpenStreetMap tag values → label, checked in this key order. */
+const OSM_LABELS: [key: string, values: RegExp, label: string][] = [
+  ['amenity', /^(restaurant|fast_food|cafe|food_court|ice_cream|bar|pub)$/, 'Food and dining'],
+  ['amenity', /^(fuel|parking|car_wash|charging_station|car_rental)$/, 'Transport'],
+  ['amenity', /^(pharmacy|hospital|clinic|doctors|dentist|veterinary)$/, 'Healthcare'],
+  ['amenity', /^(cinema|theatre|nightclub|arts_centre)$/, 'Entertainment'],
+  ['amenity', /^(school|college|university|kindergarten|language_school|driving_school|training)$/, 'Education'],
+  ['amenity', /^(bank|atm|bureau_de_change)$/, UNKNOWN],
+  ['shop', /^(supermarket|convenience|greengrocer|butcher|dairy|grocery|seafood|farm|health_food|frozen_food|deli|general|rice|spices|water|beverages|tea|nuts|wholesale)$/, 'Groceries'],
+  ['shop', /^(bakery|confectionery|pastry|sweets|chocolate)$/, 'Food and dining'],
+  ['shop', /^(car|car_repair|car_parts|tyres|motorcycle|motorcycle_repair|bicycle|fuel)$/, 'Transport'],
+  ['shop', /^(chemist|medical_supply|hearing_aids|herbalist|optician)$/, 'Healthcare'],
+  ['shop', /^(books|stationery)$/, 'Education'],
+  ['shop', /^(travel_agency)$/, 'Travel'],
+  ['shop', /^(money_lender|pawnbroker)$/, 'Loan interest and fees'],
+  ['shop', /^(mobile_phone|electronics|clothes|shoes|jewelry|furniture|hardware|gift|cosmetics|department_store|mall|bag|boutique|fabric|tailor|toys|sports|computer|appliance|variety_store|houseware|watches|paint|doityourself|fashion_accessories|perfumery|interior_decoration|kitchen|bed|carpet|curtain|lighting|photo|florist|garden_centre|textiles|saree|electrical|trade)$/, 'Shopping'],
+  ['tourism', /./, 'Travel'],
+  ['healthcare', /./, 'Healthcare'],
+  ['office', /^(company|it|consulting|financial|insurance)$/, UNKNOWN],
+  ['office', /^(estate_agent)$/, 'Rent and housing'],
+  ['office', /^(travel_agent)$/, 'Travel'],
+  ['office', /^(telecommunication|energy_supplier)$/, 'Utilities and bills'],
+  ['leisure', /^(amusement_arcade|water_park|bowling_alley)$/, 'Entertainment'],
+  ['craft', /^(tailor)$/, 'Shopping'],
+  ['craft', /^(caterer)$/, 'Food and dining'],
+];
+
+function osmLabel(place: Place): string | null {
+  for (const [key, values, label] of OSM_LABELS) {
+    if (place[key] && values.test(place[key])) {
+      return label;
+    }
+  }
+  return null;
+}
+
+/** Latin-script name without accents or bracketed notes, as it would appear in an SMS; else null. */
+function cleanName(name: string): string | null {
+  const text = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return /^[A-Za-z][A-Za-z .&'-]{2,59}$/.test(text) ? text : null;
+}
+
+function readJson<T>(file: string): T | null {
+  const url = new URL(`./data/${file}`, import.meta.url);
+  return existsSync(url) ? (JSON.parse(readFileSync(url, 'utf8')) as T) : null;
+}
+
+function loadRealBusinesses(): [string, string][] {
+  const votes = new Map<string, Map<string, number>>();
+  const display = new Map<string, string>();
+  for (const file of existsSync(new URL('./data/', import.meta.url)) ? readdirSync(new URL('./data/', import.meta.url)) : []) {
+    if (!file.startsWith('osm-')) continue;
+    for (const place of readJson<Place[]>(file) ?? []) {
+      const name = place.name && cleanName(place.name);
+      const label = osmLabel(place);
+      if (!name || !label) continue;
+      const key = name.toLowerCase();
+      display.set(key, name);
+      const counts = votes.get(key) ?? new Map<string, number>();
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+      votes.set(key, counts);
+    }
+  }
+  // One row per distinct name, with the label most places of that name have.
+  return [...votes].map(([key, counts]) => [display.get(key)!, [...counts].sort((a, b) => b[1] - a[1])[0][0]]);
+}
+
+function loadRealPeople(limit: number): string[] {
+  const names = (readJson<string[]>('people.json') ?? []).map(cleanName).filter((n): n is string => n !== null);
+  return shuffle([...new Set(names)]).slice(0, limit);
+}
+
+/** How a real name might show up in a bank SMS or as a UPI ID. */
+function asPayee(name: string, isPerson: boolean): string {
+  const words = name.toLowerCase().replace(/[^a-z ]/g, '').split(' ').filter(Boolean);
+  const roll = random();
+  if (roll < 0.12 && words.length > 0) {
+    const id = isPerson && words.length > 1 ? pick([words.join(''), `${words[0]}.${words[words.length - 1]}`, words[0]]) : words.join('');
+    return `${id}@${pick(HANDLES)}`;
+  }
+  if (isPerson && roll < 0.25 && words.length > 1) {
+    return caseLike(`${words[0][0]} ${words.slice(1).join(' ')}`);
+  }
+  return caseLike(name);
+}
+
+const REAL_PEOPLE_LIMIT = 40_000;
+const realBusinesses = shuffle(loadRealBusinesses());
+const realPeople = loadRealPeople(REAL_PEOPLE_LIMIT);
+const realRows = (businesses: [string, string][], people: string[]): [string, string][] => [
+  ...businesses.map(([name, label]): [string, string] => [asPayee(name, false), label]),
+  ...people.map((name): [string, string] => [asPayee(name, true), PERSON]),
+];
+
+// ---------------------------------------------------------------------------
+// Evaluate models trained without some names, then ship one trained on everything.
+
 const verbose = process.argv.includes('--verbose');
+const pct = (n: number, d: number) => (d === 0 ? '-' : `${((n / d) * 100).toFixed(1)}%`);
 
-let peopleFound = 0;
-for (const text of unseenPeople) {
-  if (decide(trial, text).person) {
-    peopleFound += 1;
-  } else if (verbose) {
-    console.log(`  person missed: ${text}`);
+function report(title: string, model: Model, rows: [string, string][]): void {
+  let people = 0;
+  let peopleFound = 0;
+  let businesses = 0;
+  let asPerson = 0;
+  let shops = 0;
+  let categorised = 0;
+  let correct = 0;
+  let vague = 0;
+  let vagueCategorised = 0;
+  for (const [text, label] of rows) {
+    const { person, category } = decide(model, text);
+    if (label === PERSON) {
+      people += 1;
+      peopleFound += person ? 1 : 0;
+      if (verbose && !person) console.log(`  person missed: ${text}`);
+      continue;
+    }
+    businesses += 1;
+    if (person) {
+      asPerson += 1;
+      if (verbose) console.log(`  business taken as person: ${text} (${label})`);
+    } else if (label === UNKNOWN) {
+      vague += 1;
+      vagueCategorised += category ? 1 : 0;
+    } else {
+      shops += 1;
+      if (category) {
+        categorised += 1;
+        correct += category === label ? 1 : 0;
+        if (verbose && category !== label) console.log(`  wrong: ${text} -> ${category} (${label})`);
+      }
+    }
   }
+  console.log(`${title}:`);
+  console.log(`  people recognised: ${pct(peopleFound, people)} of ${people} (rest go to Other)`);
+  console.log(`  businesses taken as people: ${pct(asPerson, businesses)} of ${businesses}`);
+  console.log(`  shops categorised: ${pct(categorised, shops)} of ${shops}, correct ${pct(correct, categorised)} (rest go to Other)`);
+  console.log(`  banks/vague businesses given a category: ${pct(vagueCategorised, vague)} of ${vague}`);
 }
-let asPerson = 0;
-let categorised = 0;
-let correct = 0;
-let vagueCategorised = 0;
-for (const [text, label] of businesses) {
-  const { person: isPerson, category } = decide(trial, text);
-  if (isPerson) {
-    asPerson += 1;
-    if (verbose) console.log(`  business taken as person: ${text} (${label})`);
-  } else if (category && label !== UNKNOWN) {
-    categorised += 1;
-    correct += category === label ? 1 : 0;
-    if (verbose && category !== label) console.log(`  wrong: ${text} -> ${category} (${label})`);
-  } else if (category) {
-    vagueCategorised += 1;
-  }
-}
-const known = businesses.filter(([, label]) => label !== UNKNOWN).length;
-const pct = (n: number, d: number) => `${((n / d) * 100).toFixed(1)}%`;
-console.log(`examples: ${rows.length}`);
-console.log(`unseen people recognised: ${pct(peopleFound, unseenPeople.length)} (rest go to Other)`);
-console.log(`held-out businesses taken as people: ${asPerson} of ${businesses.length}`);
-console.log(
-  `shops categorised: ${pct(categorised, known)}, correct ${pct(correct, categorised)} (rest go to Other); vague names/banks given a category: ${vagueCategorised}`,
-);
 
-const allRows = dataset(FIRST_NAMES, LAST_NAMES);
-const model = train(allRows);
+const synthetic = shuffle(dataset(TRAIN_FIRST, TRAIN_LAST));
+const syntheticSplit = Math.floor(synthetic.length * 0.85);
+const unseenPeople = Array.from({ length: 1000 }, (): [string, string] => [person(TEST_FIRST, TEST_LAST), PERSON]);
+const businessSplit = Math.floor(realBusinesses.length * 0.85);
+const peopleSplit = Math.floor(realPeople.length * 0.85);
+const trial = train([
+  ...synthetic.slice(0, syntheticSplit),
+  ...realRows(realBusinesses.slice(0, businessSplit), realPeople.slice(0, peopleSplit)),
+]);
+console.log(`real data: ${realBusinesses.length} business names, ${realPeople.length} people`);
+report('generated names (people unseen in training)', trial, [...synthetic.slice(syntheticSplit), ...unseenPeople]);
+if (realBusinesses.length + realPeople.length > 0) {
+  report('real names unseen in training', trial, realRows(realBusinesses.slice(businessSplit), realPeople.slice(peopleSplit)));
+}
+
+const model = train([...dataset(FIRST_NAMES, LAST_NAMES), ...realRows(realBusinesses, realPeople)]);
 const json = JSON.stringify(model);
 writeFileSync(new URL('../src/domain/categories/payeeModel.json', import.meta.url), `${json}\n`);
 console.log(`features: ${Object.keys(model.features).length}, model size: ${(json.length / 1024).toFixed(0)} KB`);

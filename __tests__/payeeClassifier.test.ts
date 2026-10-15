@@ -42,7 +42,7 @@ const PEOPLE = [
 // Businesses whose name says nothing about the spending, banks and payment gateways.
 const VAGUE_BUSINESSES = [
   'SRI LAKSHMI ENTERPRISES',
-  'Kumar Traders',
+  'Kumar Associates',
   'Patel Brothers',
   'HDFC BANK',
   'KOTAK MAHINDRA BANK',

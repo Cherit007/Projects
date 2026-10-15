@@ -33,9 +33,9 @@ export const UNKNOWN_CLASS = '__unknown__';
 /** Class the model uses for people's names. */
 export const PERSON_CLASS = '__person__';
 /** A payee is treated as a person when this likely or more. */
-export const MIN_PERSON_PROBABILITY = 0.4;
+export const MIN_PERSON_PROBABILITY = 0.55;
 /** A business gets a category when this share of the business probability agrees; else Other. */
-export const MIN_CATEGORY_CONFIDENCE = 0.35;
+export const MIN_CATEGORY_CONFIDENCE = 0.5;
 
 /** UPI IDs made of a mobile number belong to people; merchants use QR or named IDs. */
 const MOBILE_VPA = /^(\+?91)?[6-9]\d{9}@[a-z.]+$/i;
@@ -73,6 +73,26 @@ export function decidePayee(payee: string, classes: readonly string[], scores: r
 }
 
 /**
+ * Weights for a run-together word such as a UPI ID ("maharajarestaurant"):
+ * the known word it ends with (5+ letters), plus the start when that is a
+ * known word too. Null when there is no such ending.
+ */
+function splitKnown(
+  feature: string,
+  weights: Readonly<Record<string, readonly number[]>>,
+): (readonly number[])[] | null {
+  const word = feature.slice(2);
+  for (let i = 1; i <= word.length - 5; i++) {
+    const end = weights[`w:${word.slice(i)}`];
+    if (end) {
+      const start = i >= 3 ? weights[`w:${word.slice(0, i)}`] : undefined;
+      return start ? [start, end] : [end];
+    }
+  }
+  return null;
+}
+
+/**
  * Class scores for a payee: each known word counts once; an unknown word
  * counts as the average of its known fragments, so fragments of one word
  * are not counted as independent evidence.
@@ -84,7 +104,9 @@ export function scorePayee(
 ): number[] {
   const scores = [...logPriors];
   for (const [word, ...fragments] of payeeFeatures(payee)) {
-    const known = weights[word] ? [weights[word]] : fragments.map(f => weights[f]).filter(w => w !== undefined);
+    const known = weights[word]
+      ? [weights[word]]
+      : (splitKnown(word, weights) ?? fragments.map(f => weights[f]).filter(w => w !== undefined));
     for (const w of known) {
       for (let c = 0; c < scores.length; c++) {
         scores[c] += w[c] / known.length;
