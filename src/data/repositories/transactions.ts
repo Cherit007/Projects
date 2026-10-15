@@ -1,5 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import type { CategorisedPayee } from '../../domain/categories/payeeHistory';
+import type { MinorUnits } from '../../domain/money/money';
 import type { DateRange } from '../../domain/period';
 import type {
   Transaction,
@@ -186,16 +188,64 @@ export async function suggestCategory(
   counterparty: string,
   type: 'income' | 'expense',
 ): Promise<string | null> {
-  const row = await db.getFirstAsync<{ category_id: string }>(
-    `SELECT t.category_id FROM transactions t
+  return (await lastCategory(db, counterparty, type))?.categoryId ?? null;
+}
+
+/** The payee's last category, and whether the user edited that transaction after it was added. */
+export async function lastCategory(
+  db: SQLiteDatabase,
+  counterparty: string,
+  type: 'income' | 'expense',
+): Promise<{ categoryId: string; edited: boolean } | null> {
+  const row = await db.getFirstAsync<{ category_id: string; edited: number }>(
+    `SELECT t.category_id, t.updated_at != t.created_at AS edited FROM transactions t
      JOIN categories c ON c.id = t.category_id AND c.is_archived = 0
-     WHERE t.type = ? AND LOWER(t.counterparty) = LOWER(?)
+     WHERE t.type = ? AND LOWER(TRIM(t.counterparty)) = LOWER(TRIM(?))
      ORDER BY t.occurred_at DESC
      LIMIT 1`,
     type,
-    counterparty.trim(),
+    counterparty,
   );
-  return row?.category_id ?? null;
+  return row ? { categoryId: row.category_id, edited: row.edited === 1 } : null;
+}
+
+/** Every distinct payee with the categories it has been given, for learning from the user's choices. */
+export async function listCategorisedPayees(db: SQLiteDatabase): Promise<CategorisedPayee[]> {
+  return db.getAllAsync<CategorisedPayee>(
+    `SELECT DISTINCT LOWER(TRIM(t.counterparty)) AS payee, t.type, t.category_id AS categoryId
+     FROM transactions t
+     JOIN categories c ON c.id = t.category_id AND c.is_archived = 0
+     WHERE t.counterparty IS NOT NULL AND t.type != 'transfer'`,
+  );
+}
+
+/**
+ * Whether the payee got about the same amount (±5%) 25–35 days before
+ * `occurredAt`, as with monthly rent.
+ */
+export async function hasMonthlyRepeat(
+  db: SQLiteDatabase,
+  counterparty: string,
+  type: 'income' | 'expense',
+  amountMinor: MinorUnits,
+  occurredAt: string,
+): Promise<boolean> {
+  const at = Date.parse(occurredAt);
+  const day = 24 * 60 * 60 * 1000;
+  const row = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM transactions
+     WHERE type = ? AND LOWER(TRIM(counterparty)) = LOWER(TRIM(?))
+       AND amount_minor BETWEEN ? AND ?
+       AND occurred_at BETWEEN ? AND ?
+     LIMIT 1`,
+    type,
+    counterparty,
+    Math.floor(amountMinor * 0.95),
+    Math.ceil(amountMinor * 1.05),
+    new Date(at - 35 * day).toISOString(),
+    new Date(at - 25 * day).toISOString(),
+  );
+  return row !== null;
 }
 
 export async function updateTransaction(

@@ -1,4 +1,5 @@
 import type { CategoryType } from '../types';
+import type { PayeeKind } from '../upi/payeeKind';
 import { FRIENDS_CATEGORY, OTHER_CATEGORY, OTHER_INCOME_CATEGORY } from './defaults';
 import { predictPayee } from './payeeClassifier';
 
@@ -40,7 +41,7 @@ const RULES: readonly { category: string; type: CategoryType; words: readonly st
   {
     category: 'Healthcare',
     type: 'expense',
-    words: ['apollo', 'pharmeasy', '1mg', 'netmeds', 'medplus', 'pharmacy', 'medical', 'hospital', 'clinic', 'diagnostics', 'practo', 'cult fit', 'cultfit'],
+    words: ['apollo', 'pharmeasy', '1mg', 'netmeds', 'medplus', 'pharmacy', 'medical', 'hospital', 'clinic', 'diagnostics', 'practo'],
   },
   {
     category: 'Travel',
@@ -56,6 +57,31 @@ const RULES: readonly { category: string; type: CategoryType; words: readonly st
     category: 'Education',
     type: 'expense',
     words: ['school', 'college', 'university', 'udemy', 'coursera', 'byjus', 'unacademy', 'tuition', 'fees'],
+  },
+  {
+    category: 'Personal care',
+    type: 'expense',
+    words: ['salon', 'saloon', 'parlour', 'parlor', 'barber', 'spa', 'unisex salon', 'naturals salon', 'lakme salon', 'green trends', 'toni and guy', 'jawed habib'],
+  },
+  {
+    category: 'Fitness',
+    type: 'expense',
+    words: ['gym', 'gymnasium', 'fitness', 'cult fit', 'cultfit', 'yoga', 'crossfit', 'golds gym', 'anytime fitness', 'snap fitness'],
+  },
+  {
+    category: 'Insurance',
+    type: 'expense',
+    words: ['insurance', 'lic', 'policybazaar', 'acko', 'digit insurance', 'hdfc life', 'icici prudential', 'icici lombard', 'sbi life', 'star health', 'max life', 'tata aia', 'bajaj allianz', 'niva bupa', 'care health'],
+  },
+  {
+    category: 'Investments',
+    type: 'expense',
+    words: ['zerodha', 'groww', 'upstox', 'kuvera', 'smallcase', 'angel one', 'angel broking', 'paytm money', 'coin by zerodha', 'mutual fund', 'mutual funds', 'sip', 'nps', 'indmoney', 'icici direct', 'hdfc securities', 'motilal oswal', 'sharekhan', 'bse star mf', 'nse clearing', 'iccl'],
+  },
+  {
+    category: 'Donations',
+    type: 'expense',
+    words: ['temple', 'devasthanam', 'devasthan', 'mandir', 'church', 'masjid', 'gurudwara', 'donation', 'donations', 'charity', 'charitable trust', 'ttd', 'isckon', 'iskcon', 'giveindia', 'ketto', 'milaap', 'akshaya patra'],
   },
   {
     category: 'Loan interest and fees',
@@ -91,15 +117,16 @@ export function guessCategoryName(payee: string | null, type: CategoryType): str
 /**
  * Category name for a payee without history: a known merchant, else Friends
  * for a person, else the on-device classifier's shop category (expenses),
- * else Other / Other income. Every payment gets a category.
+ * else Other / Other income. `kind` is what the payment message says about
+ * the payee (P2M/P2A, QR or mobile-number UPI ID) and overrides the name.
  */
-export function predictCategoryName(payee: string | null, type: CategoryType): string {
-  const rule = guessCategoryName(payee, type);
+export function predictCategoryName(payee: string | null, type: CategoryType, kind: PayeeKind | null = null): string {
+  const rule = kind === 'person' ? null : guessCategoryName(payee, type);
   if (rule) {
     return rule;
   }
-  const { person, category } = predictPayee(payee);
-  if (person) {
+  const { person, category } = predictPayee(payee, kind === 'merchant');
+  if (kind === 'person' || person) {
     return FRIENDS_CATEGORY;
   }
   if (type === 'income') {

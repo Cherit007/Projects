@@ -32,7 +32,7 @@ export default function RootLayout() {
             <Stack.Screen name="upi-settings" options={{ title: 'Payment detection' }} />
             <Stack.Screen name="settings" options={{ title: 'Settings' }} />
             <Stack.Screen name="capture" options={{ title: 'Capture payment' }} />
-            <Stack.Screen name="people/index" options={{ title: 'Friends' }} />
+            <Stack.Screen name="people/index" options={{ title: 'Friends and family' }} />
             <Stack.Screen name="people/[name]" options={{ title: '' }} />
           </Stack>
         </UpiProvider>

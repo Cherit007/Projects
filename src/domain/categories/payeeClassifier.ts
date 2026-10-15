@@ -11,11 +11,11 @@ interface PayeeModel {
 const { classes, logPriors, features } = model as PayeeModel;
 
 /** Whether the payee is a person, and the expense category when it is a business (naive Bayes over payeeFeatures). */
-export function predictPayee(payee: string | null): PayeeDecision {
+export function predictPayee(payee: string | null, merchant = false): PayeeDecision {
   if (!payee?.trim()) {
     return { person: false, category: null };
   }
-  return decidePayee(payee, classes, scorePayee(payee, logPriors, features));
+  return decidePayee(payee, classes, scorePayee(payee, logPriors, features), merchant);
 }
 
 /** Expense category for a business payee, or null for people and names the model is unsure about. */

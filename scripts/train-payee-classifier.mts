@@ -31,6 +31,11 @@ const BRANDS: Record<string, string[]> = {
   Education: ['udemy', 'coursera', 'byjus', 'unacademy', 'vedantu', 'physics wallah', 'upgrad', 'simplilearn', 'great learning', 'toppr', 'duolingo', 'sapna book house', 'aakash institute', 'allen career institute', 'fiitjee', 'khan academy', 'scaler academy'],
   Travel: ['makemytrip', 'goibibo', 'cleartrip', 'yatra', 'ixigo', 'easemytrip', 'irctc', 'indigo', 'interglobe aviation', 'air india', 'akasa air', 'spicejet', 'vistara', 'oyo rooms', 'airbnb', 'booking com', 'agoda', 'treebo hotels', 'fabhotels', 'redbus', 'abhibus', 'zoomcar', 'thomas cook', 'taj hotels', 'lemon tree hotels'],
   'Rent and housing': ['nobroker', 'nestaway', 'magicbricks', 'housing com', 'mygate', 'nobrokerhood', 'stanza living', 'zolo stays', 'colive', 'square yards', 'urban company', 'adda apartment'],
+  'Personal care': ['naturals salon', 'lakme salon', 'green trends', 'toni and guy', 'jawed habib', 'enrich salon', 'bounce salon', 'looks salon', 'yes madam', 'vlcc', 'kaya clinic', 'bodycraft', 'geetanjali salon', 'limelite salon'],
+  Fitness: ['cult fit', 'cultfit', 'golds gym', 'anytime fitness', 'snap fitness', 'talwalkars', 'fitness first', 'crossfit', 'f45 training', 'playo', 'hudle', 'decathlon play'],
+  Insurance: ['lic of india', 'life insurance corporation', 'policybazaar', 'acko', 'digit insurance', 'hdfc life', 'hdfc ergo', 'icici prudential', 'icici lombard', 'sbi life', 'sbi general', 'star health', 'max life', 'tata aia', 'bajaj allianz', 'niva bupa', 'care health insurance', 'new india assurance', 'united india insurance', 'reliance general'],
+  Investments: ['zerodha', 'groww', 'upstox', 'kuvera', 'smallcase', 'angel one', 'paytm money', 'indmoney', 'icici direct', 'hdfc securities', 'motilal oswal', 'sharekhan', 'bse star mf', 'indian clearing corporation', 'nse clearing', 'mutual fund', 'sbi mutual fund', 'hdfc mutual fund', 'axis mutual fund', 'nippon india mutual fund', 'parag parikh', 'coin zerodha', 'cams', 'kfintech'],
+  Donations: ['tirumala tirupati devasthanams', 'ttd', 'iskcon', 'akshaya patra', 'giveindia', 'ketto', 'milaap', 'cry', 'helpage india', 'goonj', 'pm cares', 'shirdi sai baba sansthan', 'siddhivinayak temple', 'isha foundation', 'art of living'],
   'Loan interest and fees': ['bajaj finance', 'bajaj finserv', 'tata capital', 'muthoot finance', 'manappuram finance', 'home credit', 'kreditbee', 'moneyview', 'navi finserv', 'lazypay', 'simpl', 'slice', 'cred', 'sbi card', 'hdfc credit card', 'icici credit card', 'axis credit card', 'loan emi', 'hdb financial', 'l t finance', 'aditya birla finance', 'iifl finance'],
 };
 
@@ -45,6 +50,11 @@ const KEYWORDS: Record<string, string[]> = {
   Education: ['school', 'public school', 'high school', 'college', 'academy', 'institute', 'coaching centre', 'coaching', 'tuitions', 'tuition centre', 'classes', 'university', 'vidyalaya', 'vidya mandir', 'book depot', 'book house', 'books', 'educational trust', 'education', 'learning centre', 'play school', 'montessori', 'kids school', 'stationery', 'stationers'],
   Travel: ['tours and travels', 'tours travels', 'travels', 'tours', 'holidays', 'resorts', 'resort', 'lodge', 'guest house', 'residency', 'inn', 'homestay', 'airways', 'airlines', 'travel agency', 'hotels and resorts', 'stays', 'tourism', 'boarding and lodging'],
   'Rent and housing': ['rent', 'house rent', 'rentals', 'estates', 'properties', 'apartment owners association', 'apartments', 'society', 'housing society', 'welfare association', 'maintenance', 'pg', 'paying guest', 'hostel', 'realty', 'builders', 'developers', 'flat maintenance', 'residents association'],
+  'Personal care': ['salon', 'saloon', 'unisex salon', 'beauty parlour', 'beauty parlor', 'beauty salon', 'hair salon', 'hair cutting saloon', 'mens salon', 'barber shop', 'barbers', 'spa', 'day spa', 'family salon', 'makeover studio', 'bridal studio', 'nail studio', 'grooming', 'hair studio', 'beauty care'],
+  Fitness: ['gym', 'fitness', 'fitness centre', 'fitness center', 'fitness studio', 'gymnasium', 'health club', 'yoga', 'yoga centre', 'yoga studio', 'crossfit', 'martial arts', 'karate', 'dance studio', 'zumba', 'sports club', 'swimming pool', 'badminton court', 'turf', 'cricket academy', 'pilates'],
+  Insurance: ['insurance', 'insurance co', 'general insurance', 'life insurance', 'health insurance', 'assurance', 'insurance brokers', 'insurance agency', 'insurance services', 'insurance premium'],
+  Investments: ['securities', 'stock broking', 'broking', 'capital markets', 'mutual fund', 'asset management', 'amc', 'wealth', 'wealth management', 'investments', 'stock brokers', 'share brokers', 'demat'],
+  Donations: ['temple', 'devasthanam', 'devasthan', 'mandir', 'church', 'masjid', 'mosque', 'gurudwara', 'charitable trust', 'foundation', 'seva samithi', 'seva trust', 'donation', 'charity', 'ashram', 'math', 'mutt', 'dargah', 'welfare trust', 'orphanage', 'old age home', 'gaushala'],
   'Loan interest and fees': ['finance', 'finserv', 'fincorp', 'capital', 'credit', 'loans', 'emi', 'credit card', 'card payment', 'microfinance', 'gold loan', 'chit fund', 'chits', 'fin', 'financial services', 'housing finance', 'nbfc'],
 };
 
@@ -66,7 +76,7 @@ const TITLES = ['mr', 'mrs', 'ms', 'smt', 'shri', 'sri', 'kumari', 'dr', 'md', '
 
 const PERSON_PRIOR = 0.4;
 /** Rarer features (other than curated words) are dropped: they mostly memorise single names and grow the model. */
-const MIN_DOCUMENT_FREQUENCY = 25;
+const MIN_DOCUMENT_FREQUENCY = 30;
 /** Features whose weights differ less than this between classes are dropped. */
 const MIN_SPREAD = 1.5;
 /** Strength of the pull towards a feature's overall share, in examples. */
@@ -142,7 +152,7 @@ function dataset(first: readonly string[], last: readonly string[]): [string, st
     }
   }
   for (const [category, keywords] of Object.entries(KEYWORDS)) {
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 600; i++) {
       const name = random() < 0.85 ? `${businessPrefix(first, last)} ${pick(keywords)}` : pick(keywords);
       rows.push([business(name), category]);
     }
@@ -245,6 +255,8 @@ const OSM_LABELS: [key: string, values: RegExp, label: string][] = [
   ['amenity', /^(cinema|theatre|nightclub|arts_centre)$/, 'Entertainment'],
   ['amenity', /^(school|college|university|kindergarten|language_school|driving_school|training)$/, 'Education'],
   ['amenity', /^(bank|atm|bureau_de_change)$/, UNKNOWN],
+  ['amenity', /^(place_of_worship)$/, 'Donations'],
+  ['shop', /^(hairdresser|beauty|massage|hairdresser_supply)$/, 'Personal care'],
   ['shop', /^(supermarket|convenience|greengrocer|butcher|dairy|grocery|seafood|farm|health_food|frozen_food|deli|general|rice|spices|water|beverages|tea|nuts|wholesale)$/, 'Groceries'],
   ['shop', /^(bakery|confectionery|pastry|sweets|chocolate)$/, 'Food and dining'],
   ['shop', /^(car|car_repair|car_parts|tyres|motorcycle|motorcycle_repair|bicycle|fuel)$/, 'Transport'],
@@ -255,11 +267,13 @@ const OSM_LABELS: [key: string, values: RegExp, label: string][] = [
   ['shop', /^(mobile_phone|electronics|clothes|shoes|jewelry|furniture|hardware|gift|cosmetics|department_store|mall|bag|boutique|fabric|tailor|toys|sports|computer|appliance|variety_store|houseware|watches|paint|doityourself|fashion_accessories|perfumery|interior_decoration|kitchen|bed|carpet|curtain|lighting|photo|florist|garden_centre|textiles|saree|electrical|trade)$/, 'Shopping'],
   ['tourism', /./, 'Travel'],
   ['healthcare', /./, 'Healthcare'],
-  ['office', /^(company|it|consulting|financial|insurance)$/, UNKNOWN],
+  ['office', /^(insurance)$/, 'Insurance'],
+  ['office', /^(company|it|consulting|financial)$/, UNKNOWN],
   ['office', /^(estate_agent)$/, 'Rent and housing'],
   ['office', /^(travel_agent)$/, 'Travel'],
   ['office', /^(telecommunication|energy_supplier)$/, 'Utilities and bills'],
   ['leisure', /^(amusement_arcade|water_park|bowling_alley)$/, 'Entertainment'],
+  ['leisure', /^(fitness_centre|sports_centre)$/, 'Fitness'],
   ['craft', /^(tailor)$/, 'Shopping'],
   ['craft', /^(caterer)$/, 'Food and dining'],
 ];

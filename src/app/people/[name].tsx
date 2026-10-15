@@ -1,11 +1,13 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { displayName } from '@/components/PersonRow';
+import { haptic } from '@/components/PressableScale';
 import { TransactionRow } from '@/components/TransactionRow';
-import { Card, ErrorState, LoadingState } from '@/components/ui';
+import { Button, Card, ErrorState, LoadingState } from '@/components/ui';
+import { listPeople, movePerson } from '@/data/repositories/people';
 import { listTransactions } from '@/data/repositories/transactions';
 import { formatMinor, sumMinor } from '@/domain/money/money';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
@@ -13,10 +15,21 @@ import { useUpi } from '@/services/upi/UpiProvider';
 import { colors, radius, shadow } from '@/theme/colors';
 
 export default function PersonScreen() {
+  const db = useSQLiteContext();
   const { name } = useLocalSearchParams<{ name: string }>();
   const { lastSyncAt } = useUpi();
   const { data, error, isLoading, reload } = useFocusQuery(
-    useCallback((db: SQLiteDatabase) => listTransactions(db, { counterparty: name, limit: 500 }), [name]),
+    useCallback(
+      async (database: SQLiteDatabase) => {
+        const [transactions, people] = await Promise.all([
+          listTransactions(database, { counterparty: name, limit: 500 }),
+          listPeople(database),
+        ]);
+        const key = name.trim().toLowerCase();
+        return { transactions, person: people.find(p => p.name.trim().toLowerCase() === key) };
+      },
+      [name],
+    ),
     lastSyncAt,
   );
 
@@ -27,10 +40,20 @@ export default function PersonScreen() {
   if (!data && isLoading) {
     return <LoadingState />;
   }
-  const transactions = (data ?? []).filter(t => t.type !== 'transfer');
+  const transactions = (data?.transactions ?? []).filter(t => t.type !== 'transfer');
+  const person = data?.person;
   const sent = sumMinor(transactions.filter(t => t.type === 'expense').map(t => t.amountMinor));
   const received = sumMinor(transactions.filter(t => t.type === 'income').map(t => t.amountMinor));
   const net = received - sent;
+
+  const move = async () => {
+    if (!person) {
+      return;
+    }
+    haptic('selection');
+    await movePerson(db, name, person.family ? 'friends' : 'family');
+    await reload();
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -48,6 +71,10 @@ export default function PersonScreen() {
               : `You have paid them ${formatMinor(-net)} more than they paid you.`}
         </Text>
       </Card>
+
+      {person && (
+        <Button title={person.family ? 'Move to Friends' : 'Move to Family'} variant="secondary" onPress={move} />
+      )}
 
       <Text style={styles.heading}>
         {transactions.length} transaction{transactions.length === 1 ? '' : 's'}

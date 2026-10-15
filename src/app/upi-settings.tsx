@@ -7,8 +7,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { haptic } from '@/components/PressableScale';
 import { ShortcutSetupGuide } from '@/components/ShortcutSetupGuide';
-import { Button, Card, EmptyState, SectionTitle } from '@/components/ui';
-import { getAutoAddPayments, setAutoAddPayments } from '@/data/repositories/settings';
+import { Button, Card, EmptyState, Field, Input, SectionTitle } from '@/components/ui';
+import { getAutoAddPayments, getOwnerName, setAutoAddPayments, setOwnerName } from '@/data/repositories/settings';
 import { SUPPORTED_UPI_APPS } from '@/domain/upi/parser';
 import { bankSmsNative } from '@/services/upi/bankSmsSync';
 import { upiNative } from '@/services/upi/upiSync';
@@ -70,6 +70,7 @@ export default function UpiSettingsScreen() {
           />
         </Card>
         {upi.enabled && <AutoAddCard enabled={autoAdd} onChange={setAutoAdd} />}
+        {upi.enabled && autoAdd && <OwnerNameCard />}
       </Animated.View>
 
       {upi.enabled && (
@@ -163,6 +164,7 @@ function SmsShortcutGuide() {
           </View>
         </Card>
         {bankSmsNative && <AutoAddCard enabled={autoAdd} onChange={setAutoAdd} />}
+        {bankSmsNative && autoAdd && <OwnerNameCard />}
       </Animated.View>
 
       <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
@@ -239,6 +241,32 @@ function AutoAddCard({ enabled, onChange }: { enabled: boolean; onChange: (next:
   );
 }
 
+function OwnerNameCard() {
+  const db = useSQLiteContext();
+  const [name, setName] = useState('');
+  useEffect(() => {
+    getOwnerName(db).then(setName);
+  }, [db]);
+  return (
+    <Card style={styles.ownerCard}>
+      <Field label="Your name, as banks show it">
+        <Input
+          value={name}
+          onChangeText={setName}
+          onEndEditing={() => setOwnerName(db, name)}
+          placeholder="e.g. Cherit Reddy"
+          autoCapitalize="words"
+          autoCorrect={false}
+          returnKeyType="done"
+        />
+      </Field>
+      <Text style={styles.muted}>
+        Money sent to or received from your own name is recorded as a transfer between your accounts, not as spending.
+      </Text>
+    </Card>
+  );
+}
+
 function ReviewPrivacyPoint({ autoAdd }: { autoAdd: boolean }) {
   return (
     <PrivacyPoint
@@ -295,6 +323,7 @@ const styles = StyleSheet.create({
   section: { gap: 10 },
   muted: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   credit: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
+  ownerCard: { gap: 6 },
   toggleCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   toggleIcon: {
     width: 44,

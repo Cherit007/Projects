@@ -29,3 +29,12 @@ export async function getAutoAddPayments(db: SQLiteDatabase): Promise<boolean> {
 export async function setAutoAddPayments(db: SQLiteDatabase, enabled: boolean): Promise<void> {
   await setSetting(db, 'auto_add_payments', enabled ? '1' : '0');
 }
+
+/** The user's name as banks show it, to recognise transfers between their own accounts. */
+export async function getOwnerName(db: SQLiteDatabase): Promise<string> {
+  return (await getSetting(db, 'owner_name')) ?? '';
+}
+
+export async function setOwnerName(db: SQLiteDatabase, name: string): Promise<void> {
+  await setSetting(db, 'owner_name', name.trim());
+}

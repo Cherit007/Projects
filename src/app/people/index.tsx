@@ -24,8 +24,8 @@ export default function PeopleScreen() {
     return (
       <EmptyState
         icon="people"
-        title="No friends yet"
-        body="Money you send to or receive from people appears here, grouped by person. Payments are added under Friends automatically, or pick Friends as the category yourself."
+        title="No one here yet"
+        body="Money you send to or receive from people appears here, grouped by person. Payments are added under Friends automatically, or pick Friends or Family as the category yourself."
       />
     );
   }

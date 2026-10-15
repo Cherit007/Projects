@@ -20,10 +20,12 @@ import {
 import { budgetAlert, loadBudgetSummary } from '@/data/queries/budgetSummary';
 import { listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
+import { getOwnerName } from '@/data/repositories/settings';
 import {
   createTransaction,
   deleteTransaction,
   getTransaction,
+  listCategorisedPayees,
   suggestCategory,
   updateTransaction,
 } from '@/data/repositories/transactions';
@@ -35,6 +37,7 @@ import {
 } from '@/data/repositories/upiCandidates';
 import { validateTransaction, type ValidationErrors } from '@/domain/accounting/accounting';
 import { predictCategoryName } from '@/domain/categories/autoCategory';
+import { isOwnName, learnedCategoryId, learnWords } from '@/domain/categories/payeeHistory';
 import { parseToMinor } from '@/domain/money/money';
 import { monthKeyOf } from '@/domain/period';
 import type { Account, Category, Transaction, TransactionInput, TransactionType } from '@/domain/types';
@@ -125,10 +128,19 @@ export default function TransactionForm() {
           }
           setDate(toLocalDateInput(candidate.detectedAt));
           setCounterparty(candidate.counterparty ?? '');
-          if (candidate.counterparty) {
-            const predicted = predictCategoryName(candidate.counterparty, candidateType);
+          if (isOwnName(candidate.counterparty, await getOwnerName(db))) {
+            setType('transfer');
+            const other = active.filter(a => a.type !== 'cash' && a.id !== defaultAccount?.id);
+            if (other.length === 1 && defaultAccount) {
+              const outgoing = candidate.direction !== 'credit';
+              setAccountId(outgoing ? defaultAccount.id : other[0].id);
+              setToAccountId(outgoing ? other[0].id : defaultAccount.id);
+            }
+          } else if (candidate.counterparty) {
+            const predicted = predictCategoryName(candidate.counterparty, candidateType, candidate.payeeKind);
             const suggestion =
               (await suggestCategory(db, candidate.counterparty, candidateType)) ??
+              learnedCategoryId(learnWords(await listCategorisedPayees(db)), candidate.counterparty, candidateType) ??
               result.categories.find(c => !c.isArchived && c.type === candidateType && c.name === predicted)?.id ??
               null;
             setCategoryId(suggestion);

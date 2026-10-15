@@ -6,7 +6,7 @@ import { formatMinor } from '@/domain/money/money';
 import { colors } from '@/theme/colors';
 
 import { PressableScale } from './PressableScale';
-import { Amount } from './ui';
+import { Amount, Badge } from './ui';
 
 /** "RAHUL SHARMA" → "Rahul Sharma"; names with mixed case are left alone. */
 export function displayName(name: string): string {
@@ -30,9 +30,12 @@ export function PersonRow({ person }: { person: PersonSummary }) {
         <Text style={styles.initial}>{displayName(person.name).charAt(0)}</Text>
       </View>
       <View style={styles.text}>
-        <Text style={styles.name} numberOfLines={1}>
-          {displayName(person.name)}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>
+            {displayName(person.name)}
+          </Text>
+          {person.family && <Badge label="Family" color={colors.primary} background={colors.primarySoft} />}
+        </View>
         <Text style={styles.meta} numberOfLines={1}>
           {parts.filter(Boolean).join(' · ')}
         </Text>
@@ -61,6 +64,7 @@ const styles = StyleSheet.create({
   },
   initial: { color: colors.primary, fontWeight: '800', fontSize: 16 },
   text: { flex: 1, gap: 2 },
-  name: { fontSize: 15, fontWeight: '700', color: colors.text },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  name: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.text },
   meta: { fontSize: 13, color: colors.textMuted },
 });

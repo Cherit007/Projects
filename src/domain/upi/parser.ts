@@ -1,4 +1,5 @@
 import { parseToMinor, type MinorUnits } from '../money/money';
+import { detectPayeeKind, type PayeeKind } from './payeeKind';
 
 /** Package identifiers of payment apps whose notifications we parse. */
 export const SUPPORTED_UPI_APPS: Readonly<Record<string, string>> = {
@@ -27,6 +28,8 @@ export interface ParsedUpiNotification {
   amountMinor: MinorUnits | null;
   counterparty: string | null;
   reference: string | null;
+  /** Merchant or person, when the message says so (P2M/P2A, QR or mobile-number UPI ID). */
+  payeeKind: PayeeKind | null;
   postedAt: number;
 }
 
@@ -138,6 +141,7 @@ export function parseUpiNotification(
     direction,
     amountMinor: amountMatch ? parseToMinor(amountMatch[1]) : null,
     counterparty,
+    payeeKind: detectPayeeKind(text),
     reference: REFERENCE.exec(text)?.[1] ?? null,
     postedAt: raw.postedAt,
   };

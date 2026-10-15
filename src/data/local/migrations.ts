@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { DEFAULT_CATEGORIES, FRIENDS_CATEGORY } from '../../domain/categories/defaults';
+import { ADDED_CATEGORIES, DEFAULT_CATEGORIES, FRIENDS_CATEGORY } from '../../domain/categories/defaults';
 import { newId, nowIso } from './ids';
 
 type Migration = (db: SQLiteDatabase) => Promise<void>;
@@ -139,26 +139,36 @@ const MIGRATIONS: readonly Migration[] = [
   },
   async db => {
     // New installs already got these from DEFAULT_CATEGORIES in the first migration.
-    const now = nowIso();
     for (const type of ['expense', 'income'] as const) {
-      await db.runAsync(
-        `INSERT INTO categories (id, name, type, sort_order, created_at, updated_at)
-         SELECT ?, ?, ?, next_order, ?, ?
-         FROM (SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM categories)
-         WHERE NOT EXISTS (
-           SELECT 1 FROM categories WHERE type = ? AND LOWER(name) = LOWER(?) AND parent_id IS NULL
-         )`,
-        newId(),
-        FRIENDS_CATEGORY,
-        type,
-        now,
-        now,
-        type,
-        FRIENDS_CATEGORY,
-      );
+      await addCategoryIfMissing(db, FRIENDS_CATEGORY, type);
+    }
+  },
+  async db => {
+    await db.execAsync('ALTER TABLE upi_candidates ADD COLUMN payee_kind TEXT');
+    for (const { name, type } of ADDED_CATEGORIES) {
+      await addCategoryIfMissing(db, name, type);
     }
   },
 ];
+
+async function addCategoryIfMissing(db: SQLiteDatabase, name: string, type: 'expense' | 'income'): Promise<void> {
+  const now = nowIso();
+  await db.runAsync(
+    `INSERT INTO categories (id, name, type, sort_order, created_at, updated_at)
+     SELECT ?, ?, ?, next_order, ?, ?
+     FROM (SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM categories)
+     WHERE NOT EXISTS (
+       SELECT 1 FROM categories WHERE type = ? AND LOWER(name) = LOWER(?) AND parent_id IS NULL
+     )`,
+    newId(),
+    name,
+    type,
+    now,
+    now,
+    type,
+    name,
+  );
+}
 
 /** Tables mirrored to the cloud when the user is signed in. */
 export const SYNCED_TABLES = ['accounts', 'categories', 'transactions', 'budgets'] as const;

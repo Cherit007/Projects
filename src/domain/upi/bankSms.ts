@@ -1,5 +1,6 @@
 import { parseToMinor } from '../money/money';
 import { AMOUNT, SENSITIVE, type ParsedUpiNotification, type UpiDirection, type UpiStatus } from './parser';
+import { detectPayeeKind } from './payeeKind';
 
 /** Candidates created from forwarded bank SMS use this in place of an app package. */
 export const SMS_SOURCE = 'sms';
@@ -133,6 +134,7 @@ export function parseBankSms(message: string, receivedAt: number): ParsedUpiNoti
     amountMinor,
     counterparty,
     reference: firstMatch(REFERENCES, text, v => v ?? null),
+    payeeKind: detectPayeeKind(text),
     postedAt: receivedAt,
   };
 }

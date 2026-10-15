@@ -190,7 +190,7 @@ export default function DashboardScreen() {
 
         {data.people.length > 0 && (
           <Animated.View entering={FadeInDown.delay(170).duration(350)} style={styles.section}>
-            <SectionTitle title="Friends" action={<TextLink label="See all" onPress={() => router.push('/people')} />} />
+            <SectionTitle title="Friends and family" action={<TextLink label="See all" onPress={() => router.push('/people')} />} />
             <View style={styles.recent}>
               {data.people.map(person => (
                 <PersonRow key={person.name.toLowerCase()} person={person} />

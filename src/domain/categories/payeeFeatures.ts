@@ -46,9 +46,18 @@ export interface PayeeDecision {
   category: string | null;
 }
 
-/** Reads person vs business and the business category from the class scores of scorePayee. */
-export function decidePayee(payee: string, classes: readonly string[], scores: readonly number[]): PayeeDecision {
-  if (MOBILE_VPA.test(payee.trim())) {
+/**
+ * Reads person vs business and the business category from the class scores
+ * of scorePayee. `merchant` skips the person check when the payment message
+ * already says the payee is a business.
+ */
+export function decidePayee(
+  payee: string,
+  classes: readonly string[],
+  scores: readonly number[],
+  merchant = false,
+): PayeeDecision {
+  if (!merchant && MOBILE_VPA.test(payee.trim())) {
     return { person: true, category: null };
   }
   if (payeeFeatures(payee).length === 0) {
@@ -58,7 +67,7 @@ export function decidePayee(payee: string, classes: readonly string[], scores: r
   const weights = scores.map(score => Math.exp(score - top));
   const total = weights.reduce((sum, w) => sum + w, 0);
   const probability = weights.map(w => w / total);
-  const personProbability = probability[classes.indexOf(PERSON_CLASS)] ?? 0;
+  const personProbability = merchant ? 0 : (probability[classes.indexOf(PERSON_CLASS)] ?? 0);
   if (personProbability >= MIN_PERSON_PROBABILITY) {
     return { person: true, category: null };
   }
@@ -68,7 +77,8 @@ export function decidePayee(payee: string, classes: readonly string[], scores: r
       best = c;
     }
   });
-  const confidence = best < 0 ? 0 : probability[best] / (1 - personProbability);
+  const business = 1 - (probability[classes.indexOf(PERSON_CLASS)] ?? 0);
+  const confidence = best < 0 || business <= 0 ? 0 : probability[best] / business;
   return { person: false, category: confidence >= MIN_CATEGORY_CONFIDENCE ? classes[best] : null };
 }
 

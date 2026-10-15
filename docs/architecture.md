@@ -159,21 +159,35 @@ on Android too.
 `autoAddCandidates` runs after every detection sync (Android notifications
 and iOS bank SMS) unless the user turns off **Add payments automatically**
 (`settings.auto_add_payments`). Each waiting candidate, including ones
-detected earlier, is confirmed without review
-when it is a successful payment with an amount and direction and nothing
-similar was already recorded (`findPossibleDuplicate`). The category is the
-payee's last category (`suggestCategory`), else a well-known merchant from
-`guessCategoryName`, else **Friends** when the payee is a person, else the
-on-device classifier's shop category, else **Other** / **Other income**
-(`predictCategoryName`). The same order pre-fills the category when a
-payment is reviewed by hand. It goes to the first non-cash account. Correcting
-a category teaches it for that payee, since the payee's last category wins.
+detected earlier, is confirmed without review when it is a successful
+payment with an amount and direction and nothing similar was already
+recorded (`findPossibleDuplicate`).
+
+- A payee matching the user's own name (`settings.owner_name`, `isOwnName`)
+  is recorded as a transfer to their other bank or wallet account, when there
+  is exactly one; otherwise it waits for review.
+- Otherwise the category is the payee's last category (`lastCategory`), else
+  the category the user gives other payees ending in the same word
+  (`learnedCategoryId`: at least two payees, 80% agreement), else
+  `predictCategoryName`: a well-known merchant, **Friends** for a person, the
+  classifier's shop category, else **Other** / **Other income**.
+- The payment message's own hint (`payeeKind`: "P2M"/"P2A", merchant QR or
+  mobile-number UPI IDs, see `detectPayeeKind`) overrides what the name
+  suggests about person vs business.
+- A payment to a person of ₹3,000 or more, repeating an amount (±5%) paid to
+  them 25–35 days earlier, is filed as **Rent and housing**, unless the user
+  edited that payee's last transaction.
+
+The review form pre-fills the same way. Payments go to the first non-cash
+account.
 
 ### Friends
 
-`Friends` is a default expense and income category (migration 4 adds it to
-existing databases). `listPeople` groups every payee that has at least one
-Friends transaction by name (case-insensitive) with sent and received totals.
+`Friends` and `Family` are default categories (migrations 4 and 5 add them
+to existing databases). `listPeople` groups every payee that has at least one
+Friends or Family transaction by name (case-insensitive) with sent and
+received totals; `movePerson` moves a person's transactions between the two,
+and later payments follow because the payee's last category is reused.
 The Dashboard shows the top three; `/people` lists everyone and
 `/people/[name]` shows one person's transactions (`counterparty` filter on
 `listTransactions`) and the net balance.

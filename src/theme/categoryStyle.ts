@@ -13,6 +13,10 @@ export interface CategoryStyle {
 }
 
 const RULES: readonly [RegExp, CategoryStyle][] = [
+  [/personal care|salon|beauty|groom/i, { icon: 'cut', color: '#DB2777' }],
+  [/fitness|gym|sport/i, { icon: 'barbell', color: '#EA580C' }],
+  [/insur/i, { icon: 'shield-checkmark', color: '#0284C7' }],
+  [/donat|charit|temple/i, { icon: 'heart', color: '#E11D48' }],
   [/food|dining|restaurant|cafe|swiggy|zomato/i, { icon: 'restaurant', color: '#F97316' }],
   [/grocer/i, { icon: 'cart', color: '#16A34A' }],
   [/rent|housing|home/i, { icon: 'home', color: '#8B5CF6' }],

@@ -38,7 +38,8 @@ const QUERY_PARTS = [
   'nwr["name"]["tourism"~"^(hotel|guest_house|hostel|motel|resort|apartment)$"]',
   'nwr["name"]["office"~"^(company|financial|insurance|estate_agent|travel_agent|telecommunication|energy_supplier|it|consulting)$"]',
   'nwr["name"]["healthcare"]',
-  'nwr["name"]["leisure"~"^(amusement_arcade|water_park|bowling_alley)$"]',
+  'nwr["name"]["leisure"~"^(amusement_arcade|water_park|bowling_alley|fitness_centre|sports_centre)$"]',
+  'nwr["name"]["amenity"="place_of_worship"]',
   'way["name"]["building"="apartments"]',
   'nwr["name"]["craft"~"^(tailor|caterer)$"]',
 ];

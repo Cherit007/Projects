@@ -9,6 +9,7 @@ import {
   type UpiStatus,
 } from '../../domain/upi/parser';
 import { SMS_SOURCE } from '../../domain/upi/bankSms';
+import type { PayeeKind } from '../../domain/upi/payeeKind';
 import type { TransactionInput } from '../../domain/types';
 import { newId, nowIso } from '../local/ids';
 import { createTransaction } from './transactions';
@@ -22,6 +23,7 @@ export interface UpiCandidate {
   amountMinor: number | null;
   counterparty: string | null;
   reference: string | null;
+  payeeKind: PayeeKind | null;
   detectedAt: string;
   reviewState: ReviewState;
   transactionId: string | null;
@@ -36,6 +38,7 @@ interface CandidateRow {
   amount_minor: number | null;
   counterparty: string | null;
   reference: string | null;
+  payee_kind: PayeeKind | null;
   detected_at: string;
   review_state: ReviewState;
   transaction_id: string | null;
@@ -51,6 +54,7 @@ function toCandidate(row: CandidateRow): UpiCandidate {
     amountMinor: row.amount_minor,
     counterparty: row.counterparty,
     reference: row.reference,
+    payeeKind: row.payee_kind,
     detectedAt: row.detected_at,
     reviewState: row.review_state,
     transactionId: row.transaction_id,
@@ -67,9 +71,9 @@ export async function insertCandidate(
   const result = await db.runAsync(
     `INSERT OR IGNORE INTO upi_candidates
        (id, package_name, source_app, status, direction, amount_minor,
-        counterparty, reference, detected_at, dedupe_key, review_state,
+        counterparty, reference, payee_kind, detected_at, dedupe_key, review_state,
         created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     parsed.packageName,
     parsed.sourceApp,
@@ -78,6 +82,7 @@ export async function insertCandidate(
     parsed.amountMinor,
     parsed.counterparty,
     parsed.reference,
+    parsed.payeeKind,
     new Date(parsed.postedAt).toISOString(),
     dedupeKey(parsed),
     initialReviewState(parsed),
