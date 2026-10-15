@@ -31,12 +31,12 @@ const RULES: readonly { category: string; type: CategoryType; words: readonly st
   {
     category: 'Utilities and bills',
     type: 'expense',
-    words: ['airtel', 'jio', 'vodafone', 'vi', 'bsnl', 'act fibernet', 'electricity', 'bescom', 'tneb', 'msedcl', 'tata power', 'adani', 'water', 'gas', 'indane', 'hp gas', 'bharat gas', 'broadband', 'recharge', 'dth', 'tata play', 'bill'],
+    words: ['airtel', 'jio', 'vodafone', 'vi', 'bsnl', 'act fibernet', 'electricity', 'bescom', 'tneb', 'msedcl', 'tata power', 'adani', 'water', 'gas', 'indane', 'hp gas', 'bharat gas', 'broadband', 'recharge', 'dth', 'tata play', 'bill', 'cred', 'cred club', 'bharat connect'],
   },
   {
     category: 'Entertainment',
     type: 'expense',
-    words: ['netflix', 'spotify', 'hotstar', 'jiocinema', 'prime video', 'youtube', 'bookmyshow', 'pvr', 'inox', 'sonyliv', 'zee5', 'steam', 'playstation'],
+    words: ['netflix', 'spotify', 'hotstar', 'jiocinema', 'prime video', 'youtube', 'bookmyshow', 'pvr', 'inox', 'sonyliv', 'zee5', 'steam', 'playstation', 'fancode', 'google play', 'playstore', 'apple media', 'apple services'],
   },
   {
     category: 'Healthcare',
@@ -68,6 +68,7 @@ const RULES: readonly { category: string; type: CategoryType; words: readonly st
     type: 'expense',
     words: ['gym', 'gymnasium', 'fitness', 'cult fit', 'cultfit', 'yoga', 'crossfit', 'golds gym', 'anytime fitness', 'snap fitness'],
   },
+  { category: 'Loan interest and fees', type: 'expense', words: ['housing finance', 'home loan', 'home finance'] },
   {
     category: 'Insurance',
     type: 'expense',
@@ -76,7 +77,7 @@ const RULES: readonly { category: string; type: CategoryType; words: readonly st
   {
     category: 'Investments',
     type: 'expense',
-    words: ['zerodha', 'groww', 'upstox', 'kuvera', 'smallcase', 'angel one', 'angel broking', 'paytm money', 'coin by zerodha', 'mutual fund', 'mutual funds', 'sip', 'nps', 'indmoney', 'icici direct', 'hdfc securities', 'motilal oswal', 'sharekhan', 'bse star mf', 'nse clearing', 'iccl'],
+    words: ['zerodha', 'groww', 'upstox', 'kuvera', 'smallcase', 'angel one', 'angel broking', 'paytm money', 'coin by zerodha', 'mutual fund', 'mutual funds', 'sip', 'nps', 'indmoney', 'icici direct', 'hdfc securities', 'motilal oswal', 'sharekhan', 'bse star mf', 'nse clearing', 'iccl', 'indian clearing'],
   },
   {
     category: 'Donations',

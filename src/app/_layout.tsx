@@ -39,6 +39,7 @@ export default function RootLayout() {
             <Stack.Screen name="reports" options={{ title: 'Reports' }} />
             <Stack.Screen name="recurring" options={{ title: 'Repeating transactions' }} />
             <Stack.Screen name="backup" options={{ title: 'Backup and restore' }} />
+            <Stack.Screen name="statement-import" options={{ title: 'Import bank statement' }} />
           </Stack>
         </RecurringProvider>
         </UpiProvider>

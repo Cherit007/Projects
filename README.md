@@ -360,7 +360,9 @@ Category changes must not corrupt old transactions.
 -   Account-wise history.
 -   Transfers between owned accounts.
 -   Credit-card purchases and repayments.
--   Statement reconciliation where practical.
+-   Statement reconciliation where practical. HDFC Bank and SBI PDF
+    statements can be imported (Settings, Import bank statement); the
+    password is typed for each import and never saved.
 
 A credit-card purchase is recorded as spending. Paying the card bill
 settles the liability and must not count the purchase as a second

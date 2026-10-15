@@ -9,6 +9,8 @@ export const RENT_CATEGORY = 'Rent and housing';
 /** Fallbacks for payees that cannot be categorised more precisely. */
 export const OTHER_CATEGORY = 'Other';
 export const OTHER_INCOME_CATEGORY = 'Other income';
+/** Large credits from one payer every month. */
+export const SALARY_CATEGORY = 'Salary';
 
 export const DEFAULT_CATEGORIES: readonly { name: string; type: CategoryType }[] =
   [

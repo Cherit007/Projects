@@ -159,6 +159,18 @@ export default function DashboardScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </Card>
           </PressableScale>
+          <PressableScale hapticKind="light" onPress={() => router.push('/statement-import')} style={styles.secondLink}>
+            <Card style={styles.linkCard}>
+              <View style={[styles.reviewIcon, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.reviewText}>
+                <Text style={styles.reviewTitle}>Import bank statement</Text>
+                <Text style={styles.reviewBody}>Add a month of HDFC Bank or SBI transactions from the PDF</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </Card>
+          </PressableScale>
         </Animated.View>
 
         {upi.pendingCount > 0 && (
@@ -370,6 +382,7 @@ const styles = StyleSheet.create({
   },
   reviewText: { flex: 1, gap: 2 },
   linkCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  secondLink: { marginTop: 10 },
   reviewTitle: { fontWeight: '700', color: colors.text },
   reviewBody: { color: colors.textMuted, fontSize: 13 },
   section: { gap: 14 },

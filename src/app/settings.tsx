@@ -72,6 +72,12 @@ export default function SettingsScreen() {
 
       <Animated.View entering={FadeInDown.delay(120).duration(300)} style={styles.section}>
         <SectionTitle title="Your data" />
+        <LinkRow
+          icon="document-text-outline"
+          title="Import bank statement"
+          detail="HDFC Bank or SBI PDF"
+          href="/statement-import"
+        />
         <LinkRow icon="document-outline" title="Backup and restore" detail="Save everything to a file" href="/backup" />
       </Animated.View>
     </ScrollView>
@@ -171,7 +177,7 @@ function LinkRow({
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   detail: string;
-  href: '/upi-settings' | '/recurring' | '/reports' | '/backup';
+  href: '/upi-settings' | '/recurring' | '/reports' | '/backup' | '/statement-import';
 }) {
   return (
     <PressableScale hapticKind="light" onPress={() => router.push(href)}>

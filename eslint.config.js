@@ -6,4 +6,8 @@ module.exports = defineConfig([
   {
     ignores: ['dist/*'],
   },
+  {
+    files: ['modules/*/app.plugin.js'],
+    languageOptions: { globals: { __dirname: 'readonly' } },
+  },
 ]);

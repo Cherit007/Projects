@@ -18,12 +18,16 @@ import { isUpiAccount, type Account, type Category, type TransactionInput } from
 /** Regular payments to a person from this amount (₹3,000) up are taken for rent. */
 const RENT_MIN_MINOR = 300_000;
 
-interface Context {
+export interface Context {
   accounts: Account[];
   categories: Category[];
   learned: LearnedWords;
   ownerName: string;
+  /** Payments not saved yet (e.g. earlier rows of a statement) that count as a monthly repeat. */
+  pendingRepeat?: (payee: string, type: 'income' | 'expense', amountMinor: number, occurredAt: string) => boolean;
 }
+
+export type Payment = Pick<UpiCandidate, 'direction' | 'counterparty' | 'amountMinor' | 'payeeKind' | 'detectedAt'>;
 
 /**
  * Category for a detected payment: the payee's last category, else what the
@@ -31,7 +35,7 @@ interface Context {
  * merchant, Friends for people, a shop category, or Other). Monthly
  * same-amount payments to a person become rent unless the user chose otherwise.
  */
-async function chooseCategory(db: SQLiteDatabase, candidate: UpiCandidate, context: Context): Promise<string | null> {
+export async function chooseCategory(db: SQLiteDatabase, candidate: Payment, context: Context): Promise<string | null> {
   const type = candidate.direction === 'credit' ? 'income' : 'expense';
   const payee = candidate.counterparty;
   const byName = (name: string) => context.categories.find(c => c.type === type && c.name === name)?.id ?? null;
@@ -49,7 +53,8 @@ async function chooseCategory(db: SQLiteDatabase, candidate: UpiCandidate, conte
     !last?.edited &&
     candidate.amountMinor !== null &&
     candidate.amountMinor >= RENT_MIN_MINOR &&
-    (await hasMonthlyRepeat(db, payee, type, candidate.amountMinor, candidate.detectedAt))
+    (context.pendingRepeat?.(payee, type, candidate.amountMinor, candidate.detectedAt) ||
+      (await hasMonthlyRepeat(db, payee, type, candidate.amountMinor, candidate.detectedAt)))
   ) {
     return byName(RENT_CATEGORY) ?? categoryId;
   }
