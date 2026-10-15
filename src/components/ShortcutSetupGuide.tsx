@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -14,6 +15,8 @@ import {
 
 import { haptic, PressableScale } from '@/components/PressableScale';
 import { Button, Card } from '@/components/ui';
+import { bankSmsNative } from '@/services/upi/bankSmsSync';
+import { useUpi } from '@/services/upi/UpiProvider';
 import type { IconName } from '@/theme/categoryStyle';
 import { colors, radius } from '@/theme/colors';
 
@@ -29,7 +32,42 @@ interface Step {
   copy?: { label: string; value: string }[];
 }
 
-function buildSteps(captureLink: string): Step[] {
+const APP_NAME = Constants.expoConfig?.name ?? 'FinanceTracker';
+
+/** Optional iCloud link to a shared iOS 27 shortcut that carries the automation. */
+const AUTOMATION_URL = Constants.expoConfig?.extra?.iosAutomationUrl as string | undefined;
+
+function buildNativeSteps(): Step[] {
+  return [
+    {
+      icon: 'add-circle-outline',
+      title: 'Choose the trigger',
+      body: 'In Shortcuts, open the Automation tab, tap + and choose Message.',
+    },
+    {
+      icon: 'chatbubble-ellipses-outline',
+      title: 'Add the bank keyword',
+      body: 'Tap Message Contains and paste debited. Select Run Immediately, turn off Notify When Run, then tap Next.',
+      copy: [{ label: 'debited', value: 'debited' }],
+    },
+    {
+      icon: 'flash-outline',
+      title: `Add the ${APP_NAME} action`,
+      body: `Tap New Blank Automation, search for ${APP_NAME} and add Capture bank SMS. Tap Message, choose Shortcut Input, then tap Done.`,
+    },
+    {
+      icon: 'repeat-outline',
+      title: 'Repeat for other alerts',
+      body: 'Create the same automation for messages containing credited and Sent Rs, so every bank format is covered.',
+      copy: [
+        { label: 'credited', value: 'credited' },
+        { label: 'Sent Rs', value: 'Sent Rs' },
+      ],
+    },
+  ];
+}
+
+function buildLinkSteps(captureLink: string): Step[] {
   return [
     {
       icon: 'add-circle-outline',
@@ -70,7 +108,15 @@ function buildSteps(captureLink: string): Step[] {
   ];
 }
 
-function aiPrompts(captureLink: string) {
+function aiPrompts(captureLink: string, native: boolean) {
+  if (native) {
+    return [
+      {
+        label: 'Create the automation',
+        value: `When I receive a message containing debited, run Capture bank SMS from ${APP_NAME} with the message.`,
+      },
+    ];
+  }
   return [
     {
       label: '1. Create the shortcut',
@@ -98,9 +144,54 @@ async function openAutomationBuilder() {
   }
 }
 
+function formatCapturedAt(ms: number): string {
+  return new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+/** Notification permission and "is it working" status for the native action. */
+function NativeStatusCard() {
+  // Subscribing re-renders this card after each foreground sync, picking up new captures.
+  useUpi();
+  const [notifications, setNotifications] = useState<boolean | null>(null);
+  const lastCaptured = bankSmsNative?.lastCapturedAt() ?? null;
+
+  return (
+    <Card style={styles.step}>
+      <View style={styles.stepHeader}>
+        <View style={styles.stepIcon}>
+          <Ionicons
+            name={lastCaptured ? 'checkmark-circle' : 'hourglass-outline'}
+            size={22}
+            color={lastCaptured ? colors.income : colors.primary}
+          />
+        </View>
+        <Text style={styles.stepCount}>Status</Text>
+      </View>
+      <Text style={styles.stepTitle}>{lastCaptured ? 'Working' : 'Waiting for your first bank text'}</Text>
+      <Text style={styles.stepBody}>
+        {lastCaptured
+          ? `Last payment captured ${formatCapturedAt(lastCaptured)}.`
+          : 'Set up the automation below. Payments appear here as soon as your bank sends an alert.'}
+      </Text>
+      {notifications !== true && (
+        <Button
+          title="Allow payment notifications"
+          variant="secondary"
+          icon="notifications-outline"
+          onPress={async () => setNotifications((await bankSmsNative?.requestNotificationPermission()) ?? false)}
+        />
+      )}
+      {notifications === false && (
+        <Text style={styles.hint}>Notifications are off. You can turn them on in iOS Settings → {APP_NAME}.</Text>
+      )}
+    </Card>
+  );
+}
+
 export function ShortcutSetupGuide() {
+  const native = bankSmsNative != null;
   const captureLink = `${Linking.createURL('capture')}?text=`;
-  const steps = buildSteps(captureLink);
+  const steps = native ? buildNativeSteps() : buildLinkSteps(captureLink);
   const { width } = useWindowDimensions();
   const pageWidth = width - 32;
   const list = useRef<FlatList<Step>>(null);
@@ -123,6 +214,17 @@ export function ShortcutSetupGuide() {
 
   return (
     <View style={styles.container}>
+      {native && <NativeStatusCard />}
+      {native && AUTOMATION_URL && (
+        <Card style={styles.step}>
+          <Text style={styles.stepTitle}>One-tap install (iOS 27)</Text>
+          <Text style={styles.stepBody}>
+            Add the ready-made automation, then switch it on in Shortcuts → Automation. Repeat with the steps below
+            for credited and Sent Rs if your bank uses them.
+          </Text>
+          <Button title="Install automation" icon="download-outline" onPress={() => Linking.openURL(AUTOMATION_URL)} />
+        </Card>
+      )}
       <Card style={styles.step}>
         <View style={styles.stepHeader}>
           <View style={styles.stepIcon}>
@@ -132,10 +234,11 @@ export function ShortcutSetupGuide() {
         </View>
         <Text style={styles.stepTitle}>Ask the Shortcuts AI</Text>
         <Text style={styles.stepBody}>
-          Copy each prompt, paste it into the Shortcuts app&apos;s AI one at a time, and repeat prompt 2 with credited
-          and Sent Rs. If the AI declines, use the steps below.
+          {native
+            ? 'Copy the prompt, paste it into the Shortcuts app’s AI, then repeat it with credited and Sent Rs. If the AI declines, use the steps below.'
+            : 'Copy each prompt, paste it into the Shortcuts app’s AI one at a time, and repeat prompt 2 with credited and Sent Rs. If the AI declines, use the steps below.'}
         </Text>
-        {aiPrompts(captureLink).map(prompt => (
+        {aiPrompts(captureLink, native).map(prompt => (
           <View key={prompt.label} style={styles.prompt}>
             <Text style={styles.promptLabel}>{prompt.label}</Text>
             <Text selectable style={styles.promptText}>
@@ -151,17 +254,23 @@ export function ShortcutSetupGuide() {
       </Card>
 
       <Text style={styles.orText}>Or set it up step by step</Text>
-      <Button
-        title="Copy link & open Shortcuts"
-        icon="flash"
-        onPress={async () => {
-          await copyValue(captureLink);
-          await openAutomationBuilder();
-        }}
-      />
-      <Text style={styles.hint}>
-        The app link is copied for step 4. Follow the steps below; it takes about a minute.
-      </Text>
+      {native ? (
+        <Button title="Open Shortcuts automations" icon="flash" onPress={openAutomationBuilder} />
+      ) : (
+        <>
+          <Button
+            title="Copy link & open Shortcuts"
+            icon="flash"
+            onPress={async () => {
+              await copyValue(captureLink);
+              await openAutomationBuilder();
+            }}
+          />
+          <Text style={styles.hint}>
+            The app link is copied for step 4. Follow the steps below; it takes about a minute.
+          </Text>
+        </>
+      )}
 
       <FlatList
         ref={list}
@@ -230,7 +339,7 @@ export function ShortcutSetupGuide() {
         icon="flask-outline"
         onPress={() => router.push({ pathname: '/capture', params: { text: SAMPLE_SMS } })}
       />
-      {captureLink.startsWith('exp') && (
+      {!native && captureLink.startsWith('exp') && (
         <Text style={styles.hint}>
           In Expo Go this link only works while npm start is running on your Mac, and changes if its IP address
           changes. An installed build uses financetracker://capture?text=.

@@ -27,7 +27,8 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./modules/bank-sms/app.plugin.js"
     ]
   }
 }

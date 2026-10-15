@@ -159,21 +159,48 @@ adb shell cmd notification disallow_listener $C && adb shell cmd notification al
 
 ## iPhone: capture payments from bank SMS
 
-iOS apps cannot read notifications or SMS. Instead, a Shortcuts automation
-forwards each bank SMS to the app through the link
-`financetracker://capture?text=<message>`. The app parses it on the phone
+iOS apps cannot read notifications or SMS, and Apple does not let apps
+create automations. The user creates one Shortcuts automation per keyword
+(debited, credited, Sent Rs) once, and it hands each bank SMS to the app.
+There are two ways it does so:
+
+- **Installed iOS build (recommended).** The app adds its own Shortcuts
+  action, **Capture bank SMS** (an App Intent from `modules/bank-sms`). The
+  automation is just *Message contains "debited" → Capture bank SMS
+  (Message = Shortcut Input)*. It runs in the background without opening
+  the app, discards anything that is not a bank alert (including OTPs),
+  queues the rest on the phone and shows a "Payment detected"
+  notification. The queue is moved into the review list and deleted the
+  next time the app opens. This is the same approach iLekka and similar
+  apps use, and needs iOS 16.4 or later.
+- **Expo Go.** Expo Go cannot add actions, so the automation opens the link
+  `financetracker://capture?text=<message>` (an `exp://` link in Expo Go)
+  instead, which brings the app to the front.
+
+Either way the app parses the message on the phone
 (HDFC, SBI, ICICI, Axis, Kotak and similar formats), drops OTPs, and opens
 the payment ready to confirm. Duplicates are recognised by the UPI
 reference, as on Android.
 
 The setup is guided in the app: **Settings → Payment detection** on the
-iPhone. **Copy link & open Shortcuts** copies the app link and opens the
-Shortcuts app; a six-step card guide (with copy buttons for each keyword
-and the link) walks through the automation, and **Test with a sample
-message** checks the result. Apple does not allow apps to create the
-automation themselves. `scripts/build-ios-shortcut.py` can also build a
-signed "Capture payment" shortcut to AirDrop to the phone. The link needs an installed iOS build; in Expo Go the screen shows
-an `exp://` link that only works while `npm start` is running.
+iPhone. In an installed build it asks for notification permission, shows
+a prompt for the Shortcuts AI, a four-step card guide, and a status
+("Waiting for your first bank text" / "Working"). In Expo Go it shows the
+six-step link guide with a **Copy link & open Shortcuts** button.
+**Test with a sample message** checks the parser in both.
+`scripts/build-ios-shortcut.py` can also build a signed link-based
+"Capture payment" shortcut to AirDrop to the phone. In Expo Go the `exp://`
+link only works while `npm start` is running.
+
+On iOS 27 a shared shortcut can carry an automation, which installs
+switched off. To offer that, build the automation once on an iPhone, share
+its iCloud link, and set `extra.iosAutomationUrl` in `app.config.ts`; the
+setup screen then shows **Install automation**.
+
+The native action only exists in an iOS build made from this project
+(`npx expo run:ios` with Xcode, or EAS Build, which needs an Apple
+Developer account). The config plugin `modules/bank-sms/app.plugin.js`
+copies the App Intent into the app target during prebuild.
 
 To test the capture screen from the Mac on the Android emulator:
 

@@ -136,8 +136,17 @@ need database credentials in the app, which anyone could extract.
 ## Bank SMS capture (iOS)
 
 iOS has no API for reading notifications or SMS, so detection there relies
-on the user's own Shortcuts automation ("When I get a message containing
-debited → open `financetracker://capture?text=…`"). `parseBankSms` turns
+on the user's own Shortcuts automation, triggered by a message containing
+"debited" (or another keyword). Installed builds contain the
+**Capture bank SMS** App Intent (`modules/bank-sms/ios-app`, copied into
+the app target by `app.plugin.js`, since Shortcuts only discovers intents
+compiled into the app). It runs without opening the app, keeps only
+messages with a transaction word and amount (OTPs are dropped), appends them
+to a queue in `UserDefaults` and posts a local notification. The `BankSms`
+Expo module exposes that queue; `syncBankSms` drains it whenever
+`UpiProvider` syncs (on launch and on returning to the foreground), so the
+text lives only until the app next opens. Expo Go has no native action, so
+the automation opens `financetracker://capture?text=…` instead. `parseBankSms` turns
 the message into the same candidate shape as an app notification
 (`package_name = 'sms'`), so it shares the review list, the duplicate key
 (UPI reference) and the rule that failed payments and requests are never
@@ -150,4 +159,5 @@ on Android too.
 - Android can read payment-app notifications only after the user grants
   notification access; formats vary and detection is best-effort.
 - iOS apps cannot read other apps' notifications. iOS relies on quick manual
-  entry and bank SMS forwarded by a Shortcuts automation.
+  entry and bank SMS handed over by a Shortcuts automation, which the user
+  must create once (apps cannot create automations).

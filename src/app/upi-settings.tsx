@@ -8,6 +8,7 @@ import { haptic } from '@/components/PressableScale';
 import { ShortcutSetupGuide } from '@/components/ShortcutSetupGuide';
 import { Button, Card, EmptyState, SectionTitle } from '@/components/ui';
 import { SUPPORTED_UPI_APPS } from '@/domain/upi/parser';
+import { bankSmsNative } from '@/services/upi/bankSmsSync';
 import { upiNative } from '@/services/upi/upiSync';
 import { useUpi } from '@/services/upi/UpiProvider';
 import type { IconName } from '@/theme/categoryStyle';
@@ -150,8 +151,9 @@ function SmsShortcutGuide() {
           <View style={styles.toggleText}>
             <Text style={styles.toggleTitle}>Auto-track your bank SMS</Text>
             <Text style={styles.muted}>
-              iOS does not let apps read your messages. A one-time automation in Apple&apos;s Shortcuts app forwards
-              bank alerts to this app, which opens with the payment ready to confirm.
+              {bankSmsNative
+                ? 'iOS does not let apps read your messages. A one-time automation in Apple’s Shortcuts app hands bank alerts to this app in the background, and you get a notification to review each payment.'
+                : 'iOS does not let apps read your messages. A one-time automation in Apple’s Shortcuts app forwards bank alerts to this app, which opens with the payment ready to confirm.'}
             </Text>
           </View>
         </Card>
@@ -165,7 +167,14 @@ function SmsShortcutGuide() {
       <Animated.View entering={FadeInDown.delay(120).duration(300)} style={styles.section}>
         <SectionTitle title="Your privacy" />
         <Card style={styles.privacy}>
-          <PrivacyPoint icon="phone-portrait-outline" text="Messages are read only on this phone. The text is never saved or uploaded." />
+          <PrivacyPoint
+            icon="phone-portrait-outline"
+            text={
+              bankSmsNative
+                ? 'Messages are read only on this phone and deleted once the payment is extracted. The text is never uploaded.'
+                : 'Messages are read only on this phone. The text is never saved or uploaded.'
+            }
+          />
           <PrivacyPoint icon="key-outline" text="Messages that look like OTPs or PINs are discarded immediately." />
           <PrivacyPoint icon="hand-left-outline" text="Nothing is saved until you review and confirm it." />
           <PrivacyPoint

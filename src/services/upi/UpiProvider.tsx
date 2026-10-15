@@ -12,6 +12,7 @@ import { AppState } from 'react-native';
 
 import { countPendingCandidates } from '@/data/repositories/upiCandidates';
 
+import { syncBankSms } from './bankSmsSync';
 import { setDetectionEnabled, syncUpiEvents, upiNative } from './upiSync';
 
 interface UpiState {
@@ -32,6 +33,7 @@ type UpiStatusSnapshot = Pick<UpiState, 'accessGranted' | 'pendingCount' | 'last
 
 async function loadStatus(db: SQLiteDatabase): Promise<UpiStatusSnapshot> {
   await syncUpiEvents(db);
+  await syncBankSms(db);
   return {
     accessGranted: upiNative?.isAccessGranted() ?? false,
     pendingCount: await countPendingCandidates(db),
