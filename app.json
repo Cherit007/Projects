@@ -28,7 +28,8 @@
       "expo-router",
       "expo-sqlite",
       "expo-web-browser",
-      "./modules/bank-sms/app.plugin.js"
+      "./modules/bank-sms/app.plugin.js",
+      "./plugins/withIosSceneLifecycle.js"
     ]
   }
 }
