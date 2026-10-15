@@ -108,6 +108,13 @@ export async function countPendingCandidates(db: SQLiteDatabase): Promise<number
   return row?.count ?? 0;
 }
 
+export async function listWaitingCandidateIds(db: SQLiteDatabase): Promise<string[]> {
+  const rows = await db.getAllAsync<{ id: string }>(
+    "SELECT id FROM upi_candidates WHERE review_state = 'needs_review' ORDER BY detected_at",
+  );
+  return rows.map(row => row.id);
+}
+
 export async function getCandidate(
   db: SQLiteDatabase,
   id: string,

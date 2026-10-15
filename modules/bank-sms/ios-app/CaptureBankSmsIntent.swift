@@ -95,7 +95,7 @@ enum BankSmsNotifier {
     }
     let content = UNMutableNotificationContent()
     content.title = "Payment detected"
-    content.body = "₹\(amount) · Tap to add it to your expenses"
+    content.body = "₹\(amount) · Open the app to add it"
     content.sound = .default
     let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
     try? await center.add(request)

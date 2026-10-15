@@ -4,7 +4,6 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import UpiNotifications from '../../../modules/upi-notifications';
 import { insertCandidate } from '../../data/repositories/upiCandidates';
 import { parseUpiNotification, SUPPORTED_UPI_APPS } from '../../domain/upi/parser';
-import { autoAddCandidates } from './autoAdd';
 
 export const upiNative = Platform.OS === 'android' ? UpiNotifications : null;
 
@@ -33,15 +32,13 @@ export async function syncUpiEvents(db: SQLiteDatabase): Promise<number> {
     return 0;
   }
   const apps = allowedApps();
-  const inserted: string[] = [];
+  let inserted = 0;
   for (const event of events) {
     const parsed = parseUpiNotification(event, apps);
-    const id = parsed ? await insertCandidate(db, parsed) : null;
-    if (id) {
-      inserted.push(id);
+    if (parsed && (await insertCandidate(db, parsed))) {
+      inserted += 1;
     }
   }
   upiNative.removeEvents(events.map(e => e.id));
-  await autoAddCandidates(db, inserted);
-  return inserted.length;
+  return inserted;
 }

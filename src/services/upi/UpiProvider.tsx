@@ -10,8 +10,9 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
-import { countPendingCandidates } from '@/data/repositories/upiCandidates';
+import { countPendingCandidates, listWaitingCandidateIds } from '@/data/repositories/upiCandidates';
 
+import { autoAddCandidates } from './autoAdd';
 import { syncBankSms } from './bankSmsSync';
 import { setDetectionEnabled, syncUpiEvents, upiNative } from './upiSync';
 
@@ -34,6 +35,8 @@ type UpiStatusSnapshot = Pick<UpiState, 'accessGranted' | 'pendingCount' | 'last
 async function loadStatus(db: SQLiteDatabase): Promise<UpiStatusSnapshot> {
   await syncUpiEvents(db);
   await syncBankSms(db);
+  // Includes payments detected earlier, so they are added once the category becomes known.
+  await autoAddCandidates(db, await listWaitingCandidateIds(db));
   return {
     accessGranted: upiNative?.isAccessGranted() ?? false,
     pendingCount: await countPendingCandidates(db),

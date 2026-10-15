@@ -4,7 +4,6 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import BankSms from '../../../modules/bank-sms';
 import { insertCandidate } from '../../data/repositories/upiCandidates';
 import { parseBankSms } from '../../domain/upi/bankSms';
-import { autoAddCandidates } from './autoAdd';
 
 /** Present only in iOS builds that include the "Capture bank SMS" action. */
 export const bankSmsNative = Platform.OS === 'ios' ? BankSms : null;
@@ -18,15 +17,13 @@ export async function syncBankSms(db: SQLiteDatabase): Promise<number> {
   if (queued.length === 0) {
     return 0;
   }
-  const inserted: string[] = [];
+  let inserted = 0;
   for (const sms of queued) {
     const parsed = parseBankSms(sms.text, sms.receivedAt);
-    const id = parsed ? await insertCandidate(db, parsed) : null;
-    if (id) {
-      inserted.push(id);
+    if (parsed && (await insertCandidate(db, parsed))) {
+      inserted += 1;
     }
   }
   bankSmsNative.remove(queued.map(s => s.id));
-  await autoAddCandidates(db, inserted);
-  return inserted.length;
+  return inserted;
 }
