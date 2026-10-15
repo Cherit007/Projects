@@ -23,20 +23,8 @@ const CITIES: Record<string, [number, number, number, number]> = {
   chennai: [12.9, 80.12, 13.2, 80.32],
   hyderabad: [17.3, 78.35, 17.55, 78.6],
   mumbai: [18.9, 72.8, 19.25, 72.98],
-  pune: [18.45, 73.75, 18.62, 73.95],
   delhi: [28.5, 77.05, 28.75, 77.32],
   kolkata: [22.48, 88.28, 22.65, 88.42],
-  ahmedabad: [22.95, 72.5, 23.1, 72.65],
-  jaipur: [26.8, 75.7, 26.98, 75.88],
-  lucknow: [26.78, 80.88, 26.92, 81.02],
-  kochi: [9.9, 76.22, 10.05, 76.35],
-  coimbatore: [10.95, 76.9, 11.07, 77.03],
-  visakhapatnam: [17.68, 83.18, 17.8, 83.35],
-  chandigarh: [30.68, 76.7, 30.78, 76.83],
-  indore: [22.65, 75.8, 22.78, 75.93],
-  bhubaneswar: [20.22, 85.75, 20.35, 85.88],
-  guwahati: [26.1, 91.65, 26.2, 91.82],
-  patna: [25.57, 85.05, 25.65, 85.25],
 };
 
 /** Tags kept for labelling; the training script maps them to categories. */
@@ -61,15 +49,23 @@ function overpassQuery(part: string, [s, w, n, e]: [number, number, number, numb
 
 async function request(url: string, init: RequestInit, label: string): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
-    const response = await fetch(url, { ...init, headers: { 'User-Agent': USER_AGENT, ...init.headers } });
-    if (response.ok) {
-      return response;
+    const status = await fetch(url, {
+      ...init,
+      headers: { 'User-Agent': USER_AGENT, ...init.headers },
+      signal: AbortSignal.timeout(150_000),
+    }).then(
+      response => response,
+      () => 'timed out' as const,
+    );
+    if (typeof status !== 'string' && status.ok) {
+      return status;
     }
-    if (attempt === 4 || ![429, 502, 503, 504].includes(response.status)) {
-      throw new Error(`${label}: HTTP ${response.status}`);
+    const reason = typeof status === 'string' ? status : `HTTP ${status.status}`;
+    if (attempt === 6 || (typeof status !== 'string' && ![429, 502, 503, 504].includes(status.status))) {
+      throw new Error(`${label}: ${reason}`);
     }
     const wait = 20 * attempt;
-    console.log(`  ${label}: HTTP ${response.status}, retrying in ${wait}s`);
+    console.log(`  ${label}: ${reason}, retrying in ${wait}s`);
     await new Promise(resolve => setTimeout(resolve, wait * 1000));
   }
 }
@@ -84,7 +80,13 @@ async function fetchCity(city: string, box: [number, number, number, number]): P
   const places: Record<string, string>[] = [];
   for (const [index, part] of QUERY_PARTS.entries()) {
     const label = `${city} ${index + 1}/${QUERY_PARTS.length}`;
-    const response = await request(OVERPASS, { method: 'POST', body: new URLSearchParams({ data: overpassQuery(part, box) }) }, label);
+    let response: Response;
+    try {
+      response = await request(OVERPASS, { method: 'POST', body: new URLSearchParams({ data: overpassQuery(part, box) }) }, label);
+    } catch (error) {
+      console.log(`  ${(error as Error).message}, skipping this part`);
+      continue;
+    }
     const { elements } = (await response.json()) as { elements: { tags: Record<string, string> }[] };
     for (const { tags } of elements) {
       const place: Record<string, string> = { name: tags['name:en'] ?? tags.name };
