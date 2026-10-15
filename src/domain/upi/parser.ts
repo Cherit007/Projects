@@ -44,12 +44,12 @@ const PENDING = /\b(pending|processing|in\s+progress|awaiting)\b/i;
 const CREDIT = /\b(received|credited|got|added\s+to)\b/i;
 const DEBIT = /\b(paid|sent|debited|payment\s+(?:of|to)|spent|transferred)\b/i;
 
-const NAME = "([A-Za-z0-9][A-Za-z0-9 .&'@_-]{1,40}?)";
+const NAME = String.raw`([\p{L}\p{N}][\p{L}\p{M}\p{N} .&'@_-]{1,40}?)`;
 const NAME_END = String.raw`(?=\s+(?:on|via|using|from|for|ref|upi|successfully|is|has|had|was|at|could|couldn't|cannot|failed|did|will)\b|[.,!|]|\s*$)`;
-const DEBIT_PARTY = new RegExp(String.raw`\b(?:paid|sent|payment)\s+(?:of\s+\S+\s+)?to\s+${NAME}${NAME_END}`, 'i');
-const TO_PARTY = new RegExp(String.raw`\bto\s+${NAME}${NAME_END}`, 'i');
-const CREDIT_PARTY = new RegExp(String.raw`\b(?:from|by)\s+${NAME}${NAME_END}`, 'i');
-const REQUESTER = new RegExp(String.raw`^${NAME}\s+(?:has\s+)?request`, 'i');
+const DEBIT_PARTY = new RegExp(String.raw`\b(?:paid|sent|payment)\s+(?:of\s+\S+\s+)?to\s+${NAME}${NAME_END}`, 'iu');
+const TO_PARTY = new RegExp(String.raw`\bto\s+${NAME}${NAME_END}`, 'iu');
+const CREDIT_PARTY = new RegExp(String.raw`\b(?:from|by)\s+${NAME}${NAME_END}`, 'iu');
+const REQUESTER = new RegExp(String.raw`^${NAME}\s+(?:has\s+)?request`, 'iu');
 
 const ACCOUNT_LIKE = /\b(bank|a\/c|account|xx\d+|\*+\d+|wallet|upi\s+lite)\b/i;
 
@@ -158,7 +158,7 @@ export function dedupeKey(parsed: ParsedUpiNotification): string {
   if (parsed.reference) {
     return `ref:${parsed.reference.toUpperCase()}`;
   }
-  const party = (parsed.counterparty ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const party = (parsed.counterparty ?? '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
   const bucket = Math.floor(parsed.postedAt / DEDUPE_WINDOW_MS);
   return [parsed.packageName, parsed.status, parsed.direction ?? '-', parsed.amountMinor ?? '-', party, bucket].join('|');
 }

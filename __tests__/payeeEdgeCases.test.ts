@@ -69,6 +69,9 @@ describe('merchant rules edge cases', () => {
     expect(guessCategoryName('Sachin Tendulkar', 'expense')).toBeNull();
     expect(guessCategoryName('NATURALS ICE CREAM', 'expense')).not.toBe('Personal care');
     expect(guessCategoryName('Dhan Laxmi Stores', 'expense')).not.toBe('Investments');
+    expect(predictCategoryName('Nandini Milk Parlour', 'expense')).not.toBe('Personal care');
+    expect(predictCategoryName('Juice Parlour', 'expense')).toBe('Food and dining');
+    expect(predictCategoryName('Lakshmi Beauty Parlour', 'expense')).toBe('Personal care');
   });
 
   it('does not apply expense rules to income or the other way round', () => {

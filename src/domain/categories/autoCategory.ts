@@ -11,7 +11,7 @@ const RULES: readonly { category: string; type: CategoryType; words: readonly st
   {
     category: 'Food and dining',
     type: 'expense',
-    words: ['swiggy', 'zomato', 'eatsure', 'dominos', 'domino', 'pizza', 'kfc', 'mcdonalds', 'starbucks', 'restaurant', 'cafe', 'hotel', 'dhaba', 'bakery'],
+    words: ['swiggy', 'zomato', 'eatsure', 'dominos', 'domino', 'pizza', 'kfc', 'mcdonalds', 'starbucks', 'restaurant', 'cafe', 'hotel', 'dhaba', 'bakery', 'juice', 'ice cream'],
   },
   {
     category: 'Groceries',
@@ -61,7 +61,7 @@ const RULES: readonly { category: string; type: CategoryType; words: readonly st
   {
     category: 'Personal care',
     type: 'expense',
-    words: ['salon', 'saloon', 'parlour', 'parlor', 'barber', 'spa', 'unisex salon', 'naturals salon', 'lakme salon', 'green trends', 'toni and guy', 'jawed habib'],
+    words: ['salon', 'saloon', 'beauty parlour', 'beauty parlor', 'hair parlour', 'barber', 'spa', 'unisex salon', 'naturals salon', 'lakme salon', 'green trends', 'toni and guy', 'jawed habib'],
   },
   {
     category: 'Fitness',

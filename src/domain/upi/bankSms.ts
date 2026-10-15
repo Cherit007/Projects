@@ -36,18 +36,18 @@ const REFERENCES = [
   /\b(\d{12})\b/,
 ];
 
-const NAME = "([A-Za-z0-9][A-Za-z0-9 .&'@_-]{1,40}?)";
+const NAME = String.raw`([\p{L}\p{N}][\p{L}\p{M}\p{N} .&'@_-]{1,40}?)`;
 const STOP = String.raw`(?=\s+(?:on|via|using|from|ref|refno|upi|not|avl|bal|info|dated|thru|through|at|is|has|was|of)\b|[,;:!|(]|\.(?=\s|$)|\s*$)`;
 const PAYEES = [
   /\bUPI\/(?:P2[AM]\/)?\d+\/([^\s/]{2,40})/i,
   /;\s*([A-Za-z0-9][A-Za-z0-9 .&'_-]{1,40}?)\s+credited\b/i,
-  new RegExp(String.raw`\b(?:trf\s+)?to\s+(?:VPA\s+)?${NAME}${STOP}`, 'i'),
+  new RegExp(String.raw`\b(?:trf\s+)?to\s+(?:VPA\s+)?${NAME}${STOP}`, 'iu'),
 ];
 const PAYERS = [
   /\bUPI\/(?:P2[AM]\/)?\d+\/([^\s/]{2,40})/i,
-  new RegExp(String.raw`\b(?:from|by)\s+(?:VPA\s+)?${NAME}${STOP}`, 'i'),
+  new RegExp(String.raw`\b(?:from|by)\s+(?:VPA\s+)?${NAME}${STOP}`, 'iu'),
 ];
-const REQUESTER = new RegExp(String.raw`^(?:Dear\s+\w+,?\s*)?${NAME}\s+has\s+requested`, 'i');
+const REQUESTER = new RegExp(String.raw`^(?:Dear\s+\w+,?\s*)?${NAME}\s+has\s+requested`, 'iu');
 
 const ACCOUNT_LIKE = /\b(bank|a\/?c|acct|account|card|xx\d*|x\d{3,}|\*+\d+|wallet|your|you|u)\b|^\d+$/i;
 

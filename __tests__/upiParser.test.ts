@@ -72,6 +72,13 @@ describe('parseUpiNotification', () => {
     expect(parseUpiNotification(raw(PHONEPE, 'Offers for you', 'Get cashback on recharges'))).toBeNull();
   });
 
+  it('keeps payee names written in other scripts', () => {
+    expect(parseUpiNotification(raw(PHONEPE, '₹75 paid to राहुल शर्मा', 'Paid from HDFC Bank'))?.counterparty)
+      .toBe('राहुल शर्मा');
+    expect(parseUpiNotification(raw(GPAY, '₹500 received', 'Received from முருகன்'))?.counterparty).toBe('முருகன்');
+    expect(parseUpiNotification(raw(PHONEPE, '₹90 paid to Café Noir', null))?.counterparty).toBe('Café Noir');
+  });
+
   it('does not treat a bank account as the payee', () => {
     expect(parseUpiNotification(raw(PHONEPE, '₹250 debited', 'from HDFC Bank XX1234'))?.counterparty).toBeNull();
   });
@@ -88,6 +95,12 @@ describe('dedupeKey', () => {
   it('distinguishes the same amount paid to different merchants', () => {
     const other = parseUpiNotification(raw(PHONEPE, '₹250 paid to Zomato', null))!;
     expect(dedupeKey(other)).not.toBe(dedupeKey(base));
+  });
+
+  it('tells apart payees written in other scripts', () => {
+    const a = parseUpiNotification(raw(PHONEPE, '₹75 paid to राहुल', null))!;
+    const b = parseUpiNotification(raw(PHONEPE, '₹75 paid to प्रिया', null))!;
+    expect(dedupeKey(a)).not.toBe(dedupeKey(b));
   });
 
   it('prefers the transaction reference', () => {
