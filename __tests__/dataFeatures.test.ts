@@ -15,7 +15,8 @@ import {
 import { setOwnerName } from '../src/data/repositories/settings';
 import { createTransaction, deleteTransaction, listTransactions } from '../src/data/repositories/transactions';
 import { getCandidate, insertCandidate } from '../src/data/repositories/upiCandidates';
-import { accountBalance } from '../src/domain/accounting/accounting';
+import { accountBalance, holdings } from '../src/domain/accounting/accounting';
+import { monthRange } from '../src/domain/period';
 import { parseBackup } from '../src/domain/backup';
 import type { TransactionInput } from '../src/domain/types';
 import { parseBankSms } from '../src/domain/upi/bankSms';
@@ -124,6 +125,44 @@ describe('credit cards', () => {
     const own = await insertCandidate(db, sms('CHERIT REDDY', 529200000003));
     await autoAddCandidates(db, [own!]);
     expect((await getCandidate(db, own!))?.reviewState).toBe('needs_review');
+  });
+});
+
+describe('carry-over between months', () => {
+  it('carries what is left at the end of a month into the next, keeping card dues apart', async () => {
+    const db = await freshDb();
+    const bank = await createAccount(db, { name: 'HDFC', type: 'bank', openingBalanceMinor: 1_000_00 });
+    const card = await createAccount(db, { name: 'Amex', type: 'card', openingBalanceMinor: 0 });
+    const salary = await categoryId(db, 'Salary', 'income');
+    const food = await categoryId(db, 'Food and dining');
+    const sep = monthRange({ year: 2026, month: 8 });
+    const oct = monthRange({ year: 2026, month: 9 });
+    const accounts = await listAccounts(db);
+    const at = (iso: string) => getAccountFlows(db, iso).then(flows => holdings(accounts, flows));
+
+    await createTransaction(db, { ...expense(bank, salary, 50_000_00, new Date(2026, 8, 25, 10).toISOString()), type: 'income' });
+    await createTransaction(db, expense(bank, food, 30_000_00, new Date(2026, 8, 30, 23, 59).toISOString()));
+    await createTransaction(db, expense(card, food, 2_000_00, new Date(2026, 8, 28).toISOString()));
+    await createTransaction(db, expense(bank, food, 5_000_00, new Date(2026, 9, 1, 0, 0).toISOString()));
+
+    expect(await at(sep.startIso)).toEqual({ cashMinor: 1_000_00, cardDueMinor: 0 });
+    expect(await at(oct.startIso)).toEqual({ cashMinor: 21_000_00, cardDueMinor: 2_000_00 });
+    expect(await at(oct.endIso)).toEqual({ cashMinor: 16_000_00, cardDueMinor: 2_000_00 });
+
+    await createTransaction(db, {
+      type: 'transfer',
+      amountMinor: 2_000_00,
+      occurredAt: new Date(2026, 9, 5).toISOString(),
+      accountId: bank,
+      toAccountId: card,
+      categoryId: null,
+      counterparty: null,
+      note: null,
+    });
+    expect(await at(oct.endIso)).toEqual({ cashMinor: 14_000_00, cardDueMinor: 0 });
+
+    await createTransaction(db, expense(bank, food, 1_000_00, new Date(2026, 8, 2).toISOString()));
+    expect((await at(oct.startIso)).cashMinor).toBe(20_000_00);
   });
 });
 

@@ -9,7 +9,8 @@ import { PressableScale } from '@/components/PressableScale';
 import { Card, ErrorState, LoadingState, MonthSelector, SectionTitle, Segmented } from '@/components/ui';
 import { listCategories } from '@/data/repositories/categories';
 import { listTransactions } from '@/data/repositories/transactions';
-import { summarize } from '@/domain/accounting/accounting';
+import { holdings, summarize } from '@/domain/accounting/accounting';
+import { getAccountFlows, listAccounts } from '@/data/repositories/accounts';
 import { formatMinor } from '@/domain/money/money';
 import { addMonths, monthKeyOf, monthRange, yearRange, type DateRange, type MonthKey } from '@/domain/period';
 import {
@@ -35,15 +36,20 @@ const modeOptions = [
 ] as const;
 
 async function loadReport(db: SQLiteDatabase, range: DateRange, previous: DateRange, year: number | null) {
-  const [transactions, before, categories] = await Promise.all([
+  const [transactions, before, categories, accounts, startFlows, endFlows] = await Promise.all([
     listTransactions(db, { range, limit: -1 }),
     listTransactions(db, { range: previous, limit: -1 }),
     listCategories(db, { includeArchived: true }),
+    listAccounts(db),
+    getAccountFlows(db, range.startIso),
+    getAccountFlows(db, range.endIso),
   ]);
   const summary = summarize(transactions);
   return {
     summary,
     previous: summarize(before),
+    carried: holdings(accounts, startFlows),
+    closing: holdings(accounts, endFlows),
     count: transactions.length,
     months: year === null ? null : monthlyTotals(transactions, year),
     spending: totalsByCategory(transactions, categories, 'expense'),
@@ -107,6 +113,10 @@ export default function ReportsScreen() {
                 />
               </View>
               <View style={styles.facts}>
+                <Fact
+                  icon="arrow-redo-outline"
+                  text={`Carried over ${formatMinor(data.carried.cashMinor)} from ${mode === 'month' ? 'last month' : year - 1}, ended with ${formatMinor(data.closing.cashMinor)}`}
+                />
                 <Fact
                   icon="trending-up-outline"
                   text={

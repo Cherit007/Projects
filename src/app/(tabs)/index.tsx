@@ -32,9 +32,9 @@ import { loadMonth } from '@/data/queries/monthSummary';
 import { getAccountFlows, listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
 import { listPeople } from '@/data/repositories/people';
-import { accountBalance, spendingByCategory } from '@/domain/accounting/accounting';
-import { formatMinor, sumMinor } from '@/domain/money/money';
-import { monthKeyOf, type MonthKey } from '@/domain/period';
+import { holdings, spendingByCategory } from '@/domain/accounting/accounting';
+import { formatMinor } from '@/domain/money/money';
+import { addMonths, formatMonth, monthKeyOf, monthRange, type MonthKey } from '@/domain/period';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import { useRecurring } from '@/services/RecurringProvider';
 import { useUpi } from '@/services/upi/UpiProvider';
@@ -42,10 +42,12 @@ import { categoryStyle } from '@/theme/categoryStyle';
 import { colors, radius, shadow } from '@/theme/colors';
 
 async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
-  const [monthData, accounts, flows, categories, budgets, people] = await Promise.all([
+  const range = monthRange(month);
+  const [monthData, accounts, startFlows, endFlows, categories, budgets, people] = await Promise.all([
     loadMonth(db, month),
     listAccounts(db),
-    getAccountFlows(db),
+    getAccountFlows(db, range.startIso),
+    getAccountFlows(db, range.endIso),
     listCategories(db, { includeArchived: true }),
     loadBudgetSummary(db, month),
     listPeople(db),
@@ -54,10 +56,8 @@ async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
     ...monthData,
     people: people.slice(0, 3),
     budgets: budgets.progress.slice(0, 3),
-    totalBalanceMinor: sumMinor(accounts.filter(a => a.type !== 'card').map(a => accountBalance(a, flows.get(a.id)))),
-    cardDueMinor: -sumMinor(
-      accounts.filter(a => a.type === 'card').map(a => Math.min(0, accountBalance(a, flows.get(a.id)))),
-    ),
+    carried: holdings(accounts, startFlows),
+    closing: holdings(accounts, endFlows),
     spending: spendingByCategory(monthData.transactions, categories),
   };
 }
@@ -100,6 +100,8 @@ export default function DashboardScreen() {
   }
 
   const { summary, spending, transactions } = data;
+  const today = monthKeyOf(new Date());
+  const isCurrent = month.year === today.year && month.month === today.month;
   const maxSpend = spending[0]?.amountMinor ?? 0;
 
   return (
@@ -123,15 +125,22 @@ export default function DashboardScreen() {
             </View>
             <View style={styles.heroDivider} />
             <View style={styles.heroFooter}>
-              <Ionicons name="wallet-outline" size={16} color="#E0E7FF" />
-              <Text style={styles.heroFooterText}>Cash and bank balance</Text>
-              <Text style={styles.heroFooterAmount}>{formatMinor(data.totalBalanceMinor)}</Text>
+              <Ionicons name="arrow-redo-outline" size={16} color="#E0E7FF" />
+              <Text style={styles.heroFooterText}>Carried over from {monthName(addMonths(month, -1))}</Text>
+              <Text style={styles.heroFooterAmount}>{formatMinor(data.carried.cashMinor)}</Text>
             </View>
-            {data.cardDueMinor > 0 && (
+            <View style={styles.heroFooter}>
+              <Ionicons name="wallet-outline" size={16} color="#E0E7FF" />
+              <Text style={styles.heroFooterText}>
+                {isCurrent ? 'Cash and bank balance' : `Balance at end of ${monthName(month)}`}
+              </Text>
+              <Text style={styles.heroFooterAmount}>{formatMinor(data.closing.cashMinor)}</Text>
+            </View>
+            {data.closing.cardDueMinor > 0 && (
               <View style={styles.heroFooter}>
                 <Ionicons name="card-outline" size={16} color="#E0E7FF" />
                 <Text style={styles.heroFooterText}>Credit card dues</Text>
-                <Text style={styles.heroFooterAmount}>{formatMinor(data.cardDueMinor)}</Text>
+                <Text style={styles.heroFooterAmount}>{formatMinor(data.closing.cardDueMinor)}</Text>
               </View>
             )}
           </LinearGradient>
@@ -250,6 +259,10 @@ export default function DashboardScreen() {
   );
 }
 
+function monthName(key: MonthKey): string {
+  return formatMonth(key).split(' ')[0];
+}
+
 function HeroPill({ icon, label, amount }: { icon: 'arrow-down' | 'arrow-up'; label: string; amount: number }) {
   return (
     <View style={styles.heroPill}>
@@ -334,7 +347,7 @@ const styles = StyleSheet.create({
   heroPillLabel: { color: '#E0E7FF', fontSize: 12 },
   heroPillAmount: { color: '#fff', fontWeight: '700', fontVariant: ['tabular-nums'] },
   heroDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.18)', marginVertical: 10 },
-  heroFooter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   heroFooterText: { color: '#E0E7FF', flex: 1 },
   heroFooterAmount: { color: '#fff', fontWeight: '700', fontVariant: ['tabular-nums'] },
   reviewBanner: {

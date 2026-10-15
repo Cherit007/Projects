@@ -104,10 +104,12 @@ export async function setAccountArchived(
   );
 }
 
-/** Lifetime per-account totals, aggregated in SQL. */
+/** Per-account totals, aggregated in SQL: lifetime, or only before `beforeIso` (exclusive). */
 export async function getAccountFlows(
   db: SQLiteDatabase,
+  beforeIso?: string,
 ): Promise<Map<string, AccountFlow>> {
+  const cutoff = beforeIso ? 'WHERE occurred_at < ?' : '';
   const rows = await db.getAllAsync<{
     account_id: string;
     income: number;
@@ -125,13 +127,14 @@ export async function getAccountFlows(
              CASE type WHEN 'transfer' THEN 'out' ELSE type END AS kind,
              amount_minor AS amount
       FROM transactions
+      ${cutoff}
       UNION ALL
       SELECT to_account_id, 'in', amount_minor
       FROM transactions
-      WHERE type = 'transfer' AND to_account_id IS NOT NULL
+      WHERE type = 'transfer' AND to_account_id IS NOT NULL ${beforeIso ? 'AND occurred_at < ?' : ''}
     )
     GROUP BY account_id
-  `);
+  `, beforeIso ? [beforeIso, beforeIso] : []);
   return new Map(
     rows.map(row => [
       row.account_id,

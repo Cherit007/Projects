@@ -54,6 +54,31 @@ export function accountBalance(
   );
 }
 
+export interface Holdings {
+  /** Cash, bank and wallet balances together. */
+  cashMinor: MinorUnits;
+  /** What is owed on credit cards (positive). */
+  cardDueMinor: MinorUnits;
+}
+
+/** Splits balances into money held and credit-card dues, which are not money held. */
+export function holdings(
+  accounts: readonly Pick<Account, 'id' | 'type' | 'openingBalanceMinor'>[],
+  flows: ReadonlyMap<string, Omit<AccountFlow, 'accountId'>>,
+): Holdings {
+  let cashMinor = 0;
+  let cardDueMinor = 0;
+  for (const account of accounts) {
+    const balance = accountBalance(account, flows.get(account.id));
+    if (account.type === 'card') {
+      cardDueMinor += Math.max(0, -balance);
+    } else {
+      cashMinor += balance;
+    }
+  }
+  return { cashMinor, cardDueMinor };
+}
+
 /** Computes per-account flows from individual transactions. */
 export function accountFlows(
   transactions: readonly Pick<
