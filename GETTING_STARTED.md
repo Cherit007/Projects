@@ -166,9 +166,13 @@ forwards each bank SMS to the app through the link
 the payment ready to confirm. Duplicates are recognised by the UPI
 reference, as on Android.
 
-The step-by-step setup is in the app: **Settings → Payment detection** on
-the iPhone, with the exact link to paste and a **Try a sample message**
-button. The link needs an installed iOS build; in Expo Go the screen shows
+The setup is guided in the app: **Settings → Payment detection** on the
+iPhone. **Copy link & open Shortcuts** copies the app link and opens the
+Shortcuts app; a six-step card guide (with copy buttons for each keyword
+and the link) walks through the automation, and **Test with a sample
+message** checks the result. Apple does not allow apps to create the
+automation themselves. `scripts/build-ios-shortcut.py` can also build a
+signed "Capture payment" shortcut to AirDrop to the phone. The link needs an installed iOS build; in Expo Go the screen shows
 an `exp://` link that only works while `npm start` is running.
 
 To test the capture screen from the Mac on the Android emulator:
