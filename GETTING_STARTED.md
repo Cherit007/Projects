@@ -184,7 +184,7 @@ reference, as on Android.
 
 The setup is guided in the app: **Settings → Payment detection** on the
 iPhone. In an installed build it asks for notification permission, shows
-a prompt for the Shortcuts AI, a four-step card guide, and a status
+a four-step card guide (the Shortcuts AI cannot create automations), and a status
 ("Waiting for your first bank text" / "Working"). In Expo Go it shows the
 six-step link guide with a **Copy link & open Shortcuts** button.
 **Test with a sample message** checks the parser in both.

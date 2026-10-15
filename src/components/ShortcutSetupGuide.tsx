@@ -1,8 +1,8 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import Constants from 'expo-constants';
-import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import Ionicons from "@expo/vector-icons/Ionicons";
+import Constants from "expo-constants";
+import * as Linking from "expo-linking";
+import { router } from "expo-router";
+import { useRef, useState } from "react";
 import {
   FlatList,
   StyleSheet,
@@ -11,19 +11,19 @@ import {
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-} from 'react-native';
+} from "react-native";
 
-import { haptic, PressableScale } from '@/components/PressableScale';
-import { Button, Card } from '@/components/ui';
-import { bankSmsNative } from '@/services/upi/bankSmsSync';
-import { useUpi } from '@/services/upi/UpiProvider';
-import type { IconName } from '@/theme/categoryStyle';
-import { colors, radius } from '@/theme/colors';
+import { haptic, PressableScale } from "@/components/PressableScale";
+import { Button, Card } from "@/components/ui";
+import { bankSmsNative } from "@/services/upi/bankSmsSync";
+import { useUpi } from "@/services/upi/UpiProvider";
+import type { IconName } from "@/theme/categoryStyle";
+import { colors, radius } from "@/theme/colors";
 
-export const SHORTCUT_KEYWORDS = ['debited', 'credited', 'Sent Rs'] as const;
+export const SHORTCUT_KEYWORDS = ["debited", "credited", "Sent Rs"] as const;
 
 const SAMPLE_SMS =
-  'Sent Rs.250.00 From HDFC Bank A/C *1234 To SWIGGY On 12/10/26 Ref 412345678901 Not You? Call 18002586161';
+  "Sent Rs.250.00 From HDFC Bank A/C *1234 To SWIGGY On 12/10/26 Ref 412345678901 Not You? Call 18002586161";
 
 interface Step {
   icon: IconName;
@@ -32,36 +32,37 @@ interface Step {
   copy?: { label: string; value: string }[];
 }
 
-const APP_NAME = Constants.expoConfig?.name ?? 'FinanceTracker';
+const APP_NAME = Constants.expoConfig?.name ?? "FinanceTracker";
 
 /** Optional iCloud link to a shared iOS 27 shortcut that carries the automation. */
-const AUTOMATION_URL = Constants.expoConfig?.extra?.iosAutomationUrl as string | undefined;
+const AUTOMATION_URL = Constants.expoConfig?.extra?.iosAutomationUrl as
+  string | undefined;
 
 function buildNativeSteps(): Step[] {
   return [
     {
-      icon: 'add-circle-outline',
-      title: 'Choose the trigger',
-      body: 'In Shortcuts, open the Automation tab, tap + and choose Message.',
+      icon: "add-circle-outline",
+      title: "Choose the trigger",
+      body: "In Shortcuts, open the Automation tab, tap + and choose Message.",
     },
     {
-      icon: 'chatbubble-ellipses-outline',
-      title: 'Add the bank keyword',
-      body: 'Tap Message Contains and paste debited. Select Run Immediately, turn off Notify When Run, then tap Next.',
-      copy: [{ label: 'debited', value: 'debited' }],
+      icon: "chatbubble-ellipses-outline",
+      title: "Add the bank keyword",
+      body: "Tap Message Contains and paste debited. Select Run Immediately, turn off Notify When Run, then tap Next.",
+      copy: [{ label: "debited", value: "debited" }],
     },
     {
-      icon: 'flash-outline',
+      icon: "flash-outline",
       title: `Add the ${APP_NAME} action`,
       body: `Tap New Blank Automation, search for ${APP_NAME} and add Capture bank SMS. Tap Message, choose Shortcut Input, then tap Done.`,
     },
     {
-      icon: 'repeat-outline',
-      title: 'Repeat for other alerts',
-      body: 'Create the same automation for messages containing credited and Sent Rs, so every bank format is covered.',
+      icon: "repeat-outline",
+      title: "Repeat for other alerts",
+      body: "Create the same automation for messages containing credited and Sent Rs, so every bank format is covered.",
       copy: [
-        { label: 'credited', value: 'credited' },
-        { label: 'Sent Rs', value: 'Sent Rs' },
+        { label: "credited", value: "credited" },
+        { label: "Sent Rs", value: "Sent Rs" },
       ],
     },
   ];
@@ -70,82 +71,80 @@ function buildNativeSteps(): Step[] {
 function buildLinkSteps(captureLink: string): Step[] {
   return [
     {
-      icon: 'add-circle-outline',
-      title: 'Choose the trigger',
-      body: 'In Shortcuts, open the Automation tab, tap + and choose Message.',
+      icon: "add-circle-outline",
+      title: "Choose the trigger",
+      body: "In Shortcuts, open the Automation tab, tap + and choose Message.",
     },
     {
-      icon: 'chatbubble-ellipses-outline',
-      title: 'Add the bank keyword',
-      body: 'Tap Message Contains and paste debited. Select Run Immediately, turn off Notify When Run, then tap Next.',
-      copy: [{ label: 'debited', value: 'debited' }],
+      icon: "chatbubble-ellipses-outline",
+      title: "Add the bank keyword",
+      body: "Tap Message Contains and paste debited. Select Run Immediately, turn off Notify When Run, then tap Next.",
+      copy: [{ label: "debited", value: "debited" }],
     },
     {
-      icon: 'code-slash-outline',
-      title: 'Encode the message',
-      body: 'Tap New Blank Automation, add the action URL Encode, and set its input to Shortcut Input → Content.',
+      icon: "code-slash-outline",
+      title: "Encode the message",
+      body: "Tap New Blank Automation, add the action URL Encode, and set its input to Shortcut Input → Content.",
     },
     {
-      icon: 'link-outline',
-      title: 'Add the app link',
-      body: 'Add the action URL and paste the link. Then tap right after the = sign and insert the URL Encoded Text variable.',
-      copy: [{ label: 'Copy link', value: captureLink }],
+      icon: "link-outline",
+      title: "Add the app link",
+      body: "Add the action URL and paste the link. Then tap right after the = sign and insert the URL Encoded Text variable.",
+      copy: [{ label: "Copy link", value: captureLink }],
     },
     {
-      icon: 'open-outline',
-      title: 'Open the link',
-      body: 'Add the action Open URLs (it uses the URL above automatically) and tap Done.',
+      icon: "open-outline",
+      title: "Open the link",
+      body: "Add the action Open URLs (it uses the URL above automatically) and tap Done.",
     },
     {
-      icon: 'repeat-outline',
-      title: 'Repeat for other alerts',
-      body: 'Create the same automation for messages containing credited and Sent Rs, so every bank format is covered.',
+      icon: "repeat-outline",
+      title: "Repeat for other alerts",
+      body: "Create the same automation for messages containing credited and Sent Rs, so every bank format is covered.",
       copy: [
-        { label: 'credited', value: 'credited' },
-        { label: 'Sent Rs', value: 'Sent Rs' },
+        { label: "credited", value: "credited" },
+        { label: "Sent Rs", value: "Sent Rs" },
       ],
     },
   ];
 }
 
-function aiPrompts(captureLink: string, native: boolean) {
-  if (native) {
-    return [
-      {
-        label: 'Create the automation',
-        value: `When I receive a message containing debited, run Capture bank SMS from ${APP_NAME} with the message.`,
-      },
-    ];
-  }
+function aiPrompts(captureLink: string) {
   return [
     {
-      label: '1. Create the shortcut',
+      label: "1. Create the shortcut",
       value: `Make a shortcut named Capture payment that takes text, URL encodes it, and opens the URL ${captureLink} followed by the encoded text.`,
     },
     {
-      label: '2. Create the automation',
-      value: 'When I receive a message containing debited, run the Capture payment shortcut with the message.',
+      label: "2. Create the automation",
+      value:
+        "When I receive a message containing debited, run the Capture payment shortcut with the message.",
     },
   ];
 }
 
 async function copy(value: string) {
   // Loaded on demand: older Android development builds do not include this native module.
-  const Clipboard = await import('expo-clipboard');
+  const Clipboard = await import("expo-clipboard");
   await Clipboard.setStringAsync(value);
-  haptic('success');
+  haptic("success");
 }
 
 async function openAutomationBuilder() {
   try {
-    await Linking.openURL('shortcuts://create-automation');
+    await Linking.openURL("shortcuts://create-automation");
   } catch {
-    await Linking.openURL('shortcuts://');
+    await Linking.openURL("shortcuts://");
   }
 }
 
 function formatCapturedAt(ms: number): string {
-  return new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  return new Date(ms).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 /** Notification permission and "is it working" status for the native action. */
@@ -160,29 +159,38 @@ function NativeStatusCard() {
       <View style={styles.stepHeader}>
         <View style={styles.stepIcon}>
           <Ionicons
-            name={lastCaptured ? 'checkmark-circle' : 'hourglass-outline'}
+            name={lastCaptured ? "checkmark-circle" : "hourglass-outline"}
             size={22}
             color={lastCaptured ? colors.income : colors.primary}
           />
         </View>
         <Text style={styles.stepCount}>Status</Text>
       </View>
-      <Text style={styles.stepTitle}>{lastCaptured ? 'Working' : 'Waiting for your first bank text'}</Text>
+      <Text style={styles.stepTitle}>
+        {lastCaptured ? "Working" : "Waiting for your first bank text"}
+      </Text>
       <Text style={styles.stepBody}>
         {lastCaptured
           ? `Last payment captured ${formatCapturedAt(lastCaptured)}.`
-          : 'Set up the automation below. Payments appear here as soon as your bank sends an alert.'}
+          : "Set up the automation below. Payments appear here as soon as your bank sends an alert."}
       </Text>
       {notifications !== true && (
         <Button
           title="Allow payment notifications"
           variant="secondary"
           icon="notifications-outline"
-          onPress={async () => setNotifications((await bankSmsNative?.requestNotificationPermission()) ?? false)}
+          onPress={async () =>
+            setNotifications(
+              (await bankSmsNative?.requestNotificationPermission()) ?? false,
+            )
+          }
         />
       )}
       {notifications === false && (
-        <Text style={styles.hint}>Notifications are off. You can turn them on in iOS Settings → {APP_NAME}.</Text>
+        <Text style={styles.hint}>
+          Notifications are off. You can turn them on in iOS Settings →{" "}
+          {APP_NAME}.
+        </Text>
       )}
     </Card>
   );
@@ -190,7 +198,7 @@ function NativeStatusCard() {
 
 export function ShortcutSetupGuide() {
   const native = bankSmsNative != null;
-  const captureLink = `${Linking.createURL('capture')}?text=`;
+  const captureLink = `${Linking.createURL("capture")}?text=`;
   const steps = native ? buildNativeSteps() : buildLinkSteps(captureLink);
   const { width } = useWindowDimensions();
   const pageWidth = width - 32;
@@ -219,43 +227,69 @@ export function ShortcutSetupGuide() {
         <Card style={styles.step}>
           <Text style={styles.stepTitle}>One-tap install (iOS 27)</Text>
           <Text style={styles.stepBody}>
-            Add the ready-made automation, then switch it on in Shortcuts → Automation. Repeat with the steps below
-            for credited and Sent Rs if your bank uses them.
+            Add the ready-made automation, then switch it on in Shortcuts →
+            Automation. Repeat with the steps below for credited and Sent Rs if
+            your bank uses them.
           </Text>
-          <Button title="Install automation" icon="download-outline" onPress={() => Linking.openURL(AUTOMATION_URL)} />
+          <Button
+            title="Install automation"
+            icon="download-outline"
+            onPress={() => Linking.openURL(AUTOMATION_URL)}
+          />
         </Card>
       )}
-      <Card style={styles.step}>
-        <View style={styles.stepHeader}>
-          <View style={styles.stepIcon}>
-            <Ionicons name="sparkles" size={22} color={colors.primary} />
+      {/* The Shortcuts AI can build shortcuts but not automations, so only the link mode offers it. */}
+      {!native && (
+        <Card style={styles.step}>
+          <View style={styles.stepHeader}>
+            <View style={styles.stepIcon}>
+              <Ionicons name="sparkles" size={22} color={colors.primary} />
+            </View>
+            <Text style={styles.stepCount}>Quickest</Text>
           </View>
-          <Text style={styles.stepCount}>Quickest</Text>
-        </View>
-        <Text style={styles.stepTitle}>Ask the Shortcuts AI</Text>
-        <Text style={styles.stepBody}>
-          {native
-            ? 'Copy the prompt, paste it into the Shortcuts app’s AI, then repeat it with credited and Sent Rs. If the AI declines, use the steps below.'
-            : 'Copy each prompt, paste it into the Shortcuts app’s AI one at a time, and repeat prompt 2 with credited and Sent Rs. If the AI declines, use the steps below.'}
-        </Text>
-        {aiPrompts(captureLink, native).map(prompt => (
-          <View key={prompt.label} style={styles.prompt}>
-            <Text style={styles.promptLabel}>{prompt.label}</Text>
-            <Text selectable style={styles.promptText}>
-              {prompt.value}
-            </Text>
-            <PressableScale onPress={() => copyValue(prompt.value)} style={styles.chip}>
-              <Ionicons name={copied === prompt.value ? 'checkmark' : 'copy-outline'} size={16} color={colors.primary} />
-              <Text style={styles.chipText}>{copied === prompt.value ? 'Copied' : 'Copy prompt'}</Text>
-            </PressableScale>
-          </View>
-        ))}
-        <Button title="Open Shortcuts" variant="secondary" icon="open-outline" onPress={() => Linking.openURL('shortcuts://')} />
-      </Card>
+          <Text style={styles.stepTitle}>Ask the Shortcuts AI</Text>
+          <Text style={styles.stepBody}>
+            Copy each prompt, paste it into the Shortcuts app&apos;s AI one at a
+            time, and repeat prompt 2 with credited and Sent Rs. If the AI
+            declines, use the steps below.
+          </Text>
+          {aiPrompts(captureLink).map((prompt) => (
+            <View key={prompt.label} style={styles.prompt}>
+              <Text style={styles.promptLabel}>{prompt.label}</Text>
+              <Text selectable style={styles.promptText}>
+                {prompt.value}
+              </Text>
+              <PressableScale
+                onPress={() => copyValue(prompt.value)}
+                style={styles.chip}
+              >
+                <Ionicons
+                  name={copied === prompt.value ? "checkmark" : "copy-outline"}
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={styles.chipText}>
+                  {copied === prompt.value ? "Copied" : "Copy prompt"}
+                </Text>
+              </PressableScale>
+            </View>
+          ))}
+          <Button
+            title="Open Shortcuts"
+            variant="secondary"
+            icon="open-outline"
+            onPress={() => Linking.openURL("shortcuts://")}
+          />
+        </Card>
+      )}
 
-      <Text style={styles.orText}>Or set it up step by step</Text>
+      {!native && <Text style={styles.orText}>Or set it up step by step</Text>}
       {native ? (
-        <Button title="Open Shortcuts automations" icon="flash" onPress={openAutomationBuilder} />
+        <Button
+          title="Open Shortcuts automations"
+          icon="flash"
+          onPress={openAutomationBuilder}
+        />
       ) : (
         <>
           <Button
@@ -267,7 +301,8 @@ export function ShortcutSetupGuide() {
             }}
           />
           <Text style={styles.hint}>
-            The app link is copied for step 4. Follow the steps below; it takes about a minute.
+            The app link is copied for step 4. Follow the steps below; it takes
+            about a minute.
           </Text>
         </>
       )}
@@ -278,9 +313,13 @@ export function ShortcutSetupGuide() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={step => step.title}
+        keyExtractor={(step) => step.title}
         onMomentumScrollEnd={onScroll}
-        getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
+        getItemLayout={(_, index) => ({
+          length: pageWidth,
+          offset: pageWidth * index,
+          index,
+        })}
         renderItem={({ item, index }) => (
           <View style={{ width: pageWidth }}>
             <Card style={styles.step}>
@@ -296,10 +335,16 @@ export function ShortcutSetupGuide() {
               <Text style={styles.stepBody}>{item.body}</Text>
               {item.copy && (
                 <View style={styles.chips}>
-                  {item.copy.map(entry => (
-                    <PressableScale key={entry.label} onPress={() => copyValue(entry.value)} style={styles.chip}>
+                  {item.copy.map((entry) => (
+                    <PressableScale
+                      key={entry.label}
+                      onPress={() => copyValue(entry.value)}
+                      style={styles.chip}
+                    >
                       <Ionicons
-                        name={copied === entry.value ? 'checkmark' : 'copy-outline'}
+                        name={
+                          copied === entry.value ? "checkmark" : "copy-outline"
+                        }
                         size={16}
                         color={colors.primary}
                       />
@@ -316,15 +361,30 @@ export function ShortcutSetupGuide() {
       />
 
       <View style={styles.pager}>
-        <PressableScale disabled={page === 0} onPress={() => goTo(page - 1)} hitSlop={10}>
-          <Ionicons name="chevron-back" size={24} color={page === 0 ? colors.border : colors.primary} />
+        <PressableScale
+          disabled={page === 0}
+          onPress={() => goTo(page - 1)}
+          hitSlop={10}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={24}
+            color={page === 0 ? colors.border : colors.primary}
+          />
         </PressableScale>
         <View style={styles.dots}>
           {steps.map((step, index) => (
-            <View key={step.title} style={[styles.dot, index === page && styles.dotActive]} />
+            <View
+              key={step.title}
+              style={[styles.dot, index === page && styles.dotActive]}
+            />
           ))}
         </View>
-        <PressableScale disabled={page === steps.length - 1} onPress={() => goTo(page + 1)} hitSlop={10}>
+        <PressableScale
+          disabled={page === steps.length - 1}
+          onPress={() => goTo(page + 1)}
+          hitSlop={10}
+        >
           <Ionicons
             name="chevron-forward"
             size={24}
@@ -337,12 +397,15 @@ export function ShortcutSetupGuide() {
         title="Test with a sample message"
         variant="secondary"
         icon="flask-outline"
-        onPress={() => router.push({ pathname: '/capture', params: { text: SAMPLE_SMS } })}
+        onPress={() =>
+          router.push({ pathname: "/capture", params: { text: SAMPLE_SMS } })
+        }
       />
-      {!native && captureLink.startsWith('exp') && (
+      {!native && captureLink.startsWith("exp") && (
         <Text style={styles.hint}>
-          In Expo Go this link only works while npm start is running on your Mac, and changes if its IP address
-          changes. An installed build uses financetracker://capture?text=.
+          In Expo Go this link only works while npm start is running on your
+          Mac, and changes if its IP address changes. An installed build uses
+          financetracker://capture?text=.
         </Text>
       )}
     </View>
@@ -353,42 +416,56 @@ const styles = StyleSheet.create({
   container: { gap: 12 },
   hint: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   step: { gap: 10, minHeight: 230 },
-  stepHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stepHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   stepIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  stepCount: { color: colors.textMuted, fontWeight: '600' },
-  stepTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  stepCount: { color: colors.textMuted, fontWeight: "600" },
+  stepTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
   stepBody: { color: colors.text, lineHeight: 21, fontSize: 15 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    maxWidth: '100%',
+    maxWidth: "100%",
   },
-  chipText: { color: colors.primary, fontWeight: '700' },
+  chipText: { color: colors.primary, fontWeight: "700" },
   prompt: {
     gap: 8,
     padding: 12,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceMuted,
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
   },
-  promptLabel: { fontWeight: '700', color: colors.textMuted, fontSize: 13 },
+  promptLabel: { fontWeight: "700", color: colors.textMuted, fontSize: 13 },
   promptText: { color: colors.text, lineHeight: 20 },
-  orText: { textAlign: 'center', color: colors.textMuted, fontWeight: '600', marginTop: 4 },
-  pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
-  dots: { flexDirection: 'row', gap: 6 },
+  orText: {
+    textAlign: "center",
+    color: colors.textMuted,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  pager: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+  },
+  dots: { flexDirection: "row", gap: 6 },
   dot: {
     width: 8,
     height: 8,
