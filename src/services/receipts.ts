@@ -1,10 +1,11 @@
-import { Directory, File, Paths } from 'expo-file-system';
-import * as ImagePicker from 'expo-image-picker';
+import { loadNative } from './loadNative';
 
-const OPTIONS: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.6 };
+const fileSystem = () => loadNative(() => import('expo-file-system'), 'Receipts');
+const imagePicker = () => loadNative(() => import('expo-image-picker'), 'Receipts');
 
-/** Takes or picks a photo. Returns its temporary uri, or null when cancelled or not allowed. */
+/** Takes or picks a photo. Returns its temporary uri, or null when cancelled. */
 export async function pickReceiptPhoto(source: 'camera' | 'library'): Promise<string | null> {
+  const ImagePicker = await imagePicker();
   const permission =
     source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
@@ -16,13 +17,15 @@ export async function pickReceiptPhoto(source: 'camera' | 'library'): Promise<st
         : 'Allow photo access in Settings to attach receipts.',
     );
   }
+  const options = { mediaTypes: ['images' as const], quality: 0.6 };
   const result =
-    source === 'camera' ? await ImagePicker.launchCameraAsync(OPTIONS) : await ImagePicker.launchImageLibraryAsync(OPTIONS);
+    source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
   return result.canceled ? null : (result.assets[0]?.uri ?? null);
 }
 
 /** Copies a picked photo into the app's own storage, where the system does not clear it. */
-export function storeReceiptPhoto(tempUri: string, transactionId: string): string {
+export async function storeReceiptPhoto(tempUri: string, transactionId: string): Promise<string> {
+  const { Directory, File, Paths } = await fileSystem();
   const folder = new Directory(Paths.document, 'receipts');
   if (!folder.exists) {
     folder.create({ intermediates: true });
@@ -33,16 +36,18 @@ export function storeReceiptPhoto(tempUri: string, transactionId: string): strin
   return target.uri;
 }
 
-export function deleteReceiptPhoto(uri: string | null): void {
+export async function deleteReceiptPhoto(uri: string | null): Promise<void> {
   if (!uri) {
     return;
   }
+  const { File } = await fileSystem();
   const file = new File(uri);
   if (file.exists) {
     file.delete();
   }
 }
 
-export function receiptPhotoExists(uri: string): boolean {
+export async function receiptPhotoExists(uri: string): Promise<boolean> {
+  const { File } = await fileSystem();
   return new File(uri).exists;
 }

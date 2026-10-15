@@ -280,9 +280,9 @@ export default function TransactionForm() {
       }
       if (receiptUri !== loaded.receiptUri) {
         try {
-          const stored = receiptUri ? storeReceiptPhoto(receiptUri, savedId) : null;
+          const stored = receiptUri ? await storeReceiptPhoto(receiptUri, savedId) : null;
           await setReceiptUri(db, savedId, stored);
-          deleteReceiptPhoto(loaded.receiptUri);
+          await deleteReceiptPhoto(loaded.receiptUri);
         } catch (err) {
           Alert.alert('Saved without the receipt', err instanceof Error ? err.message : String(err));
         }
@@ -313,7 +313,7 @@ export default function TransactionForm() {
         style: 'destructive',
         onPress: async () => {
           await deleteTransaction(db, id);
-          deleteReceiptPhoto(loaded.receiptUri);
+          await deleteReceiptPhoto(loaded.receiptUri).catch(() => undefined);
           await upi.refresh();
           router.back();
         },
