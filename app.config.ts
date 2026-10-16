@@ -10,8 +10,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const appleTeamId = process.env.APPLE_TEAM_ID;
   return {
     ...config,
-    name: config.name ?? 'FinanceTracker',
-    slug: config.slug ?? 'FinanceTracker',
+    name: config.name ?? 'Many Tracker',
+    slug: config.slug ?? 'many-tracker',
     scheme: ['financetracker', ...(projectId ? [`appwrite-callback-${projectId}`] : [])],
     ios: { ...config.ios, ...(appleTeamId ? { appleTeamId } : {}) },
   };

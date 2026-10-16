@@ -1,6 +1,6 @@
 # Getting Started
 
-How to set up and run the Finance Tracker app on an iPhone and an Android
+How to set up and run the Many Tracker app on an iPhone and an Android
 emulator at the same time. For the product specification, see
 [README.md](README.md).
 
@@ -127,7 +127,7 @@ npm run android        # runs expo prebuild + Gradle, installs on the emulator
 
 The first build downloads Gradle and Android libraries and can take a long
 time on a slow connection. JavaScript changes after that load instantly
-from `npm start`; open the **FinanceTracker** app on the emulator instead
+from `npm start`; open the **Many Tracker** app on the emulator instead
 of Expo Go.
 
 To test detection without real payment apps (development builds only):

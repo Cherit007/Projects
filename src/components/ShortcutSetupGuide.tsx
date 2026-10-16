@@ -33,7 +33,7 @@ interface Step {
   copy?: { label: string; value: string }[];
 }
 
-const APP_NAME = Constants.expoConfig?.name ?? 'FinanceTracker';
+const APP_NAME = Constants.expoConfig?.name ?? 'Many Tracker';
 
 /** Optional iCloud link to a shared iOS 27 shortcut that carries the automation. */
 const AUTOMATION_URL = Constants.expoConfig?.extra?.iosAutomationUrl as string | undefined;

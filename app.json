@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "FinanceTracker",
-    "slug": "FinanceTracker",
+    "name": "Many Tracker",
+    "slug": "many-tracker",
     "scheme": "financetracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#312E81",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
