@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { listAccounts } from '../../data/repositories/accounts';
 import { listCategories } from '../../data/repositories/categories';
+import { findMerchantRule } from '../../data/repositories/merchantRules';
 import { getAutoAddPayments, getOwnerName } from '../../data/repositories/settings';
 import { hasMonthlyRepeat, lastCategory, listCategorisedPayees } from '../../data/repositories/transactions';
 import {
@@ -39,6 +40,10 @@ export async function chooseCategory(db: SQLiteDatabase, candidate: Payment, con
   const type = candidate.direction === 'credit' ? 'income' : 'expense';
   const payee = candidate.counterparty;
   const byName = (name: string) => context.categories.find(c => c.type === type && c.name === name)?.id ?? null;
+  const rule = payee ? await findMerchantRule(db, payee) : null;
+  if (rule && context.categories.some(c => c.id === rule.categoryId && c.type === type)) {
+    return rule.categoryId;
+  }
   const last = payee ? await lastCategory(db, payee, type) : null;
   const categoryId =
     last?.categoryId ??

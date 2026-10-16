@@ -191,6 +191,52 @@ const MIGRATIONS: readonly Migration[] = [
     `);
     await db.execAsync(outboxTriggers('accounts'));
   },
+  async db => {
+    // Insights and planning: local-only (backed up, not synced to Appwrite yet).
+    await db.execAsync(`
+      CREATE TABLE tags (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE transaction_tags (
+        transaction_id TEXT NOT NULL REFERENCES transactions (id) ON DELETE CASCADE,
+        tag_id TEXT NOT NULL REFERENCES tags (id) ON DELETE CASCADE,
+        PRIMARY KEY (transaction_id, tag_id)
+      );
+
+      CREATE TABLE merchant_rules (
+        id TEXT PRIMARY KEY NOT NULL,
+        match_text TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        category_id TEXT NOT NULL REFERENCES categories (id),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE transaction_splits (
+        id TEXT PRIMARY KEY NOT NULL,
+        transaction_id TEXT NOT NULL REFERENCES transactions (id) ON DELETE CASCADE,
+        category_id TEXT NOT NULL REFERENCES categories (id),
+        amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+        note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE INDEX idx_transaction_splits_txn ON transaction_splits (transaction_id);
+      CREATE INDEX idx_transaction_tags_tag ON transaction_tags (tag_id);
+
+      CREATE TABLE savings_goals (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        target_minor INTEGER NOT NULL CHECK (target_minor > 0),
+        monthly_minor INTEGER NOT NULL CHECK (monthly_minor >= 0),
+        saved_minor INTEGER NOT NULL DEFAULT 0 CHECK (saved_minor >= 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+  },
 ];
 
 async function addCategoryIfMissing(db: SQLiteDatabase, name: string, type: 'expense' | 'income'): Promise<void> {

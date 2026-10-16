@@ -107,6 +107,23 @@ statement's closing balance and can adjust the opening balance to match.
 Real statements used for testing go in the gitignored `samples/` folder;
 `__tests__/statementSamples.test.ts` runs only where they exist.
 
+## Insights, bills, tags and splits
+
+Local-only planning features (backed up, not synced to Appwrite yet):
+
+- **Safe-to-spend** — income basis − spent − unpaid recurring/subscription
+  bills − monthly goal contributions (`src/domain/insights/safeToSpend.ts`).
+- **Subscriptions** — merchants paid in ≥2 months at a similar amount and
+  day (`src/domain/insights/subscriptions.ts`), shown as upcoming bills.
+- **Insight notifications** — monthly overview, weekly digest, mid-month
+  pace, large spend and salary alerts via `expo-notifications`
+  (`src/services/insights/notifications.ts`). All computed on device.
+- **Merchant rules** — explicit payee → category overrides, checked before
+  learned/predicted categories.
+- **Tags** — free-text labels on transactions; search covers every month.
+- **Splits** — one expense can allocate amounts across two categories
+  (`transaction_splits`); reports respect splits when present.
+
 ## Time
 
 Transactions store `occurred_at` as a UTC ISO-8601 timestamp. Monthly

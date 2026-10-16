@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LoadingState } from '@/components/ui';
 import { migrateDbIfNeeded } from '@/data/local/migrations';
 import { CloudProvider } from '@/services/cloud/CloudProvider';
+import { InsightsProvider } from '@/services/InsightsProvider';
 import { RecurringProvider } from '@/services/RecurringProvider';
 import { UpiProvider } from '@/services/upi/UpiProvider';
 import { colors } from '@/theme/colors';
@@ -20,6 +21,7 @@ export default function RootLayout() {
         <CloudProvider>
         <UpiProvider>
         <RecurringProvider>
+        <InsightsProvider>
           <StatusBar style="dark" />
           <Stack
             screenOptions={{
@@ -43,7 +45,12 @@ export default function RootLayout() {
             <Stack.Screen name="recurring" options={{ title: 'Repeating transactions' }} />
             <Stack.Screen name="backup" options={{ title: 'Backup and restore' }} />
             <Stack.Screen name="statement-import" options={{ title: 'Import bank statement' }} />
+            <Stack.Screen name="insight-settings" options={{ title: 'Insights and alerts' }} />
+            <Stack.Screen name="merchant-rules" options={{ title: 'Merchant rules' }} />
+            <Stack.Screen name="search" options={{ title: 'Search' }} />
+            <Stack.Screen name="goals" options={{ title: 'Savings goals' }} />
           </Stack>
+        </InsightsProvider>
         </RecurringProvider>
         </UpiProvider>
         </CloudProvider>

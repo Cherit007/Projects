@@ -38,3 +38,46 @@ export async function getOwnerName(db: SQLiteDatabase): Promise<string> {
 export async function setOwnerName(db: SQLiteDatabase, name: string): Promise<void> {
   await setSetting(db, 'owner_name', name.trim());
 }
+
+/** Local insight notifications. Off | monthly | weekly (weekly includes monthly). */
+export type InsightNotifyLevel = 'off' | 'monthly' | 'weekly';
+
+export async function getInsightNotifyLevel(db: SQLiteDatabase): Promise<InsightNotifyLevel> {
+  const value = await getSetting(db, 'insight_notify');
+  return value === 'off' || value === 'monthly' || value === 'weekly' ? value : 'monthly';
+}
+
+export async function setInsightNotifyLevel(db: SQLiteDatabase, level: InsightNotifyLevel): Promise<void> {
+  await setSetting(db, 'insight_notify', level);
+}
+
+export async function getInsightNotifyFlags(db: SQLiteDatabase): Promise<{
+  pace: boolean;
+  unusual: boolean;
+  salary: boolean;
+  bills: boolean;
+}> {
+  return {
+    pace: (await getSetting(db, 'insight_pace')) !== '0',
+    unusual: (await getSetting(db, 'insight_unusual')) !== '0',
+    salary: (await getSetting(db, 'insight_salary')) !== '0',
+    bills: (await getSetting(db, 'insight_bills')) !== '0',
+  };
+}
+
+export async function setInsightNotifyFlag(
+  db: SQLiteDatabase,
+  flag: 'pace' | 'unusual' | 'salary' | 'bills',
+  enabled: boolean,
+): Promise<void> {
+  await setSetting(db, `insight_${flag}`, enabled ? '1' : '0');
+}
+
+/** Last local calendar day we posted each insight, to avoid duplicates. */
+export async function getInsightLastSent(db: SQLiteDatabase, kind: string): Promise<string | null> {
+  return getSetting(db, `insight_sent_${kind}`);
+}
+
+export async function setInsightLastSent(db: SQLiteDatabase, kind: string, day: string): Promise<void> {
+  await setSetting(db, `insight_sent_${kind}`, day);
+}

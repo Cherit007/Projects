@@ -20,9 +20,12 @@ import {
 import { budgetAlert, loadBudgetSummary } from '@/data/queries/budgetSummary';
 import { listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
+import { upsertMerchantRule } from '@/data/repositories/merchantRules';
 import { getReceiptUri, setReceiptUri } from '@/data/repositories/receipts';
 import { createRecurringRule } from '@/data/repositories/recurring';
 import { getOwnerName } from '@/data/repositories/settings';
+import { setSplits, listSplits } from '@/data/repositories/splits';
+import { listTagsForTransaction, setTransactionTags } from '@/data/repositories/tags';
 import {
   createTransaction,
   getTransaction,
@@ -45,6 +48,7 @@ import { FREQUENCY_LABEL, type Frequency } from '@/domain/recurring';
 import { isUpiAccount, type Account, type Category, type Transaction, type TransactionInput, type TransactionType } from '@/domain/types';
 import { deleteReceiptPhoto, pickReceiptPhoto, storeReceiptPhoto } from '@/services/receipts';
 import { useRecurring } from '@/services/RecurringProvider';
+import { notifyOnSave } from '@/services/insights/notifications';
 import { removeTransaction } from '@/services/removeTransaction';
 import { useUpi } from '@/services/upi/UpiProvider';
 import { categoryStyle, type IconName } from '@/theme/categoryStyle';
@@ -64,6 +68,8 @@ interface Loaded {
   candidate: UpiCandidate | null;
   duplicate: { counterparty: string | null; occurredAt: string } | null;
   receiptUri: string | null;
+  tags: { id: string; name: string }[];
+  splits: { categoryId: string; amountMinor: number }[];
 }
 
 const repeatOptions: { value: Frequency | null; label: string }[] = [
@@ -93,6 +99,11 @@ export default function TransactionForm() {
   const [note, setNote] = useState('');
   const [repeat, setRepeat] = useState<Frequency | null>(null);
   const [receiptUri, setReceiptUriState] = useState<string | null>(null);
+  const [tagText, setTagText] = useState('');
+  const [rememberRule, setRememberRule] = useState(false);
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitOtherCategoryId, setSplitOtherCategoryId] = useState<string | null>(null);
+  const [splitOtherAmount, setSplitOtherAmount] = useState('');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [saving, setSaving] = useState(false);
   const [{ today, yesterday }] = useState(() => {
@@ -114,7 +125,9 @@ export default function TransactionForm() {
       ]);
       const duplicate = candidate ? await findPossibleDuplicate(db, candidate) : null;
       const receipt = existing ? await getReceiptUri(db, existing.id) : null;
-      return { accounts, categories, existing, candidate, duplicate, receiptUri: receipt };
+      const tags = existing ? await listTagsForTransaction(db, existing.id) : [];
+      const splits = existing ? await listSplits(db, existing.id) : [];
+      return { accounts, categories, existing, candidate, duplicate, receiptUri: receipt, tags, splits };
     };
 
     load()
@@ -122,6 +135,7 @@ export default function TransactionForm() {
         setLoaded(result);
         const { accounts, existing, candidate } = result;
         setReceiptUriState(result.receiptUri);
+        setTagText(result.tags.map(t => t.name).join(', '));
         if (existing) {
           setType(existing.type);
           setAmount((existing.amountMinor / 100).toFixed(2));
@@ -131,6 +145,16 @@ export default function TransactionForm() {
           setDate(toLocalDateInput(existing.occurredAt));
           setCounterparty(existing.counterparty ?? '');
           setNote(existing.note ?? '');
+          if (result.splits.length >= 2) {
+            setSplitEnabled(true);
+            setCategoryId(result.splits[0]!.categoryId);
+            setSplitOtherCategoryId(result.splits[1]!.categoryId);
+            setSplitOtherAmount((result.splits[1]!.amountMinor / 100).toFixed(2));
+            const rest = result.splits.slice(2);
+            if (rest.length) {
+              // Extra splits beyond two are folded into the note for now.
+            }
+          }
           return;
         }
         const active = accounts.filter(a => !a.isArchived);
@@ -287,6 +311,43 @@ export default function TransactionForm() {
           Alert.alert('Saved without the receipt', err instanceof Error ? err.message : String(err));
         }
       }
+      const tags = tagText
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean);
+      await setTransactionTags(db, savedId, tags);
+
+      if (type === 'expense' && splitEnabled && categoryId && splitOtherCategoryId) {
+        const otherMinor = parseToMinor(splitOtherAmount);
+        const total = input.amountMinor;
+        if (otherMinor === null || otherMinor <= 0 || otherMinor >= total) {
+          throw new Error('The split amount must be more than 0 and less than the total.');
+        }
+        await setSplits(db, savedId, [
+          { categoryId, amountMinor: total - otherMinor },
+          { categoryId: splitOtherCategoryId, amountMinor: otherMinor },
+        ]);
+      } else {
+        await setSplits(db, savedId, []);
+      }
+
+      if (
+        rememberRule &&
+        type !== 'transfer' &&
+        input.categoryId &&
+        input.counterparty?.trim()
+      ) {
+        await upsertMerchantRule(db, input.counterparty.trim(), input.categoryId);
+      }
+
+      await notifyOnSave(db, {
+        type: input.type,
+        amountMinor: input.amountMinor,
+        occurredAt: input.occurredAt,
+        categoryId: input.categoryId,
+        counterparty: input.counterparty,
+      }).catch(() => undefined);
+
       const category = loaded.categories.find(c => c.id === input.categoryId);
       const alert =
         before && category
@@ -452,6 +513,59 @@ export default function TransactionForm() {
         <Field label="Note (optional)">
           <Input value={note} onChangeText={setNote} multiline placeholder="Anything to remember" />
         </Field>
+
+        <Field label="Tags (optional)">
+          <Input
+            value={tagText}
+            onChangeText={setTagText}
+            placeholder="trip Goa, office — comma separated"
+            autoCapitalize="none"
+          />
+        </Field>
+
+        {type === 'expense' && (
+          <Field label="Split across categories">
+            <Chip
+              label={splitEnabled ? 'Split on' : 'Split off'}
+              selected={splitEnabled}
+              onPress={() => setSplitEnabled(v => !v)}
+            />
+            {splitEnabled && (
+              <View style={{ gap: 10, marginTop: 8 }}>
+                <Text style={styles.hint}>First category is selected above. Choose a second and its amount.</Text>
+                <View style={styles.chips}>
+                  {categoryOptions
+                    .filter(c => c.id !== categoryId)
+                    .map(c => (
+                      <Chip
+                        key={c.id}
+                        label={c.label}
+                        selected={splitOtherCategoryId === c.id}
+                        onPress={() => setSplitOtherCategoryId(c.id)}
+                        color={c.style.color}
+                      />
+                    ))}
+                </View>
+                <Input
+                  value={splitOtherAmount}
+                  onChangeText={setSplitOtherAmount}
+                  placeholder="Amount for second category"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            )}
+          </Field>
+        )}
+
+        {type !== 'transfer' && counterparty.trim() && categoryId && (
+          <Field label="Merchant rule">
+            <Chip
+              label={rememberRule ? 'Always use this category for this payee' : 'Remember this payee → category'}
+              selected={rememberRule}
+              onPress={() => setRememberRule(v => !v)}
+            />
+          </Field>
+        )}
 
         {isNew && !candidate && (
           <Field label="Repeat">

@@ -67,6 +67,10 @@ export default function SettingsScreen() {
           />
         )}
         <LinkRow icon="repeat" title="Repeating transactions" detail="Rent, subscriptions, salary" href="/recurring" />
+        <LinkRow icon="notifications-outline" title="Insights and alerts" detail="Monthly overview, pace, bills" href="/insight-settings" />
+        <LinkRow icon="storefront-outline" title="Merchant rules" detail="Always categorise Swiggy as Food" href="/merchant-rules" />
+        <LinkRow icon="flag-outline" title="Savings goals" detail="Used in safe-to-spend" href="/goals" />
+        <LinkRow icon="search" title="Search" detail="Across every month and tag" href="/search" />
         <LinkRow icon="bar-chart" title="Reports" detail="Month and year totals" href="/reports" />
       </Animated.View>
 
@@ -177,7 +181,16 @@ function LinkRow({
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   detail: string;
-  href: '/upi-settings' | '/recurring' | '/reports' | '/backup' | '/statement-import';
+  href:
+    | '/upi-settings'
+    | '/recurring'
+    | '/reports'
+    | '/backup'
+    | '/statement-import'
+    | '/insight-settings'
+    | '/merchant-rules'
+    | '/goals'
+    | '/search';
 }) {
   return (
     <PressableScale hapticKind="light" onPress={() => router.push(href)}>

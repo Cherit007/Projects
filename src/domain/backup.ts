@@ -10,6 +10,11 @@ export const BACKUP_TABLES = [
   'recurring_rules',
   'receipts',
   'settings',
+  'tags',
+  'transaction_tags',
+  'merchant_rules',
+  'transaction_splits',
+  'savings_goals',
 ] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 

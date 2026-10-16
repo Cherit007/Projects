@@ -28,6 +28,7 @@ import {
 } from '@/components/ui';
 import { ProgressBar, levelColor } from '@/components/ProgressBar';
 import { loadBudgetSummary } from '@/data/queries/budgetSummary';
+import { loadMonthInsight } from '@/data/queries/insights';
 import { loadMonth } from '@/data/queries/monthSummary';
 import { getAccountFlows, listAccounts } from '@/data/repositories/accounts';
 import { listCategories } from '@/data/repositories/categories';
@@ -43,7 +44,7 @@ import { colors, radius, shadow } from '@/theme/colors';
 
 async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
   const range = monthRange(month);
-  const [monthData, accounts, startFlows, endFlows, categories, budgets, people] = await Promise.all([
+  const [monthData, accounts, startFlows, endFlows, categories, budgets, people, insight] = await Promise.all([
     loadMonth(db, month),
     listAccounts(db),
     getAccountFlows(db, range.startIso),
@@ -51,6 +52,7 @@ async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
     listCategories(db, { includeArchived: true }),
     loadBudgetSummary(db, month),
     listPeople(db),
+    loadMonthInsight(db, month),
   ]);
   return {
     ...monthData,
@@ -59,6 +61,7 @@ async function loadDashboard(db: SQLiteDatabase, month: MonthKey) {
     carried: holdings(accounts, startFlows),
     closing: holdings(accounts, endFlows),
     spending: spendingByCategory(monthData.transactions, categories),
+    insight,
   };
 }
 
@@ -76,14 +79,24 @@ export default function DashboardScreen() {
     <Stack.Screen
       options={{
         headerRight: () => (
-          <PressableScale
-            accessibilityLabel="Settings"
-            hitSlop={10}
-            onPress={() => router.push('/settings')}
-            style={styles.headerButton}
-          >
-            <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
-          </PressableScale>
+          <View style={styles.headerRight}>
+            <PressableScale
+              accessibilityLabel="Search"
+              hitSlop={10}
+              onPress={() => router.push('/search')}
+              style={styles.headerButton}
+            >
+              <Ionicons name="search" size={22} color={colors.primary} />
+            </PressableScale>
+            <PressableScale
+              accessibilityLabel="Settings"
+              hitSlop={10}
+              onPress={() => router.push('/settings')}
+              style={styles.headerButton}
+            >
+              <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
+            </PressableScale>
+          </View>
         ),
       }}
     />
@@ -145,6 +158,51 @@ export default function DashboardScreen() {
             )}
           </LinearGradient>
         </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(40).duration(350)}>
+          <Card style={styles.safeCard}>
+            <Text style={styles.safeLabel}>Safe to spend</Text>
+            <Text
+              style={[
+                styles.safeAmount,
+                { color: data.insight.safe.leftoverMinor < 0 ? colors.expense : colors.income },
+              ]}
+            >
+              {formatMinor(data.insight.safe.leftoverMinor)}
+            </Text>
+            <Text style={styles.safeDetail}>
+              Income {formatMinor(data.insight.safe.incomeBasisMinor)} − spent{' '}
+              {formatMinor(data.insight.safe.spentMinor)}
+              {data.insight.safe.billsRemainingMinor > 0
+                ? ` − bills ${formatMinor(data.insight.safe.billsRemainingMinor)}`
+                : ''}
+              {data.insight.safe.goalsMinor > 0 ? ` − goals ${formatMinor(data.insight.safe.goalsMinor)}` : ''}
+            </Text>
+            {isCurrent && data.insight.pace.aheadOfLastMonth && (
+              <Text style={styles.paceWarn}>{`At this rate: ${formatMinor(data.insight.pace.projectedMinor)} by month end`}</Text>
+            )}
+            <TextLink label="Savings goals" onPress={() => router.push('/goals')} />
+          </Card>
+        </Animated.View>
+
+        {data.insight.upcoming.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(50).duration(350)}>
+            <Card style={styles.section}>
+              <SectionTitle title="Upcoming bills" />
+              {data.insight.upcoming.slice(0, 4).map(bill => (
+                <View key={`${bill.counterparty}-${bill.nextDue}`} style={styles.billRow}>
+                  <View style={styles.flex}>
+                    <Text style={styles.barName} numberOfLines={1}>
+                      {bill.counterparty}
+                    </Text>
+                    <Text style={styles.muted}>Due {bill.nextDue}</Text>
+                  </View>
+                  <Text style={styles.billAmount}>{formatMinor(bill.amountMinor)}</Text>
+                </View>
+              ))}
+            </Card>
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeInDown.delay(60).duration(350)}>
           <PressableScale hapticKind="light" onPress={() => router.push('/reports')}>
@@ -334,7 +392,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 16, paddingBottom: 110 },
   muted: { color: colors.textMuted },
-  headerButton: { marginRight: 16, padding: 4 },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  headerButton: { marginRight: 12, padding: 4 },
+  safeCard: { gap: 6 },
+  safeLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase' },
+  safeAmount: { fontSize: 28, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  safeDetail: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
+  paceWarn: { fontSize: 13, color: colors.warning, fontWeight: '600' },
+  billRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
+  billAmount: { fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  flex: { flex: 1 },
   hero: { borderRadius: radius.lg, padding: 20, gap: 6, ...shadow },
   heroLabel: { color: '#E0E7FF', fontWeight: '600' },
   heroAmount: { color: '#fff', fontSize: 36, fontWeight: '800', fontVariant: ['tabular-nums'] },

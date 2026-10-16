@@ -37,6 +37,14 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4F46E5",
+          "defaultChannel": "insights"
+        }
+      ],
       "./modules/bank-sms/app.plugin.js",
       "./plugins/withIosSceneLifecycle.js"
     ]

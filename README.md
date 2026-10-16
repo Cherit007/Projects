@@ -283,16 +283,37 @@ Deferred from P1:
 -   [ ] CSV import/export. Full data portability is covered by the JSON
     backup file for now.
 
+### Insights and planning (in progress)
+
+Local-only insights. Nothing is uploaded for these. State:
+
+| Feature | State |
+| --- | --- |
+| Monthly overview notification (“You spent ₹X in …”) | Done |
+| Mid-month spending pace | Done |
+| Weekly budget digest | Done |
+| Large / unusual spend alert | Done |
+| Salary / income credited summary | Done |
+| Bills & subscriptions from history + upcoming | Done |
+| Safe-to-spend (income − bills − goals − spent) | Done |
+| Split one payment across categories (two-way) | Done |
+| Tags + search across all months | Done |
+| Explicit merchant rules (“Swiggy → Food”) | Done |
+| Savings goals (for safe-to-spend) | Done |
+| Budget nearing-limit alert on save | Done |
+| Recurring rules you create yourself | Done |
+| Learn category from your corrections | Done |
+
 ### P2 --- Full personal finance management
 
 -   [ ] Investment ledger.
 -   [ ] Assets and liabilities.
 -   [ ] Net-worth history.
--   [ ] Financial goals.
--   [ ] Merchant categorization rules.
--   [ ] Reconciliation workflows.
+-   [ ] Financial goals (beyond the monthly safe-to-spend contribution).
+-   [x] Merchant categorization rules (explicit + learned).
+-   [ ] Reconciliation workflows (beyond statement import).
 -   [ ] PDF reports.
--   [ ] Subscription and recurring-charge insights.
+-   [x] Subscription and recurring-charge insights (from history).
 -   [ ] Optional supported account aggregation.
 
 ### P3 --- Advanced features
