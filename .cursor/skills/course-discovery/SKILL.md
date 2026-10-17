@@ -6,8 +6,8 @@ description: >-
   and download only authorized/publicly downloadable files. Use when the user
   asks for course discovery, authorized course download, lesson inventory,
   finding official mirrors, or organizing purchased/creator-authorized course
-  videos.
-disable-model-invocation: false
+  videos. Invoke with /course-discovery.
+disable-model-invocation: true
 ---
 
 # Course Discovery & Authorized Download Agent
