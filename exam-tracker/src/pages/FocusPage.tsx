@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { Pomodoro } from '../components/Pomodoro'
 import { SyllabusChecklist } from '../components/SyllabusChecklist'
 import { EXAM_BY_ID, EXAMS, examTopicIds } from '../data/exams'
 import { useProgress } from '../hooks/useProgress'
@@ -47,7 +48,7 @@ export function FocusPage() {
           <h1>{exam.shortName}</h1>
           <p className="lede">
             {examStat?.pct ?? 0}% · {pending.length} topics left · today{' '}
-            {stats.minutesToday} min logged
+            {stats.minutesToday} min logged · streak {stats.streak}
           </p>
         </div>
         <div className="focus-actions">
@@ -62,7 +63,10 @@ export function FocusPage() {
           </button>
         </div>
       </header>
-      <SyllabusChecklist exam={exam} />
+      <div className="focus-layout">
+        <Pomodoro examId={exam.id} />
+        <SyllabusChecklist exam={exam} />
+      </div>
     </div>
   )
 }

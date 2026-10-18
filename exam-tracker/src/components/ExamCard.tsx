@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { Exam } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
+import { readinessScore } from '../utils/readiness'
 import { ProgressRing } from './ProgressRing'
 
 type Props = {
@@ -12,9 +13,10 @@ type Props = {
 }
 
 export function ExamCard({ exam, pct, done, total, pinned }: Props) {
-  const { isStarred, toggleStar } = useProgress()
+  const { isStarred, toggleStar, completed, mockScores } = useProgress()
   const starred = isStarred(exam.id)
   const isItOfficer = exam.tags?.includes('it-officer')
+  const ready = readinessScore(exam, completed, mockScores)
 
   return (
     <div
@@ -41,16 +43,18 @@ export function ExamCard({ exam, pct, done, total, pinned }: Props) {
           >
             {starred ? '★' : '☆'}
           </button>
-          <ProgressRing pct={pct} size={48} stroke={4} />
+          <ProgressRing pct={ready.score} size={48} stroke={4} label="Readiness" />
         </div>
       </div>
       <Link to={`/exam/${exam.id}`} className="exam-card-link">
         <h3>{exam.shortName}</h3>
         <p className="exam-card-name">{exam.name}</p>
         <div className="exam-card-meta">
-          <span>{exam.exam.split('·')[0]?.trim() || exam.cycle}</span>
           <span>
-            {done}/{total} topics
+            Ready {ready.score}% · {ready.label}
+          </span>
+          <span>
+            {done}/{total} · syl {pct}%
           </span>
         </div>
         <p className="exam-card-status">{exam.status}</p>

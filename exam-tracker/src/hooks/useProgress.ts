@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { EXAMS, examTopicIds, examsSharingTopic } from '../data/exams'
 import { TOPICS } from '../data/topics'
+import { studyStreak } from '../utils/readiness'
 
 const STORAGE_KEY = 'exam-prep-app-v2'
 const LEGACY_KEY = 'exam-prep-progress-v1'
@@ -31,6 +32,8 @@ export type AppState = {
   mockScores: MockScore[]
   focusExamId: string | null
   remindersEnabled: boolean
+  /** Application / document prep checklist */
+  docs: Record<string, boolean>
 }
 
 const EMPTY: AppState = {
@@ -40,6 +43,7 @@ const EMPTY: AppState = {
   mockScores: [],
   focusExamId: null,
   remindersEnabled: false,
+  docs: {},
 }
 
 function migrateLegacy(): Record<string, boolean> {
@@ -68,6 +72,7 @@ function readStorage(): AppState {
       mockScores: Array.isArray(parsed.mockScores) ? parsed.mockScores : [],
       focusExamId: parsed.focusExamId ?? null,
       remindersEnabled: !!parsed.remindersEnabled,
+      docs: parsed.docs && typeof parsed.docs === 'object' ? parsed.docs : {},
     }
   } catch {
     return { ...EMPTY }
@@ -109,8 +114,15 @@ export function useProgress() {
   const state = useSyncExternalStore(subscribe, getSnapshot, (): AppState => ({
     ...EMPTY,
   }))
-  const { completed, starred, studyLog, mockScores, focusExamId, remindersEnabled } =
-    state
+  const {
+    completed,
+    starred,
+    studyLog,
+    mockScores,
+    focusExamId,
+    remindersEnabled,
+    docs,
+  } = state
 
   const toggleTopic = useCallback((topicId: string) => {
     const nextCompleted = { ...memoryCache.completed, [topicId]: !memoryCache.completed[topicId] }
@@ -213,6 +225,12 @@ export function useProgress() {
     persist({ ...memoryCache, remindersEnabled: value })
   }, [])
 
+  const toggleDoc = useCallback((docId: string) => {
+    const next = { ...memoryCache.docs, [docId]: !memoryCache.docs[docId] }
+    if (!next[docId]) delete next[docId]
+    persist({ ...memoryCache, docs: next })
+  }, [])
+
   const importState = useCallback((incoming: Partial<AppState>) => {
     persist({
       completed: incoming.completed ?? memoryCache.completed,
@@ -227,6 +245,7 @@ export function useProgress() {
         incoming.remindersEnabled !== undefined
           ? incoming.remindersEnabled
           : memoryCache.remindersEnabled,
+      docs: incoming.docs ?? memoryCache.docs,
     })
   }, [])
 
@@ -267,6 +286,7 @@ export function useProgress() {
       byExam,
       minutesToday,
       starredCount: starred.length,
+      streak: studyStreak(studyLog),
     }
   }, [completed, studyLog, starred])
 
@@ -293,6 +313,7 @@ export function useProgress() {
     mockScores,
     focusExamId,
     remindersEnabled,
+    docs,
     toggleTopic,
     setTopic,
     toggleSubtopic,
@@ -306,6 +327,7 @@ export function useProgress() {
     removeMock,
     setFocusExam,
     setRemindersEnabled,
+    toggleDoc,
     importState,
     exportState,
     resetAll,

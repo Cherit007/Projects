@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { DOC_ITEMS } from '../data/docsChecklist'
 import { upcomingDeadlines, daysUntil } from '../data/deadlines'
 import { EXAMS } from '../data/exams'
 import { useProgress } from '../hooks/useProgress'
@@ -22,8 +23,12 @@ export function PrepLab() {
     importState,
     remindersEnabled,
     setRemindersEnabled,
+    docs,
+    toggleDoc,
     stats,
   } = useProgress()
+
+  const docsDone = DOC_ITEMS.filter((d) => docs[d.id]).length
 
   const [minutes, setMinutes] = useState(60)
   const [note, setNote] = useState('')
@@ -209,6 +214,36 @@ export function PrepLab() {
               )
             })}
             {mockScores.length === 0 && <li className="muted-line">No mocks logged yet.</li>}
+          </ul>
+        </section>
+
+        <section className="prep-panel">
+          <h2>
+            Application kit{' '}
+            <span className="soft-chip">
+              {docsDone}/{DOC_ITEMS.length}
+            </span>
+          </h2>
+          <p className="muted-line">
+            Docs checklist before IBPS / SBI / SEBI forms — avoid last-day panic.
+          </p>
+          <ul className="docs-list">
+            {DOC_ITEMS.map((d) => (
+              <li key={d.id}>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={!!docs[d.id]}
+                    onChange={() => toggleDoc(d.id)}
+                    aria-label={d.title}
+                  />
+                  <span>
+                    <strong>{d.title}</strong>
+                    <em>{d.hint}</em>
+                  </span>
+                </label>
+              </li>
+            ))}
           </ul>
         </section>
 

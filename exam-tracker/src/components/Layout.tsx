@@ -20,12 +20,13 @@ export function Layout() {
             Dashboard
           </NavLink>
           <NavLink to="/topics">Topics</NavLink>
+          <NavLink to="/compare">Compare</NavLink>
           <NavLink to="/focus">Focus</NavLink>
           <NavLink to="/prep">Prep lab</NavLink>
         </nav>
         <div className="topbar-stats">
           <span>
-            {stats.doneTopics}/{stats.totalTopics} · {stats.pct}% · {stats.minutesToday}m
+            {stats.pct}% · {stats.minutesToday}m · 🔥{stats.streak}
           </span>
           <button type="button" className="ghost" onClick={resetAll}>
             Reset

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { DeadlinesStrip } from '../components/DeadlinesStrip'
 import { ExamCard } from '../components/ExamCard'
 import { ProgressRing } from '../components/ProgressRing'
+import { TodayPlan } from '../components/TodayPlan'
 import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
@@ -103,7 +104,7 @@ export function Dashboard() {
             </Link>
             <span className="hero-meta">
               {EXAMS.length} exams · {stats.minutesToday} min today ·{' '}
-              {stats.starredCount} starred
+              {stats.streak}-day streak · {stats.starredCount} starred
             </span>
           </div>
         </div>
@@ -112,10 +113,14 @@ export function Dashboard() {
           <div>
             <strong>{stats.doneTopics}</strong>
             <span>topics done of {stats.totalTopics}</span>
+            {stats.streak > 0 && (
+              <span className="streak-badge">{stats.streak} day streak</span>
+            )}
           </div>
         </div>
       </section>
 
+      <TodayPlan />
       <DeadlinesStrip />
 
       <section id="targets" className="targets">

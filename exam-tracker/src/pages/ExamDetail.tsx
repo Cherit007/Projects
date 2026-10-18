@@ -3,13 +3,21 @@ import { ProgressRing } from '../components/ProgressRing'
 import { SyllabusChecklist } from '../components/SyllabusChecklist'
 import { EXAM_BY_ID, examTopicIds } from '../data/exams'
 import { useProgress } from '../hooks/useProgress'
+import { readinessScore } from '../utils/readiness'
 
 export function ExamDetail() {
   const { examId = '' } = useParams()
   const navigate = useNavigate()
   const exam = EXAM_BY_ID[examId]
-  const { stats, isDone, isStarred, toggleStar, setFocusExam, mockScores } =
-    useProgress()
+  const {
+    stats,
+    isDone,
+    isStarred,
+    toggleStar,
+    setFocusExam,
+    mockScores,
+    completed,
+  } = useProgress()
 
   if (!exam) {
     return (
@@ -25,6 +33,7 @@ export function ExamDetail() {
   const done = ids.filter((id) => isDone(id)).length
   const starred = isStarred(exam.id)
   const examMocks = mockScores.filter((m) => m.examId === exam.id).slice(0, 5)
+  const ready = readinessScore(exam, completed, mockScores)
 
   return (
     <div className="exam-detail">
@@ -65,9 +74,13 @@ export function ExamDetail() {
           </div>
         </div>
         <div className="detail-progress">
-          <ProgressRing pct={examStat?.pct ?? 0} size={100} stroke={8} />
+          <ProgressRing pct={ready.score} size={100} stroke={8} label="Readiness" />
           <span>
-            {done}/{ids.length} topics
+            Ready {ready.score}% · {ready.label}
+          </span>
+          <span className="muted-line">
+            Syllabus {examStat?.pct ?? 0}% ({done}/{ids.length})
+            {ready.mocks != null ? ` · mocks ${ready.mocks}%` : ''}
           </span>
         </div>
       </header>
