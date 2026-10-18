@@ -15,6 +15,8 @@ export function ExamDetail() {
     isDone,
     isStarred,
     toggleStar,
+    isDeprioritized,
+    toggleDeprioritize,
     setFocusExam,
     mockScores,
     completed,
@@ -33,6 +35,7 @@ export function ExamDetail() {
   const ids = examTopicIds(exam)
   const done = ids.filter((id) => isDone(id)).length
   const starred = isStarred(exam.id)
+  const low = isDeprioritized(exam.id)
   const examMocks = mockScores.filter((m) => m.examId === exam.id).slice(0, 5)
   const ready = readinessScore(exam, completed, mockScores)
 
@@ -58,6 +61,13 @@ export function ExamDetail() {
               onClick={() => toggleStar(exam.id)}
             >
               {starred ? '★ Starred' : '☆ Star'}
+            </button>
+            <button
+              type="button"
+              className={`sink-btn text ${low ? 'on' : ''}`}
+              onClick={() => toggleDeprioritize(exam.id)}
+            >
+              {low ? '↑ Restore priority' : '↓ Deprioritize'}
             </button>
             <button
               type="button"

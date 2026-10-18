@@ -598,6 +598,45 @@ strong {
   font-weight: 650;
 }
 
+.sink-btn {
+  border: none;
+  background: rgba(90, 110, 120, 0.12);
+  color: var(--muted);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.sink-btn:hover {
+  background: rgba(90, 110, 120, 0.22);
+  color: var(--ink);
+}
+
+.sink-btn.on {
+  background: rgba(90, 110, 120, 0.28);
+  color: var(--teal-deep);
+}
+
+.sink-btn.text {
+  width: auto;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.sunk-chip {
+  background: rgba(90, 110, 120, 0.14);
+  color: var(--muted);
+}
+
+.exam-card.sunk {
+  opacity: 0.78;
+}
+
 .exam-card-name {
   margin: 0;
   font-size: 0.86rem;

@@ -10,23 +10,33 @@ type Props = {
   done: number
   total: number
   pinned?: boolean
+  sunk?: boolean
 }
 
-export function ExamCard({ exam, pct, done, total, pinned }: Props) {
-  const { isStarred, toggleStar, completed, mockScores } = useProgress()
+export function ExamCard({ exam, pct, done, total, pinned, sunk }: Props) {
+  const {
+    isStarred,
+    toggleStar,
+    isDeprioritized,
+    toggleDeprioritize,
+    completed,
+    mockScores,
+  } = useProgress()
   const starred = isStarred(exam.id)
+  const low = sunk ?? isDeprioritized(exam.id)
   const isItOfficer = exam.tags?.includes('it-officer')
   const ready = readinessScore(exam, completed, mockScores)
 
   return (
     <div
-      className={`exam-card tier-${exam.tier.toLowerCase()}${pinned || starred ? ' pinned' : ''}`}
+      className={`exam-card tier-${exam.tier.toLowerCase()}${pinned || starred ? ' pinned' : ''}${low ? ' sunk' : ''}`}
     >
       <div className="exam-card-top">
         <div className="chip-wrap">
           <span className="tier-chip">{exam.tier}</span>
           {isItOfficer && <span className="soft-chip it-chip">IT Officer</span>}
           {(pinned || starred) && <span className="soft-chip pin-chip">Pinned</span>}
+          {low && <span className="soft-chip sunk-chip">Low priority</span>}
         </div>
         <div className="exam-card-actions">
           <button
@@ -42,6 +52,20 @@ export function ExamCard({ exam, pct, done, total, pinned }: Props) {
             }}
           >
             {starred ? '★' : '☆'}
+          </button>
+          <button
+            type="button"
+            className={`sink-btn ${low ? 'on' : ''}`}
+            aria-label={low ? 'Restore normal priority' : 'Deprioritize — move to bottom'}
+            aria-pressed={low}
+            title={low ? 'Restore normal order' : 'Deprioritize — move to bottom of Targets'}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              toggleDeprioritize(exam.id)
+            }}
+          >
+            {low ? '↑' : '↓'}
           </button>
           <ProgressRing pct={ready.score} size={48} stroke={4} label="Readiness" />
         </div>

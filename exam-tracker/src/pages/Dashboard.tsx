@@ -22,7 +22,7 @@ export function Dashboard() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const { stats, starred, focusExamId } = useProgress()
+  const { stats, starred, deprioritized, focusExamId } = useProgress()
   const pctByExam = useMemo(
     () => Object.fromEntries(stats.byExam.map((s) => [s.examId, s])),
     [stats.byExam],
@@ -67,14 +67,16 @@ export function Dashboard() {
       return haystack.includes(q)
     })
 
-    // Favorites always pinned first, then priority
+    // Starred first → normal → deprioritized last; then catalog priority
     return [...list].sort((a, b) => {
-      const as = starred.includes(a.id) ? 0 : 1
-      const bs = starred.includes(b.id) ? 0 : 1
-      if (as !== bs) return as - bs
+      const rank = (id: string) =>
+        starred.includes(id) ? 0 : deprioritized.includes(id) ? 2 : 1
+      const ar = rank(a.id)
+      const br = rank(b.id)
+      if (ar !== br) return ar - br
       return a.priority - b.priority
     })
-  }, [filter, deferredQuery, starred])
+  }, [filter, deferredQuery, starred, deprioritized])
 
   const poolCount = useMemo(() => {
     if (filter === 'Starred') return starred.length
@@ -170,6 +172,7 @@ export function Dashboard() {
           <p className="search-count">
             {filtered.length} of {poolCount} shown
             {starred.length > 0 && filter !== 'Starred' ? ' · ★ pinned first' : ''}
+            {deprioritized.length > 0 ? ' · ↓ low priority at bottom' : ''}
           </p>
         </div>
 
@@ -203,6 +206,7 @@ export function Dashboard() {
                   done={s.done}
                   total={s.total}
                   pinned={starred.includes(exam.id)}
+                  sunk={deprioritized.includes(exam.id)}
                 />
               )
             })}

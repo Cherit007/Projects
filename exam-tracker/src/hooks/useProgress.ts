@@ -28,6 +28,8 @@ export type MockScore = {
 export type AppState = {
   completed: Record<string, boolean>
   starred: string[]
+  /** Exams sunk to the bottom of Targets */
+  deprioritized: string[]
   studyLog: StudyEntry[]
   mockScores: MockScore[]
   focusExamId: string | null
@@ -39,6 +41,7 @@ export type AppState = {
 const EMPTY: AppState = {
   completed: {},
   starred: [],
+  deprioritized: [],
   studyLog: [],
   mockScores: [],
   focusExamId: null,
@@ -68,6 +71,9 @@ function readStorage(): AppState {
     return {
       completed: parsed.completed ?? migrateLegacy(),
       starred: Array.isArray(parsed.starred) ? parsed.starred : [],
+      deprioritized: Array.isArray(parsed.deprioritized)
+        ? parsed.deprioritized
+        : [],
       studyLog: Array.isArray(parsed.studyLog) ? parsed.studyLog : [],
       mockScores: Array.isArray(parsed.mockScores) ? parsed.mockScores : [],
       focusExamId: parsed.focusExamId ?? null,
@@ -117,6 +123,7 @@ export function useProgress() {
   const {
     completed,
     starred,
+    deprioritized,
     studyLog,
     mockScores,
     focusExamId,
@@ -175,15 +182,45 @@ export function useProgress() {
   )
 
   const toggleStar = useCallback((examId: string) => {
-    const set = new Set(memoryCache.starred)
-    if (set.has(examId)) set.delete(examId)
-    else set.add(examId)
-    persist({ ...memoryCache, starred: [...set] })
+    const stars = new Set(memoryCache.starred)
+    const sunk = new Set(memoryCache.deprioritized)
+    if (stars.has(examId)) {
+      stars.delete(examId)
+    } else {
+      stars.add(examId)
+      sunk.delete(examId)
+    }
+    persist({
+      ...memoryCache,
+      starred: [...stars],
+      deprioritized: [...sunk],
+    })
   }, [])
 
   const isStarred = useCallback(
     (examId: string) => starred.includes(examId),
     [starred],
+  )
+
+  const toggleDeprioritize = useCallback((examId: string) => {
+    const sunk = new Set(memoryCache.deprioritized)
+    const stars = new Set(memoryCache.starred)
+    if (sunk.has(examId)) {
+      sunk.delete(examId)
+    } else {
+      sunk.add(examId)
+      stars.delete(examId)
+    }
+    persist({
+      ...memoryCache,
+      deprioritized: [...sunk],
+      starred: [...stars],
+    })
+  }, [])
+
+  const isDeprioritized = useCallback(
+    (examId: string) => deprioritized.includes(examId),
+    [deprioritized],
   )
 
   const addStudy = useCallback(
@@ -235,6 +272,7 @@ export function useProgress() {
     persist({
       completed: incoming.completed ?? memoryCache.completed,
       starred: incoming.starred ?? memoryCache.starred,
+      deprioritized: incoming.deprioritized ?? memoryCache.deprioritized,
       studyLog: incoming.studyLog ?? memoryCache.studyLog,
       mockScores: incoming.mockScores ?? memoryCache.mockScores,
       focusExamId:
@@ -252,7 +290,11 @@ export function useProgress() {
   const exportState = useCallback(() => memoryCache, [])
 
   const resetAll = useCallback(() => {
-    if (confirm('Clear all progress, stars, study log and mocks? This cannot be undone.')) {
+    if (
+      confirm(
+        'Clear all progress, stars, deprioritized list, study log and mocks? This cannot be undone.',
+      )
+    ) {
       persist({ ...EMPTY })
       try {
         localStorage.removeItem(LEGACY_KEY)
@@ -309,6 +351,7 @@ export function useProgress() {
   return {
     completed,
     starred,
+    deprioritized,
     studyLog,
     mockScores,
     focusExamId,
@@ -321,6 +364,8 @@ export function useProgress() {
     isSubDone,
     toggleStar,
     isStarred,
+    toggleDeprioritize,
+    isDeprioritized,
     addStudy,
     removeStudy,
     addMock,
