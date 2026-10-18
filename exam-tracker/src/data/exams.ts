@@ -58,7 +58,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap SEBI', 'Anuj Jindal', 'Oliveboard mocks', 'ixamBee'],
     priority: 2,
-    tags: ['it-officer', 'regulator', 'it-stream'],
+    tags: ['it-officer', 'regulator', 'it-stream', 'commerce-ga'],
   },
   {
     id: 'ibpsso',
@@ -144,7 +144,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap NABARD', 'Oliveboard', 'ixamBee', 'Study IQ ARD'],
     priority: 3,
-    tags: ['it-officer', 'regulator', 'it-stream', 'ard'],
+    tags: ['it-officer', 'regulator', 'it-stream', 'ard', 'commerce-ga'],
   },
   {
     id: 'rbi',
@@ -188,6 +188,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap RBI', 'Anuj Jindal', 'Oliveboard', 'Mentorship Gurukul'],
     priority: 10,
+    tags: ['commerce-ga', 'regulator'],
   },
   {
     id: 'pfrda',
@@ -231,6 +232,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap', 'Anuj Jindal', 'Oliveboard mocks'],
     priority: 4,
+    tags: ['commerce-ga', 'regulator'],
   },
   {
     id: 'sbi',
@@ -430,6 +432,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap', 'Anuj Jindal', 'Oliveboard'],
     priority: 11,
+    tags: ['commerce-ga', 'regulator'],
   },
   {
     id: 'ifsca',
@@ -473,6 +476,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap SEBI track', 'Anuj Jindal', 'Oliveboard'],
     priority: 12,
+    tags: ['commerce-ga', 'regulator'],
   },
   {
     id: 'sidbi',
@@ -515,6 +519,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap', 'Oliveboard', 'Previous SIDBI papers'],
     priority: 13,
+    tags: ['commerce-ga'],
   },
   {
     id: 'fcimgr',

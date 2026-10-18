@@ -25,6 +25,7 @@ export function ExamCard({ exam, pct, done, total, pinned, sunk }: Props) {
   const starred = isStarred(exam.id)
   const low = sunk ?? isDeprioritized(exam.id)
   const isItOfficer = exam.tags?.includes('it-officer')
+  const isCommerce = exam.tags?.includes('commerce-ga')
   const ready = readinessScore(exam, completed, mockScores)
 
   return (
@@ -35,6 +36,11 @@ export function ExamCard({ exam, pct, done, total, pinned, sunk }: Props) {
         <div className="chip-wrap">
           <span className="tier-chip">{exam.tier}</span>
           {isItOfficer && <span className="soft-chip it-chip">IT Officer</span>}
+          {isCommerce && (
+            <span className="soft-chip commerce-chip" title="Heavy GA / ESI / FM / ARD">
+              Commerce/GA
+            </span>
+          )}
           {(pinned || starred) && <span className="soft-chip pin-chip">Pinned</span>}
           {low && <span className="soft-chip sunk-chip">Low priority</span>}
         </div>

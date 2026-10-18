@@ -8,25 +8,46 @@ import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
 
-const FILTERS: Array<'All' | 'Starred' | 'IT Officer' | Tier> = [
+const FILTERS: Array<
+  'All' | 'Starred' | 'IT Officer' | 'Tech lean' | 'Commerce/GA' | Tier
+> = [
   'All',
   'Starred',
   'IT Officer',
+  'Tech lean',
+  'Commerce/GA',
   'Core',
   'Extra',
   'Tech',
   'PSU',
 ]
 
+function isCommerceGa(exam: (typeof EXAMS)[number]) {
+  return !!exam.tags?.includes('commerce-ga')
+}
+
 export function Dashboard() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const { stats, starred, deprioritized, focusExamId } = useProgress()
+  const {
+    stats,
+    starred,
+    deprioritized,
+    focusExamId,
+    toggleDeprioritize,
+    isDeprioritized,
+  } = useProgress()
   const pctByExam = useMemo(
     () => Object.fromEntries(stats.byExam.map((s) => [s.examId, s])),
     [stats.byExam],
   )
+
+  const commerceIds = useMemo(
+    () => EXAMS.filter(isCommerceGa).map((e) => e.id),
+    [],
+  )
+  const commerceStillUp = commerceIds.filter((id) => !isDeprioritized(id))
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
@@ -40,6 +61,10 @@ export function Dashboard() {
             `${e.name} ${e.shortName} ${e.fit}`,
           ),
       )
+    } else if (filter === 'Tech lean') {
+      list = EXAMS.filter((e) => !isCommerceGa(e))
+    } else if (filter === 'Commerce/GA') {
+      list = EXAMS.filter(isCommerceGa)
     } else if (filter !== 'All') {
       list = EXAMS.filter((e) => e.tier === filter)
     }
@@ -83,9 +108,13 @@ export function Dashboard() {
     if (filter === 'IT Officer') {
       return EXAMS.filter((e) => e.tags?.includes('it-officer')).length
     }
+    if (filter === 'Tech lean') {
+      return EXAMS.filter((e) => !isCommerceGa(e)).length
+    }
+    if (filter === 'Commerce/GA') return commerceIds.length
     if (filter === 'All') return EXAMS.length
     return EXAMS.filter((e) => e.tier === filter).length
-  }, [filter, starred])
+  }, [filter, starred, commerceIds])
 
   return (
     <div className="dashboard">
@@ -169,11 +198,25 @@ export function Dashboard() {
               </button>
             )}
           </label>
-          <p className="search-count">
-            {filtered.length} of {poolCount} shown
-            {starred.length > 0 && filter !== 'Starred' ? ' · ★ pinned first' : ''}
-            {deprioritized.length > 0 ? ' · ↓ low priority at bottom' : ''}
-          </p>
+          <div className="targets-tools">
+            <p className="search-count">
+              {filtered.length} of {poolCount} shown
+              {starred.length > 0 && filter !== 'Starred' ? ' · ★ pinned first' : ''}
+              {deprioritized.length > 0 ? ' · ↓ low priority at bottom' : ''}
+            </p>
+            {commerceStillUp.length > 0 && (
+              <button
+                type="button"
+                className="btn ghost-btn sink-commerce"
+                title="Move RBI / SEBI / NABARD / ESI-FM family to the bottom"
+                onClick={() => {
+                  for (const id of commerceStillUp) toggleDeprioritize(id)
+                }}
+              >
+                ↓ Sink commerce / GA ({commerceStillUp.length})
+              </button>
+            )}
+          </div>
         </div>
 
         {filtered.length === 0 ? (
