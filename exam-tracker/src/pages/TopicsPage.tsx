@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { WeakAreas } from '../components/WeakAreas'
 import { examsSharingTopic } from '../data/exams'
 import { AREA_LABELS, TOPICS } from '../data/topics'
 import type { TopicArea } from '../data/types'
@@ -48,6 +49,8 @@ export function TopicsPage() {
           ))}
         </div>
       </header>
+
+      <WeakAreas />
 
       <ul className="master-topics">
         {list.map((topic) => {

@@ -3,14 +3,14 @@ import { Link } from 'react-router-dom'
 import { DeadlinesStrip } from '../components/DeadlinesStrip'
 import { ExamCard } from '../components/ExamCard'
 import { ProgressRing } from '../components/ProgressRing'
-import { WeakAreas } from '../components/WeakAreas'
 import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
 
-const TIERS: Array<'All' | Tier | 'Starred'> = [
+const FILTERS: Array<'All' | 'Starred' | 'IT Officer' | Tier> = [
   'All',
   'Starred',
+  'IT Officer',
   'Core',
   'Extra',
   'Tech',
@@ -18,7 +18,7 @@ const TIERS: Array<'All' | Tier | 'Starred'> = [
 ]
 
 export function Dashboard() {
-  const [tier, setTier] = useState<(typeof TIERS)[number]>('All')
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const { stats, starred, focusExamId } = useProgress()
@@ -30,8 +30,18 @@ export function Dashboard() {
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
     let list = EXAMS
-    if (tier === 'Starred') list = EXAMS.filter((e) => starred.includes(e.id))
-    else if (tier !== 'All') list = EXAMS.filter((e) => e.tier === tier)
+    if (filter === 'Starred') list = EXAMS.filter((e) => starred.includes(e.id))
+    else if (filter === 'IT Officer') {
+      list = EXAMS.filter(
+        (e) =>
+          e.tags?.includes('it-officer') ||
+          /IT Officer|IT specialist|Scientist-B|Manager \(IT\)|IT stream/i.test(
+            `${e.name} ${e.shortName} ${e.fit}`,
+          ),
+      )
+    } else if (filter !== 'All') {
+      list = EXAMS.filter((e) => e.tier === filter)
+    }
 
     list = list.filter((e) => {
       if (!q) return true
@@ -47,21 +57,32 @@ export function Dashboard() {
         e.qual,
         e.fit,
         e.difficulty,
+        ...(e.tags ?? []),
         ...e.coachingRefs,
+        e.tags?.includes('it-officer') ? 'IT Officer PSU bank' : '',
       ]
         .join(' ')
         .toLowerCase()
       return haystack.includes(q)
     })
-    return [...list].sort((a, b) => a.priority - b.priority)
-  }, [tier, deferredQuery, starred])
 
-  const poolCount =
-    tier === 'Starred'
-      ? starred.length
-      : tier === 'All'
-        ? EXAMS.length
-        : EXAMS.filter((e) => e.tier === tier).length
+    // Favorites always pinned first, then priority
+    return [...list].sort((a, b) => {
+      const as = starred.includes(a.id) ? 0 : 1
+      const bs = starred.includes(b.id) ? 0 : 1
+      if (as !== bs) return as - bs
+      return a.priority - b.priority
+    })
+  }, [filter, deferredQuery, starred])
+
+  const poolCount = useMemo(() => {
+    if (filter === 'Starred') return starred.length
+    if (filter === 'IT Officer') {
+      return EXAMS.filter((e) => e.tags?.includes('it-officer')).length
+    }
+    if (filter === 'All') return EXAMS.length
+    return EXAMS.filter((e) => e.tier === filter).length
+  }, [filter, starred])
 
   return (
     <div className="dashboard">
@@ -96,21 +117,22 @@ export function Dashboard() {
       </section>
 
       <DeadlinesStrip />
-      <WeakAreas />
 
       <section id="targets" className="targets">
         <div className="section-head">
           <h2>Targets</h2>
           <div className="filter-row">
-            {TIERS.map((t) => (
+            {FILTERS.map((t) => (
               <button
                 key={t}
                 type="button"
-                className={tier === t ? 'active' : ''}
-                onClick={() => setTier(t)}
+                className={filter === t ? 'active' : ''}
+                onClick={() => setFilter(t)}
               >
                 {t}
-                {t === 'Starred' && stats.starredCount > 0 ? ` (${stats.starredCount})` : ''}
+                {t === 'Starred' && stats.starredCount > 0
+                  ? ` (${stats.starredCount})`
+                  : ''}
               </button>
             ))}
           </div>
@@ -126,7 +148,7 @@ export function Dashboard() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search exams — SEBI, NIC, GATE, Mumbai…"
+              placeholder="Search — IT Officer, SEBI, NIC, PSU…"
               autoComplete="off"
             />
             {query && (
@@ -142,14 +164,15 @@ export function Dashboard() {
           </label>
           <p className="search-count">
             {filtered.length} of {poolCount} shown
+            {starred.length > 0 && filter !== 'Starred' ? ' · ★ pinned first' : ''}
           </p>
         </div>
 
         {filtered.length === 0 ? (
           <div className="empty-search">
             <p>
-              {tier === 'Starred' && !query
-                ? 'No starred exams yet — tap ★ on a card.'
+              {filter === 'Starred' && !query
+                ? 'No starred exams yet — tap ★ on a card to pin it first.'
                 : `No exams match “${query.trim()}”.`}
             </p>
             <button
@@ -157,7 +180,7 @@ export function Dashboard() {
               className="ghost"
               onClick={() => {
                 setQuery('')
-                if (tier === 'Starred') setTier('All')
+                setFilter('All')
               }}
             >
               Reset filters
@@ -174,6 +197,7 @@ export function Dashboard() {
                   pct={s.pct}
                   done={s.done}
                   total={s.total}
+                  pinned={starred.includes(exam.id)}
                 />
               )
             })}

@@ -65,4 +65,6 @@ export interface Exam {
   /** Coaching platforms that cover this exam well */
   coachingRefs: string[]
   priority: number
+  /** Discovery tags e.g. it-officer, bank, regulator, gate */
+  tags?: string[]
 }

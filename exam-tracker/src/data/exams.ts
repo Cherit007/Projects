@@ -58,6 +58,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap SEBI', 'Anuj Jindal', 'Oliveboard mocks', 'ixamBee'],
     priority: 2,
+    tags: ['it-officer', 'regulator', 'it-stream'],
   },
   {
     id: 'ibpsso',
@@ -98,6 +99,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['Oliveboard SO IT', 'Adda247', 'BankersAdda IT PK', 'Testbook'],
     priority: 1,
+    tags: ['it-officer', 'bank', 'psu-bank'],
   },
   {
     id: 'nabard',
@@ -142,6 +144,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['EduTap NABARD', 'Oliveboard', 'ixamBee', 'Study IQ ARD'],
     priority: 3,
+    tags: ['it-officer', 'regulator', 'it-stream', 'ard'],
   },
   {
     id: 'rbi',
@@ -345,6 +348,7 @@ export const EXAMS: Exam[] = [
     syllabus: mergeSections(COMPUTER_IT, GA_BANKING, INTERVIEW_TECH),
     coachingRefs: ['Previous SCO papers', 'Oliveboard IT', 'Interview banks'],
     priority: 8,
+    tags: ['it-officer', 'bank', 'experience', 'sbi'],
   },
   {
     id: 'rrb2it',
@@ -383,6 +387,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['Oliveboard RRB', 'Adda247', 'Testbook'],
     priority: 9,
+    tags: ['it-officer', 'bank', 'rrb'],
   },
   {
     id: 'irdai',
@@ -743,6 +748,7 @@ export const EXAMS: Exam[] = [
     syllabus: mergeSections(GATE_CS_FULL, INTERVIEW_TECH),
     coachingRefs: ['GATE Academy', 'Made Easy', 'GFG GATE', 'NIC interview experience blogs'],
     priority: 2,
+    tags: ['it-officer', 'psu', 'gate'],
   },
   {
     id: 'barcoces',
@@ -854,6 +860,7 @@ export const EXAMS: Exam[] = [
     ),
     coachingRefs: ['AAI previous papers', 'Oliveboard', 'Testbook', 'GFG'],
     priority: 3,
+    tags: ['it-officer', 'psu', 'experience'],
   },
   {
     id: 'defpsu',

@@ -516,6 +516,29 @@ strong {
   box-shadow: 0 22px 48px rgba(8, 40, 34, 0.16);
 }
 
+.exam-card.pinned {
+  border-color: rgba(196, 122, 44, 0.45);
+  box-shadow: 0 14px 36px rgba(154, 91, 18, 0.12);
+  order: -1;
+}
+
+.exam-card .chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.it-chip {
+  background: rgba(30, 90, 120, 0.14);
+  color: #1a4f6b;
+}
+
+.pin-chip {
+  background: rgba(196, 122, 44, 0.18);
+  color: var(--warn);
+}
+
 .exam-card-top {
   display: flex;
   justify-content: space-between;
