@@ -1006,6 +1006,114 @@ strong {
   align-items: center;
 }
 
+/* Previous year papers */
+.pyq-panel {
+  margin: 0 0 1.5rem;
+  padding: 1.1rem 1.25rem 1.2rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  animation: rise 0.55s ease 0.04s both;
+}
+
+.pyq-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pyq-head h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  color: var(--teal-deep);
+}
+
+.pyq-body {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.9rem;
+}
+
+.pyq-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.pyq-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--line);
+}
+
+.pyq-meta {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  min-width: min(100%, 280px);
+  flex: 1;
+}
+
+.pyq-meta strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.pyq-meta p {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.pyq-year {
+  flex-shrink: 0;
+  min-width: 3.4rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--teal-deep);
+  background: rgba(20, 110, 100, 0.1);
+  border: 1px solid rgba(20, 110, 100, 0.18);
+  border-radius: 8px;
+  padding: 0.35rem 0.4rem;
+}
+
+.pyq-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.pyq-actions .btn {
+  font-size: 0.85rem;
+  padding: 0.45rem 0.85rem;
+}
+
+.pyq-empty,
+.pyq-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.pyq-error {
+  color: #9a3b18;
+}
+
 .mini-mocks {
   margin: 0;
   padding-left: 1.1rem;

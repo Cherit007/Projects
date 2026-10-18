@@ -1,4 +1,5 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { PreviousPapers } from '../components/PreviousPapers'
 import { ProgressRing } from '../components/ProgressRing'
 import { SyllabusChecklist } from '../components/SyllabusChecklist'
 import { EXAM_BY_ID, examTopicIds } from '../data/exams'
@@ -84,6 +85,8 @@ export function ExamDetail() {
           </span>
         </div>
       </header>
+
+      <PreviousPapers examId={exam.id} examName={exam.shortName} />
 
       <div className="detail-grid">
         <aside className="detail-info">

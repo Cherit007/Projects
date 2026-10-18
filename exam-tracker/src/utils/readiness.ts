@@ -23,7 +23,7 @@ export function mockAvg(examId: string, mocks: MockScore[]): number | null {
   return Math.round(avg)
 }
 
-/** 0–100 readiness: syllabus + mocks + urgency boost for near deadlines */
+/** 0–100 readiness: syllabus + mocks; urgency only after you’ve started */
 export function readinessScore(
   exam: Exam,
   completed: Record<string, boolean>,
@@ -31,6 +31,12 @@ export function readinessScore(
 ): { score: number; label: string; syllabus: number; mocks: number | null } {
   const syllabus = syllabusPct(exam, completed)
   const mocksPct = mockAvg(exam.id, mocks)
+
+  // Nothing done yet → always 0% (don’t show deadline “ghost” progress)
+  if (syllabus === 0 && mocksPct == null) {
+    return { score: 0, label: 'Not started', syllabus: 0, mocks: null }
+  }
+
   const next = upcomingDeadlines(20).find((d) => d.examId === exam.id)
   const days = next ? daysUntil(next.when) : 120
   const urgency =
