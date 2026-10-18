@@ -40,8 +40,8 @@ export const EXAMS: Exam[] = [
       'Housing / HRA · LFC · Medical + insurance · Conveyance · Book grant · Briefcase · House cleaning · Subsidized lunch · Staff furnishing · Computer purchase · Learning/cert reimbursement · Gratuity · NPS',
     location:
       'Mumbai Head Office dominant; also regional/local offices (Delhi, Kolkata, Chennai, Ahmedabad, etc.). HO tenure usually longer; low transfer pain vs banks.',
-    qual: 'Gen: Masters/Law/Engg/CA… · IT: B.E./B.Tech CS/IT/ECE or MCA',
-    fit: 'Best for SDE → IT stream; Mumbai-stable, strong WLB feedback',
+    qual: 'Gen: Masters/Law/Engg/CA… · IT: B.E./B.Tech CS/IT/ECE (or any Engg in recent cycles) or MCA — B.Tech ECE fits IT stream',
+    fit: 'Best for SDE + B.Tech ECE → prefer IT stream (not commerce-heavy General)',
     rounds: [
       { name: 'Phase I', what: 'Aptitude (qualifying) + stream paper.' },
       { name: 'Phase II', what: 'English descriptive + stream.' },

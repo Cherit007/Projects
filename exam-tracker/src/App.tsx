@@ -3,6 +3,8 @@ import { Layout } from './components/Layout'
 import { useProgressHydration } from './hooks/useProgress'
 import { Dashboard } from './pages/Dashboard'
 import { ExamDetail } from './pages/ExamDetail'
+import { FocusPage } from './pages/FocusPage'
+import { PrepLab } from './pages/PrepLab'
 import { TopicsPage } from './pages/TopicsPage'
 import './App.css'
 
@@ -24,6 +26,8 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="exam/:examId" element={<ExamDetail />} />
           <Route path="topics" element={<TopicsPage />} />
+          <Route path="focus" element={<FocusPage />} />
+          <Route path="prep" element={<PrepLab />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

@@ -1,17 +1,27 @@
 import { useDeferredValue, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { DeadlinesStrip } from '../components/DeadlinesStrip'
 import { ExamCard } from '../components/ExamCard'
 import { ProgressRing } from '../components/ProgressRing'
+import { WeakAreas } from '../components/WeakAreas'
 import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
 
-const TIERS: Array<'All' | Tier> = ['All', 'Core', 'Extra', 'Tech', 'PSU']
+const TIERS: Array<'All' | Tier | 'Starred'> = [
+  'All',
+  'Starred',
+  'Core',
+  'Extra',
+  'Tech',
+  'PSU',
+]
 
 export function Dashboard() {
-  const [tier, setTier] = useState<'All' | Tier>('All')
+  const [tier, setTier] = useState<(typeof TIERS)[number]>('All')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const { stats } = useProgress()
+  const { stats, starred, focusExamId } = useProgress()
   const pctByExam = useMemo(
     () => Object.fromEntries(stats.byExam.map((s) => [s.examId, s])),
     [stats.byExam],
@@ -19,30 +29,39 @@ export function Dashboard() {
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
-    const list = (tier === 'All' ? EXAMS : EXAMS.filter((e) => e.tier === tier)).filter(
-      (e) => {
-        if (!q) return true
-        const haystack = [
-          e.name,
-          e.shortName,
-          e.tier,
-          e.status,
-          e.cycle,
-          e.exam,
-          e.reg,
-          e.location,
-          e.qual,
-          e.fit,
-          e.difficulty,
-          ...e.coachingRefs,
-        ]
-          .join(' ')
-          .toLowerCase()
-        return haystack.includes(q)
-      },
-    )
+    let list = EXAMS
+    if (tier === 'Starred') list = EXAMS.filter((e) => starred.includes(e.id))
+    else if (tier !== 'All') list = EXAMS.filter((e) => e.tier === tier)
+
+    list = list.filter((e) => {
+      if (!q) return true
+      const haystack = [
+        e.name,
+        e.shortName,
+        e.tier,
+        e.status,
+        e.cycle,
+        e.exam,
+        e.reg,
+        e.location,
+        e.qual,
+        e.fit,
+        e.difficulty,
+        ...e.coachingRefs,
+      ]
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
     return [...list].sort((a, b) => a.priority - b.priority)
-  }, [tier, deferredQuery])
+  }, [tier, deferredQuery, starred])
+
+  const poolCount =
+    tier === 'Starred'
+      ? starred.length
+      : tier === 'All'
+        ? EXAMS.length
+        : EXAMS.filter((e) => e.tier === tier).length
 
   return (
     <div className="dashboard">
@@ -58,7 +77,13 @@ export function Dashboard() {
             <a href="#targets" className="btn primary">
               Browse targets
             </a>
-            <span className="hero-meta">{EXAMS.length} exams · shared syllabus graph</span>
+            <Link to="/focus" className="btn ghost-btn">
+              {focusExamId ? 'Resume focus' : 'Focus mode'}
+            </Link>
+            <span className="hero-meta">
+              {EXAMS.length} exams · {stats.minutesToday} min today ·{' '}
+              {stats.starredCount} starred
+            </span>
           </div>
         </div>
         <div className="hero-progress">
@@ -69,6 +94,9 @@ export function Dashboard() {
           </div>
         </div>
       </section>
+
+      <DeadlinesStrip />
+      <WeakAreas />
 
       <section id="targets" className="targets">
         <div className="section-head">
@@ -82,6 +110,7 @@ export function Dashboard() {
                 onClick={() => setTier(t)}
               >
                 {t}
+                {t === 'Starred' && stats.starredCount > 0 ? ` (${stats.starredCount})` : ''}
               </button>
             ))}
           </div>
@@ -112,16 +141,26 @@ export function Dashboard() {
             )}
           </label>
           <p className="search-count">
-            {filtered.length} of{' '}
-            {tier === 'All' ? EXAMS.length : EXAMS.filter((e) => e.tier === tier).length} shown
+            {filtered.length} of {poolCount} shown
           </p>
         </div>
 
         {filtered.length === 0 ? (
           <div className="empty-search">
-            <p>No exams match “{query.trim()}”.</p>
-            <button type="button" className="ghost" onClick={() => setQuery('')}>
-              Clear search
+            <p>
+              {tier === 'Starred' && !query
+                ? 'No starred exams yet — tap ★ on a card.'
+                : `No exams match “${query.trim()}”.`}
+            </p>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setQuery('')
+                if (tier === 'Starred') setTier('All')
+              }}
+            >
+              Reset filters
             </button>
           </div>
         ) : (

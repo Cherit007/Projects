@@ -12,18 +12,20 @@ export function Layout() {
           <span className="brand-mark">EP</span>
           <span className="brand-text">
             <strong>ExamPulse</strong>
-            <em>OBC · CSE · Officer track</em>
+            <em>OBC · ECE/SDE · Officer track</em>
           </span>
         </Link>
         <nav className="nav">
           <NavLink to="/" end>
             Dashboard
           </NavLink>
-          <NavLink to="/topics">Shared topics</NavLink>
+          <NavLink to="/topics">Topics</NavLink>
+          <NavLink to="/focus">Focus</NavLink>
+          <NavLink to="/prep">Prep lab</NavLink>
         </nav>
         <div className="topbar-stats">
           <span>
-            {stats.doneTopics}/{stats.totalTopics} topics · {stats.pct}%
+            {stats.doneTopics}/{stats.totalTopics} · {stats.pct}% · {stats.minutesToday}m
           </span>
           <button type="button" className="ghost" onClick={resetAll}>
             Reset

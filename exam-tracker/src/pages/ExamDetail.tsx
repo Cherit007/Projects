@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { SyllabusChecklist } from '../components/SyllabusChecklist'
 import { EXAM_BY_ID, examTopicIds } from '../data/exams'
@@ -6,8 +6,10 @@ import { useProgress } from '../hooks/useProgress'
 
 export function ExamDetail() {
   const { examId = '' } = useParams()
+  const navigate = useNavigate()
   const exam = EXAM_BY_ID[examId]
-  const { stats, isDone } = useProgress()
+  const { stats, isDone, isStarred, toggleStar, setFocusExam, mockScores } =
+    useProgress()
 
   if (!exam) {
     return (
@@ -21,6 +23,8 @@ export function ExamDetail() {
   const examStat = stats.byExam.find((s) => s.examId === exam.id)
   const ids = examTopicIds(exam)
   const done = ids.filter((id) => isDone(id)).length
+  const starred = isStarred(exam.id)
+  const examMocks = mockScores.filter((m) => m.examId === exam.id).slice(0, 5)
 
   return (
     <div className="exam-detail">
@@ -37,6 +41,28 @@ export function ExamDetail() {
           </div>
           <h1>{exam.name}</h1>
           <p className="lede">{exam.fit}</p>
+          <div className="detail-actions">
+            <button
+              type="button"
+              className={`star-btn text ${starred ? 'on' : ''}`}
+              onClick={() => toggleStar(exam.id)}
+            >
+              {starred ? '★ Starred' : '☆ Star'}
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => {
+                setFocusExam(exam.id)
+                navigate('/focus')
+              }}
+            >
+              Focus this exam
+            </button>
+            <Link to="/prep" className="ghost">
+              Log mock / study
+            </Link>
+          </div>
         </div>
         <div className="detail-progress">
           <ProgressRing pct={examStat?.pct ?? 0} size={100} stroke={8} />
@@ -87,6 +113,23 @@ export function ExamDetail() {
                 </span>
               ))}
             </div>
+          </div>
+
+          <div className="info-block">
+            <h3>Recent mocks</h3>
+            {examMocks.length === 0 ? (
+              <p>
+                None yet. <Link to="/prep">Add in Prep lab</Link>
+              </p>
+            ) : (
+              <ul className="mini-mocks">
+                {examMocks.map((m) => (
+                  <li key={m.id}>
+                    {m.score}/{m.maxScore} · {m.source} · {m.date}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </aside>
 
