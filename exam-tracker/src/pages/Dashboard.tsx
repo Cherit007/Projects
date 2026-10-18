@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { ExamCard } from '../components/ExamCard'
 import { ProgressRing } from '../components/ProgressRing'
 import { EXAMS } from '../data/exams'
@@ -9,6 +9,8 @@ const TIERS: Array<'All' | Tier> = ['All', 'Core', 'Extra', 'Tech', 'PSU']
 
 export function Dashboard() {
   const [tier, setTier] = useState<'All' | Tier>('All')
+  const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   const { stats } = useProgress()
   const pctByExam = useMemo(
     () => Object.fromEntries(stats.byExam.map((s) => [s.examId, s])),
@@ -16,9 +18,31 @@ export function Dashboard() {
   )
 
   const filtered = useMemo(() => {
-    const list = tier === 'All' ? EXAMS : EXAMS.filter((e) => e.tier === tier)
+    const q = deferredQuery.trim().toLowerCase()
+    const list = (tier === 'All' ? EXAMS : EXAMS.filter((e) => e.tier === tier)).filter(
+      (e) => {
+        if (!q) return true
+        const haystack = [
+          e.name,
+          e.shortName,
+          e.tier,
+          e.status,
+          e.cycle,
+          e.exam,
+          e.reg,
+          e.location,
+          e.qual,
+          e.fit,
+          e.difficulty,
+          ...e.coachingRefs,
+        ]
+          .join(' ')
+          .toLowerCase()
+        return haystack.includes(q)
+      },
+    )
     return [...list].sort((a, b) => a.priority - b.priority)
-  }, [tier])
+  }, [tier, deferredQuery])
 
   return (
     <div className="dashboard">
@@ -62,20 +86,60 @@ export function Dashboard() {
             ))}
           </div>
         </div>
-        <div className="exam-grid">
-          {filtered.map((exam) => {
-            const s = pctByExam[exam.id] ?? { pct: 0, done: 0, total: 0 }
-            return (
-              <ExamCard
-                key={exam.id}
-                exam={exam}
-                pct={s.pct}
-                done={s.done}
-                total={s.total}
-              />
-            )
-          })}
+
+        <div className="targets-search">
+          <label className="search-field" htmlFor="exam-search">
+            <span className="search-icon" aria-hidden>
+              ⌕
+            </span>
+            <input
+              id="exam-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search exams — SEBI, NIC, GATE, Mumbai…"
+              autoComplete="off"
+            />
+            {query && (
+              <button
+                type="button"
+                className="search-clear"
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
+              >
+                Clear
+              </button>
+            )}
+          </label>
+          <p className="search-count">
+            {filtered.length} of{' '}
+            {tier === 'All' ? EXAMS.length : EXAMS.filter((e) => e.tier === tier).length} shown
+          </p>
         </div>
+
+        {filtered.length === 0 ? (
+          <div className="empty-search">
+            <p>No exams match “{query.trim()}”.</p>
+            <button type="button" className="ghost" onClick={() => setQuery('')}>
+              Clear search
+            </button>
+          </div>
+        ) : (
+          <div className="exam-grid">
+            {filtered.map((exam) => {
+              const s = pctByExam[exam.id] ?? { pct: 0, done: 0, total: 0 }
+              return (
+                <ExamCard
+                  key={exam.id}
+                  exam={exam}
+                  pct={s.pct}
+                  done={s.done}
+                  total={s.total}
+                />
+              )
+            })}
+          </div>
+        )}
       </section>
     </div>
   )
