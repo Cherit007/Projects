@@ -30,7 +30,6 @@ export function Layout() {
           <NavLink to="/compare">Compare</NavLink>
           <NavLink to="/focus">Focus</NavLink>
           <NavLink to="/prep">Prep lab</NavLink>
-          <NavLink to="/guide">Course guide</NavLink>
         </nav>
         <div className="topbar-stats">
           <AuthBar />

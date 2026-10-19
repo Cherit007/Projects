@@ -130,9 +130,6 @@ export function Dashboard() {
             <a href="#targets" className="btn primary">
               Browse targets
             </a>
-            <Link to="/guide" className="btn ghost-btn">
-              Oliveboard course guide
-            </Link>
             <Link to="/focus" className="btn ghost-btn">
               {focusExamId ? 'Resume focus' : 'Focus mode'}
             </Link>
