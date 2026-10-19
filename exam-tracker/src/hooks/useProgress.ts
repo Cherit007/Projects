@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { EXAMS, examTopicIds, examsSharingTopic } from '../data/exams'
 import { TOPICS } from '../data/topics'
 import { scheduleCloudSave } from '../lib/cloudSync'
+import {
+  dueRevisions,
+  reviewCard,
+  scheduleFirstReview,
+  todayIso,
+  type RevisionCard,
+} from '../utils/spacedRepetition'
 import { studyStreak } from '../utils/readiness'
+import type { SectionKey } from '../utils/prepAnalytics'
 
 const STORAGE_KEY = 'exam-prep-app-v2'
 const LEGACY_KEY = 'exam-prep-progress-v1'
@@ -16,6 +24,8 @@ export type StudyEntry = {
   topicIds: string[]
 }
 
+export type MockSections = Partial<Record<SectionKey, number>>
+
 export type MockScore = {
   id: string
   examId: string
@@ -23,6 +33,21 @@ export type MockScore = {
   score: number
   maxScore: number
   date: string
+  note: string
+  /** Section accuracy % 0–100 from Oliveboard / other platforms */
+  sections?: MockSections
+  percentile?: number
+  stage?: 'prelims' | 'mains' | 'sectional' | 'other'
+}
+
+export type ErrorEntry = {
+  id: string
+  date: string
+  examId?: string
+  topicId?: string
+  topicLabel: string
+  mistakeType: 'concept' | 'silly' | 'time'
+  section?: SectionKey | 'other'
   note: string
 }
 
@@ -33,6 +58,9 @@ export type AppState = {
   deprioritized: string[]
   studyLog: StudyEntry[]
   mockScores: MockScore[]
+  errorLog: ErrorEntry[]
+  /** topicId → spaced revision card */
+  revision: Record<string, RevisionCard>
   focusExamId: string | null
   remindersEnabled: boolean
   /** Application / document prep checklist */
@@ -45,6 +73,8 @@ const EMPTY: AppState = {
   deprioritized: [],
   studyLog: [],
   mockScores: [],
+  errorLog: [],
+  revision: {},
   focusExamId: null,
   remindersEnabled: false,
   docs: {},
@@ -59,6 +89,24 @@ function migrateLegacy(): Record<string, boolean> {
   } catch {
     return {}
   }
+}
+
+function asRevisionMap(v: unknown): Record<string, RevisionCard> {
+  if (!v || typeof v !== 'object') return {}
+  const out: Record<string, RevisionCard> = {}
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (!raw || typeof raw !== 'object') continue
+    const c = raw as Partial<RevisionCard>
+    if (typeof c.due !== 'string') continue
+    out[k] = {
+      topicId: typeof c.topicId === 'string' ? c.topicId : k,
+      due: c.due,
+      interval: typeof c.interval === 'number' ? c.interval : 1,
+      ease: typeof c.ease === 'number' ? c.ease : 2.5,
+      reps: typeof c.reps === 'number' ? c.reps : 0,
+    }
+  }
+  return out
 }
 
 function readStorage(): AppState {
@@ -77,6 +125,8 @@ function readStorage(): AppState {
         : [],
       studyLog: Array.isArray(parsed.studyLog) ? parsed.studyLog : [],
       mockScores: Array.isArray(parsed.mockScores) ? parsed.mockScores : [],
+      errorLog: Array.isArray(parsed.errorLog) ? parsed.errorLog : [],
+      revision: asRevisionMap(parsed.revision),
       focusExamId: parsed.focusExamId ?? null,
       remindersEnabled: !!parsed.remindersEnabled,
       docs: parsed.docs && typeof parsed.docs === 'object' ? parsed.docs : {},
@@ -128,6 +178,23 @@ function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function withRevisionOnComplete(
+  completed: Record<string, boolean>,
+  revision: Record<string, RevisionCard>,
+  topicId: string,
+  nowDone: boolean,
+): Record<string, RevisionCard> {
+  const next = { ...revision }
+  if (nowDone) {
+    if (!next[topicId]) next[topicId] = scheduleFirstReview(topicId)
+  } else {
+    delete next[topicId]
+  }
+  // keep completed param referenced for clarity / future hooks
+  void completed
+  return next
+}
+
 export function useProgress() {
   const state = useSyncExternalStore(subscribe, getSnapshot, (): AppState => ({
     ...EMPTY,
@@ -138,6 +205,8 @@ export function useProgress() {
     deprioritized,
     studyLog,
     mockScores,
+    errorLog,
+    revision,
     focusExamId,
     remindersEnabled,
     docs,
@@ -145,15 +214,34 @@ export function useProgress() {
 
   const toggleTopic = useCallback((topicId: string) => {
     const nextCompleted = { ...memoryCache.completed, [topicId]: !memoryCache.completed[topicId] }
-    if (!nextCompleted[topicId]) delete nextCompleted[topicId]
-    persist({ ...memoryCache, completed: nextCompleted })
+    const nowDone = !!nextCompleted[topicId]
+    if (!nowDone) delete nextCompleted[topicId]
+    persist({
+      ...memoryCache,
+      completed: nextCompleted,
+      revision: withRevisionOnComplete(
+        nextCompleted,
+        memoryCache.revision,
+        topicId,
+        nowDone,
+      ),
+    })
   }, [])
 
   const setTopic = useCallback((topicId: string, value: boolean) => {
     const nextCompleted = { ...memoryCache.completed }
     if (value) nextCompleted[topicId] = true
     else delete nextCompleted[topicId]
-    persist({ ...memoryCache, completed: nextCompleted })
+    persist({
+      ...memoryCache,
+      completed: nextCompleted,
+      revision: withRevisionOnComplete(
+        nextCompleted,
+        memoryCache.revision,
+        topicId,
+        value,
+      ),
+    })
   }, [])
 
   const toggleSubtopic = useCallback(
@@ -177,7 +265,16 @@ export function useProgress() {
       if (allDone) nextCompleted[topicId] = true
       else delete nextCompleted[topicId]
 
-      persist({ ...memoryCache, completed: nextCompleted })
+      persist({
+        ...memoryCache,
+        completed: nextCompleted,
+        revision: withRevisionOnComplete(
+          nextCompleted,
+          memoryCache.revision,
+          topicId,
+          allDone,
+        ),
+      })
     },
     [],
   )
@@ -266,6 +363,32 @@ export function useProgress() {
     })
   }, [])
 
+  const addError = useCallback((entry: Omit<ErrorEntry, 'id'>) => {
+    persist({
+      ...memoryCache,
+      errorLog: [{ ...entry, id: uid() }, ...memoryCache.errorLog].slice(0, 300),
+    })
+  }, [])
+
+  const removeError = useCallback((id: string) => {
+    persist({
+      ...memoryCache,
+      errorLog: memoryCache.errorLog.filter((e) => e.id !== id),
+    })
+  }, [])
+
+  const reviewRevision = useCallback((topicId: string, quality: 0 | 1) => {
+    const card = memoryCache.revision[topicId]
+    if (!card) return
+    persist({
+      ...memoryCache,
+      revision: {
+        ...memoryCache.revision,
+        [topicId]: reviewCard(card, quality, todayIso()),
+      },
+    })
+  }, [])
+
   const setFocusExam = useCallback((examId: string | null) => {
     persist({ ...memoryCache, focusExamId: examId })
   }, [])
@@ -287,6 +410,8 @@ export function useProgress() {
       deprioritized: incoming.deprioritized ?? memoryCache.deprioritized,
       studyLog: incoming.studyLog ?? memoryCache.studyLog,
       mockScores: incoming.mockScores ?? memoryCache.mockScores,
+      errorLog: incoming.errorLog ?? memoryCache.errorLog,
+      revision: incoming.revision ?? memoryCache.revision,
       focusExamId:
         incoming.focusExamId !== undefined
           ? incoming.focusExamId
@@ -304,7 +429,7 @@ export function useProgress() {
   const resetAll = useCallback(() => {
     if (
       confirm(
-        'Clear all progress, stars, deprioritized list, study log and mocks? This cannot be undone.',
+        'Clear all progress, stars, deprioritized list, study log, mocks, errors and revision queue? This cannot be undone.',
       )
     ) {
       persist({ ...EMPTY })
@@ -329,7 +454,7 @@ export function useProgress() {
         pct: ids.length ? Math.round((done / ids.length) * 100) : 0,
       }
     })
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayIso()
     const minutesToday = studyLog
       .filter((e) => e.date === today)
       .reduce((sum, e) => sum + e.minutes, 0)
@@ -341,8 +466,9 @@ export function useProgress() {
       minutesToday,
       starredCount: starred.length,
       streak: studyStreak(studyLog),
+      revisionsDue: dueRevisions(revision, today).length,
     }
-  }, [completed, studyLog, starred])
+  }, [completed, studyLog, starred, revision])
 
   const weakAreas = useMemo(() => {
     return TOPICS.map((topic) => {
@@ -360,12 +486,20 @@ export function useProgress() {
       .slice(0, 12)
   }, [completed])
 
+  const revisionsDueList = useMemo(
+    () => dueRevisions(revision, todayIso()),
+    [revision],
+  )
+
   return {
     completed,
     starred,
     deprioritized,
     studyLog,
     mockScores,
+    errorLog,
+    revision,
+    revisionsDueList,
     focusExamId,
     remindersEnabled,
     docs,
@@ -382,6 +516,9 @@ export function useProgress() {
     removeStudy,
     addMock,
     removeMock,
+    addError,
+    removeError,
+    reviewRevision,
     setFocusExam,
     setRemindersEnabled,
     toggleDoc,

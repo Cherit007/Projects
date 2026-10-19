@@ -2,6 +2,7 @@ import { useDeferredValue, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DeadlinesStrip } from '../components/DeadlinesStrip'
 import { ExamCard } from '../components/ExamCard'
+import { NextMoves } from '../components/NextMoves'
 import { ProgressRing } from '../components/ProgressRing'
 import { TodayPlan } from '../components/TodayPlan'
 import { EXAMS } from '../data/exams'
@@ -151,6 +152,7 @@ export function Dashboard() {
         </div>
       </section>
 
+      <NextMoves />
       <TodayPlan />
       <DeadlinesStrip />
 

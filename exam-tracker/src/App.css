@@ -1625,6 +1625,138 @@ strong {
 
 .plan-kind.mock { background: rgba(196, 122, 44, 0.16); color: var(--warn); }
 .plan-kind.focus { background: rgba(30, 90, 120, 0.14); color: #1a4f6b; }
+.plan-kind.revise { background: rgba(13, 107, 92, 0.14); color: var(--teal-deep); }
+.plan-kind.drill { background: rgba(30, 90, 120, 0.12); color: #1a4f6b; }
+.plan-kind.fix { background: rgba(139, 46, 46, 0.12); color: var(--danger); }
+
+.next-moves {
+  margin: 0 0 1.5rem;
+  animation: rise 0.45s ease both;
+}
+
+.trend-block {
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(13, 107, 92, 0.06);
+  border: 1px solid rgba(13, 107, 92, 0.12);
+}
+
+.trend-block h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+}
+
+.trend-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  height: 88px;
+  margin-bottom: 0.65rem;
+}
+
+.trend-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  height: 100%;
+  min-width: 0;
+}
+
+.trend-bar {
+  width: 70%;
+  max-width: 28px;
+  border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(180deg, var(--teal), var(--teal-deep));
+  min-height: 8px;
+}
+
+.trend-col span {
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.sec-avg-list,
+.err-stat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.sec-avg-list li,
+.err-stat-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line);
+  min-width: 5.5rem;
+}
+
+.sec-avg-list span,
+.err-stat-list span {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.sec-avg-list strong,
+.err-stat-list strong {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+}
+
+.warn-text {
+  color: var(--warn);
+}
+
+.err-tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.err-tag.concept {
+  background: rgba(30, 90, 120, 0.12);
+  color: #1a4f6b;
+}
+
+.err-tag.silly {
+  background: rgba(196, 122, 44, 0.16);
+  color: var(--warn);
+}
+
+.err-tag.time {
+  background: rgba(139, 46, 46, 0.12);
+  color: var(--danger);
+}
+
+.revision-list .rev-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+
+.small-btn {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.65rem;
+}
 
 /* Pomodoro */
 .focus-layout {

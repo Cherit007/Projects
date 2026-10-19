@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { getFirebaseDb } from './firebase'
-import type { AppState } from '../hooks/useProgress'
+import type { AppState, ErrorEntry, MockScore } from '../hooks/useProgress'
+import type { RevisionCard } from '../utils/spacedRepetition'
 
 let cloudUid: string | null = null
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -28,6 +29,24 @@ function asBoolMap(v: unknown): Record<string, boolean> {
   return out
 }
 
+function asRevisionMap(v: unknown): Record<string, RevisionCard> {
+  if (!v || typeof v !== 'object') return {}
+  const out: Record<string, RevisionCard> = {}
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (!raw || typeof raw !== 'object') continue
+    const c = raw as Partial<RevisionCard>
+    if (typeof c.due !== 'string') continue
+    out[k] = {
+      topicId: typeof c.topicId === 'string' ? c.topicId : k,
+      due: c.due,
+      interval: typeof c.interval === 'number' ? c.interval : 1,
+      ease: typeof c.ease === 'number' ? c.ease : 2.5,
+      reps: typeof c.reps === 'number' ? c.reps : 0,
+    }
+  }
+  return out
+}
+
 export function normalizeCloudState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== 'object') return null
   const p = raw as Partial<AppState>
@@ -36,7 +55,9 @@ export function normalizeCloudState(raw: unknown): AppState | null {
     starred: asStringArray(p.starred),
     deprioritized: asStringArray(p.deprioritized),
     studyLog: Array.isArray(p.studyLog) ? p.studyLog : [],
-    mockScores: Array.isArray(p.mockScores) ? p.mockScores : [],
+    mockScores: Array.isArray(p.mockScores) ? (p.mockScores as MockScore[]) : [],
+    errorLog: Array.isArray(p.errorLog) ? (p.errorLog as ErrorEntry[]) : [],
+    revision: asRevisionMap(p.revision),
     focusExamId: typeof p.focusExamId === 'string' ? p.focusExamId : null,
     remindersEnabled: !!p.remindersEnabled,
     docs: asBoolMap(p.docs),
@@ -57,6 +78,16 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
   for (const e of [...cloud.studyLog, ...local.studyLog]) studyMap.set(e.id, e)
   const mockMap = new Map<string, AppState['mockScores'][number]>()
   for (const e of [...cloud.mockScores, ...local.mockScores]) mockMap.set(e.id, e)
+  const errorMap = new Map<string, AppState['errorLog'][number]>()
+  for (const e of [...cloud.errorLog, ...local.errorLog]) errorMap.set(e.id, e)
+
+  const revision: Record<string, RevisionCard> = { ...cloud.revision }
+  for (const [id, card] of Object.entries(local.revision)) {
+    const other = revision[id]
+    if (!other || card.due > other.due || card.reps >= other.reps) {
+      revision[id] = card
+    }
+  }
 
   return {
     completed,
@@ -68,6 +99,10 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
     mockScores: [...mockMap.values()]
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 200),
+    errorLog: [...errorMap.values()]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 300),
+    revision,
     focusExamId: local.focusExamId ?? cloud.focusExamId,
     remindersEnabled: local.remindersEnabled || cloud.remindersEnabled,
     docs,
