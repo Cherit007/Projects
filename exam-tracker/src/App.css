@@ -1396,21 +1396,26 @@ strong {
   font-size: 0.85rem;
 }
 
-/* Prep lab */
+/* Prep lab — max 2 columns; dense forms overflow when forced into 4 */
 .prep-lab {
   animation: rise 0.5s ease both;
+  min-width: 0;
 }
 
 .prep-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  align-items: start;
 }
 
 .prep-panel {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 1.1rem 1.15rem 1.25rem;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
@@ -1418,19 +1423,22 @@ strong {
 .prep-panel h2 {
   margin: 0 0 0.85rem;
   font-size: 1.25rem;
+  overflow-wrap: anywhere;
 }
 
 .prep-form {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
   margin-bottom: 1rem;
+  min-width: 0;
 }
 
 .prep-form label {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  min-width: 0;
   font-size: 0.8rem;
   color: var(--muted);
   font-weight: 650;
@@ -1442,6 +1450,10 @@ strong {
 
 .prep-form input,
 .prep-form select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0.55rem 0.65rem;
@@ -1461,6 +1473,7 @@ strong {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  min-width: 0;
 }
 
 .log-list li {
@@ -1468,8 +1481,15 @@ strong {
   justify-content: space-between;
   gap: 0.75rem;
   align-items: start;
+  min-width: 0;
   padding-top: 0.55rem;
   border-top: 1px dashed rgba(15, 31, 28, 0.08);
+}
+
+.log-list li > div {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
 }
 
 .log-list strong {
@@ -1506,6 +1526,14 @@ strong {
   .hero,
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .prep-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .prep-form {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .detail-info {
