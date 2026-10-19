@@ -1502,6 +1502,179 @@ strong {
   width: fit-content;
 }
 
+.course-guide {
+  animation: rise 0.5s ease both;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.guide-panel {
+  padding: 1.15rem 1.25rem 1.35rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.guide-panel.accent {
+  background:
+    linear-gradient(135deg, rgba(13, 107, 92, 0.1), rgba(196, 122, 44, 0.12)),
+    rgba(255, 255, 255, 0.7);
+}
+
+.guide-panel h2,
+.section-title {
+  margin: 0 0 0.85rem;
+  font-size: 1.35rem;
+}
+
+.guide-steps {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.guide-steps strong {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
+}
+
+.guide-steps p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.focus-grid h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.focus-grid p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.exam-intro-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.exam-intro-card {
+  padding: 1.15rem 1.25rem 1.3rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.exam-intro-card > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 0.65rem;
+}
+
+.exam-intro-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+}
+
+.exam-intro-card .muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.olive-pick {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.olive-pick span {
+  color: var(--muted);
+}
+
+.stage-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.stage-row {
+  padding-top: 0.7rem;
+  border-top: 1px dashed rgba(15, 31, 28, 0.1);
+}
+
+.stage-row h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+}
+
+.stage-row p {
+  margin: 0 0 0.3rem;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.stage-row em {
+  font-style: normal;
+  color: var(--teal-deep);
+  font-weight: 650;
+}
+
+.skip-note {
+  margin: 0.85rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(139, 46, 46, 0.08);
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.cheat {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.cheat strong {
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+.muted.tight {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.btn.small {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.75rem;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .hero,
   .detail-grid {

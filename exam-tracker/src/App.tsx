@@ -11,6 +11,7 @@ import { ComparePage } from './pages/ComparePage'
 import { Dashboard } from './pages/Dashboard'
 import { ExamDetail } from './pages/ExamDetail'
 import { FocusPage } from './pages/FocusPage'
+import { CourseGuide } from './pages/CourseGuide'
 import { PrepLab } from './pages/PrepLab'
 import { TopicsPage } from './pages/TopicsPage'
 import './App.css'
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="compare" element={<ComparePage />} />
           <Route path="focus" element={<FocusPage />} />
           <Route path="prep" element={<PrepLab />} />
+          <Route path="guide" element={<CourseGuide />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
