@@ -1,4 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import {
+  BrowserRouter,
+  HashRouter,
+  Navigate,
+  Route,
+  Routes,
+} from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { useProgressHydration } from './hooks/useProgress'
 import { ComparePage } from './pages/ComparePage'
@@ -8,6 +14,9 @@ import { FocusPage } from './pages/FocusPage'
 import { PrepLab } from './pages/PrepLab'
 import { TopicsPage } from './pages/TopicsPage'
 import './App.css'
+
+/** GitHub Pages project subpath needs hash routes for deep links. */
+const useHashRouter = import.meta.env.BASE_URL.includes('/Projects/exam-tracker')
 
 export default function App() {
   const ready = useProgressHydration()
@@ -21,9 +30,10 @@ export default function App() {
   }
 
   const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined
+  const Router = useHashRouter ? HashRouter : BrowserRouter
 
   return (
-    <BrowserRouter basename={basename}>
+    <Router basename={useHashRouter ? undefined : basename}>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -35,6 +45,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </Router>
   )
 }
