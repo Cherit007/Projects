@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { EXAMS, examTopicIds, examsSharingTopic } from '../data/exams'
 import { TOPICS } from '../data/topics'
+import { scheduleCloudSave } from '../lib/cloudSync'
 import { studyStreak } from '../utils/readiness'
 
 const STORAGE_KEY = 'exam-prep-app-v2'
@@ -109,7 +110,18 @@ function persist(next: AppState) {
   } catch {
     /* ignore quota */
   }
+  scheduleCloudSave(next)
   emit()
+}
+
+/** Snapshot for cloud merge / auth lifecycle (outside React). */
+export function exportProgressSnapshot(): AppState {
+  return memoryCache
+}
+
+/** Replace full state (login merge). */
+export function replaceProgressState(next: AppState) {
+  persist(next)
 }
 
 function uid() {

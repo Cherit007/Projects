@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../auth/AuthContext'
 import { DOC_ITEMS } from '../data/docsChecklist'
 import { upcomingDeadlines, daysUntil } from '../data/deadlines'
 import { EXAMS } from '../data/exams'
 import { useProgress } from '../hooks/useProgress'
+import { isFirebaseConfigured } from '../lib/firebase'
 import {
   downloadDeadlinesIcs,
   downloadJson,
@@ -27,6 +29,7 @@ export function PrepLab() {
     toggleDoc,
     stats,
   } = useProgress()
+  const { user, syncing, signInWithGoogle, signOutUser, error: authError } = useAuth()
 
   const docsDone = DOC_ITEMS.filter((d) => docs[d.id]).length
 
@@ -245,6 +248,61 @@ export function PrepLab() {
               </li>
             ))}
           </ul>
+        </section>
+
+        <section className="prep-panel cloud-panel" id="cloud-login">
+          <h2>Your cloud account</h2>
+          {isFirebaseConfigured ? (
+            <>
+              {user ? (
+                <p>
+                  Signed in as <strong>{user.email ?? user.displayName}</strong>
+                  {syncing ? ' · syncing…' : ' · favorites, ticks, mocks & reminders sync to this Google account.'}
+                </p>
+              ) : (
+                <p>
+                  Sign in with Google so favorites, syllabus ticks, mocks, and reminders follow you
+                  across phone and laptop.
+                </p>
+              )}
+              <div className="backup-actions">
+                {user ? (
+                  <button type="button" className="ghost" onClick={() => void signOutUser()}>
+                    Sign out
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={syncing}
+                    onClick={() => void signInWithGoogle()}
+                  >
+                    {syncing ? 'Signing in…' : 'Sign in with Google'}
+                  </button>
+                )}
+              </div>
+              {authError && <p className="auth-error-block">{authError}</p>}
+            </>
+          ) : (
+            <>
+              <p>
+                Cloud login is not wired yet. Create a free Firebase project, enable Google sign-in
+                + Firestore, then put the web config in <code>.env.local</code> (local) or GitHub
+                Actions secrets (Pages deploy). See <code>FIREBASE_SETUP.md</code>.
+              </p>
+              <ol className="setup-steps">
+                <li>Firebase console → Create project → Add web app</li>
+                <li>Authentication → Sign-in method → Google → Enable</li>
+                <li>Firestore → Create database → start in production mode</li>
+                <li>Paste rules from <code>firestore.rules</code></li>
+                <li>
+                  Authorized domains: <code>localhost</code>,{' '}
+                  <code>cherit007.github.io</code>
+                </li>
+                <li>Copy config into <code>VITE_FIREBASE_*</code> env vars and redeploy</li>
+              </ol>
+            </>
+          )}
         </section>
 
         <section className="prep-panel">

@@ -1,8 +1,11 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '../auth/AuthContext'
 import { useProgress } from '../hooks/useProgress'
+import { AuthBar } from './AuthBar'
 
 export function Layout() {
   const { stats, resetAll } = useProgress()
+  const { user } = useAuth()
 
   return (
     <div className="app-shell">
@@ -12,7 +15,11 @@ export function Layout() {
           <span className="brand-mark">EP</span>
           <span className="brand-text">
             <strong>ExamPulse</strong>
-            <em>OBC · ECE/SDE · Officer track</em>
+            <em>
+              {user?.displayName
+                ? `${user.displayName.split(' ')[0]} · OBC track`
+                : 'OBC · ECE/SDE · Officer track'}
+            </em>
           </span>
         </Link>
         <nav className="nav">
@@ -25,6 +32,7 @@ export function Layout() {
           <NavLink to="/prep">Prep lab</NavLink>
         </nav>
         <div className="topbar-stats">
+          <AuthBar />
           <span>
             {stats.pct}% · {stats.minutesToday}m · 🔥{stats.streak}
           </span>
