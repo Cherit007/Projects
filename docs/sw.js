@@ -76,9 +76,17 @@ self.addEventListener('periodicsync', (event) => {
 });
 
 const putInCache = async (cacheName, request, response) => {
+  // Clone BEFORE any await — returning the response to the page can consume the body
+  // and makes a later clone() throw "Response body is already used".
   if (!response || response.status !== 200 || response.type === 'opaque') return;
+  let copy;
+  try {
+    copy = response.clone();
+  } catch {
+    return;
+  }
   const cache = await caches.open(cacheName);
-  await cache.put(request, response.clone());
+  await cache.put(request, copy);
 };
 
 const serveNavigation = async (event) => {
@@ -127,6 +135,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // ExamPulse lives under /Projects/exam-tracker/ — do not intercept it.
+  if (url.pathname.includes('/exam-tracker')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(serveNavigation(event));
