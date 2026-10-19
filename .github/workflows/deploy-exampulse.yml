@@ -1,0 +1,50 @@
+name: Deploy ExamPulse to GitHub Pages
+
+on:
+  push:
+    branches:
+      - cursor/exam-prep-tracker-7f33
+      - main
+    paths:
+      - 'exam-tracker/**'
+      - '.github/workflows/deploy-exampulse.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-exampulse-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: exam-tracker/package-lock.json
+
+      - name: Install & build
+        working-directory: exam-tracker
+        run: |
+          npm ci
+          npm run build:pages
+
+      - name: Publish under docs/exam-tracker
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: badminton-v10
+          publish_dir: ./exam-tracker/dist
+          destination_dir: docs/exam-tracker
+          keep_files: true
+          commit_message: 'Deploy ExamPulse to GitHub Pages'
