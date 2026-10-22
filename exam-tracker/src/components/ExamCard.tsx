@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { Exam } from '../data/types'
+import { getExamRegistration } from '../data/registration'
 import { useProgress } from '../hooks/useProgress'
 import { readinessScore } from '../utils/readiness'
 import { ProgressRing } from './ProgressRing'
@@ -27,6 +28,7 @@ export function ExamCard({ exam, pct, done, total, pinned, sunk }: Props) {
   const isItOfficer = exam.tags?.includes('it-officer')
   const isCommerce = exam.tags?.includes('commerce-ga')
   const ready = readinessScore(exam, completed, mockScores)
+  const reg = getExamRegistration(exam)
 
   return (
     <div
@@ -43,6 +45,9 @@ export function ExamCard({ exam, pct, done, total, pinned, sunk }: Props) {
           )}
           {(pinned || starred) && <span className="soft-chip pin-chip">Pinned</span>}
           {low && <span className="soft-chip sunk-chip">Low priority</span>}
+          {reg.state === 'open' && (
+            <span className="soft-chip reg-open-chip">Open for registration</span>
+          )}
         </div>
         <div className="exam-card-actions">
           <button
@@ -89,6 +94,42 @@ export function ExamCard({ exam, pct, done, total, pinned, sunk }: Props) {
         </div>
         <p className="exam-card-status">{exam.status}</p>
       </Link>
+
+      <div className={`exam-card-reg reg-${reg.state}`}>
+        {reg.state === 'open' ? (
+          <>
+            <p className="reg-line">
+              <strong>Open for registration</strong>
+              {reg.openNote ? ` · ${reg.openNote}` : ''}
+            </p>
+            <a
+              className="reg-link apply"
+              href={reg.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {reg.linkLabel} ↗
+            </a>
+          </>
+        ) : (
+          <>
+            <p className="reg-line">
+              <strong>Next notification</strong>
+              {reg.nextNotification ? ` · ${reg.nextNotification}` : ''}
+            </p>
+            <a
+              className="reg-link watch"
+              href={reg.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {reg.linkLabel} ↗
+            </a>
+          </>
+        )}
+      </div>
     </div>
   )
 }

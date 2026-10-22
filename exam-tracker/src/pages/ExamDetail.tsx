@@ -3,6 +3,7 @@ import { PreviousPapers } from '../components/PreviousPapers'
 import { ProgressRing } from '../components/ProgressRing'
 import { SyllabusChecklist } from '../components/SyllabusChecklist'
 import { EXAM_BY_ID, examTopicIds } from '../data/exams'
+import { getExamRegistration } from '../data/registration'
 import { useProgress } from '../hooks/useProgress'
 import { readinessScore } from '../utils/readiness'
 
@@ -38,6 +39,7 @@ export function ExamDetail() {
   const low = isDeprioritized(exam.id)
   const examMocks = mockScores.filter((m) => m.examId === exam.id).slice(0, 5)
   const ready = readinessScore(exam, completed, mockScores)
+  const reg = getExamRegistration(exam)
 
   return (
     <div className="exam-detail">
@@ -51,6 +53,9 @@ export function ExamDetail() {
             <span className={`tier-chip tier-${exam.tier.toLowerCase()}`}>{exam.tier}</span>
             <span className="soft-chip">{exam.difficulty}</span>
             <span className="soft-chip">Priority #{exam.priority}</span>
+            {reg.state === 'open' && (
+              <span className="soft-chip reg-open-chip">Open for registration</span>
+            )}
           </div>
           <h1>{exam.name}</h1>
           <p className="lede">{exam.fit}</p>
@@ -101,7 +106,31 @@ export function ExamDetail() {
       <div className="detail-grid">
         <aside className="detail-info">
           <InfoBlock title="Status" body={exam.status} tone="warn" />
-          <InfoBlock title="Registration" body={exam.reg} />
+          <div className={`info-block exam-card-reg reg-${reg.state}`}>
+            <h3>Apply / notification</h3>
+            {reg.state === 'open' ? (
+              <p className="reg-line">
+                <strong>Open for registration</strong>
+                {reg.openNote ? ` · ${reg.openNote}` : ''}
+              </p>
+            ) : (
+              <p className="reg-line">
+                <strong>Next notification</strong>
+                {reg.nextNotification ? ` · ${reg.nextNotification}` : ''}
+              </p>
+            )}
+            <p className="muted-line" style={{ margin: '0.35rem 0 0.5rem' }}>
+              {exam.reg}
+            </p>
+            <a
+              className={`reg-link ${reg.state === 'open' ? 'apply' : 'watch'}`}
+              href={reg.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {reg.linkLabel} ↗
+            </a>
+          </div>
           <InfoBlock title="Exam timeline" body={exam.exam} />
           <InfoBlock title="Cycle" body={exam.cycle} />
           <InfoBlock title="Vacancies" body={exam.vacancies} />

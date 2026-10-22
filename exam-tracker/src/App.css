@@ -755,6 +755,72 @@ strong {
   overflow: hidden;
 }
 
+.exam-card-reg {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(13, 107, 92, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.exam-card-reg .reg-line {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+.exam-card-reg .reg-line strong {
+  color: var(--teal-deep);
+  font-weight: 700;
+}
+
+.exam-card-reg.reg-open .reg-line strong {
+  color: #0b6b3a;
+}
+
+.exam-card-reg.reg-closed .reg-line strong,
+.exam-card-reg.reg-watch .reg-line strong {
+  color: #8a5314;
+}
+
+.reg-open-chip {
+  background: rgba(11, 107, 58, 0.14);
+  color: #0b6b3a;
+}
+
+.reg-link {
+  align-self: flex-start;
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-decoration: none;
+  padding: 0.28rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.reg-link.apply {
+  color: #0b6b3a;
+  background: rgba(11, 107, 58, 0.1);
+  border-color: rgba(11, 107, 58, 0.28);
+}
+
+.reg-link.apply:hover {
+  background: rgba(11, 107, 58, 0.18);
+}
+
+.reg-link.watch {
+  color: var(--teal-deep);
+  background: rgba(13, 107, 92, 0.08);
+  border-color: rgba(13, 107, 92, 0.22);
+}
+
+.reg-link.watch:hover {
+  background: rgba(13, 107, 92, 0.14);
+}
+
 .tier-chip,
 .soft-chip {
   display: inline-flex;
