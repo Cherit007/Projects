@@ -24,7 +24,14 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  /* Avoid smooth scroll fighting HashRouter / route resets */
+  scroll-behavior: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.allow-smooth-scroll {
+    scroll-behavior: smooth;
+  }
 }
 
 body {

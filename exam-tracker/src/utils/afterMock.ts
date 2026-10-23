@@ -72,7 +72,7 @@ export function buildAfterMockFlow(args: {
     id: 'am-error',
     title: 'Log 2–3 mistakes in error notebook',
     why: 'Turns mock pain into spaced revision cards',
-    href: '/prep#error-notebook',
+    href: '/prep',
     kind: 'revise',
   })
 
