@@ -58,6 +58,15 @@ export function normalizeCloudState(raw: unknown): AppState | null {
     mockScores: Array.isArray(p.mockScores) ? (p.mockScores as MockScore[]) : [],
     errorLog: Array.isArray(p.errorLog) ? (p.errorLog as ErrorEntry[]) : [],
     revision: asRevisionMap(p.revision),
+    mastery:
+      p.mastery && typeof p.mastery === 'object'
+        ? (Object.fromEntries(
+            Object.entries(p.mastery as Record<string, unknown>).filter(
+              ([, v]) =>
+                v === 'learning' || v === 'practiced' || v === 'mastered',
+            ),
+          ) as AppState['mastery'])
+        : {},
     focusExamId: typeof p.focusExamId === 'string' ? p.focusExamId : null,
     remindersEnabled: !!p.remindersEnabled,
     docs: asBoolMap(p.docs),
@@ -89,6 +98,15 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
     }
   }
 
+  const masteryRank = { learning: 1, practiced: 2, mastered: 3 } as const
+  const mastery: AppState['mastery'] = { ...cloud.mastery }
+  for (const [id, level] of Object.entries(local.mastery)) {
+    const other = mastery[id]
+    if (!other || masteryRank[level] >= masteryRank[other]) {
+      mastery[id] = level
+    }
+  }
+
   return {
     completed,
     starred,
@@ -103,6 +121,7 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 300),
     revision,
+    mastery,
     focusExamId: local.focusExamId ?? cloud.focusExamId,
     remindersEnabled: local.remindersEnabled || cloud.remindersEnabled,
     docs,

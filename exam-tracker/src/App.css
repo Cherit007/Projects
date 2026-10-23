@@ -1692,6 +1692,107 @@ strong {
   text-align: center;
 }
 
+/* Mastery + PYQ on topic cards */
+.mastery-chip.mastery-learning {
+  background: rgba(30, 90, 120, 0.12);
+  color: #1a4f6b;
+}
+
+.mastery-chip.mastery-practiced {
+  background: rgba(13, 107, 92, 0.14);
+  color: var(--teal-deep);
+}
+
+.mastery-chip.mastery-mastered {
+  background: rgba(196, 122, 44, 0.16);
+  color: var(--warn);
+}
+
+.topic-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  margin: 0.55rem 0 0.35rem;
+  align-items: center;
+}
+
+.mastery-cycle {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.topic-pyq-link {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--teal-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.roadmap-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+}
+
+/* CGL preference pack */
+.cgl-pack {
+  margin: 0 0 1.75rem;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line);
+}
+
+.cgl-core-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.55rem;
+  margin: 0.75rem 0 0.85rem;
+}
+
+.cgl-core-option {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.cgl-core-option.selected {
+  border-color: rgba(13, 107, 92, 0.45);
+  background: rgba(13, 107, 92, 0.08);
+}
+
+.cgl-core-option strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.cgl-core-option em {
+  display: block;
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.cgl-addon {
+  margin: 0.25rem 0 0.85rem;
+}
+
+.cgl-pack-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  align-items: center;
+}
+
 .empty {
   padding: 3rem 0;
   text-align: center;

@@ -3,8 +3,10 @@ import { examsSharingTopic } from '../data/exams'
 import { AREA_LABELS } from '../data/topics'
 import type { Topic } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
+import { MASTERY_LABELS, resolveMastery } from '../utils/mastery'
 import { showToast } from '../utils/toastBus'
 import { topicHours, topicProgress } from '../utils/topicMeta'
+import { pyqLinksForTopic } from '../utils/topicPyq'
 import { ProgressRing } from './ProgressRing'
 
 type Props = {
@@ -14,11 +16,13 @@ type Props = {
 }
 
 export function TopicCard({ topic, highlightExamIds, weak }: Props) {
-  const { isDone, isSubDone, toggleTopic } = useProgress()
+  const { isDone, isSubDone, toggleTopic, mastery, cycleMastery } = useProgress()
   const prog = topicProgress(topic, isDone, isSubDone)
   const shared = examsSharingTopic(topic.id)
   const hours = topicHours(topic)
   const starSet = highlightExamIds ? new Set(highlightExamIds) : null
+  const level = resolveMastery(topic, mastery[topic.id], isDone, isSubDone)
+  const pyqs = pyqLinksForTopic(topic)
 
   return (
     <article
@@ -28,8 +32,15 @@ export function TopicCard({ topic, highlightExamIds, weak }: Props) {
         <div className="chip-wrap">
           <span className="soft-chip area-chip">{AREA_LABELS[topic.area]}</span>
           {weak && <span className="soft-chip sunk-chip">Weak</span>}
-          {prog.fullyDone && <span className="soft-chip reg-open-chip">Done</span>}
-          {!prog.fullyDone && prog.pct > 0 && (
+          {level && (
+            <span className={`soft-chip mastery-chip mastery-${level}`}>
+              {MASTERY_LABELS[level]}
+            </span>
+          )}
+          {prog.fullyDone && !level && (
+            <span className="soft-chip reg-open-chip">Done</span>
+          )}
+          {!prog.fullyDone && prog.pct > 0 && !level && (
             <span className="soft-chip pin-chip">In progress</span>
           )}
         </div>
@@ -63,6 +74,28 @@ export function TopicCard({ topic, highlightExamIds, weak }: Props) {
       </label>
 
       {topic.note && <p className="topic-card-note">{topic.note}</p>}
+
+      <div className="topic-card-actions">
+        <button
+          type="button"
+          className="ghost mastery-cycle"
+          onClick={() => cycleMastery(topic.id)}
+          title="Cycle mastery: Learning → Practiced → Mastered"
+        >
+          {level ? `Mastery: ${MASTERY_LABELS[level]}` : 'Set mastery'}
+        </button>
+        {pyqs.map((link) => (
+          <a
+            key={link.url}
+            className="topic-pyq-link"
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            PYQ · {link.label}
+          </a>
+        ))}
+      </div>
 
       <div className="shared-exams topic-card-exams">
         {shared.map((e) => (

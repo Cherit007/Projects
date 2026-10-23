@@ -11,6 +11,7 @@ import {
 } from '../utils/spacedRepetition'
 import { studyStreak } from '../utils/readiness'
 import type { SectionKey } from '../utils/prepAnalytics'
+import type { MasteryLevel } from '../utils/mastery'
 
 const STORAGE_KEY = 'exam-prep-app-v2'
 const LEGACY_KEY = 'exam-prep-progress-v1'
@@ -61,6 +62,8 @@ export type AppState = {
   errorLog: ErrorEntry[]
   /** topicId → spaced revision card */
   revision: Record<string, RevisionCard>
+  /** topicId → Learning / Practiced / Mastered */
+  mastery: Record<string, MasteryLevel>
   focusExamId: string | null
   remindersEnabled: boolean
   /** Application / document prep checklist */
@@ -75,9 +78,21 @@ const EMPTY: AppState = {
   mockScores: [],
   errorLog: [],
   revision: {},
+  mastery: {},
   focusExamId: null,
   remindersEnabled: false,
   docs: {},
+}
+
+function asMasteryMap(v: unknown): Record<string, MasteryLevel> {
+  if (!v || typeof v !== 'object') return {}
+  const out: Record<string, MasteryLevel> = {}
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (raw === 'learning' || raw === 'practiced' || raw === 'mastered') {
+      out[k] = raw
+    }
+  }
+  return out
 }
 
 function migrateLegacy(): Record<string, boolean> {
@@ -127,6 +142,7 @@ function readStorage(): AppState {
       mockScores: Array.isArray(parsed.mockScores) ? parsed.mockScores : [],
       errorLog: Array.isArray(parsed.errorLog) ? parsed.errorLog : [],
       revision: asRevisionMap(parsed.revision),
+      mastery: asMasteryMap(parsed.mastery),
       focusExamId: parsed.focusExamId ?? null,
       remindersEnabled: !!parsed.remindersEnabled,
       docs: parsed.docs && typeof parsed.docs === 'object' ? parsed.docs : {},
@@ -207,6 +223,7 @@ export function useProgress() {
     mockScores,
     errorLog,
     revision,
+    mastery,
     focusExamId,
     remindersEnabled,
     docs,
@@ -216,9 +233,13 @@ export function useProgress() {
     const nextCompleted = { ...memoryCache.completed, [topicId]: !memoryCache.completed[topicId] }
     const nowDone = !!nextCompleted[topicId]
     if (!nowDone) delete nextCompleted[topicId]
+    const nextMastery = { ...memoryCache.mastery }
+    if (nowDone && !nextMastery[topicId]) nextMastery[topicId] = 'practiced'
+    if (!nowDone) delete nextMastery[topicId]
     persist({
       ...memoryCache,
       completed: nextCompleted,
+      mastery: nextMastery,
       revision: withRevisionOnComplete(
         nextCompleted,
         memoryCache.revision,
@@ -232,9 +253,13 @@ export function useProgress() {
     const nextCompleted = { ...memoryCache.completed }
     if (value) nextCompleted[topicId] = true
     else delete nextCompleted[topicId]
+    const nextMastery = { ...memoryCache.mastery }
+    if (value && !nextMastery[topicId]) nextMastery[topicId] = 'practiced'
+    if (!value) delete nextMastery[topicId]
     persist({
       ...memoryCache,
       completed: nextCompleted,
+      mastery: nextMastery,
       revision: withRevisionOnComplete(
         nextCompleted,
         memoryCache.revision,
@@ -265,9 +290,16 @@ export function useProgress() {
       if (allDone) nextCompleted[topicId] = true
       else delete nextCompleted[topicId]
 
+      const nextMastery = { ...memoryCache.mastery }
+      if (allDone && !nextMastery[topicId]) nextMastery[topicId] = 'practiced'
+      if (!allDone && nextMastery[topicId] === 'practiced') {
+        nextMastery[topicId] = 'learning'
+      }
+
       persist({
         ...memoryCache,
         completed: nextCompleted,
+        mastery: nextMastery,
         revision: withRevisionOnComplete(
           nextCompleted,
           memoryCache.revision,
@@ -278,6 +310,29 @@ export function useProgress() {
     },
     [],
   )
+
+  const setMastery = useCallback((topicId: string, level: MasteryLevel | null) => {
+    const next = { ...memoryCache.mastery }
+    if (level) next[topicId] = level
+    else delete next[topicId]
+    persist({ ...memoryCache, mastery: next })
+  }, [])
+
+  const cycleMastery = useCallback((topicId: string) => {
+    const order: Array<MasteryLevel | null> = [
+      'learning',
+      'practiced',
+      'mastered',
+      null,
+    ]
+    const cur = memoryCache.mastery[topicId] ?? null
+    const idx = order.indexOf(cur)
+    const nextLevel = order[(idx + 1) % order.length]
+    const next = { ...memoryCache.mastery }
+    if (nextLevel) next[topicId] = nextLevel
+    else delete next[topicId]
+    persist({ ...memoryCache, mastery: next })
+  }, [])
 
   const isDone = useCallback(
     (topicId: string) => !!completed[topicId],
@@ -412,6 +467,7 @@ export function useProgress() {
       mockScores: incoming.mockScores ?? memoryCache.mockScores,
       errorLog: incoming.errorLog ?? memoryCache.errorLog,
       revision: incoming.revision ?? memoryCache.revision,
+      mastery: incoming.mastery ?? memoryCache.mastery,
       focusExamId:
         incoming.focusExamId !== undefined
           ? incoming.focusExamId
@@ -499,6 +555,7 @@ export function useProgress() {
     mockScores,
     errorLog,
     revision,
+    mastery,
     revisionsDueList,
     focusExamId,
     remindersEnabled,
@@ -506,6 +563,8 @@ export function useProgress() {
     toggleTopic,
     setTopic,
     toggleSubtopic,
+    setMastery,
+    cycleMastery,
     isDone,
     isSubDone,
     toggleStar,

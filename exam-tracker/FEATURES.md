@@ -32,11 +32,11 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 ## Phase D — Accuracy & depth
 
 - [x] **D1** Default topic effort hours (by area + overrides)
-- [ ] **D2** Per-exam topic weights in data
-- [ ] **D3** Mastery states: Learning / Practiced / Mastered
-- [ ] **D4** CGL preference pack (one core + AAO Paper-III add-on UI)
-- [ ] **D5** PYQ links on topic cards
-- [ ] **D6** Export roadmap PDF / ICS
+- [x] **D2** Per-exam topic weights in data
+- [x] **D3** Mastery states: Learning / Practiced / Mastered
+- [x] **D4** CGL preference pack (one core + AAO Paper-III add-on UI)
+- [x] **D5** PYQ links on topic cards
+- [x] **D6** Export roadmap PDF / ICS
 
 ## Phase E — Polish
 
@@ -65,3 +65,7 @@ npm run preview
 2. Dashboard / Roadmap → **This week** (Mon–Sun slots)  
 3. Tick a shared topic on Topics → toast “Synced across N exams”  
 4. With a deadline &lt;30 days on a starred exam → **Deadline mode** chip + Wed mock  
+5. Dashboard → **CGL preference pack** → star core + optional AAO add-on  
+6. Topics → cycle mastery + open PYQ links on a card  
+7. Roadmap → **Export PDF** / **Export week ICS**  
+ 

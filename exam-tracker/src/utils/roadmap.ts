@@ -1,5 +1,6 @@
 import { EXAM_BY_ID, EXAMS, examTopicIds } from '../data/exams'
 import { TOPIC_BY_ID } from '../data/topics'
+import { maxTopicWeight, topicWeight } from '../data/topicWeights'
 import type { Exam, Topic, TopicArea } from '../data/types'
 import type { MockScore } from '../hooks/useProgress'
 import { readinessScore } from './readiness'
@@ -14,6 +15,8 @@ export type RoadmapItem = {
   examLabels: string[]
   hoursLeft: number
   hoursTotal: number
+  /** Max per-exam weight among favorites (D2) */
+  weight: number
   pct: number
   score: number
   fullyDone: boolean
@@ -74,12 +77,17 @@ export function buildRoadmap(args: {
     const topic = TOPIC_BY_ID[tid]
     if (!topic) continue
     const prog = topicProgress(topic, args.isDone, args.isSubDone)
-    const hoursTotal = topicHours(topic)
-    const hoursLeft = remainingHours(topic, args.isDone, args.isSubDone)
+    const examIds = [...examSet]
+    const weight = maxTopicWeight(examIds, tid)
+    const hoursTotal = Math.round(topicHours(topic) * weight * 10) / 10
+    const hoursLeft =
+      Math.round(
+        remainingHours(topic, args.isDone, args.isSubDone) * weight * 10,
+      ) / 10
     const share = examSet.size
     const phase = phaseFor(topic.area)
     // Higher score = do sooner
-    let score = share * 20 - PHASE_ORDER[phase] * 5
+    let score = share * 20 - PHASE_ORDER[phase] * 5 + (weight - 1) * 15
     if (weak.has(tid)) score += 25
     if (!prog.fullyDone && prog.pct > 0 && prog.pct < 100) score += 10 // finish in-progress
     if (prog.fullyDone) score -= 1000
@@ -87,10 +95,11 @@ export function buildRoadmap(args: {
     items.push({
       topic,
       phase,
-      examIds: [...examSet],
-      examLabels: [...examSet].map((id) => EXAM_BY_ID[id]?.shortName ?? id),
+      examIds,
+      examLabels: examIds.map((id) => EXAM_BY_ID[id]?.shortName ?? id),
       hoursLeft,
       hoursTotal,
+      weight,
       pct: prog.pct,
       score,
       fullyDone: prog.fullyDone,
@@ -152,7 +161,8 @@ export function examRoadStrips(args: {
     for (const tid of ids) {
       const topic = TOPIC_BY_ID[tid]
       if (!topic) continue
-      const left = remainingHours(topic, args.isDone, args.isSubDone)
+      const w = topicWeight(exam.id, tid)
+      const left = remainingHours(topic, args.isDone, args.isSubDone) * w
       if (left > 0) {
         hoursLeft += left
         topicsLeft++
