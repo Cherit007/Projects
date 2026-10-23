@@ -27,6 +27,7 @@ export function Layout() {
             Dashboard
           </NavLink>
           <NavLink to="/topics">Topics</NavLink>
+          <NavLink to="/roadmap">Roadmap</NavLink>
           <NavLink to="/compare">Compare</NavLink>
           <NavLink to="/focus">Focus</NavLink>
           <NavLink to="/prep">Prep lab</NavLink>

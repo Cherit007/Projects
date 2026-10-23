@@ -1,14 +1,17 @@
 # ExamPulse
 
-Personal exam-prep tracker for bank, regulator, tech, and PSU targets.
+Personal exam-prep tracker for bank, regulator, tech, PSU, and SSC targets.
 
 ## Features
 
-- All target exams from the OBC jobs canvas (dates, vacancies, pay, rounds, status)
-- Shared topic IDs — tick once; syncs across exams that share that topic
-- Favorites, deprioritize, readiness, mocks, reminders
-- **Google login (Firebase)** — progress personalized per user and synced to the cloud
-- Offline fallback via `localStorage` + JSON backup in Prep lab
+- Target exam cards (dates, vacancies, pay, apply/notification links)
+- Shared topic graph — tick once; syncs across linked exams
+- **Topics** — card / list / matrix views, ★ syllabus filter
+- **Roadmap** — timed plan from starred exams (foundation → specific → polish)
+- Favorites, deprioritize, readiness, mocks, error notebook, spaced revision
+- Google login (Firebase) + `localStorage` / JSON backup
+
+Feature checklist (phased): [`FEATURES.md`](./FEATURES.md)
 
 ## Run
 
