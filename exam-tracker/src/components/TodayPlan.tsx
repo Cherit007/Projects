@@ -13,6 +13,7 @@ export function TodayPlan({ compact = false }: Props) {
   const {
     completed,
     starred,
+    roadmapStarred,
     mockScores,
     weakAreas,
     stats,
@@ -26,9 +27,9 @@ export function TodayPlan({ compact = false }: Props) {
   )
 
   const roadmapNext = useMemo(() => {
-    if (!starred.length) return []
+    if (!roadmapStarred.length) return []
     return buildRoadmap({
-      starredIds: starred,
+      starredIds: roadmapStarred,
       completed,
       isDone,
       isSubDone,
@@ -36,11 +37,11 @@ export function TodayPlan({ compact = false }: Props) {
     })
       .filter((i) => !i.fullyDone)
       .slice(0, compact ? 1 : 2)
-  }, [starred, completed, isDone, isSubDone, weakIds, compact])
+  }, [roadmapStarred, completed, isDone, isSubDone, weakIds, compact])
 
   const base = buildTodayPlan({
     completed,
-    starred,
+    starred: roadmapStarred,
     mockScores,
     weakTopicIds: weakIds,
   })

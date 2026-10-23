@@ -54,6 +54,7 @@ export function normalizeCloudState(raw: unknown): AppState | null {
     completed: asBoolMap(p.completed),
     starred: asStringArray(p.starred),
     deprioritized: asStringArray(p.deprioritized),
+    roadmapIgnored: asStringArray(p.roadmapIgnored),
     studyLog: Array.isArray(p.studyLog) ? p.studyLog : [],
     mockScores: Array.isArray(p.mockScores) ? (p.mockScores as MockScore[]) : [],
     errorLog: Array.isArray(p.errorLog) ? (p.errorLog as ErrorEntry[]) : [],
@@ -68,6 +69,10 @@ export function normalizeCloudState(raw: unknown): AppState | null {
           ) as AppState['mastery'])
         : {},
     focusExamId: typeof p.focusExamId === 'string' ? p.focusExamId : null,
+    focusTopicId: typeof p.focusTopicId === 'string' ? p.focusTopicId : null,
+    checkInDoneDate:
+      typeof p.checkInDoneDate === 'string' ? p.checkInDoneDate : null,
+    lastDigestAt: typeof p.lastDigestAt === 'string' ? p.lastDigestAt : null,
     remindersEnabled: !!p.remindersEnabled,
     docs: asBoolMap(p.docs),
   }
@@ -82,6 +87,9 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
   const deprioritized = [...new Set([...cloud.deprioritized, ...local.deprioritized])].filter(
     (id) => !starred.includes(id),
   )
+  const roadmapIgnored = [
+    ...new Set([...cloud.roadmapIgnored, ...local.roadmapIgnored]),
+  ].filter((id) => starred.includes(id))
 
   const studyMap = new Map<string, AppState['studyLog'][number]>()
   for (const e of [...cloud.studyLog, ...local.studyLog]) studyMap.set(e.id, e)
@@ -111,6 +119,7 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
     completed,
     starred,
     deprioritized,
+    roadmapIgnored,
     studyLog: [...studyMap.values()]
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 200),
@@ -123,6 +132,9 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
     revision,
     mastery,
     focusExamId: local.focusExamId ?? cloud.focusExamId,
+    focusTopicId: local.focusTopicId ?? cloud.focusTopicId,
+    checkInDoneDate: local.checkInDoneDate ?? cloud.checkInDoneDate,
+    lastDigestAt: local.lastDigestAt ?? cloud.lastDigestAt,
     remindersEnabled: local.remindersEnabled || cloud.remindersEnabled,
     docs,
   }

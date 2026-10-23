@@ -1,6 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CglPackPanel } from '../components/CglPackPanel'
+import { CglPreferenceRank } from '../components/CglPreferenceRank'
+import { DailyCheckIn } from '../components/DailyCheckIn'
 import { DeadlinesStrip } from '../components/DeadlinesStrip'
 import { ExamCard } from '../components/ExamCard'
 import { ProgressRing } from '../components/ProgressRing'
@@ -158,6 +160,7 @@ export function Dashboard() {
       </section>
 
       <section className="dash-primary" aria-label="Today">
+        <DailyCheckIn />
         <TodayPlan compact />
       </section>
 
@@ -180,10 +183,11 @@ export function Dashboard() {
         </details>
         <details className="dash-fold">
           <summary>
-            CGL preference pack
-            <span>core path + AAO add-on</span>
+            CGL pack & preference
+            <span>core path · AAO · rank order</span>
           </summary>
           <CglPackPanel nested />
+          <CglPreferenceRank />
         </details>
       </div>
 

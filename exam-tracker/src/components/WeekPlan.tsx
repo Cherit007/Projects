@@ -12,7 +12,7 @@ type Props = {
 export function WeekPlan({ foundationLock, compact = false }: Props) {
   const navigate = useNavigate()
   const {
-    starred,
+    roadmapStarred,
     completed,
     isDone,
     isSubDone,
@@ -28,9 +28,9 @@ export function WeekPlan({ foundationLock, compact = false }: Props) {
   )
 
   const plan = useMemo(() => {
-    if (!starred.length) return null
+    if (!roadmapStarred.length) return null
     return buildWeekPlan({
-      starredIds: starred,
+      starredIds: roadmapStarred,
       completed,
       isDone,
       isSubDone,
@@ -40,7 +40,7 @@ export function WeekPlan({ foundationLock, compact = false }: Props) {
       foundationLock,
     })
   }, [
-    starred,
+    roadmapStarred,
     completed,
     isDone,
     isSubDone,
@@ -50,7 +50,7 @@ export function WeekPlan({ foundationLock, compact = false }: Props) {
     foundationLock,
   ])
 
-  if (!starred.length || !plan) return null
+  if (!roadmapStarred.length || !plan) return null
 
   const todayIso = new Date().toISOString().slice(0, 10)
 
