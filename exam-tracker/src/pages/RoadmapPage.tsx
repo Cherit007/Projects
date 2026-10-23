@@ -1,8 +1,14 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { WeekPlan } from '../components/WeekPlan'
+import { EXAM_BY_ID } from '../data/exams'
 import { AREA_LABELS } from '../data/topics'
-import { useDailyMinutes, useFoundationLock } from '../hooks/usePrepSettings'
+import {
+  COACH_TEMPLATES,
+  useCoachTemplate,
+  useDailyMinutes,
+  useFoundationLock,
+} from '../hooks/usePrepSettings'
 import { useProgress } from '../hooks/useProgress'
 import { downloadRoadmapIcs, printRoadmapPdf } from '../utils/export'
 import {
@@ -20,6 +26,7 @@ export function RoadmapPage() {
   const navigate = useNavigate()
   const {
     starred,
+    roadmapStarred,
     completed,
     mockScores,
     revision,
@@ -27,10 +34,13 @@ export function RoadmapPage() {
     isSubDone,
     weakAreas,
     setFocusExam,
+    toggleRoadmapIgnore,
+    isRoadmapIgnored,
   } = useProgress()
 
   const [dailyMinutes, setDailyMinutes] = useDailyMinutes()
   const [foundationLock, setFoundationLock] = useFoundationLock()
+  const [coachTemplate, setCoachTemplate] = useCoachTemplate()
 
   const weakIds = useMemo(
     () => weakAreas.map((w) => w.topic.id),
@@ -40,13 +50,13 @@ export function RoadmapPage() {
   const items = useMemo(
     () =>
       buildRoadmap({
-        starredIds: starred,
+        starredIds: roadmapStarred,
         completed,
         isDone,
         isSubDone,
         weakTopicIds: weakIds,
       }),
-    [starred, completed, isDone, isSubDone, weakIds],
+    [roadmapStarred, completed, isDone, isSubDone, weakIds],
   )
 
   const lockState = useMemo(
@@ -60,22 +70,22 @@ export function RoadmapPage() {
   const strips = useMemo(
     () =>
       examRoadStrips({
-        starredIds: starred,
+        starredIds: roadmapStarred,
         completed,
         mockScores,
         isDone,
         isSubDone,
         dailyMinutes,
       }),
-    [starred, completed, mockScores, isDone, isSubDone, dailyMinutes],
+    [roadmapStarred, completed, mockScores, isDone, isSubDone, dailyMinutes],
   )
 
   const next = lockState.active[0] ?? items.find((i) => !i.fullyDone)
 
   const weekPlan = useMemo(() => {
-    if (!starred.length) return null
+    if (!roadmapStarred.length) return null
     return buildWeekPlan({
-      starredIds: starred,
+      starredIds: roadmapStarred,
       completed,
       isDone,
       isSubDone,
@@ -85,7 +95,7 @@ export function RoadmapPage() {
       foundationLock,
     })
   }, [
-    starred,
+    roadmapStarred,
     completed,
     isDone,
     isSubDone,
@@ -136,12 +146,66 @@ export function RoadmapPage() {
         <div>
           <h1>Roadmap</h1>
           <p className="lede">
-            Built from {starred.length} starred exam
-            {starred.length === 1 ? '' : 's'}. Shared foundation first, then
-            exam-specific depth, then polish.
+            Built from {roadmapStarred.length} active ★ exam
+            {roadmapStarred.length === 1 ? '' : 's'}
+            {starred.length > roadmapStarred.length
+              ? ` (${starred.length - roadmapStarred.length} ignored for roadmap)`
+              : ''}
+            . Shared foundation first, then exam-specific depth, then polish.
           </p>
         </div>
       </header>
+
+      <section className="coach-presets" aria-label="Coach weekly template">
+        <div className="section-head">
+          <h2 className="roadmap-section-title">Coach template</h2>
+        </div>
+        <div className="filter-row wrap">
+          {COACH_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={coachTemplate === t.id ? 'active' : ''}
+              title={t.blurb}
+              onClick={() => {
+                setCoachTemplate(t.id)
+                setFoundationLock(t.foundationLock)
+                setDailyMinutes(t.dailyMinutes)
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <p className="muted-line plan-intro">
+          {COACH_TEMPLATES.find((t) => t.id === coachTemplate)?.blurb}
+        </p>
+      </section>
+
+      {starred.length > 0 && (
+        <section className="roadmap-ignore" aria-label="Roadmap favorites">
+          <h2 className="roadmap-section-title">★ in this roadmap</h2>
+          <ul className="roadmap-ignore-list">
+            {starred.map((id) => {
+              const exam = EXAM_BY_ID[id]
+              if (!exam) return null
+              const ignored = isRoadmapIgnored(id)
+              return (
+                <li key={id} className={ignored ? 'ignored' : undefined}>
+                  <Link to={`/exam/${id}`}>{exam.shortName}</Link>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => toggleRoadmapIgnore(id)}
+                  >
+                    {ignored ? 'Include in roadmap' : 'Ignore for roadmap'}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
 
       <section className="roadmap-summary" aria-label="Plan summary">
         <div className="roadmap-stat">

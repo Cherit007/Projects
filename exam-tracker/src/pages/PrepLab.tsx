@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { AfterMockPanel } from '../components/AfterMockPanel'
 import { NextMoves } from '../components/NextMoves'
 import { DOC_ITEMS } from '../data/docsChecklist'
 import { upcomingDeadlines, daysUntil } from '../data/deadlines'
@@ -124,6 +125,7 @@ export function PrepLab() {
       </header>
 
       <NextMoves />
+      <AfterMockPanel />
 
       <div className="prep-grid">
         <section className="prep-panel" id="mock-tracker">
@@ -161,6 +163,12 @@ export function PrepLab() {
                 english: '',
                 ga: '',
                 itPk: '',
+              })
+              // Scroll to after-mock suggestions
+              window.requestAnimationFrame(() => {
+                document
+                  .getElementById('after-mock')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               })
             }}
           >

@@ -2,11 +2,20 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Pomodoro } from '../components/Pomodoro'
 import { SyllabusChecklist } from '../components/SyllabusChecklist'
 import { EXAM_BY_ID, EXAMS, examTopicIds } from '../data/exams'
+import { TOPIC_BY_ID } from '../data/topics'
 import { useProgress } from '../hooks/useProgress'
 
 export function FocusPage() {
   const navigate = useNavigate()
-  const { focusExamId, setFocusExam, isDone, stats, starred } = useProgress()
+  const {
+    focusExamId,
+    setFocusExam,
+    focusTopicId,
+    setFocusTopic,
+    isDone,
+    stats,
+    starred,
+  } = useProgress()
   const exam = focusExamId ? EXAM_BY_ID[focusExamId] : null
   const examStat = stats.byExam.find((s) => s.examId === focusExamId)
   const options = [...EXAMS].sort((a, b) => {
@@ -39,6 +48,7 @@ export function FocusPage() {
 
   const ids = examTopicIds(exam)
   const pending = ids.filter((id) => !isDone(id))
+  const topic = focusTopicId ? TOPIC_BY_ID[focusTopicId] : null
 
   return (
     <div className="focus-page active">
@@ -63,8 +73,26 @@ export function FocusPage() {
           </button>
         </div>
       </header>
+      <label className="focus-topic-pick">
+        <span>Timer logs to topic</span>
+        <select
+          value={focusTopicId ?? ''}
+          onChange={(e) => setFocusTopic(e.target.value || null)}
+        >
+          <option value="">Any / general</option>
+          {pending.slice(0, 40).map((id) => (
+            <option key={id} value={id}>
+              {TOPIC_BY_ID[id]?.title ?? id}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="focus-layout">
-        <Pomodoro examId={exam.id} />
+        <Pomodoro
+          examId={exam.id}
+          topicId={focusTopicId}
+          topicLabel={topic?.title}
+        />
         <SyllabusChecklist exam={exam} />
       </div>
     </div>

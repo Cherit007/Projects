@@ -6,7 +6,13 @@ const BREAK_SECS = 5 * 60
 
 type Mode = 'focus' | 'break'
 
-export function Pomodoro({ examId }: { examId?: string }) {
+type Props = {
+  examId?: string
+  topicId?: string | null
+  topicLabel?: string
+}
+
+export function Pomodoro({ examId, topicId, topicLabel }: Props) {
   const { addStudy } = useProgress()
   const [mode, setMode] = useState<Mode>('focus')
   const [secs, setSecs] = useState(FOCUS_SECS)
@@ -17,7 +23,10 @@ export function Pomodoro({ examId }: { examId?: string }) {
     if (!running) return
     endRef.current = Date.now() + secs * 1000
     const id = window.setInterval(() => {
-      const left = Math.max(0, Math.ceil(((endRef.current ?? Date.now()) - Date.now()) / 1000))
+      const left = Math.max(
+        0,
+        Math.ceil(((endRef.current ?? Date.now()) - Date.now()) / 1000),
+      )
       setSecs(left)
       if (left <= 0) {
         window.clearInterval(id)
@@ -27,9 +36,11 @@ export function Pomodoro({ examId }: { examId?: string }) {
           addStudy({
             date: today,
             minutes: 25,
-            note: 'Pomodoro focus block',
+            note: topicLabel
+              ? `Pomodoro · ${topicLabel}`
+              : 'Pomodoro focus block',
             examId,
-            topicIds: [],
+            topicIds: topicId ? [topicId] : [],
           })
           setMode('break')
           setSecs(BREAK_SECS)
@@ -40,7 +51,7 @@ export function Pomodoro({ examId }: { examId?: string }) {
       }
     }, 250)
     return () => window.clearInterval(id)
-  }, [running, mode, addStudy, examId])
+  }, [running, mode, addStudy, examId, topicId, topicLabel])
 
   const mm = String(Math.floor(secs / 60)).padStart(2, '0')
   const ss = String(secs % 60).padStart(2, '0')
@@ -49,7 +60,10 @@ export function Pomodoro({ examId }: { examId?: string }) {
     <div className={`pomodoro ${mode}`}>
       <div className="pomo-head">
         <strong>{mode === 'focus' ? 'Focus timer' : 'Break'}</strong>
-        <span>25/5 · auto-logs study</span>
+        <span>
+          25/5 ·{' '}
+          {topicLabel ? `logs → ${topicLabel}` : 'auto-logs study'}
+        </span>
       </div>
       <div className="pomo-clock" aria-live="polite">
         {mm}:{ss}

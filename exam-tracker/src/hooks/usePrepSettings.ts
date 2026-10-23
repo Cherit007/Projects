@@ -91,3 +91,58 @@ export function useCglPack() {
   const setPack = (next: CglPackConfig) => setPackState(next)
   return [pack, setPack] as const
 }
+
+/** Coach weekly templates — adjust foundation lock + mock bias hints. */
+export type CoachTemplate = 'balanced' | 'mock-heavy' | 'foundation' | 'ga-sprint'
+
+export const COACH_TEMPLATES: Array<{
+  id: CoachTemplate
+  label: string
+  blurb: string
+  foundationLock: boolean
+  dailyMinutes: number
+}> = [
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    blurb: 'Foundation lock on · 2.5h/day · normal mock cadence',
+    foundationLock: true,
+    dailyMinutes: 150,
+  },
+  {
+    id: 'mock-heavy',
+    label: 'Mock-heavy',
+    blurb: 'Unlock streams · 3h/day · treat as deadline mode',
+    foundationLock: false,
+    dailyMinutes: 180,
+  },
+  {
+    id: 'foundation',
+    label: 'Foundation first',
+    blurb: 'Hard lock · 2h/day · Quant / Reasoning / English only',
+    foundationLock: true,
+    dailyMinutes: 120,
+  },
+  {
+    id: 'ga-sprint',
+    label: 'GA sprint',
+    blurb: 'Unlock specific · 2.5h/day · static + CA push',
+    foundationLock: false,
+    dailyMinutes: 150,
+  },
+]
+
+const COACH_KEY = 'exampulse-coach-template'
+
+export function useCoachTemplate() {
+  const [template, setTemplateState] = useState<CoachTemplate>(() => {
+    const raw = localStorage.getItem(COACH_KEY) as CoachTemplate | null
+    return COACH_TEMPLATES.some((t) => t.id === raw) ? raw! : 'balanced'
+  })
+
+  useEffect(() => {
+    localStorage.setItem(COACH_KEY, template)
+  }, [template])
+
+  return [template, setTemplateState] as const
+}

@@ -3,6 +3,14 @@ import { useAuth } from '../auth/AuthContext'
 import { useProgress } from '../hooks/useProgress'
 import { AuthBar } from './AuthBar'
 import { ToastHost } from './ToastHost'
+import { WeeklyDigestHost } from './WeeklyDigestHost'
+
+const BOTTOM = [
+  { to: '/', end: true, label: 'Targets' },
+  { to: '/topics', end: false, label: 'Topics' },
+  { to: '/roadmap', end: false, label: 'Roadmap' },
+  { to: '/prep', end: false, label: 'Prep' },
+] as const
 
 export function Layout() {
   const { stats, resetAll } = useProgress()
@@ -23,7 +31,7 @@ export function Layout() {
             </em>
           </span>
         </Link>
-        <nav className="nav">
+        <nav className="nav nav-desktop">
           <NavLink to="/" end>
             Dashboard
           </NavLink>
@@ -46,7 +54,15 @@ export function Layout() {
       <main className="main">
         <Outlet />
       </main>
+      <nav className="bottom-nav" aria-label="Primary">
+        {BOTTOM.map((item) => (
+          <NavLink key={item.to} to={item.to} end={item.end}>
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
       <ToastHost />
+      <WeeklyDigestHost />
       <footer className="footer">
         <p>
           Data from your OBC target jobs canvas · Syllabus aligned with EduTap,

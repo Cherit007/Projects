@@ -57,6 +57,8 @@ export type AppState = {
   starred: string[]
   /** Exams sunk to the bottom of Targets */
   deprioritized: string[]
+  /** ★ exams excluded from roadmap / week plan (still starred) */
+  roadmapIgnored: string[]
   studyLog: StudyEntry[]
   mockScores: MockScore[]
   errorLog: ErrorEntry[]
@@ -65,6 +67,12 @@ export type AppState = {
   /** topicId → Learning / Practiced / Mastered */
   mastery: Record<string, MasteryLevel>
   focusExamId: string | null
+  /** Active topic for Focus timer logging */
+  focusTopicId: string | null
+  /** ISO date when user marked “done for today” */
+  checkInDoneDate: string | null
+  /** ISO date of last weekly digest toast */
+  lastDigestAt: string | null
   remindersEnabled: boolean
   /** Application / document prep checklist */
   docs: Record<string, boolean>
@@ -74,12 +82,16 @@ const EMPTY: AppState = {
   completed: {},
   starred: [],
   deprioritized: [],
+  roadmapIgnored: [],
   studyLog: [],
   mockScores: [],
   errorLog: [],
   revision: {},
   mastery: {},
   focusExamId: null,
+  focusTopicId: null,
+  checkInDoneDate: null,
+  lastDigestAt: null,
   remindersEnabled: false,
   docs: {},
 }
@@ -138,12 +150,23 @@ function readStorage(): AppState {
       deprioritized: Array.isArray(parsed.deprioritized)
         ? parsed.deprioritized
         : [],
+      roadmapIgnored: Array.isArray(parsed.roadmapIgnored)
+        ? parsed.roadmapIgnored
+        : [],
       studyLog: Array.isArray(parsed.studyLog) ? parsed.studyLog : [],
       mockScores: Array.isArray(parsed.mockScores) ? parsed.mockScores : [],
       errorLog: Array.isArray(parsed.errorLog) ? parsed.errorLog : [],
       revision: asRevisionMap(parsed.revision),
       mastery: asMasteryMap(parsed.mastery),
       focusExamId: parsed.focusExamId ?? null,
+      focusTopicId:
+        typeof parsed.focusTopicId === 'string' ? parsed.focusTopicId : null,
+      checkInDoneDate:
+        typeof parsed.checkInDoneDate === 'string'
+          ? parsed.checkInDoneDate
+          : null,
+      lastDigestAt:
+        typeof parsed.lastDigestAt === 'string' ? parsed.lastDigestAt : null,
       remindersEnabled: !!parsed.remindersEnabled,
       docs: parsed.docs && typeof parsed.docs === 'object' ? parsed.docs : {},
     }
@@ -219,12 +242,16 @@ export function useProgress() {
     completed,
     starred,
     deprioritized,
+    roadmapIgnored,
     studyLog,
     mockScores,
     errorLog,
     revision,
     mastery,
     focusExamId,
+    focusTopicId,
+    checkInDoneDate,
+    lastDigestAt,
     remindersEnabled,
     docs,
   } = state
@@ -348,8 +375,10 @@ export function useProgress() {
   const toggleStar = useCallback((examId: string) => {
     const stars = new Set(memoryCache.starred)
     const sunk = new Set(memoryCache.deprioritized)
+    const ignored = new Set(memoryCache.roadmapIgnored)
     if (stars.has(examId)) {
       stars.delete(examId)
+      ignored.delete(examId)
     } else {
       stars.add(examId)
       sunk.delete(examId)
@@ -358,6 +387,7 @@ export function useProgress() {
       ...memoryCache,
       starred: [...stars],
       deprioritized: [...sunk],
+      roadmapIgnored: [...ignored],
     })
   }, [])
 
@@ -385,6 +415,24 @@ export function useProgress() {
   const isDeprioritized = useCallback(
     (examId: string) => deprioritized.includes(examId),
     [deprioritized],
+  )
+
+  const toggleRoadmapIgnore = useCallback((examId: string) => {
+    const ignored = new Set(memoryCache.roadmapIgnored)
+    if (ignored.has(examId)) ignored.delete(examId)
+    else ignored.add(examId)
+    persist({ ...memoryCache, roadmapIgnored: [...ignored] })
+  }, [])
+
+  const isRoadmapIgnored = useCallback(
+    (examId: string) => roadmapIgnored.includes(examId),
+    [roadmapIgnored],
+  )
+
+  /** Starred exams that still feed roadmap / week plan. */
+  const roadmapStarred = useMemo(
+    () => starred.filter((id) => !roadmapIgnored.includes(id)),
+    [starred, roadmapIgnored],
   )
 
   const addStudy = useCallback(
@@ -419,9 +467,20 @@ export function useProgress() {
   }, [])
 
   const addError = useCallback((entry: Omit<ErrorEntry, 'id'>) => {
+    const nextRevision = { ...memoryCache.revision }
+    // F3: error → bump or create SM-2 card for that topic
+    if (entry.topicId) {
+      const existing = nextRevision[entry.topicId]
+      if (existing) {
+        nextRevision[entry.topicId] = reviewCard(existing, 0, todayIso())
+      } else {
+        nextRevision[entry.topicId] = scheduleFirstReview(entry.topicId)
+      }
+    }
     persist({
       ...memoryCache,
       errorLog: [{ ...entry, id: uid() }, ...memoryCache.errorLog].slice(0, 300),
+      revision: nextRevision,
     })
   }, [])
 
@@ -445,7 +504,27 @@ export function useProgress() {
   }, [])
 
   const setFocusExam = useCallback((examId: string | null) => {
-    persist({ ...memoryCache, focusExamId: examId })
+    persist({
+      ...memoryCache,
+      focusExamId: examId,
+      focusTopicId: null,
+    })
+  }, [])
+
+  const setFocusTopic = useCallback((topicId: string | null) => {
+    persist({ ...memoryCache, focusTopicId: topicId })
+  }, [])
+
+  const markCheckInDone = useCallback(() => {
+    persist({ ...memoryCache, checkInDoneDate: todayIso() })
+  }, [])
+
+  const clearCheckIn = useCallback(() => {
+    persist({ ...memoryCache, checkInDoneDate: null })
+  }, [])
+
+  const markDigestShown = useCallback(() => {
+    persist({ ...memoryCache, lastDigestAt: todayIso() })
   }, [])
 
   const setRemindersEnabled = useCallback((value: boolean) => {
@@ -463,6 +542,7 @@ export function useProgress() {
       completed: incoming.completed ?? memoryCache.completed,
       starred: incoming.starred ?? memoryCache.starred,
       deprioritized: incoming.deprioritized ?? memoryCache.deprioritized,
+      roadmapIgnored: incoming.roadmapIgnored ?? memoryCache.roadmapIgnored,
       studyLog: incoming.studyLog ?? memoryCache.studyLog,
       mockScores: incoming.mockScores ?? memoryCache.mockScores,
       errorLog: incoming.errorLog ?? memoryCache.errorLog,
@@ -472,6 +552,18 @@ export function useProgress() {
         incoming.focusExamId !== undefined
           ? incoming.focusExamId
           : memoryCache.focusExamId,
+      focusTopicId:
+        incoming.focusTopicId !== undefined
+          ? incoming.focusTopicId
+          : memoryCache.focusTopicId,
+      checkInDoneDate:
+        incoming.checkInDoneDate !== undefined
+          ? incoming.checkInDoneDate
+          : memoryCache.checkInDoneDate,
+      lastDigestAt:
+        incoming.lastDigestAt !== undefined
+          ? incoming.lastDigestAt
+          : memoryCache.lastDigestAt,
       remindersEnabled:
         incoming.remindersEnabled !== undefined
           ? incoming.remindersEnabled
@@ -551,6 +643,8 @@ export function useProgress() {
     completed,
     starred,
     deprioritized,
+    roadmapIgnored,
+    roadmapStarred,
     studyLog,
     mockScores,
     errorLog,
@@ -558,6 +652,9 @@ export function useProgress() {
     mastery,
     revisionsDueList,
     focusExamId,
+    focusTopicId,
+    checkInDoneDate,
+    lastDigestAt,
     remindersEnabled,
     docs,
     toggleTopic,
@@ -571,6 +668,8 @@ export function useProgress() {
     isStarred,
     toggleDeprioritize,
     isDeprioritized,
+    toggleRoadmapIgnore,
+    isRoadmapIgnored,
     addStudy,
     removeStudy,
     addMock,
@@ -579,6 +678,10 @@ export function useProgress() {
     removeError,
     reviewRevision,
     setFocusExam,
+    setFocusTopic,
+    markCheckInDone,
+    clearCheckIn,
+    markDigestShown,
     setRemindersEnabled,
     toggleDoc,
     importState,

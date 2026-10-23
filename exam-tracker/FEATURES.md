@@ -40,10 +40,19 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 
 ## Phase E — Polish
 
-- [ ] **E1** Compare two roadmaps (e.g. SEBI-primary vs CGL-primary)
-- [ ] **E2** Coach weekly template preset
-- [ ] **E3** Mobile bottom nav: Targets · Topics · Roadmap · Prep
-- [ ] **E4** “Ignore exam for roadmap” without unstarring
+- [x] **E1** Compare two roadmaps (e.g. SEBI-primary vs CGL-primary)
+- [x] **E2** Coach weekly template preset
+- [x] **E3** Mobile bottom nav: Targets · Topics · Roadmap · Prep
+- [x] **E4** “Ignore exam for roadmap” without unstarring
+
+## Phase F — Loops & rituals (from prep-app patterns)
+
+- [x] **F1** After-mock flow: weak section → suggested topics (one screen)
+- [x] **F2** Daily check-in: one primary task + “done for today”
+- [x] **F3** Error notebook → auto bump / create SM-2 revision card
+- [x] **F4** Weekly digest: apply / exam deadlines in next 7–30 days
+- [x] **F5** CGL post-preference rank helper (ordered tradeoffs)
+- [x] **F6** Focus timer logs minutes to the active topic
 
 ## UX / quality gates (every phase)
 
@@ -68,4 +77,9 @@ npm run preview
 5. Dashboard → **CGL preference pack** → star core + optional AAO add-on  
 6. Topics → cycle mastery + open PYQ links on a card  
 7. Roadmap → **Export PDF** / **Export week ICS**  
- 
+8. Mobile → bottom nav Targets / Topics / Roadmap / Prep  
+9. Roadmap → ignore a ★ exam without unstarring  
+10. Compare → two primary packs (roadmap hours / ETA)  
+11. Prep lab → log mock → **After mock** suggestions  
+12. Dashboard → daily check-in → mark done for today  
+13. Focus → pick topic → finish Pomodoro → study log has topicId  
