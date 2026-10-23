@@ -1,11 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CglPackPanel } from '../components/CglPackPanel'
 import { DeadlinesStrip } from '../components/DeadlinesStrip'
 import { ExamCard } from '../components/ExamCard'
-import { NextMoves } from '../components/NextMoves'
 import { ProgressRing } from '../components/ProgressRing'
 import { TodayPlan } from '../components/TodayPlan'
-import { CglPackPanel } from '../components/CglPackPanel'
 import { WeekPlan } from '../components/WeekPlan'
 import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
@@ -97,7 +96,6 @@ export function Dashboard() {
       return haystack.includes(q)
     })
 
-    // Starred first → normal → deprioritized last; then catalog priority
     return [...list].sort((a, b) => {
       const rank = (id: string) =>
         starred.includes(id) ? 0 : deprioritized.includes(id) ? 2 : 1
@@ -123,47 +121,71 @@ export function Dashboard() {
 
   return (
     <div className="dashboard">
-      <section className="hero">
+      <section className="hero hero-compact">
         <div className="hero-copy">
-          <p className="eyebrow">Your command centre</p>
           <h1>ExamPulse</h1>
           <p className="lede">
-            Track every target exam, date, and syllabus — tick a topic once and
-            it marks complete across all exams that share it.
+            One tick updates every exam that shares the topic.
           </p>
           <div className="hero-cta">
             <a href="#targets" className="btn primary">
               Browse targets
             </a>
-            <Link to="/roadmap" className="btn ghost-btn">
-              Roadmap
+            <Link to={focusExamId ? '/focus' : '/roadmap'} className="btn ghost-btn">
+              {focusExamId ? 'Resume focus' : 'Open roadmap'}
             </Link>
-            <Link to="/focus" className="btn ghost-btn">
-              {focusExamId ? 'Resume focus' : 'Focus mode'}
-            </Link>
-            <span className="hero-meta">
-              {EXAMS.length} exams · {stats.minutesToday} min today ·{' '}
-              {stats.streak}-day streak · {stats.starredCount} starred
-            </span>
           </div>
         </div>
         <div className="hero-progress">
-          <ProgressRing pct={stats.pct} size={140} stroke={10} label="Overall progress" />
+          <ProgressRing
+            pct={stats.pct}
+            size={112}
+            stroke={8}
+            label="Overall progress"
+          />
           <div>
-            <strong>{stats.doneTopics}</strong>
-            <span>topics done of {stats.totalTopics}</span>
-            {stats.streak > 0 && (
-              <span className="streak-badge">{stats.streak} day streak</span>
-            )}
+            <strong>
+              {stats.doneTopics}
+              <span className="hero-of">/{stats.totalTopics}</span>
+            </strong>
+            <span>
+              {stats.minutesToday}m today
+              {stats.streak > 0 ? ` · ${stats.streak}d streak` : ''}
+              {stats.starredCount > 0 ? ` · ${stats.starredCount}★` : ''}
+            </span>
           </div>
         </div>
       </section>
 
-      <NextMoves />
-      <TodayPlan />
-      {starred.length > 0 && <WeekPlan foundationLock={foundationLock} />}
-      <CglPackPanel />
-      <DeadlinesStrip />
+      <section className="dash-primary" aria-label="Today">
+        <TodayPlan compact />
+      </section>
+
+      <div className="dash-folds">
+        {starred.length > 0 && (
+          <details className="dash-fold">
+            <summary>
+              This week
+              <span>Mon–Sun plan</span>
+            </summary>
+            <WeekPlan foundationLock={foundationLock} compact />
+          </details>
+        )}
+        <details className="dash-fold">
+          <summary>
+            Upcoming deadlines
+            <span>verify official dates</span>
+          </summary>
+          <DeadlinesStrip limit={5} nested />
+        </details>
+        <details className="dash-fold">
+          <summary>
+            CGL preference pack
+            <span>core path + AAO add-on</span>
+          </summary>
+          <CglPackPanel nested />
+        </details>
+      </div>
 
       <section id="targets" className="targets">
         <div className="section-head">

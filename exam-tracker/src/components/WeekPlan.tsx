@@ -5,9 +5,11 @@ import { buildWeekPlan } from '../utils/weekPlan'
 
 type Props = {
   foundationLock: boolean
+  /** Hide duplicate heading when nested in a fold. */
+  compact?: boolean
 }
 
-export function WeekPlan({ foundationLock }: Props) {
+export function WeekPlan({ foundationLock, compact = false }: Props) {
   const navigate = useNavigate()
   const {
     starred,
@@ -53,10 +55,36 @@ export function WeekPlan({ foundationLock }: Props) {
   const todayIso = new Date().toISOString().slice(0, 10)
 
   return (
-    <section className="week-plan" aria-label="This week">
-      <div className="section-head">
-        <h2>This week</h2>
-        <div className="chip-wrap">
+    <section
+      className={`week-plan${compact ? ' week-plan-nested' : ''}`}
+      aria-label="This week"
+    >
+      {!compact && (
+        <>
+          <div className="section-head">
+            <h2>This week</h2>
+            <div className="chip-wrap">
+              {plan.mockHeavy && (
+                <span className="soft-chip sunk-chip">Deadline mode</span>
+              )}
+              {plan.locked && (
+                <span className="soft-chip pin-chip">
+                  Foundation {Math.round(plan.foundationPct * 100)}%
+                </span>
+              )}
+            </div>
+          </div>
+          <p className="muted-line plan-intro">
+            Mon–Fri learn · weak drill · weekend mock + revision
+            {plan.locked
+              ? ' · exam-specific locked until foundation ≥50%'
+              : ''}
+            .
+          </p>
+        </>
+      )}
+      {compact && (plan.mockHeavy || plan.locked) && (
+        <div className="chip-wrap week-nested-chips">
           {plan.mockHeavy && (
             <span className="soft-chip sunk-chip">Deadline mode</span>
           )}
@@ -66,11 +94,7 @@ export function WeekPlan({ foundationLock }: Props) {
             </span>
           )}
         </div>
-      </div>
-      <p className="muted-line plan-intro">
-        Mon–Fri learn · weak drill · weekend mock + revision
-        {plan.locked ? ' · exam-specific locked until foundation ≥50%' : ''}.
-      </p>
+      )}
       <ol className="week-plan-list">
         {plan.slots.map((slot) => {
           const isToday = slot.dateIso === todayIso
@@ -92,7 +116,10 @@ export function WeekPlan({ foundationLock }: Props) {
                 type="button"
                 className="ghost week-go"
                 onClick={() => {
-                  if (slot.examId && (slot.kind === 'learn' || slot.kind === 'drill')) {
+                  if (
+                    slot.examId &&
+                    (slot.kind === 'learn' || slot.kind === 'drill')
+                  ) {
                     setFocusExam(slot.examId)
                   }
                   if (slot.href === '/focus' && slot.examId) {
