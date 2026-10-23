@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   BrowserRouter,
   HashRouter,
@@ -6,7 +7,9 @@ import {
   Routes,
 } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { ScrollToTop } from './components/ScrollToTop'
 import { useProgressHydration } from './hooks/useProgress'
+import { normalizeHashRoute } from './lib/normalizeHashRoute'
 import { ComparePage } from './pages/ComparePage'
 import { Dashboard } from './pages/Dashboard'
 import { ExamDetail } from './pages/ExamDetail'
@@ -22,6 +25,12 @@ const useHashRouter = import.meta.env.BASE_URL.includes('/Projects/exam-tracker'
 export default function App() {
   const ready = useProgressHydration()
 
+  useEffect(() => {
+    if (!useHashRouter) return
+    // Fix #targets-style hashes that break HashRouter + cause jump-scroll
+    normalizeHashRoute()
+  }, [])
+
   if (!ready) {
     return (
       <div className="boot">
@@ -35,6 +44,7 @@ export default function App() {
 
   return (
     <Router basename={useHashRouter ? undefined : basename}>
+      <ScrollToTop />
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />

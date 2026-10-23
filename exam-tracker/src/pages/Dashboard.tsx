@@ -130,9 +130,18 @@ export function Dashboard() {
             One tick updates every exam that shares the topic.
           </p>
           <div className="hero-cta">
-            <a href="#targets" className="btn primary">
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => {
+                // Don't use href="#targets" — HashRouter owns the URL hash.
+                document
+                  .getElementById('targets')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+            >
               Browse targets
-            </a>
+            </button>
             <Link to={focusExamId ? '/focus' : '/roadmap'} className="btn ghost-btn">
               {focusExamId ? 'Resume focus' : 'Open roadmap'}
             </Link>
