@@ -4,7 +4,12 @@ import { useProgress } from '../hooks/useProgress'
 import { buildRoadmap } from '../utils/roadmap'
 import { buildTodayPlan } from '../utils/readiness'
 
-export function TodayPlan() {
+type Props = {
+  /** Shorter list + no intro copy (dashboard). */
+  compact?: boolean
+}
+
+export function TodayPlan({ compact = false }: Props) {
   const {
     completed,
     starred,
@@ -30,8 +35,8 @@ export function TodayPlan() {
       weakTopicIds: weakIds,
     })
       .filter((i) => !i.fullyDone)
-      .slice(0, 2)
-  }, [starred, completed, isDone, isSubDone, weakIds])
+      .slice(0, compact ? 1 : 2)
+  }, [starred, completed, isDone, isSubDone, weakIds, compact])
 
   const base = buildTodayPlan({
     completed,
@@ -50,29 +55,39 @@ export function TodayPlan() {
     }))
     const seen = new Set(fromRoad.map((i) => i.id))
     const rest = base.filter((i) => !seen.has(i.id) && i.kind !== 'topic')
-    return [...fromRoad, ...rest].slice(0, 4)
-  }, [roadmapNext, base])
+    return [...fromRoad, ...rest].slice(0, compact ? 3 : 4)
+  }, [roadmapNext, base, compact])
 
   return (
-    <section className="today-plan" aria-label="Today's plan">
+    <section
+      className={`today-plan${compact ? ' today-plan-compact' : ''}`}
+      aria-label="Today's plan"
+    >
       <div className="section-head">
-        <h2>Today’s plan</h2>
+        <h2>Today</h2>
         <div className="chip-wrap">
-          <span className="soft-chip">
-            {stats.streak > 0 ? `${stats.streak}-day streak` : 'Start a streak'}
-          </span>
+          {!compact && (
+            <span className="soft-chip">
+              {stats.streak > 0 ? `${stats.streak}-day streak` : 'Start a streak'}
+            </span>
+          )}
           {starred.length > 0 && (
             <Link to="/roadmap" className="soft-chip pin-chip">
-              Full roadmap →
+              Roadmap →
             </Link>
           )}
+          <Link to="/prep" className="soft-chip">
+            Prep lab →
+          </Link>
         </div>
       </div>
-      <p className="muted-line plan-intro">
-        {starred.length > 0
-          ? 'Pulled from your ★ roadmap, weak topics, and deadlines.'
-          : 'Star exams to unlock a timed roadmap — until then, deadlines and weak topics drive this list.'}
-      </p>
+      {!compact && (
+        <p className="muted-line plan-intro">
+          {starred.length > 0
+            ? 'Pulled from your ★ roadmap, weak topics, and deadlines.'
+            : 'Star exams to unlock a timed roadmap — until then, deadlines and weak topics drive this list.'}
+        </p>
+      )}
       <ol className="plan-list">
         {plan.map((item, i) => (
           <li key={item.id}>

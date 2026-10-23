@@ -10,7 +10,12 @@ import { useCglPack } from '../hooks/usePrepSettings'
 import { replaceProgressState, useProgress } from '../hooks/useProgress'
 import { showToast } from '../utils/toastBus'
 
-export function CglPackPanel() {
+type Props = {
+  /** Skip outer chrome when nested in a dashboard fold. */
+  nested?: boolean
+}
+
+export function CglPackPanel({ nested = false }: Props) {
   const [pack, setPack] = useCglPack()
   const { starred, exportState } = useProgress()
   const [applied, setApplied] = useState(false)
@@ -36,11 +41,19 @@ export function CglPackPanel() {
   }
 
   return (
-    <section className="cgl-pack" aria-label="SSC CGL preference pack">
-      <div className="section-head">
-        <h2>CGL preference pack</h2>
-        {applied && <span className="soft-chip reg-open-chip">Applied</span>}
-      </div>
+    <section
+      className={`cgl-pack${nested ? ' cgl-pack-nested' : ''}`}
+      aria-label="SSC CGL preference pack"
+    >
+      {!nested && (
+        <div className="section-head">
+          <h2>CGL preference pack</h2>
+          {applied && <span className="soft-chip reg-open-chip">Applied</span>}
+        </div>
+      )}
+      {nested && applied && (
+        <span className="soft-chip reg-open-chip">Applied</span>
+      )}
       <p className="muted-line plan-intro">
         Pick one core post path. Optionally add AAO Paper-III (Finance &amp;
         Economics) without dropping your core preference.
