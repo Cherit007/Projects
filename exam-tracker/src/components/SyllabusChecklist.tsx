@@ -3,6 +3,7 @@ import { examsSharingTopic } from '../data/exams'
 import { AREA_LABELS, TOPIC_BY_ID } from '../data/topics'
 import type { Exam } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
+import { showToast } from '../utils/toastBus'
 
 type Props = {
   exam: Exam
@@ -77,7 +78,14 @@ export function SyllabusChecklist({ exam }: Props) {
                       <input
                         type="checkbox"
                         checked={done}
-                        onChange={() => toggleTopic(topic.id)}
+                        onChange={() => {
+                          toggleTopic(topic.id)
+                          if (!done && shared.length > 0) {
+                            showToast(
+                              `Synced across ${shared.length + 1} exams`,
+                            )
+                          }
+                        }}
                         aria-label={topic.title}
                       />
                       <span className="topic-title">{topic.title}</span>

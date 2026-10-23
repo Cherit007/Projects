@@ -3,6 +3,7 @@ import { examsSharingTopic } from '../data/exams'
 import { AREA_LABELS } from '../data/topics'
 import type { Topic } from '../data/types'
 import { useProgress } from '../hooks/useProgress'
+import { showToast } from '../utils/toastBus'
 import { topicHours, topicProgress } from '../utils/topicMeta'
 import { ProgressRing } from './ProgressRing'
 
@@ -39,7 +40,18 @@ export function TopicCard({ topic, highlightExamIds, weak }: Props) {
         <input
           type="checkbox"
           checked={prog.fullyDone}
-          onChange={() => toggleTopic(topic.id)}
+          onChange={() => {
+            const wasDone = prog.fullyDone
+            toggleTopic(topic.id)
+            if (!wasDone && shared.length > 1) {
+              showToast(
+                `Synced across ${shared.length} exams: ${shared
+                  .slice(0, 4)
+                  .map((e) => e.shortName)
+                  .join(', ')}${shared.length > 4 ? '…' : ''}`,
+              )
+            }
+          }}
           aria-label={topic.title}
         />
         <span>

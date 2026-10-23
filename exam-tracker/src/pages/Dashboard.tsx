@@ -5,8 +5,10 @@ import { ExamCard } from '../components/ExamCard'
 import { NextMoves } from '../components/NextMoves'
 import { ProgressRing } from '../components/ProgressRing'
 import { TodayPlan } from '../components/TodayPlan'
+import { WeekPlan } from '../components/WeekPlan'
 import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
+import { useFoundationLock } from '../hooks/usePrepSettings'
 import { useProgress } from '../hooks/useProgress'
 
 const FILTERS: Array<
@@ -39,6 +41,7 @@ export function Dashboard() {
     toggleDeprioritize,
     isDeprioritized,
   } = useProgress()
+  const [foundationLock] = useFoundationLock()
   const pctByExam = useMemo(
     () => Object.fromEntries(stats.byExam.map((s) => [s.examId, s])),
     [stats.byExam],
@@ -157,6 +160,7 @@ export function Dashboard() {
 
       <NextMoves />
       <TodayPlan />
+      {starred.length > 0 && <WeekPlan foundationLock={foundationLock} />}
       <DeadlinesStrip />
 
       <section id="targets" className="targets">

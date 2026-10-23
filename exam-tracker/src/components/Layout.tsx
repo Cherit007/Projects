@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useProgress } from '../hooks/useProgress'
 import { AuthBar } from './AuthBar'
+import { ToastHost } from './ToastHost'
 
 export function Layout() {
   const { stats, resetAll } = useProgress()
@@ -45,6 +46,7 @@ export function Layout() {
       <main className="main">
         <Outlet />
       </main>
+      <ToastHost />
       <footer className="footer">
         <p>
           Data from your OBC target jobs canvas · Syllabus aligned with EduTap,

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { WeekPlan } from '../components/WeekPlan'
 import { AREA_LABELS } from '../data/topics'
+import { useDailyMinutes, useFoundationLock } from '../hooks/usePrepSettings'
 import { useProgress } from '../hooks/useProgress'
 import {
   PHASE_LABELS,
@@ -11,8 +13,7 @@ import {
   roadmapTotals,
   type RoadmapPhase,
 } from '../utils/roadmap'
-
-const HOURS_KEY = 'exampulse-daily-minutes'
+import { applyFoundationLock } from '../utils/weekPlan'
 
 export function RoadmapPage() {
   const navigate = useNavigate()
@@ -26,15 +27,8 @@ export function RoadmapPage() {
     setFocusExam,
   } = useProgress()
 
-  const [dailyMinutes, setDailyMinutes] = useState(() => {
-    const raw = localStorage.getItem(HOURS_KEY)
-    const n = raw ? Number(raw) : 150
-    return Number.isFinite(n) && n > 0 ? n : 150
-  })
-
-  useEffect(() => {
-    localStorage.setItem(HOURS_KEY, String(dailyMinutes))
-  }, [dailyMinutes])
+  const [dailyMinutes, setDailyMinutes] = useDailyMinutes()
+  const [foundationLock, setFoundationLock] = useFoundationLock()
 
   const weakIds = useMemo(
     () => weakAreas.map((w) => w.topic.id),
@@ -53,6 +47,11 @@ export function RoadmapPage() {
     [starred, completed, isDone, isSubDone, weakIds],
   )
 
+  const lockState = useMemo(
+    () => applyFoundationLock(items, foundationLock),
+    [items, foundationLock],
+  )
+
   const totals = useMemo(() => roadmapTotals(items), [items])
   const days = etaDays(totals.hoursLeft, dailyMinutes)
 
@@ -69,7 +68,7 @@ export function RoadmapPage() {
     [starred, completed, mockScores, isDone, isSubDone, dailyMinutes],
   )
 
-  const next = items.find((i) => !i.fullyDone)
+  const next = lockState.active[0] ?? items.find((i) => !i.fullyDone)
 
   const byPhase = useMemo(() => {
     const order: RoadmapPhase[] = ['foundation', 'specific', 'polish']
@@ -77,10 +76,11 @@ export function RoadmapPage() {
       .map((phase) => ({
         phase,
         label: PHASE_LABELS[phase],
+        locked: lockState.lockedPhases.includes(phase),
         rows: items.filter((i) => i.phase === phase),
       }))
       .filter((g) => g.rows.length > 0)
-  }, [items])
+  }, [items, lockState.lockedPhases])
 
   if (starred.length === 0) {
     return (
@@ -150,6 +150,24 @@ export function RoadmapPage() {
         </label>
       </section>
 
+      <label className="foundation-lock">
+        <input
+          type="checkbox"
+          checked={foundationLock}
+          onChange={(e) => setFoundationLock(e.target.checked)}
+        />
+        <span>
+          Foundation lock — finish ≥50% shared Quant/Reasoning/English before
+          exam-specific topics
+          {foundationLock ? (
+            <>
+              {' '}
+              · now {Math.round(lockState.foundationPct * 100)}%
+            </>
+          ) : null}
+        </span>
+      </label>
+
       {next && (
         <section className="roadmap-next">
           <div>
@@ -174,6 +192,8 @@ export function RoadmapPage() {
         </section>
       )}
 
+      <WeekPlan foundationLock={foundationLock} />
+
       <section className="roadmap-strips" aria-label="Favorite exam progress">
         <h2 className="roadmap-section-title">Your favorites</h2>
         <div className="roadmap-strip-grid">
@@ -193,8 +213,14 @@ export function RoadmapPage() {
       </section>
 
       {byPhase.map((group) => (
-        <section key={group.phase} className="roadmap-phase">
-          <h2 className="roadmap-section-title">{group.label}</h2>
+        <section
+          key={group.phase}
+          className={`roadmap-phase${group.locked ? ' phase-locked' : ''}`}
+        >
+          <h2 className="roadmap-section-title">
+            {group.label}
+            {group.locked ? ' · locked' : ''}
+          </h2>
           <ol className="roadmap-queue">
             {group.rows.map((row, idx) => (
               <li
@@ -209,7 +235,7 @@ export function RoadmapPage() {
                     {row.hoursLeft}h left · {row.examLabels.join(' · ')}
                   </em>
                 </div>
-                {!row.fullyDone && (
+                {!row.fullyDone && !group.locked && (
                   <button
                     type="button"
                     className="ghost roadmap-go"

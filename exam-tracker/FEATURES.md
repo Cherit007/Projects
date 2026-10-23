@@ -10,7 +10,7 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 - [x] **A3** View toggle: Cards · List · Matrix (topic × ★ exams)
 - [x] **A4** Subtopic progress on cards
 - [x] **A5** Shared-exam chips link to exam detail
-- [ ] **A6** “Shared win” toast when a tick updates multiple exams *(later)*
+- [x] **A6** “Shared win” toast when a tick updates multiple exams
 
 ## Phase B — Roadmap for favorites
 
@@ -23,11 +23,11 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 
 ## Phase C — Systematic prep engine
 
-- [ ] **C1** Auto “This week” 7-slot plan
-- [ ] **C2** Optional foundation lock before deep streams
-- [ ] **C3** Mock cadence reminders (sectionals + full)
-- [ ] **C4** Weak-section → suggested topics (deeper)
-- [ ] **C5** Deadline-aware mock-heavy mode
+- [x] **C1** Auto “This week” 7-slot plan
+- [x] **C2** Optional foundation lock before deep streams
+- [x] **C3** Mock cadence reminders (sectionals + full)
+- [x] **C4** Weak-section → suggested topics (Thu drill from mock sections)
+- [x] **C5** Deadline-aware mock-heavy mode (&lt;30 days → Wed + Sat mocks)
 
 ## Phase D — Accuracy & depth
 
@@ -61,4 +61,7 @@ npm run build
 npm run preview
 ```
 
-Open Topics → switch Cards / List / Matrix. Star 2–3 exams → Roadmap → set daily hours → Start next.
+1. Star 2–3 exams → Roadmap → toggle **Foundation lock** → check locked phases  
+2. Dashboard / Roadmap → **This week** (Mon–Sun slots)  
+3. Tick a shared topic on Topics → toast “Synced across N exams”  
+4. With a deadline &lt;30 days on a starred exam → **Deadline mode** chip + Wed mock  
