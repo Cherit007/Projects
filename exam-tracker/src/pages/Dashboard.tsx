@@ -5,6 +5,7 @@ import { ExamCard } from '../components/ExamCard'
 import { NextMoves } from '../components/NextMoves'
 import { ProgressRing } from '../components/ProgressRing'
 import { TodayPlan } from '../components/TodayPlan'
+import { CglPackPanel } from '../components/CglPackPanel'
 import { WeekPlan } from '../components/WeekPlan'
 import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
@@ -161,6 +162,7 @@ export function Dashboard() {
       <NextMoves />
       <TodayPlan />
       {starred.length > 0 && <WeekPlan foundationLock={foundationLock} />}
+      <CglPackPanel />
       <DeadlinesStrip />
 
       <section id="targets" className="targets">

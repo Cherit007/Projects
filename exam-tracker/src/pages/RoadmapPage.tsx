@@ -4,6 +4,7 @@ import { WeekPlan } from '../components/WeekPlan'
 import { AREA_LABELS } from '../data/topics'
 import { useDailyMinutes, useFoundationLock } from '../hooks/usePrepSettings'
 import { useProgress } from '../hooks/useProgress'
+import { downloadRoadmapIcs, printRoadmapPdf } from '../utils/export'
 import {
   PHASE_LABELS,
   buildRoadmap,
@@ -13,7 +14,7 @@ import {
   roadmapTotals,
   type RoadmapPhase,
 } from '../utils/roadmap'
-import { applyFoundationLock } from '../utils/weekPlan'
+import { applyFoundationLock, buildWeekPlan } from '../utils/weekPlan'
 
 export function RoadmapPage() {
   const navigate = useNavigate()
@@ -21,6 +22,7 @@ export function RoadmapPage() {
     starred,
     completed,
     mockScores,
+    revision,
     isDone,
     isSubDone,
     weakAreas,
@@ -69,6 +71,29 @@ export function RoadmapPage() {
   )
 
   const next = lockState.active[0] ?? items.find((i) => !i.fullyDone)
+
+  const weekPlan = useMemo(() => {
+    if (!starred.length) return null
+    return buildWeekPlan({
+      starredIds: starred,
+      completed,
+      isDone,
+      isSubDone,
+      weakTopicIds: weakIds,
+      mockScores,
+      revision,
+      foundationLock,
+    })
+  }, [
+    starred,
+    completed,
+    isDone,
+    isSubDone,
+    weakIds,
+    mockScores,
+    revision,
+    foundationLock,
+  ])
 
   const byPhase = useMemo(() => {
     const order: RoadmapPhase[] = ['foundation', 'specific', 'polish']
@@ -168,6 +193,33 @@ export function RoadmapPage() {
         </span>
       </label>
 
+      <div className="roadmap-export">
+        <button
+          type="button"
+          className="ghost"
+          onClick={() =>
+            printRoadmapPdf({
+              items,
+              etaLabel: formatEta(days),
+              hoursLeft: totals.hoursLeft,
+              starredLabels: strips.map((s) => s.exam.shortName),
+            })
+          }
+        >
+          Export PDF
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={!weekPlan?.slots.length}
+          onClick={() => {
+            if (weekPlan) downloadRoadmapIcs(weekPlan.slots)
+          }}
+        >
+          Export week ICS
+        </button>
+      </div>
+
       {next && (
         <section className="roadmap-next">
           <div>
@@ -232,7 +284,9 @@ export function RoadmapPage() {
                   <strong>{row.topic.title}</strong>
                   <em>
                     {AREA_LABELS[row.topic.area]} · {row.pct}% · ~
-                    {row.hoursLeft}h left · {row.examLabels.join(' · ')}
+                    {row.hoursLeft}h left
+                    {row.weight > 1 ? ` · ×${row.weight.toFixed(1)} weight` : ''}{' '}
+                    · {row.examLabels.join(' · ')}
                   </em>
                 </div>
                 {!row.fullyDone && !group.locked && (
