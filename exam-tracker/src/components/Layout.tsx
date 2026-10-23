@@ -1,7 +1,9 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useProgress } from '../hooks/useProgress'
+import { AppNavLink } from './AppNavLink'
 import { AuthBar } from './AuthBar'
+import { ScrollToTop } from './ScrollToTop'
 import { ToastHost } from './ToastHost'
 import { WeeklyDigestHost } from './WeeklyDigestHost'
 
@@ -18,6 +20,7 @@ export function Layout() {
 
   return (
     <div className="app-shell">
+      <ScrollToTop />
       <div className="bg-atmosphere" aria-hidden />
       <header className="topbar">
         <Link to="/" className="brand">
@@ -32,14 +35,14 @@ export function Layout() {
           </span>
         </Link>
         <nav className="nav nav-desktop">
-          <NavLink to="/" end>
+          <AppNavLink to="/" end>
             Dashboard
-          </NavLink>
-          <NavLink to="/topics">Topics</NavLink>
-          <NavLink to="/roadmap">Roadmap</NavLink>
-          <NavLink to="/compare">Compare</NavLink>
-          <NavLink to="/focus">Focus</NavLink>
-          <NavLink to="/prep">Prep lab</NavLink>
+          </AppNavLink>
+          <AppNavLink to="/topics">Topics</AppNavLink>
+          <AppNavLink to="/roadmap">Roadmap</AppNavLink>
+          <AppNavLink to="/compare">Compare</AppNavLink>
+          <AppNavLink to="/focus">Focus</AppNavLink>
+          <AppNavLink to="/prep">Prep lab</AppNavLink>
         </nav>
         <div className="topbar-stats">
           <AuthBar />
@@ -56,9 +59,9 @@ export function Layout() {
       </main>
       <nav className="bottom-nav" aria-label="Primary">
         {BOTTOM.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.end}>
+          <AppNavLink key={item.to} to={item.to} end={item.end}>
             {item.label}
-          </NavLink>
+          </AppNavLink>
         ))}
       </nav>
       <ToastHost />
