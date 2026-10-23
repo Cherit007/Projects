@@ -305,11 +305,14 @@ export const TOPICS: Topic[] = [
     area: 'ga',
     title: 'Static GK',
     subtopics: [
-      'Indian polity basics',
-      'Geography (India)',
+      'Indian polity basics (Constitution, Parliament, fundamental rights)',
+      'Modern Indian history & freedom movement (SSC depth)',
+      'Geography (India + world basics)',
+      'Science & tech basics (physics/chem/bio for CGL GA)',
       'Important days & organisations',
       'National parks / dams / HQ',
     ],
+    note: 'Heavier for SSC CGL Tier-1/2 GA than bank exams',
   },
   {
     id: 'ga-economy',

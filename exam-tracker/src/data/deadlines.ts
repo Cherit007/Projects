@@ -105,6 +105,62 @@ export const DEADLINES: Deadline[] = [
     label: 'Watch RAC Sci-B',
     approx: true,
   },
+  {
+    examId: 'ssccgl',
+    kind: 'exam',
+    date: '2026-10-30',
+    label: 'Tier-1 window ends (if applied)',
+    approx: true,
+  },
+  {
+    examId: 'ssccgl',
+    kind: 'exam',
+    date: '2026-12-15',
+    label: 'Tier-2 expected',
+    approx: true,
+  },
+  {
+    examId: 'ssccgl',
+    kind: 'watch',
+    date: '2027-05-15',
+    label: 'Next CGL notify/apply window',
+    approx: true,
+  },
+  {
+    examId: 'ssccgliti',
+    kind: 'watch',
+    date: '2027-05-15',
+    label: 'Next CGL (prefer ITI)',
+    approx: true,
+  },
+  {
+    examId: 'ssccglgst',
+    kind: 'watch',
+    date: '2027-05-15',
+    label: 'Next CGL (prefer GST/Excise)',
+    approx: true,
+  },
+  {
+    examId: 'ssccglaao',
+    kind: 'watch',
+    date: '2027-05-15',
+    label: 'Next CGL (AAO + Paper-III)',
+    approx: true,
+  },
+  {
+    examId: 'ssccglaso',
+    kind: 'watch',
+    date: '2027-05-15',
+    label: 'Next CGL (prefer ASO)',
+    approx: true,
+  },
+  {
+    examId: 'statepcs',
+    kind: 'watch',
+    date: '2026-12-01',
+    label: 'Watch home-state PSC',
+    approx: true,
+  },
 ]
 
 export function upcomingDeadlines(limit = 8, from = new Date()) {

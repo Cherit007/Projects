@@ -162,6 +162,43 @@ export const EXAM_REGISTRATION: Record<string, ExamRegistration> = {
     linkLabel: 'IOCL careers',
     nextNotification: 'Yearly GATE PSU windows — verify CS/IT posts',
   },
+  ssccgl: {
+    state: 'closed',
+    url: 'https://ssc.gov.in/',
+    linkLabel: 'SSC portal',
+    nextNotification:
+      '2026 apply closed · Tier-1 ~Sep–Oct 2026 if applied · next full cycle expected ~May–Jun 2027',
+  },
+  ssccgliti: {
+    state: 'closed',
+    url: 'https://ssc.gov.in/',
+    linkLabel: 'SSC CGL (ITI via preference)',
+    nextNotification: 'Same as SSC CGL — prefer Income Tax Inspector after Tier-2',
+  },
+  ssccglgst: {
+    state: 'closed',
+    url: 'https://ssc.gov.in/',
+    linkLabel: 'SSC CGL (GST/Excise via preference)',
+    nextNotification: 'Same as SSC CGL — prefer Inspector (Central Excise)',
+  },
+  ssccglaao: {
+    state: 'closed',
+    url: 'https://ssc.gov.in/',
+    linkLabel: 'SSC CGL (AAO path)',
+    nextNotification: 'Same as SSC CGL — sit Paper-III Finance & Economics for AAO',
+  },
+  ssccglaso: {
+    state: 'closed',
+    url: 'https://ssc.gov.in/',
+    linkLabel: 'SSC CGL (ASO CSS/MEA)',
+    nextNotification: 'Same as SSC CGL — prefer ASO CSS / MEA in post list',
+  },
+  statepcs: {
+    state: 'watch',
+    url: 'https://www.google.com/search?q=state+public+service+commission+notification',
+    linkLabel: 'Search your State PSC',
+    nextNotification: 'Watch your home-state PSC for Group-1 / SSE / Combined + Commercial Tax posts',
+  },
 }
 
 const FALLBACK: ExamRegistration = {

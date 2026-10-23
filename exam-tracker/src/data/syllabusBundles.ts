@@ -87,6 +87,16 @@ export const GA_BANKING: SyllabusSection[] = [
   },
 ]
 
+/** SSC CGL style GA — static + current heavy, no banking paper */
+export const GA_SSC: SyllabusSection[] = [
+  {
+    area: 'ga',
+    label: 'General Awareness (SSC)',
+    topicIds: ['ga-current', 'ga-static', 'ga-economy'],
+    weightNote: 'Tier-1 + Tier-2 GA; Lucent / NCERT + monthly CA',
+  },
+]
+
 export const DESCRIPTIVE: SyllabusSection[] = [
   {
     area: 'desc-eng',
