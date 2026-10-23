@@ -1,0 +1,212 @@
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { PreviousPapers } from '../components/PreviousPapers'
+import { ProgressRing } from '../components/ProgressRing'
+import { SyllabusChecklist } from '../components/SyllabusChecklist'
+import { EXAM_BY_ID, examTopicIds } from '../data/exams'
+import { getExamRegistration } from '../data/registration'
+import { useProgress } from '../hooks/useProgress'
+import { readinessScore } from '../utils/readiness'
+
+export function ExamDetail() {
+  const { examId = '' } = useParams()
+  const navigate = useNavigate()
+  const exam = EXAM_BY_ID[examId]
+  const {
+    stats,
+    isDone,
+    isStarred,
+    toggleStar,
+    isDeprioritized,
+    toggleDeprioritize,
+    setFocusExam,
+    mockScores,
+    completed,
+  } = useProgress()
+
+  if (!exam) {
+    return (
+      <div className="empty">
+        <h1>Exam not found</h1>
+        <Link to="/">Back to dashboard</Link>
+      </div>
+    )
+  }
+
+  const examStat = stats.byExam.find((s) => s.examId === exam.id)
+  const ids = examTopicIds(exam)
+  const done = ids.filter((id) => isDone(id)).length
+  const starred = isStarred(exam.id)
+  const low = isDeprioritized(exam.id)
+  const examMocks = mockScores.filter((m) => m.examId === exam.id).slice(0, 5)
+  const ready = readinessScore(exam, completed, mockScores)
+  const reg = getExamRegistration(exam)
+
+  return (
+    <div className="exam-detail">
+      <Link to="/" className="back-link">
+        ← All exams
+      </Link>
+
+      <header className="detail-hero">
+        <div>
+          <div className="detail-chips">
+            <span className={`tier-chip tier-${exam.tier.toLowerCase()}`}>{exam.tier}</span>
+            <span className="soft-chip">{exam.difficulty}</span>
+            <span className="soft-chip">Priority #{exam.priority}</span>
+            {reg.state === 'open' && (
+              <span className="soft-chip reg-open-chip">Open for registration</span>
+            )}
+          </div>
+          <h1>{exam.name}</h1>
+          <p className="lede">{exam.fit}</p>
+          <div className="detail-actions">
+            <button
+              type="button"
+              className={`star-btn text ${starred ? 'on' : ''}`}
+              onClick={() => toggleStar(exam.id)}
+            >
+              {starred ? '★ Starred' : '☆ Star'}
+            </button>
+            <button
+              type="button"
+              className={`sink-btn text ${low ? 'on' : ''}`}
+              onClick={() => toggleDeprioritize(exam.id)}
+            >
+              {low ? '↑ Restore priority' : '↓ Deprioritize'}
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => {
+                setFocusExam(exam.id)
+                navigate('/focus')
+              }}
+            >
+              Focus this exam
+            </button>
+            <Link to="/prep" className="ghost">
+              Log mock / study
+            </Link>
+          </div>
+        </div>
+        <div className="detail-progress">
+          <ProgressRing pct={ready.score} size={100} stroke={8} label="Readiness" />
+          <span>
+            Ready {ready.score}% · {ready.label}
+          </span>
+          <span className="muted-line">
+            Syllabus {examStat?.pct ?? 0}% ({done}/{ids.length})
+            {ready.mocks != null ? ` · mocks ${ready.mocks}%` : ''}
+          </span>
+        </div>
+      </header>
+
+      <PreviousPapers examId={exam.id} examName={exam.shortName} />
+
+      <div className="detail-grid">
+        <aside className="detail-info">
+          <InfoBlock title="Status" body={exam.status} tone="warn" />
+          <div className={`info-block exam-card-reg reg-${reg.state}`}>
+            <h3>Apply / notification</h3>
+            {reg.state === 'open' ? (
+              <p className="reg-line">
+                <strong>Open for registration</strong>
+                {reg.openNote ? ` · ${reg.openNote}` : ''}
+              </p>
+            ) : (
+              <p className="reg-line">
+                <strong>Next notification</strong>
+                {reg.nextNotification ? ` · ${reg.nextNotification}` : ''}
+              </p>
+            )}
+            <p className="muted-line" style={{ margin: '0.35rem 0 0.5rem' }}>
+              {exam.reg}
+            </p>
+            <a
+              className={`reg-link ${reg.state === 'open' ? 'apply' : 'watch'}`}
+              href={reg.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {reg.linkLabel} ↗
+            </a>
+          </div>
+          <InfoBlock title="Exam timeline" body={exam.exam} />
+          <InfoBlock title="Cycle" body={exam.cycle} />
+          <InfoBlock title="Vacancies" body={exam.vacancies} />
+          <InfoBlock title="OBC seats" body={exam.obcSeats} />
+          <InfoBlock title="OBC age" body={exam.obcAge} />
+          <InfoBlock title="OBC cutoffs" body={exam.obcCutoff} />
+          <InfoBlock title="Qualification" body={exam.qual} />
+          <InfoBlock title="Competitiveness" body={exam.competitiveness} />
+          <InfoBlock title="Compensation" body={exam.compensation} tone="ok" />
+          <InfoBlock title="Perks" body={exam.perks} />
+          <InfoBlock title="Location" body={exam.location} />
+          <InfoBlock
+            title="Applications vs offers"
+            body={`${exam.applied}\n\nOffered: ${exam.offered}\n\n${exam.appsNote}`}
+          />
+
+          <div className="info-block">
+            <h3>Rounds</h3>
+            <ol className="rounds">
+              {exam.rounds.map((r) => (
+                <li key={r.name}>
+                  <strong>{r.name}</strong>
+                  <span>{r.what}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="info-block">
+            <h3>Coaching references</h3>
+            <div className="chip-wrap">
+              {exam.coachingRefs.map((c) => (
+                <span key={c} className="soft-chip">
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="info-block">
+            <h3>Recent mocks</h3>
+            {examMocks.length === 0 ? (
+              <p>
+                None yet. <Link to="/prep">Add in Prep lab</Link>
+              </p>
+            ) : (
+              <ul className="mini-mocks">
+                {examMocks.map((m) => (
+                  <li key={m.id}>
+                    {m.score}/{m.maxScore} · {m.source} · {m.date}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        <SyllabusChecklist exam={exam} />
+      </div>
+    </div>
+  )
+}
+
+function InfoBlock({
+  title,
+  body,
+  tone,
+}: {
+  title: string
+  body: string
+  tone?: 'ok' | 'warn'
+}) {
+  return (
+    <div className={`info-block ${tone ?? ''}`}>
+      <h3>{title}</h3>
+      <p>{body}</p>
+    </div>
+  )
+}
