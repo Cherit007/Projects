@@ -5,6 +5,7 @@ import { CglPreferenceRank } from '../components/CglPreferenceRank'
 import { DailyCheckIn } from '../components/DailyCheckIn'
 import { DeadlinesStrip } from '../components/DeadlinesStrip'
 import { ExamCard } from '../components/ExamCard'
+import { ExamGroupsPanel } from '../components/ExamGroupsPanel'
 import { ProgressRing } from '../components/ProgressRing'
 import { TodayPlan } from '../components/TodayPlan'
 import { WeekPlan } from '../components/WeekPlan'
@@ -172,6 +173,8 @@ export function Dashboard() {
         <DailyCheckIn />
         <TodayPlan compact />
       </section>
+
+      <ExamGroupsPanel />
 
       <div className="dash-folds">
         {starred.length > 0 && (

@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { getFirebaseDb } from './firebase'
 import type { AppState, ErrorEntry, MockScore } from '../hooks/useProgress'
+import { mergeExamGroups, normalizeExamGroups } from '../utils/examGroups'
 import type { RevisionCard } from '../utils/spacedRepetition'
 
 let cloudUid: string | null = null
@@ -75,6 +76,7 @@ export function normalizeCloudState(raw: unknown): AppState | null {
     lastDigestAt: typeof p.lastDigestAt === 'string' ? p.lastDigestAt : null,
     remindersEnabled: !!p.remindersEnabled,
     docs: asBoolMap(p.docs),
+    examGroups: normalizeExamGroups(p.examGroups),
   }
 }
 
@@ -137,6 +139,7 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
     lastDigestAt: local.lastDigestAt ?? cloud.lastDigestAt,
     remindersEnabled: local.remindersEnabled || cloud.remindersEnabled,
     docs,
+    examGroups: mergeExamGroups(local.examGroups, cloud.examGroups),
   }
 }
 
