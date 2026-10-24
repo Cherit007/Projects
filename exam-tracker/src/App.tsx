@@ -13,6 +13,7 @@ import { ComparePage } from './pages/ComparePage'
 import { Dashboard } from './pages/Dashboard'
 import { ExamDetail } from './pages/ExamDetail'
 import { FocusPage } from './pages/FocusPage'
+import { GroupPage } from './pages/GroupPage'
 import { PrepLab } from './pages/PrepLab'
 import { RoadmapPage } from './pages/RoadmapPage'
 import { TopicsPage } from './pages/TopicsPage'
@@ -32,6 +33,7 @@ function routes() {
         { path: 'compare', Component: ComparePage },
         { path: 'focus', Component: FocusPage },
         { path: 'prep', Component: PrepLab },
+        { path: 'group/:groupId', Component: GroupPage },
         { path: '*', element: <Navigate to="/" replace /> },
       ],
     },
@@ -51,6 +53,7 @@ function BrowserApp() {
           <Route path="compare" element={<ComparePage />} />
           <Route path="focus" element={<FocusPage />} />
           <Route path="prep" element={<PrepLab />} />
+          <Route path="group/:groupId" element={<GroupPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
