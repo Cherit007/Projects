@@ -100,6 +100,8 @@ export function Dashboard() {
     })
 
     return [...list].sort((a, b) => {
+      // While searching, show matches by priority only — don't boost ★ pins.
+      if (q) return a.priority - b.priority
       const rank = (id: string) =>
         starred.includes(id) ? 0 : deprioritized.includes(id) ? 2 : 1
       const ar = rank(a.id)
@@ -250,8 +252,14 @@ export function Dashboard() {
           <div className="targets-tools">
             <p className="search-count">
               {filtered.length} of {poolCount} shown
-              {starred.length > 0 && filter !== 'Starred' ? ' · ★ pinned first' : ''}
-              {deprioritized.length > 0 ? ' · ↓ low priority at bottom' : ''}
+              {!deferredQuery.trim() &&
+              starred.length > 0 &&
+              filter !== 'Starred'
+                ? ' · ★ pinned first'
+                : ''}
+              {!deferredQuery.trim() && deprioritized.length > 0
+                ? ' · ↓ low priority at bottom'
+                : ''}
             </p>
             {commerceStillUp.length > 0 && (
               <button
