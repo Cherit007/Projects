@@ -1156,6 +1156,65 @@ export const EXAMS: Exam[] = [
     tags: ['ssc', 'desk', 'css', 'mea', 'wlb', 'level-7'],
   },
   {
+    id: 'ibacio',
+    name: 'IB ACIO Grade-II / Executive (Intelligence Bureau)',
+    shortName: 'IB ACIO',
+    tier: 'Core',
+    difficulty: 'Moderate–Hard (GA + aptitude speed; Tier-II descriptive + interview)',
+    competitiveness:
+      'High volume — 2025 cycle ~3,717 posts; Tier-I is mass CBT, interview decides final rank',
+    vacancies: '2025: 3,717 ACIO-II/Exe (UR 1,537 · OBC 946 · EWS 442 · SC 566 · ST 226)',
+    obcSeats: '2025 OBC 946',
+    obcAge: '18–27 +3 OBC → 30 (as on notif cut-off; verify each cycle on mha.gov.in)',
+    obcCutoff:
+      'Combined Tier-I + Tier-II + Interview merit; OBC relief on age and vacancies, cutoffs still competitive',
+    reg: 'Apply on mha.gov.in / ncs.gov.in when IB ACIO-II/Exe notif opens (2025 window was mid-year)',
+    exam: 'Tier-I CBT (100 MCQ, −¼) → Tier-II descriptive (50) → Tier-III Interview (100)',
+    status: '2025 ACIO-II/Exe result cycle winding down — watch mha.gov.in for next ACIO notif',
+    cycle: 'Irregular (MHA / IB)',
+    applied: 'Large national CBT pool each cycle',
+    offered: '~3.7k in 2025 notification (provisional)',
+    appsNote:
+      'Group C Non-Gazetted · All-India transfer liability · Not PwBD-suitable per 2025 notif · Desirable: computer knowledge. Prefer if you want central intel/security over bank SO desk work.',
+    compensation:
+      'Level-7 basic ₹44,900–1,42,400 · Special Security Allowance @20% of basic · other CG allowances · holiday-duty cash compensation up to 30 days · metro in-hand often ~₹70–90k+ with SSA (verify DA/HRA)',
+    perks:
+      'SSA 20% · CGHS/medical · LTC · NPS · leave rules · holiday compensation · housing/HRA as per posting',
+    location:
+      'All-India IB postings — field/desk mix; transfers across states/UTs. Not a home-state cadre job.',
+    qual: 'Graduation or equivalent from a recognised university (any stream — B.Tech OK). Age usually 18–27 + category relief.',
+    fit: 'Strong Plan-B next to SSC CGL Level-7: central MHA/IB, SSA bump, interview stage. Skip if you need pure home-state (use TSPSC) or max cash (SEBI/RBI).',
+    rounds: [
+      {
+        name: 'Tier-I',
+        what: '100 MCQs / 1h — Current Affairs, GS, Quant, Reasoning, English (20 each); −¼ negative.',
+      },
+      {
+        name: 'Tier-II',
+        what: 'Descriptive 50 marks / 1h — Essay (20), English comprehension (10), 2× long answers on CA/econ/socio-political (20).',
+      },
+      {
+        name: 'Tier-III Interview',
+        what: '100 marks — personality + awareness; final merit = Tier-I + II + Interview.',
+      },
+    ],
+    syllabus: mergeSections(
+      APTITUDE_FULL,
+      GA_SSC,
+      DESCRIPTIVE,
+      INTERVIEW_GENERAL,
+    ),
+    coachingRefs: [
+      'MHA / IB official notification (mha.gov.in)',
+      'IB ACIO Tier-I PYQs + mocks',
+      'Lucent / NCERT static + daily CA',
+      'Descriptive essay + précis practice',
+      'Adda247 / Testbook IB ACIO packs',
+    ],
+    priority: 6,
+    tags: ['ib', 'acio', 'mha', 'central', 'security', 'level-7', 'interview'],
+  },
+  {
     id: 'statepcs',
     name: 'State PSC / PCS (Commercial Tax · SDM · allied)',
     shortName: 'State PCS',

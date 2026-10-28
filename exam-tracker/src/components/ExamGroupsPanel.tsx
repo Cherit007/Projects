@@ -6,6 +6,7 @@ import {
   groupProgress,
   partitionGroupSyllabus,
 } from '../utils/examGroups'
+import { examMatchesQuery } from '../utils/examSearch'
 
 export function ExamGroupsPanel() {
   const {
@@ -29,9 +30,7 @@ export function ExamGroupsPanel() {
       return a.priority - b.priority
     })
     if (!q) return list
-    return list.filter((e) =>
-      `${e.shortName} ${e.name} ${e.tier}`.toLowerCase().includes(q),
-    )
+    return list.filter((e) => examMatchesQuery(e, q))
   }, [query, starred])
 
   const toggle = (id: string) => {

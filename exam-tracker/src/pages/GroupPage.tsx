@@ -7,6 +7,7 @@ import {
   groupProgress,
   partitionGroupSyllabus,
 } from '../utils/examGroups'
+import { examMatchesQuery } from '../utils/examSearch'
 
 type Tab = 'common' | 'extra'
 
@@ -51,9 +52,7 @@ export function GroupPage() {
       return a.priority - b.priority
     })
     if (!q) return list
-    return list.filter((e) =>
-      `${e.shortName} ${e.name}`.toLowerCase().includes(q),
-    )
+    return list.filter((e) => examMatchesQuery(e, q))
   }, [query, starred])
 
   if (!groupId || !group) {

@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CglPackPanel } from '../components/CglPackPanel'
 import { CglPreferenceRank } from '../components/CglPreferenceRank'
@@ -13,6 +13,7 @@ import { EXAMS } from '../data/exams'
 import type { Tier } from '../data/types'
 import { useFoundationLock } from '../hooks/usePrepSettings'
 import { useProgress } from '../hooks/useProgress'
+import { examMatchesQuery } from '../utils/examSearch'
 
 const FILTERS: Array<
   'All' | 'Starred' | 'IT Officer' | 'Tech lean' | 'Commerce/GA' | Tier
@@ -35,7 +36,6 @@ function isCommerceGa(exam: (typeof EXAMS)[number]) {
 export function Dashboard() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All')
   const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query)
   const {
     stats,
     starred,
@@ -57,47 +57,29 @@ export function Dashboard() {
   const commerceStillUp = commerceIds.filter((id) => !isDeprioritized(id))
 
   const filtered = useMemo(() => {
-    const q = deferredQuery.trim().toLowerCase()
+    const q = query.trim()
+    // While typing, search the full catalogue — don't stay stuck inside Starred / tier chips.
     let list = EXAMS
-    if (filter === 'Starred') list = EXAMS.filter((e) => starred.includes(e.id))
-    else if (filter === 'IT Officer') {
-      list = EXAMS.filter(
-        (e) =>
-          e.tags?.includes('it-officer') ||
-          /IT Officer|IT specialist|Scientist-B|Manager \(IT\)|IT stream/i.test(
-            `${e.name} ${e.shortName} ${e.fit}`,
-          ),
-      )
-    } else if (filter === 'Tech lean') {
-      list = EXAMS.filter((e) => !isCommerceGa(e))
-    } else if (filter === 'Commerce/GA') {
-      list = EXAMS.filter(isCommerceGa)
-    } else if (filter !== 'All') {
-      list = EXAMS.filter((e) => e.tier === filter)
+    if (!q) {
+      if (filter === 'Starred') list = EXAMS.filter((e) => starred.includes(e.id))
+      else if (filter === 'IT Officer') {
+        list = EXAMS.filter(
+          (e) =>
+            e.tags?.includes('it-officer') ||
+            /IT Officer|IT specialist|Scientist-B|Manager \(IT\)|IT stream/i.test(
+              `${e.name} ${e.shortName} ${e.fit}`,
+            ),
+        )
+      } else if (filter === 'Tech lean') {
+        list = EXAMS.filter((e) => !isCommerceGa(e))
+      } else if (filter === 'Commerce/GA') {
+        list = EXAMS.filter(isCommerceGa)
+      } else if (filter !== 'All') {
+        list = EXAMS.filter((e) => e.tier === filter)
+      }
+    } else {
+      list = EXAMS.filter((e) => examMatchesQuery(e, q))
     }
-
-    list = list.filter((e) => {
-      if (!q) return true
-      const haystack = [
-        e.name,
-        e.shortName,
-        e.tier,
-        e.status,
-        e.cycle,
-        e.exam,
-        e.reg,
-        e.location,
-        e.qual,
-        e.fit,
-        e.difficulty,
-        ...(e.tags ?? []),
-        ...e.coachingRefs,
-        e.tags?.includes('it-officer') ? 'IT Officer PSU bank' : '',
-      ]
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(q)
-    })
 
     return [...list].sort((a, b) => {
       // While searching, show matches by priority only — don't boost ★ pins.
@@ -109,9 +91,10 @@ export function Dashboard() {
       if (ar !== br) return ar - br
       return a.priority - b.priority
     })
-  }, [filter, deferredQuery, starred, deprioritized])
+  }, [filter, query, starred, deprioritized])
 
   const poolCount = useMemo(() => {
+    if (query.trim()) return EXAMS.length
     if (filter === 'Starred') return starred.length
     if (filter === 'IT Officer') {
       return EXAMS.filter((e) => e.tags?.includes('it-officer')).length
@@ -122,7 +105,7 @@ export function Dashboard() {
     if (filter === 'Commerce/GA') return commerceIds.length
     if (filter === 'All') return EXAMS.length
     return EXAMS.filter((e) => e.tier === filter).length
-  }, [filter, starred, commerceIds])
+  }, [filter, starred, commerceIds, query])
 
   return (
     <div className="dashboard">
@@ -235,7 +218,7 @@ export function Dashboard() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search — IT Officer, SEBI, NIC, PSU…"
+              placeholder="Search — IB ACIO, SEBI, TSPSC, NIC…"
               autoComplete="off"
             />
             {query && (
@@ -252,12 +235,10 @@ export function Dashboard() {
           <div className="targets-tools">
             <p className="search-count">
               {filtered.length} of {poolCount} shown
-              {!deferredQuery.trim() &&
-              starred.length > 0 &&
-              filter !== 'Starred'
+              {!query.trim() && starred.length > 0 && filter !== 'Starred'
                 ? ' · ★ pinned first'
                 : ''}
-              {!deferredQuery.trim() && deprioritized.length > 0
+              {!query.trim() && deprioritized.length > 0
                 ? ' · ↓ low priority at bottom'
                 : ''}
             </p>
