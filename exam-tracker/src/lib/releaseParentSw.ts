@@ -17,7 +17,13 @@ export async function releaseParentServiceWorker() {
           reg.waiting?.scriptURL ||
           reg.installing?.scriptURL ||
           ''
-        if (script.includes('/Projects/sw.js') || /\/Projects\/sw\.js$/.test(script)) {
+        // Parent Badminton PWA SW scope covers /Projects/exam-tracker/ and
+        // can serve stale shells that break SPA hash navigation.
+        if (
+          script.includes('/Projects/sw.js') ||
+          /\/Projects\/sw\.js$/.test(script) ||
+          script.includes('/Projects/')
+        ) {
           await reg.unregister()
         }
       }),
@@ -30,7 +36,15 @@ export async function releaseParentServiceWorker() {
   try {
     const keys = await caches.keys()
     await Promise.all(
-      keys.filter((k) => k.startsWith('bfm-')).map((k) => caches.delete(k)),
+      keys
+        .filter(
+          (k) =>
+            k.startsWith('bfm-') ||
+            k.includes('badminton') ||
+            k.includes('workbox') ||
+            k.includes('Projects'),
+        )
+        .map((k) => caches.delete(k)),
     )
   } catch {
     /* ignore */

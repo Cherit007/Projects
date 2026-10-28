@@ -54,6 +54,12 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 - [x] **F5** CGL post-preference rank helper (ordered tradeoffs)
 - [x] **F6** Focus timer logs minutes to the active topic
 
+## Phase G — Study groups
+
+- [x] **G1** Named multi-exam groups (create / edit / delete on Dashboard)
+- [x] **G2** Group detail: shared-by-all syllabus vs extras
+- [x] **G3** Progress on group rows + cloud sync with AppState
+
 ## UX / quality gates (every phase)
 
 - [x] Responsive layout ≤560px and ≤900px
@@ -83,3 +89,4 @@ npm run preview
 11. Prep lab → log mock → **After mock** suggestions  
 12. Dashboard → daily check-in → mark done for today  
 13. Focus → pick topic → finish Pomodoro → study log has topicId  
+14. Dashboard → **New group** → pick 2+ exams → open group → Shared / Extra tabs  

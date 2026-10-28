@@ -9,9 +9,11 @@ import {
   todayIso,
   type RevisionCard,
 } from '../utils/spacedRepetition'
-import { studyStreak } from '../utils/readiness'
-import type { SectionKey } from '../utils/prepAnalytics'
+import type { ExamGroup } from '../utils/examGroups'
+import { normalizeExamGroups } from '../utils/examGroups'
 import type { MasteryLevel } from '../utils/mastery'
+import type { SectionKey } from '../utils/prepAnalytics'
+import { studyStreak } from '../utils/readiness'
 
 const STORAGE_KEY = 'exam-prep-app-v2'
 const LEGACY_KEY = 'exam-prep-progress-v1'
@@ -76,6 +78,8 @@ export type AppState = {
   remindersEnabled: boolean
   /** Application / document prep checklist */
   docs: Record<string, boolean>
+  /** Named multi-exam sets for common + extra syllabus tracking */
+  examGroups: ExamGroup[]
 }
 
 const EMPTY: AppState = {
@@ -94,6 +98,7 @@ const EMPTY: AppState = {
   lastDigestAt: null,
   remindersEnabled: false,
   docs: {},
+  examGroups: [],
 }
 
 function asMasteryMap(v: unknown): Record<string, MasteryLevel> {
@@ -169,6 +174,7 @@ function readStorage(): AppState {
         typeof parsed.lastDigestAt === 'string' ? parsed.lastDigestAt : null,
       remindersEnabled: !!parsed.remindersEnabled,
       docs: parsed.docs && typeof parsed.docs === 'object' ? parsed.docs : {},
+      examGroups: normalizeExamGroups(parsed.examGroups),
     }
   } catch {
     return { ...EMPTY }
@@ -254,6 +260,7 @@ export function useProgress() {
     lastDigestAt,
     remindersEnabled,
     docs,
+    examGroups,
   } = state
 
   const toggleTopic = useCallback((topicId: string) => {
@@ -537,6 +544,46 @@ export function useProgress() {
     persist({ ...memoryCache, docs: next })
   }, [])
 
+  const addExamGroup = useCallback((name: string, examIds: string[]) => {
+    const cleaned = normalizeExamGroups([
+      {
+        id: uid(),
+        name,
+        examIds,
+        createdAt: new Date().toISOString(),
+      },
+    ])
+    if (!cleaned.length) return null
+    persist({
+      ...memoryCache,
+      examGroups: [cleaned[0], ...memoryCache.examGroups],
+    })
+    return cleaned[0]
+  }, [])
+
+  const updateExamGroup = useCallback(
+    (id: string, patch: Partial<Pick<ExamGroup, 'name' | 'examIds'>>) => {
+      const next = memoryCache.examGroups.map((g) => {
+        if (g.id !== id) return g
+        const merged = {
+          ...g,
+          name: patch.name !== undefined ? patch.name : g.name,
+          examIds: patch.examIds !== undefined ? patch.examIds : g.examIds,
+        }
+        return normalizeExamGroups([merged])[0] ?? g
+      })
+      persist({ ...memoryCache, examGroups: next.filter(Boolean) })
+    },
+    [],
+  )
+
+  const removeExamGroup = useCallback((id: string) => {
+    persist({
+      ...memoryCache,
+      examGroups: memoryCache.examGroups.filter((g) => g.id !== id),
+    })
+  }, [])
+
   const importState = useCallback((incoming: Partial<AppState>) => {
     persist({
       completed: incoming.completed ?? memoryCache.completed,
@@ -569,6 +616,10 @@ export function useProgress() {
           ? incoming.remindersEnabled
           : memoryCache.remindersEnabled,
       docs: incoming.docs ?? memoryCache.docs,
+      examGroups:
+        incoming.examGroups !== undefined
+          ? normalizeExamGroups(incoming.examGroups)
+          : memoryCache.examGroups,
     })
   }, [])
 
@@ -657,6 +708,7 @@ export function useProgress() {
     lastDigestAt,
     remindersEnabled,
     docs,
+    examGroups,
     toggleTopic,
     setTopic,
     toggleSubtopic,
@@ -684,6 +736,9 @@ export function useProgress() {
     markDigestShown,
     setRemindersEnabled,
     toggleDoc,
+    addExamGroup,
+    updateExamGroup,
+    removeExamGroup,
     importState,
     exportState,
     resetAll,
