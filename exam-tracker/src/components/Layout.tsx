@@ -42,6 +42,7 @@ export function Layout() {
           <AppNavLink to="/roadmap">Roadmap</AppNavLink>
           <AppNavLink to="/compare">Compare</AppNavLink>
           <AppNavLink to="/focus">Focus</AppNavLink>
+          <AppNavLink to="/practice/quant">Quant</AppNavLink>
           <AppNavLink to="/prep">Prep lab</AppNavLink>
         </nav>
         <div className="topbar-stats">

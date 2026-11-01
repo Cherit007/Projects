@@ -60,6 +60,12 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 - [x] **G2** Group detail: shared-by-all syllabus vs extras
 - [x] **G3** Progress on group rows + cloud sync with AppState
 
+## Phase H — Quant section tests
+
+- [x] **H1** Section-wise Quant practice bank (11 chapters)
+- [x] **H2** Timed test runner with explanations + score save to Prep lab
+- [x] **H3** Links to free external PYQ hubs (no copyrighted paper dumps)
+
 ## UX / quality gates (every phase)
 
 - [x] Responsive layout ≤560px and ≤900px

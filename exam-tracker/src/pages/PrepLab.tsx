@@ -124,6 +124,17 @@ export function PrepLab() {
         </div>
       </header>
 
+      <section className="prep-panel practice-cta" aria-label="Quant practice">
+        <h2>Quant section tests</h2>
+        <p className="muted-line">
+          Drill Number System, DI, SI/CI, and other chapters with a timer — then
+          save the score here.
+        </p>
+        <Link to="/practice/quant" className="btn primary">
+          Open quant tests
+        </Link>
+      </section>
+
       <NextMoves />
       <AfterMockPanel />
 
