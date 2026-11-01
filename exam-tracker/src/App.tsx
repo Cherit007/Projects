@@ -15,6 +15,8 @@ import { ExamDetail } from './pages/ExamDetail'
 import { FocusPage } from './pages/FocusPage'
 import { GroupPage } from './pages/GroupPage'
 import { PrepLab } from './pages/PrepLab'
+import { QuantPracticePage } from './pages/QuantPracticePage'
+import { QuantTestPage } from './pages/QuantTestPage'
 import { RoadmapPage } from './pages/RoadmapPage'
 import { TopicsPage } from './pages/TopicsPage'
 import './App.css'
@@ -33,6 +35,8 @@ function routes() {
         { path: 'compare', Component: ComparePage },
         { path: 'focus', Component: FocusPage },
         { path: 'prep', Component: PrepLab },
+        { path: 'practice/quant', Component: QuantPracticePage },
+        { path: 'practice/quant/:topicId', Component: QuantTestPage },
         { path: 'group/:groupId', Component: GroupPage },
         { path: '*', element: <Navigate to="/" replace /> },
       ],
@@ -53,6 +57,11 @@ function BrowserApp() {
           <Route path="compare" element={<ComparePage />} />
           <Route path="focus" element={<FocusPage />} />
           <Route path="prep" element={<PrepLab />} />
+          <Route path="practice/quant" element={<QuantPracticePage />} />
+          <Route
+            path="practice/quant/:topicId"
+            element={<QuantTestPage />}
+          />
           <Route path="group/:groupId" element={<GroupPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
