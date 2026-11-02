@@ -66,6 +66,12 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 - [x] **H2** Timed test runner with explanations + score save to Prep lab
 - [x] **H3** Links to free external PYQ hubs (no copyrighted paper dumps)
 
+## Phase I — Video tracker
+
+- [x] **I1** Videos page: add topic + section + YouTube link
+- [x] **I2** Group by section; watch embed with IFrame progress
+- [x] **I3** Manual % slider + cloud sync of videoLibrary
+
 ## UX / quality gates (every phase)
 
 - [x] Responsive layout ≤560px and ≤900px

@@ -11,6 +11,11 @@ import {
 } from '../utils/spacedRepetition'
 import type { ExamGroup } from '../utils/examGroups'
 import { normalizeExamGroups } from '../utils/examGroups'
+import type { VideoEntry } from '../utils/videoLibrary'
+import {
+  normalizeVideoEntries,
+  parseYouTubeId,
+} from '../utils/videoLibrary'
 import type { MasteryLevel } from '../utils/mastery'
 import type { SectionKey } from '../utils/prepAnalytics'
 import { studyStreak } from '../utils/readiness'
@@ -80,6 +85,8 @@ export type AppState = {
   docs: Record<string, boolean>
   /** Named multi-exam sets for common + extra syllabus tracking */
   examGroups: ExamGroup[]
+  /** YouTube study playlist / topic links with watch progress */
+  videoLibrary: VideoEntry[]
 }
 
 const EMPTY: AppState = {
@@ -99,6 +106,7 @@ const EMPTY: AppState = {
   remindersEnabled: false,
   docs: {},
   examGroups: [],
+  videoLibrary: [],
 }
 
 function asMasteryMap(v: unknown): Record<string, MasteryLevel> {
@@ -175,6 +183,7 @@ function readStorage(): AppState {
       remindersEnabled: !!parsed.remindersEnabled,
       docs: parsed.docs && typeof parsed.docs === 'object' ? parsed.docs : {},
       examGroups: normalizeExamGroups(parsed.examGroups),
+      videoLibrary: normalizeVideoEntries(parsed.videoLibrary),
     }
   } catch {
     return { ...EMPTY }
@@ -261,6 +270,7 @@ export function useProgress() {
     remindersEnabled,
     docs,
     examGroups,
+    videoLibrary,
   } = state
 
   const toggleTopic = useCallback((topicId: string) => {
@@ -584,6 +594,88 @@ export function useProgress() {
     })
   }, [])
 
+  const addVideo = useCallback(
+    (input: { title: string; section: string; url: string; notes?: string }) => {
+      const videoId = parseYouTubeId(input.url)
+      const cleaned = normalizeVideoEntries([
+        {
+          id: uid(),
+          title: input.title,
+          section: input.section,
+          url: input.url.trim(),
+          videoId,
+          watchedSec: 0,
+          pct: 0,
+          durationSec: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          notes: input.notes,
+        },
+      ])
+      if (!cleaned.length) return null
+      persist({
+        ...memoryCache,
+        videoLibrary: [cleaned[0], ...memoryCache.videoLibrary],
+      })
+      return cleaned[0]
+    },
+    [],
+  )
+
+  const updateVideo = useCallback(
+    (
+      id: string,
+      patch: Partial<
+        Pick<
+          VideoEntry,
+          | 'title'
+          | 'section'
+          | 'url'
+          | 'notes'
+          | 'pct'
+          | 'watchedSec'
+          | 'durationSec'
+          | 'videoId'
+        >
+      >,
+    ) => {
+      const next = memoryCache.videoLibrary.map((v) => {
+        if (v.id !== id) return v
+        const url = patch.url !== undefined ? patch.url.trim() : v.url
+        const merged: VideoEntry = {
+          ...v,
+          ...patch,
+          url,
+          videoId:
+            patch.url !== undefined
+              ? parseYouTubeId(url)
+              : patch.videoId !== undefined
+                ? patch.videoId
+                : v.videoId,
+          pct:
+            patch.pct !== undefined
+              ? Math.max(0, Math.min(100, Math.round(patch.pct)))
+              : v.pct,
+          watchedSec:
+            patch.watchedSec !== undefined
+              ? Math.max(v.watchedSec, patch.watchedSec)
+              : v.watchedSec,
+          updatedAt: new Date().toISOString(),
+        }
+        return normalizeVideoEntries([merged])[0] ?? v
+      })
+      persist({ ...memoryCache, videoLibrary: next })
+    },
+    [],
+  )
+
+  const removeVideo = useCallback((id: string) => {
+    persist({
+      ...memoryCache,
+      videoLibrary: memoryCache.videoLibrary.filter((v) => v.id !== id),
+    })
+  }, [])
+
   const importState = useCallback((incoming: Partial<AppState>) => {
     persist({
       completed: incoming.completed ?? memoryCache.completed,
@@ -620,6 +712,10 @@ export function useProgress() {
         incoming.examGroups !== undefined
           ? normalizeExamGroups(incoming.examGroups)
           : memoryCache.examGroups,
+      videoLibrary:
+        incoming.videoLibrary !== undefined
+          ? normalizeVideoEntries(incoming.videoLibrary)
+          : memoryCache.videoLibrary,
     })
   }, [])
 
@@ -709,6 +805,7 @@ export function useProgress() {
     remindersEnabled,
     docs,
     examGroups,
+    videoLibrary,
     toggleTopic,
     setTopic,
     toggleSubtopic,
@@ -739,6 +836,9 @@ export function useProgress() {
     addExamGroup,
     updateExamGroup,
     removeExamGroup,
+    addVideo,
+    updateVideo,
+    removeVideo,
     importState,
     exportState,
     resetAll,

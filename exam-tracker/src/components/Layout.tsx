@@ -10,7 +10,7 @@ import { WeeklyDigestHost } from './WeeklyDigestHost'
 const BOTTOM = [
   { to: '/', end: true, label: 'Targets' },
   { to: '/topics', end: false, label: 'Topics' },
-  { to: '/roadmap', end: false, label: 'Roadmap' },
+  { to: '/videos', end: false, label: 'Videos' },
   { to: '/prep', end: false, label: 'Prep' },
 ] as const
 
@@ -43,6 +43,7 @@ export function Layout() {
           <AppNavLink to="/compare">Compare</AppNavLink>
           <AppNavLink to="/focus">Focus</AppNavLink>
           <AppNavLink to="/practice/quant">Quant</AppNavLink>
+          <AppNavLink to="/videos">Videos</AppNavLink>
           <AppNavLink to="/prep">Prep lab</AppNavLink>
         </nav>
         <div className="topbar-stats">

@@ -3,6 +3,10 @@ import { getFirebaseDb } from './firebase'
 import type { AppState, ErrorEntry, MockScore } from '../hooks/useProgress'
 import { mergeExamGroups, normalizeExamGroups } from '../utils/examGroups'
 import type { RevisionCard } from '../utils/spacedRepetition'
+import {
+  mergeVideoEntries,
+  normalizeVideoEntries,
+} from '../utils/videoLibrary'
 
 let cloudUid: string | null = null
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -77,6 +81,7 @@ export function normalizeCloudState(raw: unknown): AppState | null {
     remindersEnabled: !!p.remindersEnabled,
     docs: asBoolMap(p.docs),
     examGroups: normalizeExamGroups(p.examGroups),
+    videoLibrary: normalizeVideoEntries(p.videoLibrary),
   }
 }
 
@@ -140,6 +145,7 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
     remindersEnabled: local.remindersEnabled || cloud.remindersEnabled,
     docs,
     examGroups: mergeExamGroups(local.examGroups, cloud.examGroups),
+    videoLibrary: mergeVideoEntries(local.videoLibrary, cloud.videoLibrary),
   }
 }
 
