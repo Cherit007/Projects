@@ -19,6 +19,7 @@ import { QuantPracticePage } from './pages/QuantPracticePage'
 import { QuantTestPage } from './pages/QuantTestPage'
 import { RoadmapPage } from './pages/RoadmapPage'
 import { TopicsPage } from './pages/TopicsPage'
+import { VideosPage } from './pages/VideosPage'
 import './App.css'
 
 const useHashRouter = import.meta.env.BASE_URL.includes('/Projects/exam-tracker')
@@ -37,6 +38,7 @@ function routes() {
         { path: 'prep', Component: PrepLab },
         { path: 'practice/quant', Component: QuantPracticePage },
         { path: 'practice/quant/:topicId', Component: QuantTestPage },
+        { path: 'videos', Component: VideosPage },
         { path: 'group/:groupId', Component: GroupPage },
         { path: '*', element: <Navigate to="/" replace /> },
       ],
@@ -62,6 +64,7 @@ function BrowserApp() {
             path="practice/quant/:topicId"
             element={<QuantTestPage />}
           />
+          <Route path="videos" element={<VideosPage />} />
           <Route path="group/:groupId" element={<GroupPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
