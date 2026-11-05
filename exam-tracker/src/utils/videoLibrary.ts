@@ -9,6 +9,8 @@ export type VideoEntry = {
   url: string
   /** Parsed YouTube id when URL is valid */
   videoId: string | null
+  /** Channel / uploader from YouTube oEmbed when known */
+  channel?: string
   /** Longest continuous position reached (seconds) */
   watchedSec: number
   /** Peak watch percent 0–100 */
@@ -18,6 +20,46 @@ export type VideoEntry = {
   createdAt: string
   updatedAt: string
   notes?: string
+}
+
+export type YoutubeOEmbed = {
+  title: string
+  channel: string
+  thumbnailUrl?: string
+}
+
+/** Pull title + channel from YouTube (no API key). Browser CORS OK. */
+export async function fetchYoutubeDetails(
+  urlOrId: string,
+): Promise<YoutubeOEmbed | null> {
+  const id = parseYouTubeId(urlOrId)
+  if (!id) return null
+  const watch = youtubeWatchUrl(id)
+  const endpoints = [
+    `https://www.youtube.com/oembed?url=${encodeURIComponent(watch)}&format=json`,
+    `https://noembed.com/embed?url=${encodeURIComponent(watch)}`,
+  ]
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint)
+      if (!res.ok) continue
+      const data = (await res.json()) as {
+        title?: string
+        author_name?: string
+        thumbnail_url?: string
+        error?: string
+      }
+      if (data.error || !data.title) continue
+      return {
+        title: data.title.trim().slice(0, 120),
+        channel: (data.author_name ?? '').trim().slice(0, 80),
+        thumbnailUrl: data.thumbnail_url,
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  return null
 }
 
 const YT_HOST =
@@ -108,6 +150,10 @@ export function normalizeVideoEntries(raw: unknown): VideoEntry[] {
       section: section || 'General',
       url,
       videoId,
+      channel:
+        typeof v.channel === 'string' && v.channel.trim()
+          ? v.channel.trim().slice(0, 80)
+          : undefined,
       watchedSec,
       pct,
       durationSec,
@@ -145,6 +191,7 @@ export function mergeVideoEntries(
       pct: Math.max(v.pct, other.pct),
       watchedSec: Math.max(v.watchedSec, other.watchedSec),
       durationSec: v.durationSec ?? other.durationSec,
+      channel: v.channel || other.channel,
       updatedAt:
         v.updatedAt > other.updatedAt ? v.updatedAt : other.updatedAt,
       title: richer.title,

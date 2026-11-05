@@ -595,7 +595,13 @@ export function useProgress() {
   }, [])
 
   const addVideo = useCallback(
-    (input: { title: string; section: string; url: string; notes?: string }) => {
+    (input: {
+      title: string
+      section: string
+      url: string
+      notes?: string
+      channel?: string
+    }) => {
       const videoId = parseYouTubeId(input.url)
       const cleaned = normalizeVideoEntries([
         {
@@ -604,6 +610,7 @@ export function useProgress() {
           section: input.section,
           url: input.url.trim(),
           videoId,
+          channel: input.channel,
           watchedSec: 0,
           pct: 0,
           durationSec: null,
@@ -632,6 +639,7 @@ export function useProgress() {
           | 'section'
           | 'url'
           | 'notes'
+          | 'channel'
           | 'pct'
           | 'watchedSec'
           | 'durationSec'
@@ -642,6 +650,20 @@ export function useProgress() {
       const next = memoryCache.videoLibrary.map((v) => {
         if (v.id !== id) return v
         const url = patch.url !== undefined ? patch.url.trim() : v.url
+        const nextPct =
+          patch.pct !== undefined
+            ? Math.max(0, Math.min(100, Math.round(patch.pct)))
+            : v.pct
+        // Allow lowering watchedSec when explicitly resetting progress
+        const resetting = patch.pct !== undefined && nextPct < v.pct
+        const nextWatched =
+          patch.watchedSec !== undefined
+            ? resetting
+              ? Math.max(0, patch.watchedSec)
+              : Math.max(v.watchedSec, patch.watchedSec)
+            : resetting && nextPct === 0
+              ? 0
+              : v.watchedSec
         const merged: VideoEntry = {
           ...v,
           ...patch,
@@ -652,14 +674,8 @@ export function useProgress() {
               : patch.videoId !== undefined
                 ? patch.videoId
                 : v.videoId,
-          pct:
-            patch.pct !== undefined
-              ? Math.max(0, Math.min(100, Math.round(patch.pct)))
-              : v.pct,
-          watchedSec:
-            patch.watchedSec !== undefined
-              ? Math.max(v.watchedSec, patch.watchedSec)
-              : v.watchedSec,
+          pct: nextPct,
+          watchedSec: nextWatched,
           updatedAt: new Date().toISOString(),
         }
         return normalizeVideoEntries([merged])[0] ?? v
