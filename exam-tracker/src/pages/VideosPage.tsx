@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ExternalProgressLog } from '../components/ExternalProgressLog'
 import { TopicPicker } from '../components/TopicPicker'
 import { VideoNotes } from '../components/VideoNotes'
 import { YouTubeProgressPlayer } from '../components/YouTubeProgressPlayer'
@@ -88,26 +89,43 @@ export function VideosPage() {
   })
   /** One-shot: play this id in the embed even if preferExternal is on */
   const [forceEmbedId, setForceEmbedId] = useState<string | null>(null)
+  const [logNudge, setLogNudge] = useState(false)
   const titleTouched = useRef(false)
   const activeRef = useRef<VideoEntry | null>(null)
   const watchRef = useRef<HTMLElement | null>(null)
   const seekNonce = useRef(0)
+  const externalOpenedAt = useRef<number | null>(null)
+
+  const resumeStartSec = (entry: VideoEntry) => {
+    if (entry.pct >= 90) return 0
+    const sec = Math.floor(entry.watchedSec)
+    return sec > 5 ? sec : 0
+  }
 
   const openWatch = (id: string, opts?: { forceEmbed?: boolean }) => {
     setMenuId(null)
     setSeekRequest(null)
+    setLogNudge(false)
     const entry = videoLibrary.find((v) => v.id === id)
     if (opts?.forceEmbed) {
       setForceEmbedId(id)
       setActiveId(id)
+      externalOpenedAt.current = null
       return
     }
     setForceEmbedId(null)
     if (preferExternal && entry?.videoId) {
-      window.open(youtubeWatchUrl(entry.videoId), '_blank', 'noopener,noreferrer')
-      setActiveId(id) // still select for notes / mark done / up next
+      const start = resumeStartSec(entry)
+      window.open(
+        youtubeWatchUrl(entry.videoId, { startSec: start }),
+        '_blank',
+        'noopener,noreferrer',
+      )
+      externalOpenedAt.current = Date.now()
+      setActiveId(id) // keep panel open so user can log % when they return
       return
     }
+    externalOpenedAt.current = null
     setActiveId(id)
   }
 
@@ -169,6 +187,26 @@ export function VideosPage() {
   activeRef.current = active
   const showEmbed =
     !!active?.videoId && (!preferExternal || forceEmbedId === active.id)
+
+  useEffect(() => {
+    if (showEmbed || !activeId) {
+      setLogNudge(false)
+      return
+    }
+    const maybeNudge = () => {
+      if (document.visibilityState !== 'visible') return
+      const opened = externalOpenedAt.current
+      if (!opened) return
+      if (Date.now() - opened < 15_000) return
+      setLogNudge(true)
+    }
+    document.addEventListener('visibilitychange', maybeNudge)
+    window.addEventListener('focus', maybeNudge)
+    return () => {
+      document.removeEventListener('visibilitychange', maybeNudge)
+      window.removeEventListener('focus', maybeNudge)
+    }
+  }, [activeId, showEmbed])
 
   const upNext = useMemo(() => {
     if (!active) return []
@@ -382,6 +420,20 @@ export function VideosPage() {
       pct: done ? 100 : 0,
       watchedSec: done ? (v.durationSec ?? v.watchedSec) : 0,
     })
+    setLogNudge(false)
+  }
+
+  const applyManualProgress = (
+    id: string,
+    patch: { pct: number; watchedSec: number; durationSec?: number | null },
+  ) => {
+    updateVideo(id, {
+      pct: patch.pct,
+      watchedSec: patch.watchedSec,
+      ...(patch.durationSec != null ? { durationSec: patch.durationSec } : {}),
+    })
+    setLivePct(patch.pct)
+    setLogNudge(false)
   }
 
   const onPlayerEnded = () => {
@@ -533,7 +585,13 @@ export function VideosPage() {
           {menuOpen && (
             <div className="yt-card-menu">
               <a
-                href={v.videoId ? youtubeWatchUrl(v.videoId) : v.url}
+                href={
+                  v.videoId
+                    ? youtubeWatchUrl(v.videoId, {
+                        startSec: resumeStartSec(v),
+                      })
+                    : v.url
+                }
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -659,20 +717,19 @@ export function VideosPage() {
 
       {!active && (
         <aside className="yt-ads-note" aria-label="About YouTube ads">
-          <strong>About ads in the player</strong>
+          <strong>About ads &amp; progress</strong>
           <p>
-            YouTube’s official API does not let ExamPulse remove or reduce ads —
-            only the video owner’s monetization settings and{' '}
+            Embeds can’t strip ads (
             <a
               href="https://www.youtube.com/premium"
               target="_blank"
               rel="noopener noreferrer"
             >
-              YouTube Premium
+              Premium
             </a>{' '}
-            control that. Best option here: turn on “Open on YouTube” below the
-            player (Premium works there), or watch shorter clips with fewer
-            mid-rolls.
+            on youtube.com can). Tradeoff: watching on YouTube means progress
+            isn’t automatic — log % when you return, or use Play in ExamPulse
+            for auto-tracking.
           </p>
         </aside>
       )}
@@ -1125,16 +1182,21 @@ export function VideosPage() {
               ) : (
                 <div className="yt-external-panel">
                   <p>
-                    Playing on YouTube (where Premium removes ads). Embeds can’t
-                    be made ad-free — that’s a YouTube platform limit, not an
-                    ExamPulse setting.
+                    Playing on YouTube (Premium can remove ads there). Progress
+                    won’t auto-update — log it below when you’re back.
                   </p>
                   <div className="yt-watch-actions">
                     <a
                       className="yt-action solid"
-                      href={youtubeWatchUrl(active.videoId)}
+                      href={youtubeWatchUrl(active.videoId, {
+                        startSec: resumeStartSec(active),
+                      })}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => {
+                        externalOpenedAt.current = Date.now()
+                        setLogNudge(false)
+                      }}
                     >
                       Open again ↗
                     </a>
@@ -1151,7 +1213,7 @@ export function VideosPage() {
                       className="yt-action"
                       onClick={() => openWatch(active.id, { forceEmbed: true })}
                     >
-                      Play in ExamPulse
+                      Play in ExamPulse (auto %)
                     </button>
                   </div>
                 </div>
@@ -1184,9 +1246,17 @@ export function VideosPage() {
                 <div className="yt-watch-actions">
                   <a
                     className="yt-action"
-                    href={youtubeWatchUrl(active.videoId)}
+                    href={youtubeWatchUrl(active.videoId, {
+                      startSec: resumeStartSec(active),
+                    })}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      if (!showEmbed) {
+                        externalOpenedAt.current = Date.now()
+                        setLogNudge(false)
+                      }
+                    }}
                   >
                     YouTube ↗
                   </a>
@@ -1213,44 +1283,45 @@ export function VideosPage() {
                   onChange={(e) => togglePreferExternal(e.target.checked)}
                 />
                 <span>
-                  Open on YouTube instead of in-app player — recommended if you
-                  have{' '}
-                  <a
-                    href="https://www.youtube.com/premium"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Premium
-                  </a>{' '}
-                  (embeds can’t strip ads)
+                  Open on YouTube instead of in-app player — Premium can kill
+                  ads there, but you’ll log % manually (auto-track needs the
+                  in-app player)
                 </span>
               </label>
 
-              <div className="yt-progress-panel">
-                <div className="yt-progress-meta">
-                  <strong>{displayPct}%</strong>
-                  {watchedLabel && <span>{watchedLabel}</span>}
-                  {active.durationSec && displayPct < 100 && (
-                    <span className="yt-left">
-                      {formatDuration(
-                        Math.max(
-                          0,
-                          active.durationSec -
-                            Math.max(
-                              active.watchedSec,
-                              (displayPct / 100) * active.durationSec,
-                            ),
-                        ),
-                      )}{' '}
-                      left
-                    </span>
-                  )}
+              {!showEmbed ? (
+                <ExternalProgressLog
+                  video={active}
+                  nudge={logNudge}
+                  onApply={(patch) => applyManualProgress(active.id, patch)}
+                  onClearNudge={() => setLogNudge(false)}
+                />
+              ) : (
+                <div className="yt-progress-panel">
+                  <div className="yt-progress-meta">
+                    <strong>{displayPct}%</strong>
+                    {watchedLabel && <span>{watchedLabel}</span>}
+                    {active.durationSec && displayPct < 100 && (
+                      <span className="yt-left">
+                        {formatDuration(
+                          Math.max(
+                            0,
+                            active.durationSec -
+                              Math.max(
+                                active.watchedSec,
+                                (displayPct / 100) * active.durationSec,
+                              ),
+                          ),
+                        )}{' '}
+                        left
+                      </span>
+                    )}
+                  </div>
+                  <div className="video-progress-track" aria-hidden>
+                    <span style={{ width: `${displayPct}%` }} />
+                  </div>
                 </div>
-                <div className="video-progress-track" aria-hidden>
-                  <span style={{ width: `${displayPct}%` }} />
-                </div>
-              </div>
+              )}
 
               <VideoNotes
                 notes={active.notes}
