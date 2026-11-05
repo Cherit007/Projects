@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { TopicPicker } from '../components/TopicPicker'
+import { VideoNotes } from '../components/VideoNotes'
 import { YouTubeProgressPlayer } from '../components/YouTubeProgressPlayer'
+import { TOPICS } from '../data/topics'
 import { useProgress } from '../hooks/useProgress'
 import {
   VIDEO_SECTION_SUGGESTIONS,
@@ -13,24 +16,43 @@ import {
   type VideoEntry,
   type YoutubePlaylist,
 } from '../utils/videoLibrary'
+import {
+  buildDailyMix,
+  dueRewatches,
+  rankUpNext,
+  type RecReason,
+  type UpNextMode,
+} from '../utils/videoRecommend'
 
 type StatusFilter = 'All' | 'In progress' | 'Done' | 'Not started'
 type ComposerMode = 'video' | 'playlist'
 
 export function VideosPage() {
-  const { videoLibrary, addVideo, addVideos, updateVideo, removeVideo } =
-    useProgress()
+  const {
+    videoLibrary,
+    videoQueues,
+    addVideo,
+    addVideos,
+    updateVideo,
+    removeVideo,
+    scheduleRewatch,
+    addVideoQueue,
+    updateVideoQueue,
+    removeVideoQueue,
+    reorderVideoQueue,
+  } = useProgress()
+
   const [title, setTitle] = useState('')
   const [section, setSection] = useState<string>(VIDEO_SECTION_SUGGESTIONS[0])
   const [customSection, setCustomSection] = useState('')
   const [url, setUrl] = useState('')
   const [channel, setChannel] = useState('')
   const [notesDraft, setNotesDraft] = useState('')
+  const [topicIds, setTopicIds] = useState<string[]>([])
   const [filter, setFilter] = useState('All')
   const [status, setStatus] = useState<StatusFilter>('All')
   const [query, setQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [editingNotesId, setEditingNotesId] = useState<string | null>(null)
   const [menuId, setMenuId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [composerOpen, setComposerOpen] = useState(false)
@@ -44,17 +66,33 @@ export function VideosPage() {
   >('idle')
   const [playlistMsg, setPlaylistMsg] = useState('')
   const [usePlaylistTitle, setUsePlaylistTitle] = useState(true)
-  const [lookupState, setLookupState] = useState<'idle' | 'loading' | 'ok' | 'fail'>(
-    'idle',
-  )
+  const [lookupState, setLookupState] = useState<
+    'idle' | 'loading' | 'ok' | 'fail'
+  >('idle')
   const [livePct, setLivePct] = useState<number | null>(null)
+  const [upNextMode, setUpNextMode] = useState<UpNextMode>('section')
+  const [autoplay, setAutoplay] = useState(true)
+  const [seekRequest, setSeekRequest] = useState<{
+    seconds: number
+    nonce: number
+  } | null>(null)
+  const [queueName, setQueueName] = useState('')
+  const [activeQueueId, setActiveQueueId] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
   const titleTouched = useRef(false)
   const activeRef = useRef<VideoEntry | null>(null)
   const watchRef = useRef<HTMLElement | null>(null)
+  const seekNonce = useRef(0)
 
   const openWatch = (id: string) => {
     setMenuId(null)
+    setSeekRequest(null)
     setActiveId(id)
+  }
+
+  const jumpTo = (seconds: number) => {
+    seekNonce.current += 1
+    setSeekRequest({ seconds, nonce: seekNonce.current })
   }
 
   const sections = useMemo(() => {
@@ -78,7 +116,10 @@ export function VideosPage() {
       if (status === 'In progress' && !(v.pct > 0 && v.pct < 90)) return false
       if (status === 'Not started' && v.pct > 0) return false
       if (!q) return true
-      return `${v.title} ${v.section} ${v.channel ?? ''} ${v.notes ?? ''}`
+      const topicText = (v.topicIds ?? [])
+        .map((id) => TOPICS.find((t) => t.id === id)?.title ?? id)
+        .join(' ')
+      return `${v.title} ${v.section} ${v.channel ?? ''} ${v.notes ?? ''} ${topicText}`
         .toLowerCase()
         .includes(q)
     })
@@ -99,23 +140,11 @@ export function VideosPage() {
 
   const upNext = useMemo(() => {
     if (!active) return []
-    const same = videoLibrary.filter(
-      (v) =>
-        v.id !== active.id &&
-        v.section === active.section &&
-        v.pct < 90 &&
-        v.videoId,
-    )
-    const rest = videoLibrary.filter(
-      (v) =>
-        v.id !== active.id &&
-        v.section !== active.section &&
-        v.pct < 90 &&
-        v.videoId &&
-        !same.some((s) => s.id === v.id),
-    )
-    return [...same, ...rest].slice(0, 10)
-  }, [videoLibrary, active])
+    return rankUpNext(videoLibrary, active, upNextMode).slice(0, 12)
+  }, [videoLibrary, active, upNextMode])
+
+  const dailyMix = useMemo(() => buildDailyMix(videoLibrary, 6), [videoLibrary])
+  const rewatch = useMemo(() => dueRewatches(videoLibrary), [videoLibrary])
 
   const totals = useMemo(() => {
     const n = videoLibrary.length
@@ -164,6 +193,13 @@ export function VideosPage() {
     setQuery('')
   }
 
+  const activeQueue =
+    videoQueues.find((q) => q.id === activeQueueId) ?? videoQueues[0] ?? null
+
+  useEffect(() => {
+    if (!activeQueueId && videoQueues[0]) setActiveQueueId(videoQueues[0].id)
+  }, [videoQueues, activeQueueId])
+
   useEffect(() => {
     const id = parseYouTubeId(url)
     if (!id) {
@@ -204,7 +240,6 @@ export function VideosPage() {
     return () => window.cancelAnimationFrame(id)
   }, [activeId])
 
-  // Preview playlist when URL looks valid
   useEffect(() => {
     if (composerMode !== 'playlist') return
     const id = parseYouTubePlaylistId(playlistUrl)
@@ -250,6 +285,7 @@ export function VideosPage() {
       url: url.trim(),
       notes: notesDraft.trim() || undefined,
       channel: channel.trim() || undefined,
+      topicIds: topicIds.length ? topicIds : undefined,
     })
     if (!created) {
       setError('Could not save that video.')
@@ -260,6 +296,7 @@ export function VideosPage() {
     setChannel('')
     setNotesDraft('')
     setCustomSection('')
+    setTopicIds([])
     titleTouched.current = false
     setLookupState('idle')
     setComposerOpen(false)
@@ -291,6 +328,7 @@ export function VideosPage() {
         url: item.url,
         channel: item.channel || playlistPreview.channel,
         notes: `Playlist: ${playlistPreview.title}`,
+        topicIds: topicIds.length ? topicIds : undefined,
       })),
     )
     setPlaylistMsg(
@@ -307,16 +345,6 @@ export function VideosPage() {
     }
   }
 
-  const refreshMeta = async (v: VideoEntry) => {
-    if (!v.videoId && !v.url) return
-    const meta = await fetchYoutubeDetails(v.videoId || v.url)
-    if (!meta) return
-    updateVideo(v.id, {
-      title: v.title.trim() ? v.title : meta.title,
-      channel: meta.channel || v.channel,
-    })
-  }
-
   const markDone = (v: VideoEntry, done: boolean) => {
     updateVideo(v.id, {
       pct: done ? 100 : 0,
@@ -324,34 +352,44 @@ export function VideosPage() {
     })
   }
 
-  const renderUpNextRow = (v: VideoEntry, index: number) => {
-    const thumb = v.videoId ? youtubeThumbnailUrl(v.videoId, 'mq') : null
+  const onPlayerEnded = () => {
+    if (!autoplay || !active) return
+    const next = upNext[0]?.video
+    if (next) openWatch(next.id)
+  }
+
+  const reasonClass = (reason: RecReason) =>
+    reason.toLowerCase().replace(/\s+/g, '-')
+
+  const renderUpNextRow = (
+    video: VideoEntry,
+    reason: RecReason,
+    index: number,
+  ) => {
+    const thumb = video.videoId ? youtubeThumbnailUrl(video.videoId, 'mq') : null
     return (
       <button
-        key={v.id}
+        key={video.id}
         type="button"
         className="yt-upnext-row"
-        onClick={() => openWatch(v.id)}
+        onClick={() => openWatch(video.id)}
       >
         <span className="yt-upnext-index" aria-hidden>
           {index + 1}
         </span>
         <span className="yt-upnext-thumb">
           {thumb ? <img src={thumb} alt="" loading="lazy" /> : null}
-          {v.pct > 0 && (
-            <i className="yt-upnext-bar" style={{ width: `${v.pct}%` }} />
+          {video.pct > 0 && (
+            <i className="yt-upnext-bar" style={{ width: `${video.pct}%` }} />
           )}
         </span>
         <span className="yt-upnext-copy">
-          <strong>{v.title}</strong>
+          <strong>{video.title}</strong>
           <em>
-            {v.section}
-            {v.channel ? ` · ${v.channel}` : ''}
+            {video.section}
+            {video.channel ? ` · ${video.channel}` : ''}
           </em>
-          <em>
-            {v.pct > 0 ? `${v.pct}%` : 'Not started'}
-            {v.durationSec ? ` · ${formatDuration(v.durationSec)}` : ''}
-          </em>
+          <span className={`yt-why ${reasonClass(reason)}`}>{reason}</span>
         </span>
       </button>
     )
@@ -365,6 +403,9 @@ export function VideosPage() {
         ? Math.max(0, v.durationSec - v.watchedSec)
         : null
     const menuOpen = menuId === v.id
+    const topicLabels = (v.topicIds ?? [])
+      .map((id) => TOPICS.find((t) => t.id === id)?.title)
+      .filter(Boolean)
     return (
       <article
         key={v.id}
@@ -410,13 +451,16 @@ export function VideosPage() {
             </button>
           </h3>
           {v.channel && <p className="yt-card-channel">{v.channel}</p>}
+          {topicLabels.length > 0 && (
+            <p className="yt-card-topics">{topicLabels.join(' · ')}</p>
+          )}
           <p className="yt-card-meta">
             {v.pct}% watched
             {v.durationSec
               ? ` · ${formatDuration(v.watchedSec)} / ${formatDuration(v.durationSec)}`
               : ''}
+            {v.rewatchDue ? ` · rewatch ${v.rewatchDue}` : ''}
           </p>
-          {v.notes && <p className="yt-card-notes">{v.notes}</p>}
 
           <div className="yt-card-actions">
             {v.videoId && (
@@ -435,6 +479,15 @@ export function VideosPage() {
             >
               {done ? 'Reset' : 'Done'}
             </button>
+            {done && v.rewatchDue && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => scheduleRewatch(v.id)}
+              >
+                Snooze rewatch
+              </button>
+            )}
             <button
               type="button"
               className={`ghost${menuOpen ? ' active' : ''}`}
@@ -454,26 +507,32 @@ export function VideosPage() {
               >
                 Open on YouTube ↗
               </a>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingNotesId(editingNotesId === v.id ? null : v.id)
-                  setMenuId(null)
-                }}
-              >
-                Edit notes
-              </button>
-              {!v.channel && (
+              {activeQueue && (
                 <button
                   type="button"
                   onClick={() => {
-                    void refreshMeta(v)
+                    if (activeQueue.videoIds.includes(v.id)) return
+                    updateVideoQueue(activeQueue.id, {
+                      videoIds: [...activeQueue.videoIds, v.id],
+                    })
                     setMenuId(null)
                   }}
                 >
-                  Fetch title / channel
+                  Add to “{activeQueue.name}”
                 </button>
               )}
+              <TopicPicker
+                value={v.topicIds ?? []}
+                onChange={(ids) => updateVideo(v.id, { topicIds: ids })}
+              />
+              <VideoNotes
+                notes={v.notes}
+                onSave={(n) => updateVideo(v.id, { notes: n })}
+                onJump={(sec) => {
+                  openWatch(v.id)
+                  window.setTimeout(() => jumpTo(sec), 400)
+                }}
+              />
               <label className="yt-menu-slider">
                 <span>Adjust % (watched elsewhere)</span>
                 <input
@@ -505,28 +564,6 @@ export function VideosPage() {
               </button>
             </div>
           )}
-
-          {editingNotesId === v.id && (
-            <div className="yt-notes-edit">
-              <textarea
-                defaultValue={v.notes ?? ''}
-                rows={3}
-                placeholder="Timestamps, weak spots, what to revise…"
-                onBlur={(e) => {
-                  updateVideo(v.id, {
-                    notes: e.target.value.trim() || undefined,
-                  })
-                }}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setEditingNotesId(null)}
-              >
-                Done editing
-              </button>
-            </div>
-          )}
         </div>
       </article>
     )
@@ -549,8 +586,8 @@ export function VideosPage() {
           <h1>YouTube library</h1>
           {!active && (
             <p className="lede">
-              Add a video or import a whole playlist. Progress updates while you
-              watch here.
+              Add videos or playlists, link syllabus topics, and get smart Up
+              next while you watch.
             </p>
           )}
         </div>
@@ -571,9 +608,9 @@ export function VideosPage() {
                   <strong>{totals.inProgress}</strong> in progress
                 </span>
               )}
-              {totals.leftSec > 0 && (
+              {rewatch.length > 0 && (
                 <span>
-                  <strong>~{formatDuration(totals.leftSec)}</strong> left
+                  <strong>{rewatch.length}</strong> rewatch due
                 </span>
               )}
             </div>
@@ -704,6 +741,7 @@ export function VideosPage() {
                   />
                 </label>
               </div>
+              <TopicPicker value={topicIds} onChange={setTopicIds} />
               {error && <p className="video-error">{error}</p>}
               <button type="button" className="btn primary" onClick={onAdd}>
                 Save to library
@@ -776,7 +814,7 @@ export function VideosPage() {
                   </>
                 )}
               </div>
-
+              <TopicPicker value={topicIds} onChange={setTopicIds} />
               {playlistPreview && playlistPreview.items.length > 0 && (
                 <div className="yt-playlist-preview" aria-label="Playlist preview">
                   <p className="yt-playlist-preview-head">
@@ -797,25 +835,179 @@ export function VideosPage() {
                       </li>
                     ))}
                   </ul>
-                  {playlistPreview.items.length > 8 && (
-                    <p className="muted-line">
-                      +{playlistPreview.items.length - 8} more will import
-                    </p>
-                  )}
                 </div>
               )}
-
               {error && <p className="video-error">{error}</p>}
               {playlistMsg && <p className="yt-lookup ok">{playlistMsg}</p>}
               <button
                 type="button"
                 className="btn primary"
-                disabled={!playlistPreview?.items.length || playlistState === 'loading'}
+                disabled={
+                  !playlistPreview?.items.length || playlistState === 'loading'
+                }
                 onClick={onImportPlaylist}
               >
                 Import {playlistPreview?.items.length ?? 0} to library
               </button>
             </>
+          )}
+        </section>
+      )}
+
+      {!active && videoLibrary.length > 0 && (
+        <section className="yt-study-strips" aria-label="Study strips">
+          {dailyMix.length > 0 && (
+            <div className="yt-strip">
+              <div className="yt-section-head">
+                <h2 className="roadmap-section-title">Daily Mix</h2>
+                <span className="muted-line">Unfinished + due rewatches</span>
+              </div>
+              <div className="yt-rail">
+                {dailyMix.map((r) => renderThumbCard(r.video, true))}
+              </div>
+            </div>
+          )}
+          {rewatch.length > 0 && (
+            <div className="yt-strip">
+              <div className="yt-section-head">
+                <h2 className="roadmap-section-title">Rewatch due</h2>
+                <span className="muted-line">Spaced 3 / 7 / 21 days</span>
+              </div>
+              <div className="yt-rail">
+                {rewatch.slice(0, 8).map((v) => renderThumbCard(v, true))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!active && (
+        <section className="yt-queues" aria-label="Study queues">
+          <div className="yt-section-head">
+            <h2 className="roadmap-section-title">Study queues</h2>
+          </div>
+          <div className="yt-queue-create">
+            <input
+              type="text"
+              value={queueName}
+              onChange={(e) => setQueueName(e.target.value)}
+              placeholder="e.g. Week 12 English"
+              maxLength={80}
+            />
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => {
+                const q = addVideoQueue(queueName)
+                if (q) {
+                  setQueueName('')
+                  setActiveQueueId(q.id)
+                }
+              }}
+            >
+              New queue
+            </button>
+          </div>
+          {videoQueues.length > 0 && (
+            <div className="yt-queue-tabs">
+              {videoQueues.map((q) => (
+                <button
+                  key={q.id}
+                  type="button"
+                  className={activeQueue?.id === q.id ? 'active' : ''}
+                  onClick={() => setActiveQueueId(q.id)}
+                >
+                  {q.name}
+                  <em>{q.videoIds.length}</em>
+                </button>
+              ))}
+            </div>
+          )}
+          {activeQueue && (
+            <div className="yt-queue-panel">
+              <div className="yt-queue-panel-head">
+                <strong>{activeQueue.name}</strong>
+                <div className="yt-watch-actions">
+                  {activeQueue.videoIds[0] && (
+                    <button
+                      type="button"
+                      className="yt-action solid"
+                      onClick={() => openWatch(activeQueue.videoIds[0])}
+                    >
+                      Play queue
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="yt-action"
+                    onClick={() => {
+                      if (confirm(`Delete queue “${activeQueue.name}”?`)) {
+                        removeVideoQueue(activeQueue.id)
+                        setActiveQueueId(null)
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              {activeQueue.videoIds.length === 0 ? (
+                <p className="muted-line">
+                  Empty — use More → Add to queue on any video.
+                </p>
+              ) : (
+                <ul className="yt-queue-list">
+                  {activeQueue.videoIds.map((id, index) => {
+                    const v = videoLibrary.find((x) => x.id === id)
+                    if (!v) return null
+                    return (
+                      <li
+                        key={id}
+                        draggable
+                        onDragStart={() => setDragId(id)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (!dragId || dragId === id) return
+                          const ids = [...activeQueue.videoIds]
+                          const from = ids.indexOf(dragId)
+                          const to = ids.indexOf(id)
+                          if (from < 0 || to < 0) return
+                          ids.splice(from, 1)
+                          ids.splice(to, 0, dragId)
+                          reorderVideoQueue(activeQueue.id, ids)
+                          setDragId(null)
+                        }}
+                      >
+                        <span className="yt-queue-handle" aria-hidden>
+                          ⋮⋮
+                        </span>
+                        <span className="yt-upnext-index">{index + 1}</span>
+                        <button
+                          type="button"
+                          className="yt-queue-title"
+                          onClick={() => openWatch(id)}
+                        >
+                          {v.title}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            updateVideoQueue(activeQueue.id, {
+                              videoIds: activeQueue.videoIds.filter(
+                                (x) => x !== id,
+                              ),
+                            })
+                          }
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -835,6 +1027,8 @@ export function VideosPage() {
                   active.pct >= 90 ? 0 : Math.max(0, active.watchedSec - 3)
                 }
                 initialPeakSec={active.watchedSec}
+                seekRequest={seekRequest}
+                onEnded={onPlayerEnded}
                 onProgress={({ watchedSec, durationSec, pct }) => {
                   setLivePct(pct)
                   const cur = activeRef.current
@@ -863,6 +1057,14 @@ export function VideosPage() {
                 {active.channel && (
                   <span className="yt-tag soft">{active.channel}</span>
                 )}
+                {(active.topicIds ?? []).slice(0, 3).map((id) => {
+                  const t = TOPICS.find((x) => x.id === id)
+                  return t ? (
+                    <span key={id} className="yt-tag soft">
+                      {t.title}
+                    </span>
+                  ) : null
+                })}
                 <span className="yt-auto-pill">Auto tracking</span>
               </div>
               <div className="yt-now-title-row">
@@ -917,19 +1119,54 @@ export function VideosPage() {
                   <span style={{ width: `${displayPct}%` }} />
                 </div>
               </div>
+
+              <VideoNotes
+                notes={active.notes}
+                onSave={(n) => updateVideo(active.id, { notes: n })}
+                onJump={jumpTo}
+              />
             </div>
           </div>
 
           <aside className="yt-upnext" aria-label="Up next">
             <div className="yt-upnext-head">
               <h3>Up next</h3>
-              <span>{upNext.length} queued</span>
+              <label className="yt-autoplay">
+                <input
+                  type="checkbox"
+                  checked={autoplay}
+                  onChange={(e) => setAutoplay(e.target.checked)}
+                />
+                Autoplay
+              </label>
+            </div>
+            <div className="yt-mode-toggle yt-upnext-modes" role="tablist">
+              {(
+                [
+                  ['section', 'This section'],
+                  ['related', 'Related'],
+                  ['all', 'All library'],
+                ] as Array<[UpNextMode, string]>
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={upNextMode === mode}
+                  className={upNextMode === mode ? 'active' : ''}
+                  onClick={() => setUpNextMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className="yt-upnext-list">
               {upNext.length === 0 ? (
-                <p className="yt-upnext-empty">All caught up — nice work.</p>
+                <p className="yt-upnext-empty">
+                  Nothing queued in this view — try Related or All library.
+                </p>
               ) : (
-                upNext.map((v, i) => renderUpNextRow(v, i))
+                upNext.map((r, i) => renderUpNextRow(r.video, r.reason, i))
               )}
             </div>
           </aside>
@@ -1041,7 +1278,7 @@ export function VideosPage() {
       {grouped.length === 0 ? (
         <p className="group-empty">
           {videoLibrary.length === 0
-            ? 'No videos yet — tap Add video and paste a YouTube link.'
+            ? 'No videos yet — tap Add and paste a YouTube link or playlist.'
             : 'No videos match this filter.'}
         </p>
       ) : (
@@ -1059,7 +1296,7 @@ export function VideosPage() {
         ))
       )}
 
-      {active && grouped.length > 0 && (
+      {active && (
         <section className="yt-library-rest" aria-label="Library">
           <div className="yt-section-head">
             <h2 className="roadmap-section-title">Library</h2>
@@ -1072,7 +1309,7 @@ export function VideosPage() {
             </button>
           </div>
           <div className="yt-rail">
-            {filtered.slice(0, 12).map((v) => renderThumbCard(v, true))}
+            {videoLibrary.slice(0, 12).map((v) => renderThumbCard(v, true))}
           </div>
         </section>
       )}

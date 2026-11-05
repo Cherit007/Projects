@@ -7,6 +7,10 @@ import {
   mergeVideoEntries,
   normalizeVideoEntries,
 } from '../utils/videoLibrary'
+import {
+  mergeVideoQueues,
+  normalizeVideoQueues,
+} from '../utils/videoQueues'
 
 let cloudUid: string | null = null
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -82,6 +86,7 @@ export function normalizeCloudState(raw: unknown): AppState | null {
     docs: asBoolMap(p.docs),
     examGroups: normalizeExamGroups(p.examGroups),
     videoLibrary: normalizeVideoEntries(p.videoLibrary),
+    videoQueues: normalizeVideoQueues(p.videoQueues),
   }
 }
 
@@ -146,6 +151,7 @@ export function mergeAppState(local: AppState, cloud: AppState): AppState {
     docs,
     examGroups: mergeExamGroups(local.examGroups, cloud.examGroups),
     videoLibrary: mergeVideoEntries(local.videoLibrary, cloud.videoLibrary),
+    videoQueues: mergeVideoQueues(local.videoQueues, cloud.videoQueues),
   }
 }
 

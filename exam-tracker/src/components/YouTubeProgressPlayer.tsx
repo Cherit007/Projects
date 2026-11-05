@@ -7,6 +7,7 @@ type YTPlayer = {
   getDuration: () => number
   getPlayerState: () => number
   seekTo: (seconds: number, allowSeekAhead: boolean) => void
+  playVideo: () => void
 }
 
 type YTNamespace = {
@@ -57,7 +58,6 @@ function loadYouTubeApi(): Promise<void> {
       s.dataset.ytApi = '1'
       document.head.appendChild(s)
     }
-    // Script already present / race: poll until Player exists
     if (window.YT?.Player) {
       done()
       return
@@ -82,6 +82,9 @@ type Props = {
   startSeconds?: number
   /** Known peak so we never report lower % after resume */
   initialPeakSec?: number
+  /** Bump this object to seek+play at seconds (timestamp notes) */
+  seekRequest?: { seconds: number; nonce: number } | null
+  onEnded?: () => void
   onProgress: (info: {
     watchedSec: number
     durationSec: number
@@ -98,13 +101,17 @@ export function YouTubeProgressPlayer({
   videoId,
   startSeconds = 0,
   initialPeakSec = 0,
+  seekRequest = null,
+  onEnded,
   onProgress,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const peakRef = useRef(0)
   const onProgressRef = useRef(onProgress)
+  const onEndedRef = useRef(onEnded)
   onProgressRef.current = onProgress
+  onEndedRef.current = onEnded
 
   useEffect(() => {
     let cancelled = false
@@ -171,8 +178,8 @@ export function YouTubeProgressPlayer({
             report()
             if (e.data === window.YT?.PlayerState.ENDED) {
               report(100)
+              onEndedRef.current?.()
             }
-            // Persist immediately on pause
             if (e.data === window.YT?.PlayerState.PAUSED) {
               report()
             }
@@ -198,9 +205,20 @@ export function YouTubeProgressPlayer({
       }
       playerRef.current = null
     }
-    // Only remount when the video changes — resume args are seed values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId])
+
+  useEffect(() => {
+    if (!seekRequest) return
+    const p = playerRef.current
+    if (!p) return
+    try {
+      p.seekTo(Math.max(0, seekRequest.seconds), true)
+      p.playVideo()
+    } catch {
+      /* ignore */
+    }
+  }, [seekRequest])
 
   return (
     <div className="yt-player-wrap">
