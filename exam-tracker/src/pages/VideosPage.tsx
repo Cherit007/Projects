@@ -35,6 +35,11 @@ export function VideosPage() {
   const [livePct, setLivePct] = useState<number | null>(null)
   const titleTouched = useRef(false)
   const activeRef = useRef<VideoEntry | null>(null)
+  const watchRef = useRef<HTMLElement | null>(null)
+
+  const openWatch = (id: string) => {
+    setActiveId(id)
+  }
 
   const sections = useMemo(() => {
     const set = new Set<string>()
@@ -121,6 +126,17 @@ export function VideosPage() {
     setLivePct(null)
   }, [activeId])
 
+  // Player mounts above the grid — scroll it into view or Watch looks like a no-op
+  useEffect(() => {
+    if (!activeId) return
+    const node = watchRef.current
+    if (!node) return
+    const id = window.requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [activeId])
+
   const onAdd = () => {
     setError('')
     const sec = (customSection.trim() || section).trim()
@@ -151,7 +167,7 @@ export function VideosPage() {
     titleTouched.current = false
     setLookupState('idle')
     setComposerOpen(false)
-    setActiveId(created.id)
+    openWatch(created.id)
   }
 
   const refreshMeta = async (v: VideoEntry) => {
@@ -180,7 +196,7 @@ export function VideosPage() {
           type="button"
           className="yt-thumb"
           disabled={!v.videoId}
-          onClick={() => v.videoId && setActiveId(v.id)}
+          onClick={() => v.videoId && openWatch(v.id)}
           aria-label={`Watch ${v.title}`}
         >
           {thumb ? (
@@ -222,7 +238,7 @@ export function VideosPage() {
               <button
                 type="button"
                 className="btn primary"
-                onClick={() => setActiveId(v.id)}
+                onClick={() => openWatch(v.id)}
               >
                 {v.pct > 0 && v.pct < 90 ? 'Resume' : 'Watch'}
               </button>
@@ -499,7 +515,12 @@ export function VideosPage() {
       )}
 
       {active && active.videoId && (
-        <section className="video-watch" aria-label="Now watching">
+        <section
+          ref={watchRef}
+          className="video-watch"
+          aria-label="Now watching"
+          tabIndex={-1}
+        >
           <div className="video-watch-head">
             <div>
               <p className="muted-line">
