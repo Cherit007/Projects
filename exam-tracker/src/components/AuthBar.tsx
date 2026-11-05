@@ -32,7 +32,12 @@ export function AuthBar() {
           onClick={() => void signInWithGoogle()}
           disabled={syncing}
         >
-          {syncing ? 'Signing in…' : 'Sign in with Google'}
+          <span className="auth-login-full">
+            {syncing ? 'Signing in…' : 'Sign in with Google'}
+          </span>
+          <span className="auth-login-short">
+            {syncing ? '…' : 'Sign in'}
+          </span>
         </button>
         {error && <span className="auth-error" title={error}>Sign-in issue</span>}
       </div>

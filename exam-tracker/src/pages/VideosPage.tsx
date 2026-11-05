@@ -657,6 +657,26 @@ export function VideosPage() {
         </div>
       </header>
 
+      {!active && (
+        <aside className="yt-ads-note" aria-label="About YouTube ads">
+          <strong>About ads in the player</strong>
+          <p>
+            YouTube’s official API does not let ExamPulse remove or reduce ads —
+            only the video owner’s monetization settings and{' '}
+            <a
+              href="https://www.youtube.com/premium"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              YouTube Premium
+            </a>{' '}
+            control that. Best option here: turn on “Open on YouTube” below the
+            player (Premium works there), or watch shorter clips with fewer
+            mid-rolls.
+          </p>
+        </aside>
+      )}
+
       {composerOpen && (
         <section className="video-composer" aria-label="Add to YouTube library">
           <div className="yt-composer-top">
@@ -1105,9 +1125,9 @@ export function VideosPage() {
               ) : (
                 <div className="yt-external-panel">
                   <p>
-                    Opened on YouTube. Official embeds always use YouTube’s ads —
-                    ExamPulse can’t remove them. YouTube Premium is the only
-                    official ad-free option.
+                    Playing on YouTube (where Premium removes ads). Embeds can’t
+                    be made ad-free — that’s a YouTube platform limit, not an
+                    ExamPulse setting.
                   </p>
                   <div className="yt-watch-actions">
                     <a
@@ -1117,6 +1137,14 @@ export function VideosPage() {
                       rel="noopener noreferrer"
                     >
                       Open again ↗
+                    </a>
+                    <a
+                      className="yt-action"
+                      href="https://www.youtube.com/premium"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      YouTube Premium
                     </a>
                     <button
                       type="button"
@@ -1184,8 +1212,19 @@ export function VideosPage() {
                   checked={preferExternal}
                   onChange={(e) => togglePreferExternal(e.target.checked)}
                 />
-                Open on YouTube instead of in-app player (ads are controlled by
-                YouTube either way; Premium is the only official ad-free path)
+                <span>
+                  Open on YouTube instead of in-app player — recommended if you
+                  have{' '}
+                  <a
+                    href="https://www.youtube.com/premium"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Premium
+                  </a>{' '}
+                  (embeds can’t strip ads)
+                </span>
               </label>
 
               <div className="yt-progress-panel">
