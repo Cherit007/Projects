@@ -70,6 +70,8 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 - [x] **I2** Thumbnail grid by section; embed watch + IFrame progress
 - [x] **I3** Continue watching, mark done, notes, search, manual %
 - [x] **I4** Cloud sync of videoLibrary
+- [x] **I5** Auto title/channel from YouTube oEmbed on paste
+- [x] **I6** Auto % from IFrame player (resume + live bar); manual % only as fallback
 
 ## UX / quality gates (every phase)
 
