@@ -56,6 +56,20 @@ export function youtubeWatchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`
 }
 
+/** Public thumbnail (no API key). Falls back gracefully if video is private. */
+export function youtubeThumbnailUrl(
+  videoId: string,
+  quality: 'hq' | 'mq' | 'sd' = 'hq',
+): string {
+  const q =
+    quality === 'mq'
+      ? 'mqdefault'
+      : quality === 'sd'
+        ? 'sddefault'
+        : 'hqdefault'
+  return `https://i.ytimg.com/vi/${videoId}/${q}.jpg`
+}
+
 export function youtubeEmbedUrl(videoId: string, origin?: string): string {
   const params = new URLSearchParams({
     enablejsapi: '1',
