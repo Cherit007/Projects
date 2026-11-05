@@ -6,10 +6,12 @@ import { YouTubeProgressPlayer } from '../components/YouTubeProgressPlayer'
 import { TOPICS } from '../data/topics'
 import { useProgress } from '../hooks/useProgress'
 import {
+  PLAYBACK_RATES,
   VIDEO_SECTION_SUGGESTIONS,
   fetchYoutubeDetails,
   fetchYoutubePlaylist,
   formatDuration,
+  normalizePlaybackRate,
   parseYouTubeId,
   parseYouTubePlaylistId,
   youtubeThumbnailUrl,
@@ -71,6 +73,8 @@ export function VideosPage() {
     'idle' | 'loading' | 'ok' | 'fail'
   >('idle')
   const [livePct, setLivePct] = useState<number | null>(null)
+  const [liveWatchedSec, setLiveWatchedSec] = useState<number | null>(null)
+  const [liveDurationSec, setLiveDurationSec] = useState<number | null>(null)
   const [upNextMode, setUpNextMode] = useState<UpNextMode>('section')
   const [autoplay, setAutoplay] = useState(true)
   const [seekRequest, setSeekRequest] = useState<{
@@ -106,6 +110,9 @@ export function VideosPage() {
     setMenuId(null)
     setSeekRequest(null)
     setLogNudge(false)
+    setLivePct(null)
+    setLiveWatchedSec(null)
+    setLiveDurationSec(null)
     const entry = videoLibrary.find((v) => v.id === id)
     if (opts?.forceEmbed) {
       setForceEmbedId(id)
@@ -419,7 +426,10 @@ export function VideosPage() {
     updateVideo(v.id, {
       pct: done ? 100 : 0,
       watchedSec: done ? (v.durationSec ?? v.watchedSec) : 0,
+      lastPlayedAt: new Date().toISOString(),
     })
+    setLivePct(done ? 100 : 0)
+    setLiveWatchedSec(done ? (v.durationSec ?? v.watchedSec) : 0)
     setLogNudge(false)
   }
 
@@ -427,13 +437,30 @@ export function VideosPage() {
     id: string,
     patch: { pct: number; watchedSec: number; durationSec?: number | null },
   ) => {
+    const watchedSec = Math.floor(patch.watchedSec)
     updateVideo(id, {
       pct: patch.pct,
-      watchedSec: patch.watchedSec,
-      ...(patch.durationSec != null ? { durationSec: patch.durationSec } : {}),
+      watchedSec,
+      lastPlayedAt: new Date().toISOString(),
+      ...(patch.durationSec != null
+        ? { durationSec: Math.round(patch.durationSec) }
+        : {}),
     })
     setLivePct(patch.pct)
+    setLiveWatchedSec(watchedSec)
+    if (patch.durationSec != null) setLiveDurationSec(Math.round(patch.durationSec))
     setLogNudge(false)
+  }
+
+  const setVideoSpeed = (id: string, rate: number) => {
+    updateVideo(id, { playbackRate: normalizePlaybackRate(rate) })
+  }
+
+  const resumeLabel = (v: VideoEntry, watchedOverride?: number | null) => {
+    const sec = Math.floor(watchedOverride ?? v.watchedSec)
+    if (v.pct >= 90) return 'Finished'
+    if (sec <= 0) return 'Not started'
+    return `Resume ${formatDuration(sec)}`
   }
 
   const onPlayerEnded = () => {
@@ -539,9 +566,15 @@ export function VideosPage() {
             <p className="yt-card-topics">{topicLabels.join(' · ')}</p>
           )}
           <p className="yt-card-meta">
-            {v.pct}% watched
+            {resumeLabel(v)}
             {v.durationSec
               ? ` · ${formatDuration(v.watchedSec)} / ${formatDuration(v.durationSec)}`
+              : v.watchedSec > 0
+                ? ` · ${formatDuration(v.watchedSec)}`
+                : ''}
+            {` · ${v.pct}%`}
+            {v.playbackRate && v.playbackRate !== 1
+              ? ` · ${v.playbackRate}×`
               : ''}
             {v.rewatchDue ? ` · rewatch ${v.rewatchDue}` : ''}
           </p>
@@ -660,14 +693,18 @@ export function VideosPage() {
   }
 
   const displayPct = livePct ?? active?.pct ?? 0
-  const watchedLabel = active?.durationSec
-    ? `${formatDuration(
-        Math.max(
-          active.watchedSec,
-          (displayPct / 100) * active.durationSec,
-        ),
-      )} / ${formatDuration(active.durationSec)}`
-    : null
+  const displayWatchedSec = Math.floor(
+    liveWatchedSec ?? active?.watchedSec ?? 0,
+  )
+  const displayDurationSec =
+    liveDurationSec ?? active?.durationSec ?? null
+  const watchedLabel =
+    displayDurationSec != null
+      ? `${formatDuration(displayWatchedSec)} / ${formatDuration(displayDurationSec)}`
+      : displayWatchedSec > 0
+        ? formatDuration(displayWatchedSec)
+        : null
+  const activeRate = normalizePlaybackRate(active?.playbackRate)
 
   return (
     <div className={`videos-page yt-library${active ? ' is-watching' : ''}`}>
@@ -714,25 +751,6 @@ export function VideosPage() {
           </button>
         </div>
       </header>
-
-      {!active && (
-        <aside className="yt-ads-note" aria-label="About YouTube ads">
-          <strong>About ads &amp; progress</strong>
-          <p>
-            Embeds can’t strip ads (
-            <a
-              href="https://www.youtube.com/premium"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Premium
-            </a>{' '}
-            on youtube.com can). Tradeoff: watching on YouTube means progress
-            isn’t automatic — log % when you return, or use Play in ExamPulse
-            for auto-tracking.
-          </p>
-        </aside>
-      )}
 
       {composerOpen && (
         <section className="video-composer" aria-label="Add to YouTube library">
@@ -1140,10 +1158,16 @@ export function VideosPage() {
                   }
                   initialPeakSec={active.watchedSec}
                   knownDurationSec={active.durationSec}
+                  playbackRate={activeRate}
                   seekRequest={seekRequest}
                   onEnded={onPlayerEnded}
+                  onPlaybackRateChange={(rate) =>
+                    setVideoSpeed(active.id, rate)
+                  }
                   onProgress={({ watchedSec, durationSec, pct }) => {
                     setLivePct(pct)
+                    setLiveWatchedSec(watchedSec)
+                    setLiveDurationSec(durationSec)
                     const cur = activeRef.current
                     if (!cur || cur.id !== active.id) return
 
@@ -1165,16 +1189,19 @@ export function VideosPage() {
                       !known || durationSec >= known * 0.9
                         ? durationSec
                         : known
+                    const nextWatched = Math.max(cur.watchedSec, watchedSec)
+                    const nextPct = Math.max(cur.pct, pct)
 
                     if (
-                      pct > cur.pct ||
-                      watchedSec > cur.watchedSec + 1 ||
+                      nextPct > cur.pct ||
+                      nextWatched > cur.watchedSec + 1 ||
                       (nextDuration && nextDuration !== cur.durationSec)
                     ) {
                       updateVideo(cur.id, {
-                        watchedSec: Math.max(cur.watchedSec, watchedSec),
+                        watchedSec: nextWatched,
                         durationSec: nextDuration,
-                        pct: Math.max(cur.pct, pct),
+                        pct: nextPct,
+                        lastPlayedAt: new Date().toISOString(),
                       })
                     }
                   }}
@@ -1289,6 +1316,60 @@ export function VideosPage() {
                 </span>
               </label>
 
+              <div className="yt-meta-facts" aria-label="Video metadata">
+                <span>
+                  <em>Resume</em>
+                  {resumeLabel(active, displayWatchedSec)}
+                </span>
+                <span>
+                  <em>Position</em>
+                  {watchedLabel ?? '—'}
+                </span>
+                <span>
+                  <em>Progress</em>
+                  {displayPct}%
+                </span>
+                <span>
+                  <em>Speed</em>
+                  {activeRate}×
+                </span>
+                {active.channel && (
+                  <span>
+                    <em>Channel</em>
+                    {active.channel}
+                  </span>
+                )}
+                {active.lastPlayedAt && (
+                  <span>
+                    <em>Last played</em>
+                    {new Date(active.lastPlayedAt).toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                )}
+              </div>
+
+              <div
+                className="yt-speed-control"
+                role="group"
+                aria-label="Playback speed"
+              >
+                <span className="yt-speed-label">Speed</span>
+                {PLAYBACK_RATES.map((rate) => (
+                  <button
+                    key={rate}
+                    type="button"
+                    className={activeRate === rate ? 'active' : ''}
+                    onClick={() => setVideoSpeed(active.id, rate)}
+                  >
+                    {rate}×
+                  </button>
+                ))}
+              </div>
+
               {!showEmbed ? (
                 <ExternalProgressLog
                   video={active}
@@ -1301,17 +1382,10 @@ export function VideosPage() {
                   <div className="yt-progress-meta">
                     <strong>{displayPct}%</strong>
                     {watchedLabel && <span>{watchedLabel}</span>}
-                    {active.durationSec && displayPct < 100 && (
+                    {displayDurationSec != null && displayPct < 100 && (
                       <span className="yt-left">
                         {formatDuration(
-                          Math.max(
-                            0,
-                            active.durationSec -
-                              Math.max(
-                                active.watchedSec,
-                                (displayPct / 100) * active.durationSec,
-                              ),
-                          ),
+                          Math.max(0, displayDurationSec - displayWatchedSec),
                         )}{' '}
                         left
                       </span>

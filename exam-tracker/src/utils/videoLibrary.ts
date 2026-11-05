@@ -13,12 +13,16 @@ export type VideoEntry = {
   channel?: string
   /** Optional links to ExamPulse syllabus topic ids */
   topicIds?: string[]
-  /** Longest continuous position reached (seconds) */
+  /** Furthest / resume position in seconds */
   watchedSec: number
   /** Peak watch percent 0–100 */
   pct: number
   /** Duration from player when known */
   durationSec: number | null
+  /** Last in-app playback rate (0.75–2) */
+  playbackRate?: number
+  /** ISO timestamp of last progress touch */
+  lastPlayedAt?: string
   /** When first marked done (≥90%) */
   completedAt?: string
   /** ISO date (yyyy-mm-dd) when a spaced rewatch is due */
@@ -28,6 +32,17 @@ export type VideoEntry = {
   createdAt: string
   updatedAt: string
   notes?: string
+}
+
+export const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2] as const
+
+export function normalizePlaybackRate(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 1
+  const nearest = PLAYBACK_RATES.reduce((best, rate) =>
+    Math.abs(rate - n) < Math.abs(best - n) ? rate : best,
+  )
+  return nearest
 }
 
 export type YoutubeOEmbed = {
@@ -385,18 +400,27 @@ export function normalizeVideoEntries(raw: unknown): VideoEntry[] {
       typeof v.videoId === 'string' && v.videoId
         ? v.videoId
         : parseYouTubeId(url)
-    const pct = Math.max(0, Math.min(100, Math.round(Number(v.pct) || 0)))
-    const watchedSec = Math.max(0, Number(v.watchedSec) || 0)
     const durationSec =
       typeof v.durationSec === 'number' && v.durationSec > 0
-        ? v.durationSec
+        ? Math.round(v.durationSec)
         : null
+    let watchedSec = Math.max(0, Math.floor(Number(v.watchedSec) || 0))
+    if (durationSec != null) watchedSec = Math.min(watchedSec, durationSec)
+    let pct = Math.max(0, Math.min(100, Math.round(Number(v.pct) || 0)))
+    // Keep % consistent with resume + duration when both exist
+    if (durationSec != null && durationSec > 0 && watchedSec > 0) {
+      const fromPos = Math.min(100, Math.round((watchedSec / durationSec) * 100))
+      // Prefer position-derived % when stored pct drifted
+      if (Math.abs(fromPos - pct) > 2 || pct === 0) pct = Math.max(pct, fromPos)
+      if (watchedSec >= durationSec * 0.99) pct = Math.max(pct, 100)
+    }
     const topicIds = Array.isArray(v.topicIds)
       ? [...new Set(v.topicIds.filter((id): id is string => typeof id === 'string' && !!id))].slice(
           0,
           8,
         )
       : undefined
+    const playbackRate = normalizePlaybackRate(v.playbackRate)
     out.push({
       id: v.id,
       title,
@@ -411,6 +435,9 @@ export function normalizeVideoEntries(raw: unknown): VideoEntry[] {
       watchedSec,
       pct,
       durationSec,
+      playbackRate: playbackRate === 1 ? undefined : playbackRate,
+      lastPlayedAt:
+        typeof v.lastPlayedAt === 'string' ? v.lastPlayedAt : undefined,
       completedAt:
         typeof v.completedAt === 'string' ? v.completedAt : undefined,
       rewatchDue:
@@ -450,12 +477,21 @@ export function mergeVideoEntries(
     const topicIds = [
       ...new Set([...(other.topicIds ?? []), ...(v.topicIds ?? [])]),
     ].slice(0, 8)
+    const newer =
+      v.updatedAt >= other.updatedAt
+        ? v
+        : other
     map.set(v.id, {
       ...other,
       ...v,
       pct: Math.max(v.pct, other.pct),
       watchedSec: Math.max(v.watchedSec, other.watchedSec),
       durationSec: v.durationSec ?? other.durationSec,
+      playbackRate: newer.playbackRate ?? richer.playbackRate,
+      lastPlayedAt:
+        (v.lastPlayedAt ?? '') >= (other.lastPlayedAt ?? '')
+          ? v.lastPlayedAt || other.lastPlayedAt
+          : other.lastPlayedAt || v.lastPlayedAt,
       channel: v.channel || other.channel,
       topicIds: topicIds.length ? topicIds : undefined,
       completedAt: v.completedAt || other.completedAt,

@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { youtubeWatchUrl } from '../utils/videoLibrary'
+import { normalizePlaybackRate, youtubeWatchUrl } from '../utils/videoLibrary'
 
 type YTPlayer = {
   destroy: () => void
   getCurrentTime: () => number
   getDuration: () => number
   getPlayerState: () => number
+  getPlaybackRate?: () => number
+  setPlaybackRate?: (rate: number) => void
   seekTo: (seconds: number, allowSeekAhead: boolean) => void
   playVideo: () => void
 }
@@ -19,6 +21,7 @@ type YTNamespace = {
       events?: {
         onReady?: (e: { target: YTPlayer }) => void
         onStateChange?: (e: { data: number; target: YTPlayer }) => void
+        onPlaybackRateChange?: (e: { data: number; target: YTPlayer }) => void
       }
     },
   ) => YTPlayer
@@ -78,15 +81,18 @@ function loadYouTubeApi(): Promise<void> {
 
 type Props = {
   videoId: string
-  /** Resume playback near last watched second */
+  /** Resume playback at this second */
   startSeconds?: number
   /** Known peak so we never report lower % after resume */
   initialPeakSec?: number
   /** Trusted full video length from prior sessions (guards against ad durations) */
   knownDurationSec?: number | null
+  /** Persisted playback speed for this video */
+  playbackRate?: number
   /** Bump this object to seek+play at seconds (timestamp notes) */
   seekRequest?: { seconds: number; nonce: number } | null
   onEnded?: () => void
+  onPlaybackRateChange?: (rate: number) => void
   onProgress: (info: {
     watchedSec: number
     durationSec: number
@@ -104,8 +110,10 @@ export function YouTubeProgressPlayer({
   startSeconds = 0,
   initialPeakSec = 0,
   knownDurationSec = null,
+  playbackRate = 1,
   seekRequest = null,
   onEnded,
+  onPlaybackRateChange,
   onProgress,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -114,10 +122,14 @@ export function YouTubeProgressPlayer({
   const trustedDurationRef = useRef<number | null>(
     knownDurationSec && knownDurationSec > 0 ? knownDurationSec : null,
   )
+  const rateRef = useRef(normalizePlaybackRate(playbackRate))
   const onProgressRef = useRef(onProgress)
   const onEndedRef = useRef(onEnded)
+  const onRateRef = useRef(onPlaybackRateChange)
   onProgressRef.current = onProgress
   onEndedRef.current = onEnded
+  onRateRef.current = onPlaybackRateChange
+  rateRef.current = normalizePlaybackRate(playbackRate)
 
   useEffect(() => {
     if (knownDurationSec && knownDurationSec > 0) {
@@ -127,6 +139,19 @@ export function YouTubeProgressPlayer({
       )
     }
   }, [knownDurationSec])
+
+  useEffect(() => {
+    const p = playerRef.current
+    const rate = normalizePlaybackRate(playbackRate)
+    rateRef.current = rate
+    if (!p?.setPlaybackRate) return
+    try {
+      const current = p.getPlaybackRate?.() ?? 1
+      if (Math.abs(current - rate) > 0.01) p.setPlaybackRate(rate)
+    } catch {
+      /* ignore */
+    }
+  }, [playbackRate])
 
   useEffect(() => {
     let cancelled = false
@@ -152,6 +177,14 @@ export function YouTubeProgressPlayer({
         if (raw >= 30) trustedDurationRef.current = raw
       }
       return trustedDurationRef.current ?? raw
+    }
+
+    const applyRate = (target: YTPlayer) => {
+      try {
+        target.setPlaybackRate?.(rateRef.current)
+      } catch {
+        /* ignore */
+      }
     }
 
     const report = (opts?: { forceEnd?: boolean }) => {
@@ -199,8 +232,10 @@ export function YouTubeProgressPlayer({
           : Math.min(100, Math.round((peakRef.current / duration) * 100))
 
         onProgressRef.current({
-          watchedSec: opts?.forceEnd ? duration : peakRef.current,
-          durationSec: duration,
+          watchedSec: opts?.forceEnd
+            ? duration
+            : Math.floor(peakRef.current),
+          durationSec: Math.round(duration),
           pct,
           auto: true,
         })
@@ -219,7 +254,6 @@ export function YouTubeProgressPlayer({
         modestbranding: 1,
         enablejsapi: 1,
         origin: window.location.origin,
-        // Fewer annotation overlays (does not remove ads — YouTube controls those)
         iv_load_policy: 3,
       }
       if (resumeAt > 0) playerVars.start = resumeAt
@@ -229,6 +263,7 @@ export function YouTubeProgressPlayer({
         playerVars,
         events: {
           onReady: (e) => {
+            applyRate(e.target)
             if (resumeAt > 0) {
               try {
                 e.target.seekTo(resumeAt, true)
@@ -238,7 +273,7 @@ export function YouTubeProgressPlayer({
             }
             // Delay first report so pre-roll ad duration doesn't win
             window.setTimeout(() => report(), 800)
-            poll = window.setInterval(() => report(), 1500)
+            poll = window.setInterval(() => report(), 1200)
           },
           onStateChange: (e) => {
             if (e.data === window.YT?.PlayerState.ENDED) {
@@ -250,8 +285,14 @@ export function YouTubeProgressPlayer({
               e.data === window.YT?.PlayerState.PLAYING ||
               e.data === window.YT?.PlayerState.PAUSED
             ) {
+              applyRate(e.target)
               report()
             }
+          },
+          onPlaybackRateChange: (e) => {
+            const rate = normalizePlaybackRate(e.data)
+            rateRef.current = rate
+            onRateRef.current?.(rate)
           },
         },
       })
@@ -282,7 +323,7 @@ export function YouTubeProgressPlayer({
     const p = playerRef.current
     if (!p) return
     try {
-      const capped = Math.max(0, seekRequest.seconds)
+      const capped = Math.max(0, Math.floor(seekRequest.seconds))
       p.seekTo(capped, true)
       peakRef.current = Math.max(peakRef.current, capped)
       p.playVideo()

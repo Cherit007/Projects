@@ -5208,36 +5208,69 @@ strong {
   color: #a33b2a;
 }
 
-.yt-ads-note {
-  display: grid;
+.yt-meta-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.yt-meta-facts > span {
+  display: inline-flex;
+  align-items: baseline;
   gap: 0.35rem;
-  margin: 0 0 1rem;
-  padding: 0.85rem 1rem;
-  border-radius: 14px;
-  border: 1px solid rgba(196, 122, 44, 0.28);
-  background:
-    linear-gradient(135deg, rgba(240, 211, 168, 0.28), rgba(255, 255, 255, 0.55)),
-    rgba(255, 255, 255, 0.45);
-}
-
-.yt-ads-note strong {
-  font-family: var(--font-body);
-  font-size: 0.88rem;
-  color: var(--ink);
-}
-
-.yt-ads-note p {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--ink-soft);
-  line-height: 1.4;
-}
-
-.yt-ads-note a {
-  color: var(--teal-deep);
+  padding: 0.28rem 0.55rem;
+  border-radius: 9px;
+  background: rgba(15, 31, 28, 0.045);
+  border: 1px solid rgba(15, 31, 28, 0.06);
+  font-size: 0.8rem;
   font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.yt-meta-facts em {
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.yt-speed-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.15rem 0 0.55rem;
+}
+
+.yt-speed-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.2rem;
+}
+
+.yt-speed-control button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--ink-soft);
+  padding: 0.32rem 0.55rem;
+  border-radius: 9px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.yt-speed-control button:hover,
+.yt-speed-control button.active {
+  border-color: rgba(13, 107, 92, 0.35);
+  background: rgba(13, 107, 92, 0.1);
+  color: var(--teal-deep);
 }
 
 .yt-external-panel {
