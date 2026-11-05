@@ -205,14 +205,11 @@ export function YouTubeProgressPlayer({
   return (
     <div className="yt-player-wrap">
       <div ref={hostRef} className="yt-player-host" />
-      <a
-        className="yt-fallback-link"
-        href={youtubeWatchUrl(videoId)}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Open on YouTube ↗
-      </a>
+      <noscript>
+        <a href={youtubeWatchUrl(videoId)} target="_blank" rel="noopener noreferrer">
+          Open on YouTube
+        </a>
+      </noscript>
     </div>
   )
 }
