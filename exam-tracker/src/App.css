@@ -5282,3 +5282,125 @@ strong {
   color: var(--teal-deep);
   font-weight: 650;
 }
+
+.yt-log-progress {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.yt-log-progress.is-nudge {
+  border-color: rgba(196, 122, 44, 0.45);
+  box-shadow: 0 0 0 3px rgba(196, 122, 44, 0.16);
+  animation: yt-nudge-pulse 1.4s ease-in-out 2;
+}
+
+@keyframes yt-nudge-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(196, 122, 44, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(196, 122, 44, 0.22);
+  }
+}
+
+.yt-log-progress-head {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.yt-log-progress-head strong {
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+.yt-log-progress-head span {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.yt-log-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.yt-log-quick button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink-soft);
+  padding: 0.4rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.yt-log-quick button:hover,
+.yt-log-quick button.active {
+  border-color: rgba(13, 107, 92, 0.35);
+  background: rgba(13, 107, 92, 0.1);
+  color: var(--teal-deep);
+}
+
+.yt-log-slider {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--teal-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.yt-log-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--teal);
+}
+
+.yt-log-time-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.yt-log-time-row label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--muted);
+  min-width: 7rem;
+}
+
+.yt-log-time-row input {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 6.5rem;
+}
+
+.yt-log-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.yt-log-error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--danger);
+}

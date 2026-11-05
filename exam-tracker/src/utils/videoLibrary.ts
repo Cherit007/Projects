@@ -102,8 +102,49 @@ export function parseYouTubeId(raw: string): string | null {
   }
 }
 
-export function youtubeWatchUrl(videoId: string): string {
-  return `https://www.youtube.com/watch?v=${videoId}`
+export function youtubeWatchUrl(
+  videoId: string,
+  opts?: { startSec?: number },
+): string {
+  const base = `https://www.youtube.com/watch?v=${videoId}`
+  const start = opts?.startSec != null ? Math.floor(opts.startSec) : 0
+  return start > 0 ? `${base}&t=${start}s` : base
+}
+
+/** Parse "1:23", "1h2m", "90", "12m30s" into seconds. */
+export function parseTimestampInput(raw: string): number | null {
+  const input = raw.trim().toLowerCase()
+  if (!input) return null
+  if (/^\d+(\.\d+)?$/.test(input)) {
+    const n = Number(input)
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null
+  }
+  const hms = input.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/)
+  if (hms) {
+    const a = Number(hms[1])
+    const b = Number(hms[2])
+    const c = hms[3] != null ? Number(hms[3]) : null
+    if (c != null) return a * 3600 + b * 60 + c
+    return a * 60 + b
+  }
+  let total = 0
+  let matched = false
+  const hour = input.match(/(\d+)\s*h/)
+  const min = input.match(/(\d+)\s*m/)
+  const sec = input.match(/(\d+)\s*s/)
+  if (hour) {
+    total += Number(hour[1]) * 3600
+    matched = true
+  }
+  if (min) {
+    total += Number(min[1]) * 60
+    matched = true
+  }
+  if (sec) {
+    total += Number(sec[1])
+    matched = true
+  }
+  return matched ? total : null
 }
 
 /** Extract playlist id (PL… / UU… / OL…) from playlist or watch?list= URLs. */
