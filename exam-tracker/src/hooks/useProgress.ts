@@ -16,6 +16,9 @@ import {
   normalizeVideoEntries,
   parseYouTubeId,
 } from '../utils/videoLibrary'
+import type { VideoQueue } from '../utils/videoQueues'
+import { normalizeVideoQueues } from '../utils/videoQueues'
+import { nextRewatchAfterDone } from '../utils/videoRecommend'
 import type { MasteryLevel } from '../utils/mastery'
 import type { SectionKey } from '../utils/prepAnalytics'
 import { studyStreak } from '../utils/readiness'
@@ -87,6 +90,8 @@ export type AppState = {
   examGroups: ExamGroup[]
   /** YouTube study playlist / topic links with watch progress */
   videoLibrary: VideoEntry[]
+  /** Named ordered study queues of video ids */
+  videoQueues: VideoQueue[]
 }
 
 const EMPTY: AppState = {
@@ -107,6 +112,7 @@ const EMPTY: AppState = {
   docs: {},
   examGroups: [],
   videoLibrary: [],
+  videoQueues: [],
 }
 
 function asMasteryMap(v: unknown): Record<string, MasteryLevel> {
@@ -184,6 +190,7 @@ function readStorage(): AppState {
       docs: parsed.docs && typeof parsed.docs === 'object' ? parsed.docs : {},
       examGroups: normalizeExamGroups(parsed.examGroups),
       videoLibrary: normalizeVideoEntries(parsed.videoLibrary),
+      videoQueues: normalizeVideoQueues(parsed.videoQueues),
     }
   } catch {
     return { ...EMPTY }
@@ -271,6 +278,7 @@ export function useProgress() {
     docs,
     examGroups,
     videoLibrary,
+    videoQueues,
   } = state
 
   const toggleTopic = useCallback((topicId: string) => {
@@ -601,6 +609,7 @@ export function useProgress() {
       url: string
       notes?: string
       channel?: string
+      topicIds?: string[]
     }) => {
       const videoId = parseYouTubeId(input.url)
       const cleaned = normalizeVideoEntries([
@@ -611,6 +620,7 @@ export function useProgress() {
           url: input.url.trim(),
           videoId,
           channel: input.channel,
+          topicIds: input.topicIds,
           watchedSec: 0,
           pct: 0,
           durationSec: null,
@@ -638,6 +648,7 @@ export function useProgress() {
         url: string
         notes?: string
         channel?: string
+        topicIds?: string[]
       }>,
     ) => {
       const existing = new Set(
@@ -662,6 +673,7 @@ export function useProgress() {
             url: input.url.trim(),
             videoId,
             channel: input.channel,
+            topicIds: input.topicIds,
             watchedSec: 0,
             pct: 0,
             durationSec: null,
@@ -696,10 +708,14 @@ export function useProgress() {
           | 'url'
           | 'notes'
           | 'channel'
+          | 'topicIds'
           | 'pct'
           | 'watchedSec'
           | 'durationSec'
           | 'videoId'
+          | 'completedAt'
+          | 'rewatchDue'
+          | 'rewatchInterval'
         >
       >,
     ) => {
@@ -720,6 +736,27 @@ export function useProgress() {
             : resetting && nextPct === 0
               ? 0
               : v.watchedSec
+
+        let completedAt = patch.completedAt !== undefined ? patch.completedAt : v.completedAt
+        let rewatchDue = patch.rewatchDue !== undefined ? patch.rewatchDue : v.rewatchDue
+        let rewatchInterval =
+          patch.rewatchInterval !== undefined
+            ? patch.rewatchInterval
+            : v.rewatchInterval
+
+        // Crossing into done → schedule first spaced rewatch
+        if (nextPct >= 90 && v.pct < 90 && patch.rewatchDue === undefined) {
+          const sched = nextRewatchAfterDone(0)
+          completedAt = new Date().toISOString()
+          rewatchDue = sched.due
+          rewatchInterval = sched.interval
+        }
+        if (nextPct < 90 && resetting) {
+          completedAt = undefined
+          rewatchDue = undefined
+          rewatchInterval = undefined
+        }
+
         const merged: VideoEntry = {
           ...v,
           ...patch,
@@ -732,6 +769,9 @@ export function useProgress() {
                 : v.videoId,
           pct: nextPct,
           watchedSec: nextWatched,
+          completedAt,
+          rewatchDue,
+          rewatchInterval,
           updatedAt: new Date().toISOString(),
         }
         return normalizeVideoEntries([merged])[0] ?? v
@@ -745,7 +785,91 @@ export function useProgress() {
     persist({
       ...memoryCache,
       videoLibrary: memoryCache.videoLibrary.filter((v) => v.id !== id),
+      videoQueues: memoryCache.videoQueues.map((q) => ({
+        ...q,
+        videoIds: q.videoIds.filter((vid) => vid !== id),
+        updatedAt: new Date().toISOString(),
+      })),
     })
+  }, [])
+
+  const scheduleRewatch = useCallback((id: string) => {
+    const v = memoryCache.videoLibrary.find((x) => x.id === id)
+    if (!v) return
+    const sched = nextRewatchAfterDone(v.rewatchInterval ?? 0)
+    const next = memoryCache.videoLibrary.map((row) => {
+      if (row.id !== id) return row
+      return (
+        normalizeVideoEntries([
+          {
+            ...row,
+            rewatchDue: sched.due,
+            rewatchInterval: sched.interval,
+            updatedAt: new Date().toISOString(),
+          },
+        ])[0] ?? row
+      )
+    })
+    persist({ ...memoryCache, videoLibrary: next })
+  }, [])
+
+  const addVideoQueue = useCallback((name: string, videoIds: string[] = []) => {
+    const cleaned = name.trim().slice(0, 80)
+    if (!cleaned) return null
+    const now = new Date().toISOString()
+    const q: VideoQueue = {
+      id: uid(),
+      name: cleaned,
+      videoIds: [...new Set(videoIds)],
+      createdAt: now,
+      updatedAt: now,
+    }
+    persist({
+      ...memoryCache,
+      videoQueues: [q, ...memoryCache.videoQueues],
+    })
+    return q
+  }, [])
+
+  const updateVideoQueue = useCallback(
+    (
+      id: string,
+      patch: Partial<Pick<VideoQueue, 'name' | 'videoIds'>>,
+    ) => {
+      const next = memoryCache.videoQueues.map((q) => {
+        if (q.id !== id) return q
+        return {
+          ...q,
+          name:
+            patch.name !== undefined
+              ? patch.name.trim().slice(0, 80) || q.name
+              : q.name,
+          videoIds:
+            patch.videoIds !== undefined
+              ? [...new Set(patch.videoIds)]
+              : q.videoIds,
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      persist({ ...memoryCache, videoQueues: next })
+    },
+    [],
+  )
+
+  const removeVideoQueue = useCallback((id: string) => {
+    persist({
+      ...memoryCache,
+      videoQueues: memoryCache.videoQueues.filter((q) => q.id !== id),
+    })
+  }, [])
+
+  const reorderVideoQueue = useCallback((id: string, videoIds: string[]) => {
+    const next = memoryCache.videoQueues.map((q) =>
+      q.id === id
+        ? { ...q, videoIds: [...videoIds], updatedAt: new Date().toISOString() }
+        : q,
+    )
+    persist({ ...memoryCache, videoQueues: next })
   }, [])
 
   const importState = useCallback((incoming: Partial<AppState>) => {
@@ -788,6 +912,10 @@ export function useProgress() {
         incoming.videoLibrary !== undefined
           ? normalizeVideoEntries(incoming.videoLibrary)
           : memoryCache.videoLibrary,
+      videoQueues:
+        incoming.videoQueues !== undefined
+          ? normalizeVideoQueues(incoming.videoQueues)
+          : memoryCache.videoQueues,
     })
   }, [])
 
@@ -878,6 +1006,7 @@ export function useProgress() {
     docs,
     examGroups,
     videoLibrary,
+    videoQueues,
     toggleTopic,
     setTopic,
     toggleSubtopic,
@@ -912,6 +1041,11 @@ export function useProgress() {
     addVideos,
     updateVideo,
     removeVideo,
+    scheduleRewatch,
+    addVideoQueue,
+    updateVideoQueue,
+    removeVideoQueue,
+    reorderVideoQueue,
     importState,
     exportState,
     resetAll,

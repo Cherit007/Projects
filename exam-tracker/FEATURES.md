@@ -73,6 +73,11 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 - [x] **I5** Auto title/channel from YouTube oEmbed on paste
 - [x] **I6** Auto % from IFrame player (resume + live bar); manual % only as fallback
 - [x] **I7** Playlist import (public playlist URL → bulk add, skip duplicates)
+- [x] **I8** Smart Up next (section / related / all) + why labels + autoplay
+- [x] **I9** Optional syllabus topic linking on videos
+- [x] **I10** Timestamp jump from notes (mm:ss / h:mm:ss)
+- [x] **I11** Daily Mix + spaced rewatch (3 / 7 / 21)
+- [x] **I12** Named study queues with drag reorder
 
 ## UX / quality gates (every phase)
 

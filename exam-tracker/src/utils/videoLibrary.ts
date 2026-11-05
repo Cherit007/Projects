@@ -11,12 +11,20 @@ export type VideoEntry = {
   videoId: string | null
   /** Channel / uploader from YouTube oEmbed when known */
   channel?: string
+  /** Optional links to ExamPulse syllabus topic ids */
+  topicIds?: string[]
   /** Longest continuous position reached (seconds) */
   watchedSec: number
   /** Peak watch percent 0–100 */
   pct: number
   /** Duration from player when known */
   durationSec: number | null
+  /** When first marked done (≥90%) */
+  completedAt?: string
+  /** ISO date (yyyy-mm-dd) when a spaced rewatch is due */
+  rewatchDue?: string
+  /** Last spaced interval used (3 / 7 / 21) */
+  rewatchInterval?: number
   createdAt: string
   updatedAt: string
   notes?: string
@@ -342,6 +350,12 @@ export function normalizeVideoEntries(raw: unknown): VideoEntry[] {
       typeof v.durationSec === 'number' && v.durationSec > 0
         ? v.durationSec
         : null
+    const topicIds = Array.isArray(v.topicIds)
+      ? [...new Set(v.topicIds.filter((id): id is string => typeof id === 'string' && !!id))].slice(
+          0,
+          8,
+        )
+      : undefined
     out.push({
       id: v.id,
       title,
@@ -352,9 +366,18 @@ export function normalizeVideoEntries(raw: unknown): VideoEntry[] {
         typeof v.channel === 'string' && v.channel.trim()
           ? v.channel.trim().slice(0, 80)
           : undefined,
+      topicIds: topicIds?.length ? topicIds : undefined,
       watchedSec,
       pct,
       durationSec,
+      completedAt:
+        typeof v.completedAt === 'string' ? v.completedAt : undefined,
+      rewatchDue:
+        typeof v.rewatchDue === 'string' ? v.rewatchDue.slice(0, 10) : undefined,
+      rewatchInterval:
+        typeof v.rewatchInterval === 'number' && v.rewatchInterval > 0
+          ? v.rewatchInterval
+          : undefined,
       createdAt:
         typeof v.createdAt === 'string' ? v.createdAt : new Date().toISOString(),
       updatedAt:
@@ -383,6 +406,9 @@ export function mergeVideoEntries(
       (v.pct === other.pct && v.watchedSec >= other.watchedSec)
         ? v
         : other
+    const topicIds = [
+      ...new Set([...(other.topicIds ?? []), ...(v.topicIds ?? [])]),
+    ].slice(0, 8)
     map.set(v.id, {
       ...other,
       ...v,
@@ -390,6 +416,18 @@ export function mergeVideoEntries(
       watchedSec: Math.max(v.watchedSec, other.watchedSec),
       durationSec: v.durationSec ?? other.durationSec,
       channel: v.channel || other.channel,
+      topicIds: topicIds.length ? topicIds : undefined,
+      completedAt: v.completedAt || other.completedAt,
+      rewatchDue:
+        v.rewatchDue && other.rewatchDue
+          ? v.rewatchDue < other.rewatchDue
+            ? v.rewatchDue
+            : other.rewatchDue
+          : v.rewatchDue || other.rewatchDue,
+      rewatchInterval: Math.max(
+        v.rewatchInterval ?? 0,
+        other.rewatchInterval ?? 0,
+      ) || undefined,
       updatedAt:
         v.updatedAt > other.updatedAt ? v.updatedAt : other.updatedAt,
       title: richer.title,
