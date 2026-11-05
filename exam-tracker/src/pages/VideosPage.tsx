@@ -79,15 +79,45 @@ export function VideosPage() {
   const [queueName, setQueueName] = useState('')
   const [activeQueueId, setActiveQueueId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
+  const [preferExternal, setPreferExternal] = useState(() => {
+    try {
+      return localStorage.getItem('exampulse-yt-external') === '1'
+    } catch {
+      return false
+    }
+  })
+  /** One-shot: play this id in the embed even if preferExternal is on */
+  const [forceEmbedId, setForceEmbedId] = useState<string | null>(null)
   const titleTouched = useRef(false)
   const activeRef = useRef<VideoEntry | null>(null)
   const watchRef = useRef<HTMLElement | null>(null)
   const seekNonce = useRef(0)
 
-  const openWatch = (id: string) => {
+  const openWatch = (id: string, opts?: { forceEmbed?: boolean }) => {
     setMenuId(null)
     setSeekRequest(null)
+    const entry = videoLibrary.find((v) => v.id === id)
+    if (opts?.forceEmbed) {
+      setForceEmbedId(id)
+      setActiveId(id)
+      return
+    }
+    setForceEmbedId(null)
+    if (preferExternal && entry?.videoId) {
+      window.open(youtubeWatchUrl(entry.videoId), '_blank', 'noopener,noreferrer')
+      setActiveId(id) // still select for notes / mark done / up next
+      return
+    }
     setActiveId(id)
+  }
+
+  const togglePreferExternal = (on: boolean) => {
+    setPreferExternal(on)
+    try {
+      localStorage.setItem('exampulse-yt-external', on ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
   }
 
   const jumpTo = (seconds: number) => {
@@ -137,6 +167,8 @@ export function VideosPage() {
 
   const active = videoLibrary.find((v) => v.id === activeId) ?? null
   activeRef.current = active
+  const showEmbed =
+    !!active?.videoId && (!preferExternal || forceEmbedId === active.id)
 
   const upNext = useMemo(() => {
     if (!active) return []
@@ -1021,31 +1053,81 @@ export function VideosPage() {
         >
           <div className="yt-theater-main">
             <div className="yt-stage">
-              <YouTubeProgressPlayer
-                videoId={active.videoId}
-                startSeconds={
-                  active.pct >= 90 ? 0 : Math.max(0, active.watchedSec - 3)
-                }
-                initialPeakSec={active.watchedSec}
-                seekRequest={seekRequest}
-                onEnded={onPlayerEnded}
-                onProgress={({ watchedSec, durationSec, pct }) => {
-                  setLivePct(pct)
-                  const cur = activeRef.current
-                  if (!cur || cur.id !== active.id) return
-                  if (
-                    pct > cur.pct ||
-                    watchedSec > cur.watchedSec + 1 ||
-                    (durationSec && durationSec !== cur.durationSec)
-                  ) {
-                    updateVideo(cur.id, {
-                      watchedSec,
-                      durationSec,
-                      pct: Math.max(cur.pct, pct),
-                    })
+              {showEmbed ? (
+                <YouTubeProgressPlayer
+                  videoId={active.videoId}
+                  startSeconds={
+                    active.pct >= 90
+                      ? 0
+                      : Math.max(0, Math.floor(active.watchedSec))
                   }
-                }}
-              />
+                  initialPeakSec={active.watchedSec}
+                  knownDurationSec={active.durationSec}
+                  seekRequest={seekRequest}
+                  onEnded={onPlayerEnded}
+                  onProgress={({ watchedSec, durationSec, pct }) => {
+                    setLivePct(pct)
+                    const cur = activeRef.current
+                    if (!cur || cur.id !== active.id) return
+
+                    // Reject ad-length spikes that would wipe resume
+                    const known = cur.durationSec
+                    if (
+                      known &&
+                      known > 90 &&
+                      durationSec > 0 &&
+                      durationSec < known * 0.5
+                    ) {
+                      return
+                    }
+                    if (watchedSec + 15 < cur.watchedSec && pct < cur.pct) {
+                      return
+                    }
+
+                    const nextDuration =
+                      !known || durationSec >= known * 0.9
+                        ? durationSec
+                        : known
+
+                    if (
+                      pct > cur.pct ||
+                      watchedSec > cur.watchedSec + 1 ||
+                      (nextDuration && nextDuration !== cur.durationSec)
+                    ) {
+                      updateVideo(cur.id, {
+                        watchedSec: Math.max(cur.watchedSec, watchedSec),
+                        durationSec: nextDuration,
+                        pct: Math.max(cur.pct, pct),
+                      })
+                    }
+                  }}
+                />
+              ) : (
+                <div className="yt-external-panel">
+                  <p>
+                    Opened on YouTube. Official embeds always use YouTube’s ads —
+                    ExamPulse can’t remove them. YouTube Premium is the only
+                    official ad-free option.
+                  </p>
+                  <div className="yt-watch-actions">
+                    <a
+                      className="yt-action solid"
+                      href={youtubeWatchUrl(active.videoId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open again ↗
+                    </a>
+                    <button
+                      type="button"
+                      className="yt-action"
+                      onClick={() => openWatch(active.id, { forceEmbed: true })}
+                    >
+                      Play in ExamPulse
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="yt-stage-progress" aria-hidden>
                 <span style={{ width: `${displayPct}%` }} />
               </div>
@@ -1065,7 +1147,9 @@ export function VideosPage() {
                     </span>
                   ) : null
                 })}
-                <span className="yt-auto-pill">Auto tracking</span>
+                {showEmbed && (
+                  <span className="yt-auto-pill">Auto tracking</span>
+                )}
               </div>
               <div className="yt-now-title-row">
                 <h2>{active.title}</h2>
@@ -1094,6 +1178,15 @@ export function VideosPage() {
                   </button>
                 </div>
               </div>
+              <label className="yt-external-toggle">
+                <input
+                  type="checkbox"
+                  checked={preferExternal}
+                  onChange={(e) => togglePreferExternal(e.target.checked)}
+                />
+                Open on YouTube instead of in-app player (ads are controlled by
+                YouTube either way; Premium is the only official ad-free path)
+              </label>
 
               <div className="yt-progress-panel">
                 <div className="yt-progress-meta">
