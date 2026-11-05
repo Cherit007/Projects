@@ -4,17 +4,22 @@ import { useProgress } from '../hooks/useProgress'
 import {
   VIDEO_SECTION_SUGGESTIONS,
   fetchYoutubeDetails,
+  fetchYoutubePlaylist,
   formatDuration,
   parseYouTubeId,
+  parseYouTubePlaylistId,
   youtubeThumbnailUrl,
   youtubeWatchUrl,
   type VideoEntry,
+  type YoutubePlaylist,
 } from '../utils/videoLibrary'
 
 type StatusFilter = 'All' | 'In progress' | 'Done' | 'Not started'
+type ComposerMode = 'video' | 'playlist'
 
 export function VideosPage() {
-  const { videoLibrary, addVideo, updateVideo, removeVideo } = useProgress()
+  const { videoLibrary, addVideo, addVideos, updateVideo, removeVideo } =
+    useProgress()
   const [title, setTitle] = useState('')
   const [section, setSection] = useState<string>(VIDEO_SECTION_SUGGESTIONS[0])
   const [customSection, setCustomSection] = useState('')
@@ -29,6 +34,16 @@ export function VideosPage() {
   const [menuId, setMenuId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [composerOpen, setComposerOpen] = useState(false)
+  const [composerMode, setComposerMode] = useState<ComposerMode>('video')
+  const [playlistUrl, setPlaylistUrl] = useState('')
+  const [playlistPreview, setPlaylistPreview] = useState<YoutubePlaylist | null>(
+    null,
+  )
+  const [playlistState, setPlaylistState] = useState<
+    'idle' | 'loading' | 'ok' | 'fail'
+  >('idle')
+  const [playlistMsg, setPlaylistMsg] = useState('')
+  const [usePlaylistTitle, setUsePlaylistTitle] = useState(true)
   const [lookupState, setLookupState] = useState<'idle' | 'loading' | 'ok' | 'fail'>(
     'idle',
   )
@@ -154,6 +169,35 @@ export function VideosPage() {
     return () => window.cancelAnimationFrame(id)
   }, [activeId])
 
+  // Preview playlist when URL looks valid
+  useEffect(() => {
+    if (composerMode !== 'playlist') return
+    const id = parseYouTubePlaylistId(playlistUrl)
+    if (!id) {
+      setPlaylistState('idle')
+      setPlaylistPreview(null)
+      return
+    }
+    let cancelled = false
+    setPlaylistState('loading')
+    setPlaylistPreview(null)
+    const t = window.setTimeout(() => {
+      void fetchYoutubePlaylist(playlistUrl).then((pl) => {
+        if (cancelled) return
+        if (!pl) {
+          setPlaylistState('fail')
+          return
+        }
+        setPlaylistPreview(pl)
+        setPlaylistState('ok')
+      })
+    }, 400)
+    return () => {
+      cancelled = true
+      window.clearTimeout(t)
+    }
+  }, [playlistUrl, composerMode])
+
   const onAdd = () => {
     setError('')
     const sec = (customSection.trim() || section).trim()
@@ -185,6 +229,47 @@ export function VideosPage() {
     setLookupState('idle')
     setComposerOpen(false)
     openWatch(created.id)
+  }
+
+  const onImportPlaylist = () => {
+    setError('')
+    setPlaylistMsg('')
+    if (!playlistPreview?.items.length) {
+      setError('Paste a playlist link and wait for the preview.')
+      return
+    }
+    const sec = (
+      usePlaylistTitle && playlistPreview.title
+        ? playlistPreview.title
+        : customSection.trim() || section
+    )
+      .trim()
+      .slice(0, 64)
+    if (!sec) {
+      setError('Pick a section for the imported videos.')
+      return
+    }
+    const result = addVideos(
+      playlistPreview.items.map((item) => ({
+        title: item.title,
+        section: sec,
+        url: item.url,
+        channel: item.channel || playlistPreview.channel,
+        notes: `Playlist: ${playlistPreview.title}`,
+      })),
+    )
+    setPlaylistMsg(
+      `Imported ${result.added} video${result.added === 1 ? '' : 's'}${
+        result.skipped ? ` · skipped ${result.skipped} already saved` : ''
+      }${playlistPreview.truncated ? ' · recent items only (public feed limit)' : ''}.`,
+    )
+    if (result.added > 0) {
+      setPlaylistUrl('')
+      setPlaylistPreview(null)
+      setPlaylistState('idle')
+      setComposerOpen(false)
+      if (result.created[0]) openWatch(result.created[0].id)
+    }
   }
 
   const refreshMeta = async (v: VideoEntry) => {
@@ -426,8 +511,8 @@ export function VideosPage() {
           <h1>YouTube library</h1>
           {!active && (
             <p className="lede">
-              Paste a link — title and channel fill in from YouTube. Watch here
-              and progress updates automatically.
+              Add a video or import a whole playlist. Progress updates while you
+              watch here.
             </p>
           )}
         </div>
@@ -445,100 +530,240 @@ export function VideosPage() {
             className="btn primary"
             onClick={() => setComposerOpen((o) => !o)}
           >
-            {composerOpen ? 'Close' : 'Add video'}
+            {composerOpen ? 'Close' : 'Add'}
           </button>
         </div>
       </header>
 
       {composerOpen && (
-        <section className="video-composer" aria-label="Add YouTube video">
-          <h2>Add YouTube video</h2>
-          <div className="video-composer-grid">
-            <label className="video-url-field">
-              <span>YouTube link</span>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value)
-                  titleTouched.current = false
+        <section className="video-composer" aria-label="Add to YouTube library">
+          <div className="yt-composer-top">
+            <h2>{composerMode === 'playlist' ? 'Import playlist' : 'Add video'}</h2>
+            <div className="yt-mode-toggle" role="tablist" aria-label="Add mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={composerMode === 'video'}
+                className={composerMode === 'video' ? 'active' : ''}
+                onClick={() => {
+                  setComposerMode('video')
+                  setError('')
                 }}
-                placeholder="https://youtu.be/… or youtube.com/watch?v=…"
-                autoFocus
-              />
-              {lookupState === 'loading' && (
-                <em className="yt-lookup">Fetching title from YouTube…</em>
-              )}
-              {lookupState === 'ok' && (
-                <em className="yt-lookup ok">Details loaded from YouTube</em>
-              )}
-              {lookupState === 'fail' && (
-                <em className="yt-lookup fail">
-                  Couldn’t fetch details — type a title manually.
-                </em>
-              )}
-            </label>
-            <label>
-              <span>Topic / title</span>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => {
-                  titleTouched.current = true
-                  setTitle(e.target.value)
-                }}
-                placeholder="Auto-fills from the link"
-                maxLength={120}
-              />
-            </label>
-            <label>
-              <span>Channel</span>
-              <input
-                type="text"
-                value={channel}
-                onChange={(e) => setChannel(e.target.value)}
-                placeholder="Auto-fills from YouTube"
-                maxLength={80}
-              />
-            </label>
-            <label>
-              <span>Section</span>
-              <select
-                value={section}
-                onChange={(e) => setSection(e.target.value)}
               >
-                {VIDEO_SECTION_SUGGESTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Or custom section</span>
-              <input
-                type="text"
-                value={customSection}
-                onChange={(e) => setCustomSection(e.target.value)}
-                placeholder="Overrides dropdown if filled"
-                maxLength={64}
-              />
-            </label>
-            <label className="video-url-field">
-              <span>Notes (optional)</span>
-              <input
-                type="text"
-                value={notesDraft}
-                onChange={(e) => setNotesDraft(e.target.value)}
-                placeholder="e.g. revise synonyms at 12:40"
-                maxLength={400}
-              />
-            </label>
+                Single video
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={composerMode === 'playlist'}
+                className={composerMode === 'playlist' ? 'active' : ''}
+                onClick={() => {
+                  setComposerMode('playlist')
+                  setError('')
+                }}
+              >
+                Playlist
+              </button>
+            </div>
           </div>
-          {error && <p className="video-error">{error}</p>}
-          <button type="button" className="btn primary" onClick={onAdd}>
-            Save to library
-          </button>
+
+          {composerMode === 'video' ? (
+            <>
+              <div className="video-composer-grid">
+                <label className="video-url-field">
+                  <span>YouTube link</span>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value)
+                      titleTouched.current = false
+                    }}
+                    placeholder="https://youtu.be/… or youtube.com/watch?v=…"
+                    autoFocus
+                  />
+                  {lookupState === 'loading' && (
+                    <em className="yt-lookup">Fetching title from YouTube…</em>
+                  )}
+                  {lookupState === 'ok' && (
+                    <em className="yt-lookup ok">Details loaded from YouTube</em>
+                  )}
+                  {lookupState === 'fail' && (
+                    <em className="yt-lookup fail">
+                      Couldn’t fetch details — type a title manually.
+                    </em>
+                  )}
+                </label>
+                <label>
+                  <span>Topic / title</span>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => {
+                      titleTouched.current = true
+                      setTitle(e.target.value)
+                    }}
+                    placeholder="Auto-fills from the link"
+                    maxLength={120}
+                  />
+                </label>
+                <label>
+                  <span>Channel</span>
+                  <input
+                    type="text"
+                    value={channel}
+                    onChange={(e) => setChannel(e.target.value)}
+                    placeholder="Auto-fills from YouTube"
+                    maxLength={80}
+                  />
+                </label>
+                <label>
+                  <span>Section</span>
+                  <select
+                    value={section}
+                    onChange={(e) => setSection(e.target.value)}
+                  >
+                    {VIDEO_SECTION_SUGGESTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Or custom section</span>
+                  <input
+                    type="text"
+                    value={customSection}
+                    onChange={(e) => setCustomSection(e.target.value)}
+                    placeholder="Overrides dropdown if filled"
+                    maxLength={64}
+                  />
+                </label>
+                <label className="video-url-field">
+                  <span>Notes (optional)</span>
+                  <input
+                    type="text"
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    placeholder="e.g. revise synonyms at 12:40"
+                    maxLength={400}
+                  />
+                </label>
+              </div>
+              {error && <p className="video-error">{error}</p>}
+              <button type="button" className="btn primary" onClick={onAdd}>
+                Save to library
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="video-composer-grid">
+                <label className="video-url-field">
+                  <span>Playlist link</span>
+                  <input
+                    type="url"
+                    value={playlistUrl}
+                    onChange={(e) => {
+                      setPlaylistUrl(e.target.value)
+                      setPlaylistMsg('')
+                    }}
+                    placeholder="youtube.com/playlist?list=PL… or watch?v=…&list=PL…"
+                    autoFocus
+                  />
+                  {playlistState === 'loading' && (
+                    <em className="yt-lookup">Loading playlist…</em>
+                  )}
+                  {playlistState === 'ok' && playlistPreview && (
+                    <em className="yt-lookup ok">
+                      Found “{playlistPreview.title}” · {playlistPreview.items.length}{' '}
+                      video{playlistPreview.items.length === 1 ? '' : 's'}
+                      {playlistPreview.truncated ? ' (recent items)' : ''}
+                    </em>
+                  )}
+                  {playlistState === 'fail' && (
+                    <em className="yt-lookup fail">
+                      Couldn’t load that playlist — check the link is public.
+                    </em>
+                  )}
+                </label>
+                <label className="yt-check-label">
+                  <input
+                    type="checkbox"
+                    checked={usePlaylistTitle}
+                    onChange={(e) => setUsePlaylistTitle(e.target.checked)}
+                  />
+                  <span>Use playlist name as section</span>
+                </label>
+                {!usePlaylistTitle && (
+                  <>
+                    <label>
+                      <span>Section</span>
+                      <select
+                        value={section}
+                        onChange={(e) => setSection(e.target.value)}
+                      >
+                        {VIDEO_SECTION_SUGGESTIONS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Or custom section</span>
+                      <input
+                        type="text"
+                        value={customSection}
+                        onChange={(e) => setCustomSection(e.target.value)}
+                        placeholder="Overrides dropdown if filled"
+                        maxLength={64}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+
+              {playlistPreview && playlistPreview.items.length > 0 && (
+                <div className="yt-playlist-preview" aria-label="Playlist preview">
+                  <p className="yt-playlist-preview-head">
+                    Preview
+                    {playlistPreview.channel
+                      ? ` · ${playlistPreview.channel}`
+                      : ''}
+                  </p>
+                  <ul>
+                    {playlistPreview.items.slice(0, 8).map((item) => (
+                      <li key={item.videoId}>
+                        <img
+                          src={youtubeThumbnailUrl(item.videoId, 'mq')}
+                          alt=""
+                          loading="lazy"
+                        />
+                        <span>{item.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {playlistPreview.items.length > 8 && (
+                    <p className="muted-line">
+                      +{playlistPreview.items.length - 8} more will import
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {error && <p className="video-error">{error}</p>}
+              {playlistMsg && <p className="yt-lookup ok">{playlistMsg}</p>}
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!playlistPreview?.items.length || playlistState === 'loading'}
+                onClick={onImportPlaylist}
+              >
+                Import {playlistPreview?.items.length ?? 0} to library
+              </button>
+            </>
+          )}
         </section>
       )}
 

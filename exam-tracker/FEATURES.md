@@ -72,6 +72,7 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 - [x] **I4** Cloud sync of videoLibrary
 - [x] **I5** Auto title/channel from YouTube oEmbed on paste
 - [x] **I6** Auto % from IFrame player (resume + live bar); manual % only as fallback
+- [x] **I7** Playlist import (public playlist URL → bulk add, skip duplicates)
 
 ## UX / quality gates (every phase)
 
