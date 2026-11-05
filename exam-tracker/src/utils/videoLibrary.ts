@@ -98,6 +98,204 @@ export function youtubeWatchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`
 }
 
+/** Extract playlist id (PL… / UU… / OL…) from playlist or watch?list= URLs. */
+export function parseYouTubePlaylistId(raw: string): string | null {
+  const input = raw.trim()
+  if (!input) return null
+  if (/^(PL|UU|OL|RD)[\w-]{10,}$/i.test(input)) return input
+  try {
+    const withProto = /^https?:\/\//i.test(input) ? input : `https://${input}`
+    const u = new URL(withProto)
+    if (!YT_HOST.test(u.hostname)) return null
+    const list = u.searchParams.get('list')
+    if (list && /^(PL|UU|OL|RD)[\w-]{10,}$/i.test(list)) return list
+    const parts = u.pathname.split('/').filter(Boolean)
+    const idx = parts.findIndex((p) => p === 'playlist')
+    if (idx >= 0) {
+      const fromPath = u.searchParams.get('list')
+      if (fromPath && /^(PL|UU|OL|RD)[\w-]{10,}$/i.test(fromPath)) return fromPath
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+export type YoutubePlaylistItem = {
+  videoId: string
+  title: string
+  channel?: string
+  url: string
+}
+
+export type YoutubePlaylist = {
+  playlistId: string
+  title: string
+  channel?: string
+  items: YoutubePlaylistItem[]
+  /** true when import may be truncated (RSS / free proxy caps) */
+  truncated: boolean
+}
+
+function youtubePlaylistFeedUrl(playlistId: string): string {
+  return `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`
+}
+
+async function fetchPlaylistViaDataApi(
+  playlistId: string,
+  apiKey: string,
+): Promise<YoutubePlaylist | null> {
+  const items: YoutubePlaylistItem[] = []
+  let title = 'YouTube playlist'
+  let channel: string | undefined
+  let pageToken = ''
+  const maxPages = 4 // up to ~200 videos
+
+  for (let page = 0; page < maxPages; page++) {
+    const params = new URLSearchParams({
+      part: 'snippet',
+      maxResults: '50',
+      playlistId,
+      key: apiKey,
+    })
+    if (pageToken) params.set('pageToken', pageToken)
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?${params}`,
+    )
+    if (!res.ok) return items.length ? { playlistId, title, channel, items, truncated: false } : null
+    const data = (await res.json()) as {
+      nextPageToken?: string
+      items?: Array<{
+        snippet?: {
+          title?: string
+          channelTitle?: string
+          videoOwnerChannelTitle?: string
+          resourceId?: { videoId?: string }
+        }
+      }>
+    }
+    for (const row of data.items ?? []) {
+      const sn = row.snippet
+      const videoId = sn?.resourceId?.videoId
+      if (!videoId || !/^[\w-]{11}$/.test(videoId)) continue
+      const t = (sn?.title ?? '').trim()
+      if (!t || t === 'Private video' || t === 'Deleted video') continue
+      items.push({
+        videoId,
+        title: t.slice(0, 120),
+        channel: (sn?.videoOwnerChannelTitle || sn?.channelTitle || '')
+          .trim()
+          .slice(0, 80) || undefined,
+        url: youtubeWatchUrl(videoId),
+      })
+      if (!channel && sn?.channelTitle) channel = sn.channelTitle.trim().slice(0, 80)
+    }
+    if (!data.nextPageToken) break
+    pageToken = data.nextPageToken
+  }
+
+  // Playlist title from playlists.list
+  try {
+    const metaRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${encodeURIComponent(playlistId)}&key=${encodeURIComponent(apiKey)}`,
+    )
+    if (metaRes.ok) {
+      const meta = (await metaRes.json()) as {
+        items?: Array<{ snippet?: { title?: string; channelTitle?: string } }>
+      }
+      const sn = meta.items?.[0]?.snippet
+      if (sn?.title) title = sn.title.trim().slice(0, 120)
+      if (sn?.channelTitle) channel = sn.channelTitle.trim().slice(0, 80)
+    }
+  } catch {
+    /* keep defaults */
+  }
+
+  if (!items.length) return null
+  return { playlistId, title, channel, items, truncated: false }
+}
+
+async function fetchPlaylistViaRss(playlistId: string): Promise<YoutubePlaylist | null> {
+  const feed = youtubePlaylistFeedUrl(playlistId)
+  const proxy = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed)}`
+  const res = await fetch(proxy)
+  if (!res.ok) return null
+  const data = (await res.json()) as {
+    status?: string
+    feed?: { title?: string; author?: string }
+    items?: Array<{
+      title?: string
+      link?: string
+      author?: string
+      guid?: string
+    }>
+  }
+  if (data.status !== 'ok') return null
+  const items: YoutubePlaylistItem[] = []
+  for (const row of data.items ?? []) {
+    const videoId =
+      parseYouTubeId(row.link ?? '') ||
+      (typeof row.guid === 'string' && row.guid.includes('yt:video:')
+        ? row.guid.replace(/^yt:video:/, '')
+        : null)
+    if (!videoId) continue
+    const t = (row.title ?? '').trim()
+    if (!t) continue
+    items.push({
+      videoId,
+      title: t.slice(0, 120),
+      channel: (row.author ?? data.feed?.author ?? '').trim().slice(0, 80) || undefined,
+      url: youtubeWatchUrl(videoId),
+    })
+  }
+  if (!items.length) return null
+
+  let title = (data.feed?.title ?? 'YouTube playlist').trim().slice(0, 120)
+  let channel = (data.feed?.author ?? '').trim().slice(0, 80) || undefined
+  try {
+    const oe = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/playlist?list=${playlistId}`)}&format=json`,
+    )
+    if (oe.ok) {
+      const meta = (await oe.json()) as { title?: string; author_name?: string }
+      if (meta.title) title = meta.title.trim().slice(0, 120)
+      if (meta.author_name) channel = meta.author_name.trim().slice(0, 80)
+    }
+  } catch {
+    /* keep rss title */
+  }
+
+  return {
+    playlistId,
+    title,
+    channel,
+    items,
+    truncated: items.length >= 10,
+  }
+}
+
+/** Load playlist videos (Data API if VITE_YOUTUBE_API_KEY, else public RSS via rss2json). */
+export async function fetchYoutubePlaylist(
+  urlOrId: string,
+): Promise<YoutubePlaylist | null> {
+  const playlistId = parseYouTubePlaylistId(urlOrId)
+  if (!playlistId) return null
+  const apiKey = String(import.meta.env.VITE_YOUTUBE_API_KEY || '').trim()
+  if (apiKey) {
+    try {
+      const viaApi = await fetchPlaylistViaDataApi(playlistId, apiKey)
+      if (viaApi) return viaApi
+    } catch {
+      /* fall through to RSS */
+    }
+  }
+  try {
+    return await fetchPlaylistViaRss(playlistId)
+  } catch {
+    return null
+  }
+}
+
 /** Public thumbnail (no API key). Falls back gracefully if video is private. */
 export function youtubeThumbnailUrl(
   videoId: string,

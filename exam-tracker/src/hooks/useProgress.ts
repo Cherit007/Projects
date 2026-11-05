@@ -629,6 +629,62 @@ export function useProgress() {
     [],
   )
 
+  /** Bulk-add videos; skips ones whose YouTube id is already in the library. */
+  const addVideos = useCallback(
+    (
+      inputs: Array<{
+        title: string
+        section: string
+        url: string
+        notes?: string
+        channel?: string
+      }>,
+    ) => {
+      const existing = new Set(
+        memoryCache.videoLibrary
+          .map((v) => v.videoId)
+          .filter((id): id is string => !!id),
+      )
+      const created: VideoEntry[] = []
+      let skipped = 0
+      const now = new Date().toISOString()
+      for (const input of inputs) {
+        const videoId = parseYouTubeId(input.url)
+        if (videoId && existing.has(videoId)) {
+          skipped += 1
+          continue
+        }
+        const cleaned = normalizeVideoEntries([
+          {
+            id: uid(),
+            title: input.title,
+            section: input.section,
+            url: input.url.trim(),
+            videoId,
+            channel: input.channel,
+            watchedSec: 0,
+            pct: 0,
+            durationSec: null,
+            createdAt: now,
+            updatedAt: now,
+            notes: input.notes,
+          },
+        ])
+        if (!cleaned.length) continue
+        created.push(cleaned[0])
+        if (cleaned[0].videoId) existing.add(cleaned[0].videoId)
+      }
+      if (created.length) {
+        persist({
+          ...memoryCache,
+          videoLibrary: [...created, ...memoryCache.videoLibrary],
+        })
+      }
+      return { added: created.length, skipped, created }
+    },
+    [],
+  )
+
   const updateVideo = useCallback(
     (
       id: string,
@@ -853,6 +909,7 @@ export function useProgress() {
     updateExamGroup,
     removeExamGroup,
     addVideo,
+    addVideos,
     updateVideo,
     removeVideo,
     importState,
