@@ -26,7 +26,7 @@ export function VideosPage() {
   const [query, setQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null)
-  const [manualOpenId, setManualOpenId] = useState<string | null>(null)
+  const [menuId, setMenuId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [composerOpen, setComposerOpen] = useState(false)
   const [lookupState, setLookupState] = useState<'idle' | 'loading' | 'ok' | 'fail'>(
@@ -38,6 +38,7 @@ export function VideosPage() {
   const watchRef = useRef<HTMLElement | null>(null)
 
   const openWatch = (id: string) => {
+    setMenuId(null)
     setActiveId(id)
   }
 
@@ -49,10 +50,10 @@ export function VideosPage() {
 
   const continueWatching = useMemo(() => {
     return videoLibrary
-      .filter((v) => v.pct > 0 && v.pct < 90)
+      .filter((v) => v.pct > 0 && v.pct < 90 && v.id !== activeId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, 8)
-  }, [videoLibrary])
+  }, [videoLibrary, activeId])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -81,6 +82,26 @@ export function VideosPage() {
   const active = videoLibrary.find((v) => v.id === activeId) ?? null
   activeRef.current = active
 
+  const upNext = useMemo(() => {
+    if (!active) return []
+    const same = videoLibrary.filter(
+      (v) =>
+        v.id !== active.id &&
+        v.section === active.section &&
+        v.pct < 90 &&
+        v.videoId,
+    )
+    const rest = videoLibrary.filter(
+      (v) =>
+        v.id !== active.id &&
+        v.section !== active.section &&
+        v.pct < 90 &&
+        v.videoId &&
+        !same.some((s) => s.id === v.id),
+    )
+    return [...same, ...rest].slice(0, 10)
+  }, [videoLibrary, active])
+
   const totals = useMemo(() => {
     const n = videoLibrary.length
     if (!n) return { n: 0, avg: 0, done: 0, leftSec: 0 }
@@ -93,7 +114,6 @@ export function VideosPage() {
     return { n, avg, done, leftSec }
   }, [videoLibrary])
 
-  // Auto-fetch YouTube title + channel when a valid link is pasted
   useEffect(() => {
     const id = parseYouTubeId(url)
     if (!id) {
@@ -110,9 +130,7 @@ export function VideosPage() {
           return
         }
         setLookupState('ok')
-        if (!titleTouched.current) {
-          setTitle(meta.title)
-        }
+        if (!titleTouched.current) setTitle(meta.title)
         if (meta.channel) setChannel(meta.channel)
       })
     }, 350)
@@ -126,7 +144,6 @@ export function VideosPage() {
     setLivePct(null)
   }, [activeId])
 
-  // Player mounts above the grid — scroll it into view or Watch looks like a no-op
   useEffect(() => {
     if (!activeId) return
     const node = watchRef.current
@@ -180,6 +197,43 @@ export function VideosPage() {
     })
   }
 
+  const markDone = (v: VideoEntry, done: boolean) => {
+    updateVideo(v.id, {
+      pct: done ? 100 : 0,
+      watchedSec: done ? (v.durationSec ?? v.watchedSec) : 0,
+    })
+  }
+
+  const renderUpNextRow = (v: VideoEntry) => {
+    const thumb = v.videoId ? youtubeThumbnailUrl(v.videoId, 'mq') : null
+    return (
+      <button
+        key={v.id}
+        type="button"
+        className="yt-upnext-row"
+        onClick={() => openWatch(v.id)}
+      >
+        <span className="yt-upnext-thumb">
+          {thumb ? <img src={thumb} alt="" loading="lazy" /> : null}
+          {v.pct > 0 && (
+            <i className="yt-upnext-bar" style={{ width: `${v.pct}%` }} />
+          )}
+        </span>
+        <span className="yt-upnext-copy">
+          <strong>{v.title}</strong>
+          <em>
+            {v.section}
+            {v.channel ? ` · ${v.channel}` : ''}
+          </em>
+          <em>
+            {v.pct > 0 ? `${v.pct}%` : 'Not started'}
+            {v.durationSec ? ` · ${formatDuration(v.durationSec)}` : ''}
+          </em>
+        </span>
+      </button>
+    )
+  }
+
   const renderThumbCard = (v: VideoEntry, compact = false) => {
     const thumb = v.videoId ? youtubeThumbnailUrl(v.videoId) : null
     const done = v.pct >= 90
@@ -187,10 +241,13 @@ export function VideosPage() {
       v.durationSec && v.pct < 90
         ? Math.max(0, v.durationSec - v.watchedSec)
         : null
+    const menuOpen = menuId === v.id
     return (
       <article
         key={v.id}
-        className={`yt-card${compact ? ' compact' : ''}${done ? ' done' : ''}`}
+        className={`yt-card${compact ? ' compact' : ''}${done ? ' done' : ''}${
+          activeId === v.id ? ' playing' : ''
+        }`}
       >
         <button
           type="button"
@@ -219,11 +276,16 @@ export function VideosPage() {
           {left != null && left > 0 && !done && (
             <span className="yt-badge left">{formatDuration(left)} left</span>
           )}
+          {activeId === v.id && <span className="yt-badge now">Now</span>}
         </button>
 
         <div className="yt-card-body">
           <p className="yt-card-section">{v.section}</p>
-          <h3 className="yt-card-title">{v.title}</h3>
+          <h3 className="yt-card-title">
+            <button type="button" onClick={() => v.videoId && openWatch(v.id)}>
+              {v.title}
+            </button>
+          </h3>
           {v.channel && <p className="yt-card-channel">{v.channel}</p>}
           <p className="yt-card-meta">
             {v.pct}% watched
@@ -243,84 +305,83 @@ export function VideosPage() {
                 {v.pct > 0 && v.pct < 90 ? 'Resume' : 'Watch'}
               </button>
             )}
-            <a
-              className="btn ghost-btn"
-              href={v.videoId ? youtubeWatchUrl(v.videoId) : v.url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              YouTube ↗
-            </a>
             <button
               type="button"
               className="ghost"
-              onClick={() =>
-                updateVideo(v.id, {
-                  pct: done ? 0 : 100,
-                  watchedSec: done ? 0 : v.durationSec ?? v.watchedSec,
-                })
-              }
+              onClick={() => markDone(v, !done)}
             >
-              {done ? 'Reset' : 'Mark done'}
+              {done ? 'Reset' : 'Done'}
             </button>
             <button
               type="button"
-              className="ghost"
-              onClick={() => {
-                setEditingNotesId(editingNotesId === v.id ? null : v.id)
-              }}
+              className={`ghost${menuOpen ? ' active' : ''}`}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuId(menuOpen ? null : v.id)}
             >
-              Notes
-            </button>
-            {!v.channel && (
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void refreshMeta(v)}
-              >
-                Fetch info
-              </button>
-            )}
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                if (confirm(`Remove “${v.title}”?`)) removeVideo(v.id)
-                if (activeId === v.id) setActiveId(null)
-              }}
-            >
-              Delete
+              More
             </button>
           </div>
 
-          <details
-            className="yt-manual-details"
-            open={manualOpenId === v.id}
-            onToggle={(e) => {
-              const open = (e.target as HTMLDetailsElement).open
-              setManualOpenId(open ? v.id : manualOpenId === v.id ? null : manualOpenId)
-            }}
-          >
-            <summary>Watched outside ExamPulse? Adjust %</summary>
-            <label className="video-manual yt-manual">
-              <span>Set progress</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={v.pct}
-                onChange={(e) =>
-                  updateVideo(v.id, {
-                    pct: Number(e.target.value),
-                    watchedSec:
-                      v.durationSec != null
-                        ? (Number(e.target.value) / 100) * v.durationSec
-                        : v.watchedSec,
-                  })
-                }
-              />
-            </label>
-          </details>
+          {menuOpen && (
+            <div className="yt-card-menu">
+              <a
+                href={v.videoId ? youtubeWatchUrl(v.videoId) : v.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open on YouTube ↗
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingNotesId(editingNotesId === v.id ? null : v.id)
+                  setMenuId(null)
+                }}
+              >
+                Edit notes
+              </button>
+              {!v.channel && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void refreshMeta(v)
+                    setMenuId(null)
+                  }}
+                >
+                  Fetch title / channel
+                </button>
+              )}
+              <label className="yt-menu-slider">
+                <span>Adjust % (watched elsewhere)</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={v.pct}
+                  onChange={(e) =>
+                    updateVideo(v.id, {
+                      pct: Number(e.target.value),
+                      watchedSec:
+                        v.durationSec != null
+                          ? (Number(e.target.value) / 100) * v.durationSec
+                          : v.watchedSec,
+                    })
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="danger-text"
+                onClick={() => {
+                  if (confirm(`Remove “${v.title}”?`)) removeVideo(v.id)
+                  if (activeId === v.id) setActiveId(null)
+                  setMenuId(null)
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          )}
 
           {editingNotesId === v.id && (
             <div className="yt-notes-edit">
@@ -329,7 +390,9 @@ export function VideosPage() {
                 rows={3}
                 placeholder="Timestamps, weak spots, what to revise…"
                 onBlur={(e) => {
-                  updateVideo(v.id, { notes: e.target.value.trim() || undefined })
+                  updateVideo(v.id, {
+                    notes: e.target.value.trim() || undefined,
+                  })
                 }}
               />
               <button
@@ -347,21 +410,31 @@ export function VideosPage() {
   }
 
   const displayPct = livePct ?? active?.pct ?? 0
+  const watchedLabel = active?.durationSec
+    ? `${formatDuration(
+        Math.max(
+          active.watchedSec,
+          (displayPct / 100) * active.durationSec,
+        ),
+      )} / ${formatDuration(active.durationSec)}`
+    : null
 
   return (
-    <div className="videos-page yt-library">
-      <header className="section-head stack">
+    <div className={`videos-page yt-library${active ? ' is-watching' : ''}`}>
+      <header className="section-head yt-page-head">
         <div>
           <h1>YouTube library</h1>
-          <p className="lede">
-            Paste a link — title and channel fill in from YouTube. Watch here and
-            progress updates automatically from the player.
-          </p>
+          {!active && (
+            <p className="lede">
+              Paste a link — title and channel fill in from YouTube. Watch here
+              and progress updates automatically.
+            </p>
+          )}
         </div>
         <div className="yt-header-actions">
           {totals.n > 0 && (
             <p className="videos-summary">
-              {totals.n} videos · avg {totals.avg}% · {totals.done} done
+              {totals.n} · avg {totals.avg}% · {totals.done} done
               {totals.leftSec > 0
                 ? ` · ~${formatDuration(totals.leftSec)} left`
                 : ''}
@@ -469,7 +542,118 @@ export function VideosPage() {
         </section>
       )}
 
-      {videoLibrary.length > 0 && (
+      {active && active.videoId && (
+        <section
+          ref={watchRef}
+          className="yt-theater"
+          aria-label="Now watching"
+          tabIndex={-1}
+        >
+          <div className="yt-theater-main">
+            <YouTubeProgressPlayer
+              videoId={active.videoId}
+              startSeconds={
+                active.pct >= 90 ? 0 : Math.max(0, active.watchedSec - 3)
+              }
+              initialPeakSec={active.watchedSec}
+              onProgress={({ watchedSec, durationSec, pct }) => {
+                setLivePct(pct)
+                const cur = activeRef.current
+                if (!cur || cur.id !== active.id) return
+                if (
+                  pct > cur.pct ||
+                  watchedSec > cur.watchedSec + 1 ||
+                  (durationSec && durationSec !== cur.durationSec)
+                ) {
+                  updateVideo(cur.id, {
+                    watchedSec,
+                    durationSec,
+                    pct: Math.max(cur.pct, pct),
+                  })
+                }
+              }}
+            />
+
+            <div className="yt-now-meta">
+              <div className="yt-now-title-row">
+                <div>
+                  <p className="yt-now-kicker">
+                    {active.section}
+                    {active.channel ? ` · ${active.channel}` : ''}
+                  </p>
+                  <h2>{active.title}</h2>
+                </div>
+                <div className="yt-watch-actions">
+                  <a
+                    className="ghost"
+                    href={youtubeWatchUrl(active.videoId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    YouTube ↗
+                  </a>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => markDone(active, active.pct < 90)}
+                  >
+                    {active.pct >= 90 ? 'Reset' : 'Mark done'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => setActiveId(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              <div className="yt-progress-panel">
+                <div className="video-progress-track" aria-hidden>
+                  <span style={{ width: `${displayPct}%` }} />
+                </div>
+                <div className="yt-progress-meta">
+                  <span className="yt-auto-pill">Auto</span>
+                  <strong>{displayPct}%</strong>
+                  {watchedLabel && <span>{watchedLabel}</span>}
+                  {active.durationSec && displayPct < 100 && (
+                    <span className="yt-left">
+                      {formatDuration(
+                        Math.max(
+                          0,
+                          active.durationSec -
+                            Math.max(
+                              active.watchedSec,
+                              (displayPct / 100) * active.durationSec,
+                            ),
+                        ),
+                      )}{' '}
+                      left
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside className="yt-upnext" aria-label="Up next">
+            <div className="yt-upnext-head">
+              <h3>Up next</h3>
+              <span>{upNext.length} queued</span>
+            </div>
+            <div className="yt-upnext-list">
+              {upNext.length === 0 ? (
+                <p className="yt-upnext-empty">All caught up in this filter.</p>
+              ) : (
+                upNext.map(renderUpNextRow)
+              )}
+            </div>
+          </aside>
+        </section>
+      )}
+
+      {videoLibrary.length > 0 && !active && (
         <div className="yt-toolbar">
           <label className="yt-search">
             <span className="search-icon" aria-hidden>
@@ -499,7 +683,7 @@ export function VideosPage() {
         </div>
       )}
 
-      {sections.length > 1 && (
+      {sections.length > 1 && !active && (
         <div className="filter-row video-filters" role="tablist">
           {sections.map((s) => (
             <button
@@ -514,97 +698,14 @@ export function VideosPage() {
         </div>
       )}
 
-      {active && active.videoId && (
-        <section
-          ref={watchRef}
-          className="video-watch"
-          aria-label="Now watching"
-          tabIndex={-1}
-        >
-          <div className="video-watch-head">
-            <div>
-              <p className="muted-line">
-                {active.section}
-                {active.channel ? ` · ${active.channel}` : ''}
-              </p>
-              <h2>{active.title}</h2>
-            </div>
-            <div className="yt-watch-actions">
-              <button
-                type="button"
-                className="ghost"
-                onClick={() =>
-                  updateVideo(active.id, {
-                    pct: 100,
-                    watchedSec: active.durationSec ?? active.watchedSec,
-                  })
-                }
-              >
-                Mark done
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setActiveId(null)}
-              >
-                Close player
-              </button>
-            </div>
-          </div>
-          <YouTubeProgressPlayer
-            videoId={active.videoId}
-            startSeconds={
-              active.pct >= 90
-                ? 0
-                : Math.max(0, active.watchedSec - 3)
-            }
-            initialPeakSec={active.watchedSec}
-            onProgress={({ watchedSec, durationSec, pct }) => {
-              setLivePct(pct)
-              const cur = activeRef.current
-              if (!cur || cur.id !== active.id) return
-              if (
-                pct > cur.pct ||
-                watchedSec > cur.watchedSec + 1 ||
-                (durationSec && durationSec !== cur.durationSec)
-              ) {
-                updateVideo(cur.id, {
-                  watchedSec,
-                  durationSec,
-                  pct: Math.max(cur.pct, pct),
-                })
-              }
-            }}
-          />
-          <div className="video-progress-row">
-            <div className="video-progress-track" aria-hidden>
-              <span style={{ width: `${displayPct}%` }} />
-            </div>
-            <span>
-              <span className="yt-auto-pill">Auto</span>
-              {displayPct}% watched
-              {active.durationSec
-                ? ` · ${formatDuration(
-                    Math.max(active.watchedSec, (displayPct / 100) * active.durationSec),
-                  )} / ${formatDuration(active.durationSec)}`
-                : ''}
-            </span>
-          </div>
-          <p className="muted-line video-progress-hint">
-            Progress is read live from the YouTube player (time watched ÷ length).
-            YouTube doesn’t share watch history from the YouTube app — use
-            “Adjust %” on a card only if you finished it elsewhere.
-          </p>
-        </section>
-      )}
-
-      {continueWatching.length > 0 &&
+      {!active &&
+        continueWatching.length > 0 &&
         filter === 'All' &&
         !query &&
         status === 'All' && (
           <section className="yt-continue" aria-label="Continue watching">
             <h2 className="roadmap-section-title">Continue watching</h2>
-            <div className="yt-grid">
+            <div className="yt-rail">
               {continueWatching.map((v) => renderThumbCard(v, true))}
             </div>
           </section>
@@ -617,6 +718,7 @@ export function VideosPage() {
             : 'No videos match this filter.'}
         </p>
       ) : (
+        !active &&
         grouped.map(([sec, items]) => (
           <section key={sec} className="video-section-block">
             <div className="yt-section-head">
@@ -628,6 +730,24 @@ export function VideosPage() {
             <div className="yt-grid">{items.map((v) => renderThumbCard(v))}</div>
           </section>
         ))
+      )}
+
+      {active && grouped.length > 0 && (
+        <section className="yt-library-rest" aria-label="Library">
+          <div className="yt-section-head">
+            <h2 className="roadmap-section-title">Library</h2>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setActiveId(null)}
+            >
+              Browse all
+            </button>
+          </div>
+          <div className="yt-rail">
+            {filtered.slice(0, 12).map((v) => renderThumbCard(v, true))}
+          </div>
+        </section>
       )}
     </div>
   )
