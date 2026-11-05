@@ -712,6 +712,8 @@ export function useProgress() {
           | 'pct'
           | 'watchedSec'
           | 'durationSec'
+          | 'playbackRate'
+          | 'lastPlayedAt'
           | 'videoId'
           | 'completedAt'
           | 'rewatchDue'
