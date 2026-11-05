@@ -44,10 +44,11 @@ function loadYouTubeApi(): Promise<void> {
   if (window.YT?.Player) return Promise.resolve()
   if (apiLoader) return apiLoader
   apiLoader = new Promise((resolve) => {
+    const done = () => resolve()
     const prev = window.onYouTubeIframeAPIReady
     window.onYouTubeIframeAPIReady = () => {
       prev?.()
-      resolve()
+      done()
     }
     if (!document.querySelector('script[data-yt-api]')) {
       const s = document.createElement('script')
@@ -56,7 +57,21 @@ function loadYouTubeApi(): Promise<void> {
       s.dataset.ytApi = '1'
       document.head.appendChild(s)
     }
-    if (window.YT?.Player) resolve()
+    // Script already present / race: poll until Player exists
+    if (window.YT?.Player) {
+      done()
+      return
+    }
+    const started = Date.now()
+    const poll = window.setInterval(() => {
+      if (window.YT?.Player) {
+        window.clearInterval(poll)
+        done()
+      } else if (Date.now() - started > 12000) {
+        window.clearInterval(poll)
+        done()
+      }
+    }, 50)
   })
   return apiLoader
 }
