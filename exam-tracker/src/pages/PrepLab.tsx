@@ -124,14 +124,14 @@ export function PrepLab() {
         </div>
       </header>
 
-      <section className="prep-panel practice-cta" aria-label="Quant practice">
-        <h2>Quant section tests</h2>
+      <section className="prep-panel practice-cta" aria-label="YouTube library">
+        <h2>YouTube library</h2>
         <p className="muted-line">
-          Drill Number System, DI, SI/CI, and other chapters with a timer — then
-          save the score here.
+          Save lecture links by section (vocab, grammar, DI…) with thumbnails and
+          watch progress.
         </p>
-        <Link to="/practice/quant" className="btn primary">
-          Open quant tests
+        <Link to="/youtube" className="btn primary">
+          Open YouTube library
         </Link>
       </section>
 

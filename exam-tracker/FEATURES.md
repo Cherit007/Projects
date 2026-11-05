@@ -62,15 +62,14 @@ Mark items done as they ship. Keep UI clean and mobile-responsive.
 
 ## Phase H — Quant section tests
 
-- [x] **H1** Section-wise Quant practice bank (11 chapters)
-- [x] **H2** Timed test runner with explanations + score save to Prep lab
-- [x] **H3** Links to free external PYQ hubs (no copyrighted paper dumps)
+- [ ] ~~Removed~~ — Quant drill UI removed in favor of YouTube library
 
-## Phase I — Video tracker
+## Phase I — YouTube library
 
-- [x] **I1** Videos page: add topic + section + YouTube link
-- [x] **I2** Group by section; watch embed with IFrame progress
-- [x] **I3** Manual % slider + cloud sync of videoLibrary
+- [x] **I1** Add topic + section + YouTube link
+- [x] **I2** Thumbnail grid by section; embed watch + IFrame progress
+- [x] **I3** Continue watching, mark done, notes, search, manual %
+- [x] **I4** Cloud sync of videoLibrary
 
 ## UX / quality gates (every phase)
 
