@@ -119,15 +119,50 @@ export function VideosPage() {
 
   const totals = useMemo(() => {
     const n = videoLibrary.length
-    if (!n) return { n: 0, avg: 0, done: 0, leftSec: 0 }
+    if (!n) return { n: 0, avg: 0, done: 0, leftSec: 0, inProgress: 0 }
     const avg = Math.round(videoLibrary.reduce((s, v) => s + v.pct, 0) / n)
     const done = videoLibrary.filter((v) => v.pct >= 90).length
+    const inProgress = videoLibrary.filter((v) => v.pct > 0 && v.pct < 90).length
     const leftSec = videoLibrary.reduce((s, v) => {
       if (!v.durationSec || v.pct >= 90) return s
       return s + Math.max(0, v.durationSec - v.watchedSec)
     }, 0)
-    return { n, avg, done, leftSec }
+    return { n, avg, done, leftSec, inProgress }
   }, [videoLibrary])
+
+  const statusCounts = useMemo(() => {
+    let inProgress = 0
+    let done = 0
+    let notStarted = 0
+    for (const v of videoLibrary) {
+      if (v.pct >= 90) done += 1
+      else if (v.pct > 0) inProgress += 1
+      else notStarted += 1
+    }
+    return {
+      All: videoLibrary.length,
+      'In progress': inProgress,
+      Done: done,
+      'Not started': notStarted,
+    } as Record<StatusFilter, number>
+  }, [videoLibrary])
+
+  const sectionCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const v of videoLibrary) {
+      map.set(v.section, (map.get(v.section) ?? 0) + 1)
+    }
+    return map
+  }, [videoLibrary])
+
+  const filtersActive =
+    status !== 'All' || filter !== 'All' || query.trim().length > 0
+
+  const clearFilters = () => {
+    setStatus('All')
+    setFilter('All')
+    setQuery('')
+  }
 
   useEffect(() => {
     const id = parseYouTubeId(url)
@@ -289,7 +324,7 @@ export function VideosPage() {
     })
   }
 
-  const renderUpNextRow = (v: VideoEntry) => {
+  const renderUpNextRow = (v: VideoEntry, index: number) => {
     const thumb = v.videoId ? youtubeThumbnailUrl(v.videoId, 'mq') : null
     return (
       <button
@@ -298,6 +333,9 @@ export function VideosPage() {
         className="yt-upnext-row"
         onClick={() => openWatch(v.id)}
       >
+        <span className="yt-upnext-index" aria-hidden>
+          {index + 1}
+        </span>
         <span className="yt-upnext-thumb">
           {thumb ? <img src={thumb} alt="" loading="lazy" /> : null}
           {v.pct > 0 && (
@@ -518,12 +556,27 @@ export function VideosPage() {
         </div>
         <div className="yt-header-actions">
           {totals.n > 0 && (
-            <p className="videos-summary">
-              {totals.n} · avg {totals.avg}% · {totals.done} done
-              {totals.leftSec > 0
-                ? ` · ~${formatDuration(totals.leftSec)} left`
-                : ''}
-            </p>
+            <div className="yt-stat-chips" aria-label="Library summary">
+              <span>
+                <strong>{totals.n}</strong> videos
+              </span>
+              <span>
+                <strong>{totals.avg}%</strong> avg
+              </span>
+              <span>
+                <strong>{totals.done}</strong> done
+              </span>
+              {totals.inProgress > 0 && (
+                <span>
+                  <strong>{totals.inProgress}</strong> in progress
+                </span>
+              )}
+              {totals.leftSec > 0 && (
+                <span>
+                  <strong>~{formatDuration(totals.leftSec)}</strong> left
+                </span>
+              )}
+            </div>
           )}
           <button
             type="button"
@@ -775,42 +828,48 @@ export function VideosPage() {
           tabIndex={-1}
         >
           <div className="yt-theater-main">
-            <YouTubeProgressPlayer
-              videoId={active.videoId}
-              startSeconds={
-                active.pct >= 90 ? 0 : Math.max(0, active.watchedSec - 3)
-              }
-              initialPeakSec={active.watchedSec}
-              onProgress={({ watchedSec, durationSec, pct }) => {
-                setLivePct(pct)
-                const cur = activeRef.current
-                if (!cur || cur.id !== active.id) return
-                if (
-                  pct > cur.pct ||
-                  watchedSec > cur.watchedSec + 1 ||
-                  (durationSec && durationSec !== cur.durationSec)
-                ) {
-                  updateVideo(cur.id, {
-                    watchedSec,
-                    durationSec,
-                    pct: Math.max(cur.pct, pct),
-                  })
+            <div className="yt-stage">
+              <YouTubeProgressPlayer
+                videoId={active.videoId}
+                startSeconds={
+                  active.pct >= 90 ? 0 : Math.max(0, active.watchedSec - 3)
                 }
-              }}
-            />
+                initialPeakSec={active.watchedSec}
+                onProgress={({ watchedSec, durationSec, pct }) => {
+                  setLivePct(pct)
+                  const cur = activeRef.current
+                  if (!cur || cur.id !== active.id) return
+                  if (
+                    pct > cur.pct ||
+                    watchedSec > cur.watchedSec + 1 ||
+                    (durationSec && durationSec !== cur.durationSec)
+                  ) {
+                    updateVideo(cur.id, {
+                      watchedSec,
+                      durationSec,
+                      pct: Math.max(cur.pct, pct),
+                    })
+                  }
+                }}
+              />
+              <div className="yt-stage-progress" aria-hidden>
+                <span style={{ width: `${displayPct}%` }} />
+              </div>
+            </div>
 
             <div className="yt-now-meta">
+              <div className="yt-now-tags">
+                <span className="yt-tag">{active.section}</span>
+                {active.channel && (
+                  <span className="yt-tag soft">{active.channel}</span>
+                )}
+                <span className="yt-auto-pill">Auto tracking</span>
+              </div>
               <div className="yt-now-title-row">
-                <div>
-                  <p className="yt-now-kicker">
-                    {active.section}
-                    {active.channel ? ` · ${active.channel}` : ''}
-                  </p>
-                  <h2>{active.title}</h2>
-                </div>
+                <h2>{active.title}</h2>
                 <div className="yt-watch-actions">
                   <a
-                    className="ghost"
+                    className="yt-action"
                     href={youtubeWatchUrl(active.videoId)}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -819,14 +878,14 @@ export function VideosPage() {
                   </a>
                   <button
                     type="button"
-                    className="ghost"
+                    className="yt-action"
                     onClick={() => markDone(active, active.pct < 90)}
                   >
                     {active.pct >= 90 ? 'Reset' : 'Mark done'}
                   </button>
                   <button
                     type="button"
-                    className="ghost"
+                    className="yt-action solid"
                     onClick={() => setActiveId(null)}
                   >
                     Close
@@ -835,11 +894,7 @@ export function VideosPage() {
               </div>
 
               <div className="yt-progress-panel">
-                <div className="video-progress-track" aria-hidden>
-                  <span style={{ width: `${displayPct}%` }} />
-                </div>
                 <div className="yt-progress-meta">
-                  <span className="yt-auto-pill">Auto</span>
                   <strong>{displayPct}%</strong>
                   {watchedLabel && <span>{watchedLabel}</span>}
                   {active.durationSec && displayPct < 100 && (
@@ -858,6 +913,9 @@ export function VideosPage() {
                     </span>
                   )}
                 </div>
+                <div className="video-progress-track" aria-hidden>
+                  <span style={{ width: `${displayPct}%` }} />
+                </div>
               </div>
             </div>
           </div>
@@ -869,9 +927,9 @@ export function VideosPage() {
             </div>
             <div className="yt-upnext-list">
               {upNext.length === 0 ? (
-                <p className="yt-upnext-empty">All caught up in this filter.</p>
+                <p className="yt-upnext-empty">All caught up — nice work.</p>
               ) : (
-                upNext.map(renderUpNextRow)
+                upNext.map((v, i) => renderUpNextRow(v, i))
               )}
             </div>
           </aside>
@@ -879,47 +937,91 @@ export function VideosPage() {
       )}
 
       {videoLibrary.length > 0 && !active && (
-        <div className="yt-toolbar">
-          <label className="yt-search">
-            <span className="search-icon" aria-hidden>
-              ⌕
-            </span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search title, channel, section, notes…"
-            />
-          </label>
-          <div className="filter-row" role="tablist" aria-label="Status">
-            {(
-              ['All', 'In progress', 'Done', 'Not started'] as StatusFilter[]
-            ).map((s) => (
+        <div className="yt-filters">
+          <div className="yt-filters-top">
+            <label className="yt-search">
+              <span className="search-icon" aria-hidden>
+                ⌕
+              </span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search title, channel, section, notes…"
+              />
+              {query && (
+                <button
+                  type="button"
+                  className="yt-search-clear"
+                  aria-label="Clear search"
+                  onClick={() => setQuery('')}
+                >
+                  ×
+                </button>
+              )}
+            </label>
+            {filtersActive && (
               <button
-                key={s}
                 type="button"
-                className={status === s ? 'active' : ''}
-                onClick={() => setStatus(s)}
+                className="yt-clear-filters"
+                onClick={clearFilters}
               >
-                {s}
+                Clear filters
               </button>
-            ))}
+            )}
           </div>
-        </div>
-      )}
 
-      {sections.length > 1 && !active && (
-        <div className="filter-row video-filters" role="tablist">
-          {sections.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={filter === s ? 'active' : ''}
-              onClick={() => setFilter(s)}
-            >
-              {s}
-            </button>
-          ))}
+          <div className="yt-filter-group">
+            <p className="yt-filter-label">Status</p>
+            <div className="yt-seg" role="tablist" aria-label="Status">
+              {(
+                ['All', 'In progress', 'Done', 'Not started'] as StatusFilter[]
+              ).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="tab"
+                  aria-selected={status === s}
+                  className={status === s ? 'active' : ''}
+                  onClick={() => setStatus(s)}
+                >
+                  {s}
+                  <em>{statusCounts[s]}</em>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {sections.length > 1 && (
+            <div className="yt-filter-group">
+              <p className="yt-filter-label">Section</p>
+              <div className="yt-chips" role="tablist" aria-label="Section">
+                {sections.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === s}
+                    className={filter === s ? 'active' : ''}
+                    onClick={() => setFilter(s)}
+                  >
+                    {s}
+                    <em>
+                      {s === 'All'
+                        ? videoLibrary.length
+                        : (sectionCounts.get(s) ?? 0)}
+                    </em>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {filtersActive && (
+            <p className="yt-filter-result">
+              Showing {filtered.length} of {videoLibrary.length}
+            </p>
+          )}
         </div>
       )}
 
