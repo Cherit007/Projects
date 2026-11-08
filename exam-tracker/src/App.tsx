@@ -15,6 +15,8 @@ import { ExamDetail } from './pages/ExamDetail'
 import { FocusPage } from './pages/FocusPage'
 import { GroupPage } from './pages/GroupPage'
 import { PrepLab } from './pages/PrepLab'
+import { PracticeExamPage } from './pages/PracticeExamPage'
+import { PracticePage } from './pages/PracticePage'
 import { RoadmapPage } from './pages/RoadmapPage'
 import { TopicsPage } from './pages/TopicsPage'
 import { VideosPage } from './pages/VideosPage'
@@ -34,6 +36,8 @@ function routes() {
         { path: 'compare', Component: ComparePage },
         { path: 'focus', Component: FocusPage },
         { path: 'prep', Component: PrepLab },
+        { path: 'practice', Component: PracticePage },
+        { path: 'practice/exam/:attemptId', Component: PracticeExamPage },
         { path: 'youtube', Component: VideosPage },
         { path: 'videos', element: <Navigate to="/youtube" replace /> },
         { path: 'group/:groupId', Component: GroupPage },
@@ -56,6 +60,11 @@ function BrowserApp() {
           <Route path="compare" element={<ComparePage />} />
           <Route path="focus" element={<FocusPage />} />
           <Route path="prep" element={<PrepLab />} />
+          <Route path="practice" element={<PracticePage />} />
+          <Route
+            path="practice/exam/:attemptId"
+            element={<PracticeExamPage />}
+          />
           <Route path="youtube" element={<VideosPage />} />
           <Route path="videos" element={<Navigate to="/youtube" replace />} />
           <Route path="group/:groupId" element={<GroupPage />} />
