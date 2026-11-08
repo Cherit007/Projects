@@ -59,6 +59,16 @@ export async function putQuestion(q: BankQuestion): Promise<void> {
   db.close()
 }
 
+export async function putQuestions(list: BankQuestion[]): Promise<void> {
+  if (!list.length) return
+  const db = await openDb()
+  const tx = db.transaction(Q_STORE, 'readwrite')
+  const store = tx.objectStore(Q_STORE)
+  for (const q of list) store.put(q)
+  await txDone(tx)
+  db.close()
+}
+
 export async function deleteQuestion(id: string): Promise<void> {
   const db = await openDb()
   const tx = db.transaction(Q_STORE, 'readwrite')

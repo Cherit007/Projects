@@ -19,6 +19,7 @@ import {
   listQuestions,
   putAttempt,
   putQuestion,
+  putQuestions,
 } from '../utils/questionBankDb'
 
 type AddInput = {
@@ -86,6 +87,26 @@ export function useQuestionBank() {
     await putQuestion(q)
     setQuestions((prev) => [q, ...prev])
     return q
+  }, [])
+
+  const addQuestions = useCallback(async (inputs: AddInput[]) => {
+    if (!inputs.length) return [] as BankQuestion[]
+    const now = new Date().toISOString()
+    const created: BankQuestion[] = inputs.map((input) => ({
+      id: newId('q'),
+      topicId: input.topicId,
+      imageDataUrl: input.imageDataUrl,
+      answerKey: input.answerKey,
+      prompt: input.prompt?.trim() || undefined,
+      explanation: input.explanation?.trim() || undefined,
+      solutionImageDataUrl: input.solutionImageDataUrl,
+      difficulty: input.difficulty,
+      createdAt: now,
+      updatedAt: now,
+    }))
+    await putQuestions(created)
+    setQuestions((prev) => [...created, ...prev])
+    return created
   }, [])
 
   const removeQuestion = useCallback(async (id: string) => {
@@ -159,6 +180,7 @@ export function useQuestionBank() {
     attempts,
     countsByTopic,
     addQuestion,
+    addQuestions,
     removeQuestion,
     startAttempt,
     saveAttempt,
