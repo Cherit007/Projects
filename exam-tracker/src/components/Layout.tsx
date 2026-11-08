@@ -11,11 +11,12 @@ import { WeeklyDigestHost } from './WeeklyDigestHost'
 const PRIMARY = [
   { to: '/', end: true, label: 'Home', short: 'Home' },
   { to: '/topics', end: false, label: 'Topics', short: 'Topics' },
+  { to: '/practice', end: false, label: 'Practice', short: 'Drill' },
   { to: '/youtube', end: false, label: 'YouTube', short: 'Watch' },
-  { to: '/prep', end: false, label: 'Prep lab', short: 'Prep' },
 ] as const
 
 const MORE = [
+  { to: '/prep', label: 'Prep lab' },
   { to: '/roadmap', label: 'Roadmap' },
   { to: '/compare', label: 'Compare' },
   { to: '/focus', label: 'Focus' },
@@ -24,8 +25,8 @@ const MORE = [
 const BOTTOM = [
   { to: '/', end: true, label: 'Home', icon: 'home' },
   { to: '/topics', end: false, label: 'Topics', icon: 'topics' },
+  { to: '/practice', end: false, label: 'Drill', icon: 'prep' },
   { to: '/youtube', end: false, label: 'Watch', icon: 'watch' },
-  { to: '/prep', end: false, label: 'Prep', icon: 'prep' },
 ] as const
 
 function NavIcon({ name }: { name: (typeof BOTTOM)[number]['icon'] }) {
