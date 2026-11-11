@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cherit.financetracker"
@@ -37,12 +37,19 @@
           "microphonePermission": false
         }
       ],
+      "./plugins/withoutPushEntitlement.js",
       [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
           "color": "#4F46E5",
           "defaultChannel": "insights"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to unlock Many Tracker so only you can see your finances."
         }
       ],
       "./modules/bank-sms/app.plugin.js",
