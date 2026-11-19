@@ -3,184 +3,77 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seminar Script — Electrical Circuits Within the House</title>
+  <title>Seminar Script</title>
   <style>
-    :root {
-      --ink: #1a1a1a;
-      --muted: #5a5a5a;
-      --red: #a01e1e;
-      --green: #145032;
-      --blue: #1e3c6e;
-      --bg: #f7f4ef;
-      --card: #ffffff;
-      --line: #e2ddd4;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      background:
-        radial-gradient(ellipse at top left, #efe8dc 0%, transparent 50%),
-        linear-gradient(180deg, #faf7f2 0%, var(--bg) 100%);
-      color: var(--ink);
-      line-height: 1.55;
-    }
-    .wrap {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 28px 20px 64px;
-    }
-    header {
-      margin-bottom: 28px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--line);
-    }
-    h1 {
-      margin: 0 0 8px;
-      font-size: 1.65rem;
-      color: var(--blue);
-    }
-    .note {
-      margin: 0 0 14px;
-      color: var(--muted);
-      font-style: italic;
-      font-size: 0.95rem;
-    }
-    .actions a {
-      display: inline-block;
-      background: var(--blue);
-      color: #fff;
-      text-decoration: none;
-      padding: 10px 16px;
-      border-radius: 6px;
-      font-family: system-ui, sans-serif;
-      font-size: 0.92rem;
-    }
-    .actions a:hover { opacity: 0.9; }
-    h2.main {
-      margin: 28px 0 10px;
-      font-size: 1.15rem;
-      color: var(--red);
-      letter-spacing: 0.02em;
-    }
-    h3.sub {
-      margin: 20px 0 8px;
-      font-size: 1.05rem;
-      color: var(--green);
-    }
-    h4.small {
-      margin: 16px 0 6px;
-      font-size: 1rem;
-      color: var(--blue);
-    }
-    p { margin: 0 0 12px; }
-    ul {
-      margin: 0 0 14px;
-      padding-left: 1.2rem;
-    }
-    li { margin-bottom: 6px; }
-    section {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 18px 18px 8px;
-      margin-bottom: 16px;
-    }
-    @media print {
-      body { background: #fff; }
-      .actions { display: none; }
-      section { border: none; padding: 0; }
-    }
+    body { font-family: Georgia, serif; max-width: 680px; margin: 24px auto; padding: 0 16px 40px; line-height: 1.45; color: #1a1a1a; }
+    h1 { font-size: 1.35rem; color: #1e3c6e; margin: 0 0 12px; }
+    h2 { font-size: 1.05rem; color: #a01e1e; margin: 18px 0 6px; }
+    h3 { font-size: 0.98rem; color: #145032; margin: 12px 0 4px; }
+    p, li { font-size: 0.95rem; margin: 0 0 8px; }
+    ul { margin: 0 0 10px; padding-left: 1.15rem; }
+    a { color: #1e3c6e; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Seminar Script</h1>
-      <p class="note">Simple explanation in easy words. Same headings as in the book.</p>
-      <p class="actions">
-        <a href="./electrical-circuits-seminar-script.pdf" download>Download PDF</a>
-      </p>
-    </header>
+  <h1>Seminar Script</h1>
+  <p><a href="./electrical-circuits-seminar-script.pdf" download>Download PDF</a></p>
 
-    <section>
-      <h2 class="main">ELECTRICAL CIRCUITS WITHIN THE HOUSE</h2>
-      <p>The basic circuit of a house has two circuits.</p>
-      <ul>
-        <li>One circuit is for high power rating appliances such as geyser, electric iron, air conditioners, etc. This is of 15 A.</li>
-        <li>One circuit is for low power rating appliances such as bulbs. This is of 5 A.</li>
-      </ul>
-      <p>Now look at the common domestic circuit.</p>
-      <p>From outside, two wires come into the house — the live wire and the neutral wire.</p>
-      <p>First, the live wire goes through the main fuse. Then both wires go to the electricity meter. After that, they go to the distribution box.</p>
-      <p>From the distribution box, the wires go to the sockets in the house. The sockets are connected in parallel.</p>
-      <p>In a three-pin socket:</p>
-      <ul>
-        <li>Live wire goes to one pin.</li>
-        <li>Neutral wire goes to another pin.</li>
-        <li>Earth wire goes to the top pin, and this earth wire is connected to the ground.</li>
-      </ul>
-      <p>In a domestic circuit, each appliance is given a separate ON/OFF switch. This is so that we can use it whenever we want.</p>
-      <p>So that each appliance gets equal voltage, they are connected in parallel. This also makes sure that if the switch of one appliance is ON or OFF, the other appliances are not affected.</p>
-      <p><strong>Each electrical appliance connected in parallel has an independent path for current and it works at the same voltage, that is 220 V.</strong></p>
+  <h2>ELECTRICAL CIRCUITS WITHIN THE HOUSE</h2>
+  <p>House has two circuits:</p>
+  <ul>
+    <li>15 A - high power appliances (geyser, iron, AC)</li>
+    <li>5 A - low power appliances (bulbs)</li>
+  </ul>
+  <p>Common domestic circuit: Live and neutral wires come from outside → main fuse → electricity meter → distribution box → sockets (parallel).</p>
+  <p>Three-pin socket: live, neutral, and earth (top pin to ground).</p>
+  <p>Each appliance has its own ON/OFF switch. Appliances are connected in parallel so each gets equal voltage and one switch does not affect others.</p>
+  <p><strong>Each electrical appliance connected in parallel has an independent path for current and it works at the same voltage, that is 220 V.</strong></p>
 
-      <h3 class="sub">Role of earth wire</h3>
-      <p>The earth wire has green insulation.</p>
-      <p>One end of the earth wire is connected to a metallic plate deep underground. The other end is connected to the metallic body of appliances like electric irons, toasters, and refrigerators.</p>
-      <p>It is a safety measure. If there is any leaked current in the metallic body of the appliance, the earth wire gives a low resistance conducting path for that current to flow into the earth.</p>
-      <p>Because of this, the current does not pass through the person touching the appliance, and electric shock is prevented.</p>
-    </section>
+  <h3>Role of earth wire</h3>
+  <p>Earth wire has green insulation. One end goes to a metal plate deep underground; other end to the metal body of appliances (iron, toaster, fridge).</p>
+  <p>If current leaks to the metal body, earth wire gives a low-resistance path into the ground, so the person does not get a shock.</p>
 
-    <section>
-      <h2 class="main">SAFETY COMPONENTS</h2>
-      <p>Short circuit and overloading are two big dangers in electrical circuits. So safety devices are very important to protect us from fire and electric shock.</p>
+  <h2>SAFETY COMPONENTS</h2>
+  <h3>Short circuit</h3>
+  <p>Live and neutral wires touch directly (damaged insulation/fault). Current rises a lot → heat, sparks, fire.</p>
+  <h3>Overloading</h3>
+  <p>Too many appliances on one plug. Wires heat up, insulation may melt, and short circuit can happen. Safety devices are needed.</p>
 
-      <h4 class="small">Short circuit</h4>
-      <p>A short circuit happens when the live wire and the neutral wire come into direct contact. This can happen due to damaged insulation or some fault.</p>
-      <p>Then the current increases enormously. This causes extreme heating and sparks, which can lead to fire.</p>
+  <h2>Electric Fuse</h2>
+  <p>Safety device that stops undesirably high current from voltage fluctuation or fault, so wires/appliances do not overheat or catch fire.</p>
+  <h3>Structure</h3>
+  <ul>
+    <li>Porcelain casing: hollow block with brass terminals T1 and T2; live wire to T1; no direct link between T1 and T2.</li>
+    <li>Porcelain grip: solid block with copper clamps and fuse wire between them. When inserted, current flows T1 → fuse wire → T2.</li>
+  </ul>
+  <p>If current is too high, fuse wire melts and current stops.</p>
+  <h3>Features</h3>
+  <p>Made of metal alloy (lead and tin). Melting point about 200°C. Connected in series in the live wire where current enters.</p>
+  <p>When heat exceeds safe limit, fuse melts and breaks the circuit. Found near main switch in porcelain cartridge.</p>
+  <p>Higher rating = thicker wire. Ratings: 1 A, 2 A, 3 A, 5 A, 10 A, etc.</p>
 
-      <h4 class="small">Overloading</h4>
-      <p>Overloading of a circuit happens when too many appliances are connected to a single plug.</p>
-      <p>This causes the wires to heat up. The insulation may melt, and later this can lead to a short circuit.</p>
-      <p>So it is very important to have safety devices to protect against fire and electrocution.</p>
-    </section>
+  <h2>Miniature Circuit Breaker (MCB)</h2>
+  <p>MCBs are replacing fuses. Fuse problem: melted wire must be replaced. MCB trips automatically; just switch it ON again to restore supply.</p>
+  <p>Some MCBs can resume supply automatically. Always look for ISI mark on MCBs.</p>
+  <h3>Remember</h3>
+  <p>Buy only appliances with ISI mark. ISI = Indian Standard Institute (Bureau of Indian Standard). It means safe, less energy waste, and good quality.</p>
 
-    <section>
-      <h2 class="main">Electric Fuse</h2>
-      <p>Fuse is a safety device used in electrical circuits. Its main function is to protect the appliances by stopping the flow of undesirably high currents through the circuit.</p>
-      <p>Sometimes due to voltage fluctuations and some fault in the circuit, heavy current starts flowing through the circuit. This may heat up the circuit wires and appliances. This may damage the appliances and can even cause fire.</p>
-      <p>The fuse protects us from this danger.</p>
-
-      <h3 class="sub">Structure</h3>
-      <p>A fuse socket consists of two parts.</p>
-      <p><strong>(i) Porcelain casing:</strong> It is a hollow rectangular block of porcelain. Inside it, two rectangular brass terminals T1 and T2 are fixed. The casing is fixed to a wooden board, and the live wire is connected to terminal T1. There is no direct connection between terminals T1 and T2. So no current can flow from T1 to T2 unless they are connected by some wire.</p>
-      <p><strong>(ii) Porcelain Grip:</strong> It is a rectangular solid porcelain block. On one side of it, there are two rectangular clamps of copper. These clamps can fit tightly on the terminals T1 and T2. Between the copper clamps, a fuse wire of appropriate value is fixed.</p>
-      <p>When the grip is inserted in the casing, the current from terminal T1 flows to terminal T2 through the fuse wire.</p>
-      <p>If the current becomes too high, the fuse wire melts and current does not flow.</p>
-
-      <h3 class="sub">Features</h3>
-      <p>A fuse wire is made of an alloy of metals, say lead and tin. It has an appropriate melting point as per the requirement of the circuit.</p>
-      <p>Fuse wire is connected in series with the circuit. The melting point of fuse wire material is about 200 degrees Celsius.</p>
-      <p>It is placed in the live wire of the circuit at the point where the current enters the circuit.</p>
-      <p>When the circuit gets heated up to greater temperatures beyond the safe limit, the fuse wire melts and breaks the circuit. This protects our appliances from the effects of heavy current.</p>
-      <p>Fuse wires can be easily located in domestic circuits close to the main switch, encased in a porcelain cartridge.</p>
-      <p>The thickness of fuse wire depends on current rating. Higher is the rating, thicker is the fuse wire.</p>
-      <p>Fuse wires are available in different current ratings such as 1 A, 2 A, 3 A, 5 A, 10 A, etc.</p>
-    </section>
-
-    <section>
-      <h2 class="main">Miniature Circuit Breaker (MCB)</h2>
-      <p>Now-a-days MCBs are replacing electric fuse from wirings at most of the places.</p>
-      <p>The electric fuse has a big practical problem. Whenever the wire fuses, one needs to replace the wire to resume electric supply.</p>
-      <p>Miniature circuit breakers break the circuit automatically. One just needs to switch it on to resume the electric supply.</p>
-      <p>Many models of MCBs have a built-in mechanism by which the electric supply is automatically resumed.</p>
-      <p>One should always look for ISI mark on MCBs also.</p>
-
-      <h3 class="sub">Remember</h3>
-      <p>While purchasing electrical appliances, we should opt only those that bear an ISI mark.</p>
-      <p>ISI stands for Indian Standard Institute (Bureau of Indian Standard).</p>
-      <p>If an appliance bears the ISI mark, it means that it is safe and will not waste electrical energy. Moreover, it is a mark of quality.</p>
-    </section>
-  </div>
+  <h2>LIGHTNING SAFETY</h2>
+  <p>Lightning starts from friction of water particles in clouds. Negative charge at bottom, positive at top; ground becomes positive. When charge is large, air cannot resist — charges meet. This electric discharge is lightning (with heat, light, sound).</p>
+  <p>It can happen cloud-to-ground, cloud-to-cloud, or inside the same cloud.</p>
+  <p>Lightning is dangerous. It often strikes tall buildings and trees. No open place is safe. When thunder roars, go indoors.</p>
+  <ul>
+    <li>Hearing thunder = rush to a safer place.</li>
+    <li>After lightning flash, count slowly: every 3 counts ≈ 1 km away.</li>
+    <li>Flash and thunder together = storm is above you.</li>
+    <li>After last thunder, wait 30 minutes before coming out.</li>
+  </ul>
+  <p>A building or house is safe. Remain inside.</p>
+  <h3>Do's and Don'ts during a Thunderstorm — Outside the House</h3>
+  <ul>
+    <li>Open vehicles (motorbikes, tractors, open cars) are not safe.</li>
+    <li>Open fields, tall trees, park shelters, elevated places do not protect us.</li>
+    <li>Carrying umbrella is not a good idea.</li>
+  </ul>
 </body>
 </html>
