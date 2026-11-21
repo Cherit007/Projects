@@ -27,6 +27,10 @@ export interface UpiCandidate {
   detectedAt: string;
   reviewState: ReviewState;
   transactionId: string | null;
+  /** Bank SMS about a credit card. */
+  card: boolean;
+  /** Last four digits of the account or card the message names. */
+  accountLast4: string | null;
 }
 
 interface CandidateRow {
@@ -42,6 +46,8 @@ interface CandidateRow {
   detected_at: string;
   review_state: ReviewState;
   transaction_id: string | null;
+  is_card: number | null;
+  account_last4: string | null;
 }
 
 function toCandidate(row: CandidateRow): UpiCandidate {
@@ -58,6 +64,8 @@ function toCandidate(row: CandidateRow): UpiCandidate {
     detectedAt: row.detected_at,
     reviewState: row.review_state,
     transactionId: row.transaction_id,
+    card: row.is_card === 1,
+    accountLast4: row.account_last4,
   };
 }
 
@@ -72,8 +80,8 @@ export async function insertCandidate(
     `INSERT OR IGNORE INTO upi_candidates
        (id, package_name, source_app, status, direction, amount_minor,
         counterparty, reference, payee_kind, detected_at, dedupe_key, review_state,
-        created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        is_card, account_last4, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     parsed.packageName,
     parsed.sourceApp,
@@ -86,6 +94,8 @@ export async function insertCandidate(
     new Date(parsed.postedAt).toISOString(),
     dedupeKey(parsed),
     initialReviewState(parsed),
+    parsed.card ? 1 : 0,
+    parsed.accountLast4 ?? null,
     now,
     now,
   );
@@ -173,6 +183,16 @@ export async function confirmCandidate(
     );
   });
   return transactionId;
+}
+
+/** Marks a candidate as recorded by a transaction that already exists. */
+export async function linkCandidate(db: SQLiteDatabase, candidateId: string, transactionId: string): Promise<void> {
+  await db.runAsync(
+    `UPDATE upi_candidates SET review_state = 'confirmed', transaction_id = ?, updated_at = ? WHERE id = ?`,
+    transactionId,
+    nowIso(),
+    candidateId,
+  );
 }
 
 /**

@@ -12,7 +12,7 @@ import { listTransactions } from '@/data/repositories/transactions';
 import { formatMinor, sumMinor } from '@/domain/money/money';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 
 export default function PersonScreen() {
   const db = useSQLiteContext();
@@ -97,7 +97,7 @@ function Total({ label, amountMinor, color }: { label: string; amountMinor: numb
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 12 },
   summary: { gap: 12 },
   totals: { flexDirection: 'row', gap: 12 },
@@ -107,4 +107,4 @@ const styles = StyleSheet.create({
   net: { color: colors.text, lineHeight: 20 },
   heading: { color: colors.textMuted, fontWeight: '700', marginTop: 4 },
   list: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, ...shadow },
-});
+}));

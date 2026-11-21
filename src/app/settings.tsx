@@ -8,7 +8,7 @@ import { haptic, PressableScale } from '@/components/PressableScale';
 import { Button, Card, SectionTitle } from '@/components/ui';
 import { useCloud } from '@/services/cloud/CloudProvider';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 function formatSyncTime(iso: string | null): string {
   if (!iso) {
@@ -58,6 +58,12 @@ export default function SettingsScreen() {
 
       <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.section}>
         <SectionTitle title="Features" />
+        <LinkRow
+          icon="color-palette-outline"
+          title="Personalise"
+          detail="Theme, month start day, app lock, dashboard"
+          href="/preferences"
+        />
         {(upi.available || Platform.OS === 'ios') && (
           <LinkRow
             icon="flash"
@@ -78,8 +84,8 @@ export default function SettingsScreen() {
         <SectionTitle title="Your data" />
         <LinkRow
           icon="document-text-outline"
-          title="Import bank statement"
-          detail="HDFC Bank or SBI PDF"
+          title="Import statement"
+          detail="HDFC Bank, SBI or MobiKwik PDF"
           href="/statement-import"
         />
         <LinkRow icon="document-outline" title="Backup and restore" detail="Save everything to a file" href="/backup" />
@@ -190,7 +196,8 @@ function LinkRow({
     | '/insight-settings'
     | '/merchant-rules'
     | '/goals'
-    | '/search';
+    | '/search'
+    | '/preferences';
 }) {
   return (
     <PressableScale hapticKind="light" onPress={() => router.push(href)}>
@@ -208,7 +215,7 @@ function LinkRow({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 20, paddingBottom: 48 },
   section: { gap: 10 },
   card: { gap: 14 },
@@ -224,7 +231,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: '#fff', fontWeight: '700', fontSize: 18 },
+  avatarText: { color: colors.onPrimary, fontWeight: '700', fontSize: 18 },
   syncRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   buttons: { flexDirection: 'row', gap: 10 },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -236,4 +243,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

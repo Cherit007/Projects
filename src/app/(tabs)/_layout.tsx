@@ -1,8 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 
 import { haptic } from '@/components/PressableScale';
+import { ThemedScreen } from '@/components/ThemedScreen';
+import { usePreferences } from '@/services/PreferencesProvider';
+import { QuickAddListener } from '@/services/QuickAddListener';
 import type { IconName } from '@/theme/categoryStyle';
 import { colors } from '@/theme/colors';
 
@@ -14,8 +17,15 @@ function icon(active: IconName, inactive: IconName) {
 }
 
 export default function TabLayout() {
+  const { onboarded } = usePreferences();
+  if (!onboarded) {
+    return <Redirect href="/onboarding" />;
+  }
   return (
+    <>
+    <QuickAddListener />
     <Tabs
+      screenLayout={({ children }) => <ThemedScreen>{children}</ThemedScreen>}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
@@ -37,5 +47,6 @@ export default function TabLayout() {
         options={{ title: 'Categories', tabBarIcon: icon('pricetags', 'pricetags-outline') }}
       />
     </Tabs>
+    </>
   );
 }

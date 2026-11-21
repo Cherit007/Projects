@@ -5,32 +5,45 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { billSummary } from '@/components/cardBill';
 import { PressableScale } from '@/components/PressableScale';
 import { Amount, Button, EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import { loadCardsOverview } from '@/data/queries/cards';
 import { getAccountFlows, listAccounts } from '@/data/repositories/accounts';
 import { accountBalance } from '@/domain/accounting/accounting';
+import type { CardBill } from '@/domain/cards/billing';
 import { formatMinor, sumMinor } from '@/domain/money/money';
 import type { AccountType } from '@/domain/types';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import type { IconName } from '@/theme/categoryStyle';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 
-const typeInfo: Record<AccountType, { label: string; icon: IconName; color: string }> = {
+const typeInfo = themedStyles((): Record<AccountType, { label: string; icon: IconName; color: string }> => ({
   cash: { label: 'Cash', icon: 'cash-outline', color: colors.income },
   bank: { label: 'Bank account', icon: 'business-outline', color: colors.primary },
   wallet: { label: 'Wallet', icon: 'wallet-outline', color: '#D97706' },
   card: { label: 'Credit card', icon: 'card-outline', color: '#DB2777' },
-};
+}));
 
 async function loadAccounts(db: SQLiteDatabase) {
-  const [accounts, flows] = await Promise.all([
+  const [accounts, flows, cards] = await Promise.all([
     listAccounts(db, { includeArchived: true }),
     getAccountFlows(db),
+    loadCardsOverview(db),
   ]);
+  const bills = new Map(cards.cards.map(card => [card.account.id, card.bill]));
   return accounts.map(account => ({
     ...account,
     balanceMinor: accountBalance(account, flows.get(account.id)),
+    bill: bills.get(account.id) ?? null,
   }));
+}
+
+function cardMeta(item: { balanceMinor: number; bill: CardBill | null }): string {
+  if (item.bill && item.bill.status !== 'nothing') {
+    return ` · ${billSummary(item.bill).text}`;
+  }
+  return item.balanceMinor < 0 ? ' · Due' : ' · Nothing due';
 }
 
 export default function AccountsScreen() {
@@ -86,7 +99,7 @@ export default function AccountsScreen() {
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.meta}>
                   {info.label}
-                  {item.type === 'card' ? (item.balanceMinor < 0 ? ' · Due' : ' · Nothing due') : ''}
+                  {item.type === 'card' ? cardMeta(item) : ''}
                   {item.isArchived ? ' · Archived' : ''}
                 </Text>
               </View>
@@ -100,19 +113,23 @@ export default function AccountsScreen() {
         );
       }}
       ListFooterComponent={
-        <Button
-          title="Add account"
-          icon="add"
-          variant="secondary"
-          onPress={() => router.push('/account/new')}
-          style={styles.add}
-        />
+        <View style={styles.add}>
+          {active.some(a => a.type === 'card') && (
+            <Button
+              title="Credit card bills and due dates"
+              icon="card-outline"
+              variant="secondary"
+              onPress={() => router.push('/cards')}
+            />
+          )}
+          <Button title="Add account" icon="add" variant="secondary" onPress={() => router.push('/account/new')} />
+        </View>
       }
     />
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 10, paddingBottom: 48 },
   totalCard: { marginBottom: 8, gap: 4, borderRadius: radius.lg, padding: 20, ...shadow },
   totalLabel: { color: '#E0E7FF', fontWeight: '600' },
@@ -132,5 +149,5 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   name: { fontSize: 16, fontWeight: '700', color: colors.text },
   meta: { color: colors.textMuted, fontSize: 13 },
-  add: { marginTop: 12 },
-});
+  add: { marginTop: 12, gap: 10 },
+}));

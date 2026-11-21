@@ -25,7 +25,7 @@ import type { BudgetProgress } from '@/domain/budgets/budgets';
 import { formatMinor, parseToMinor } from '@/domain/money/money';
 import { monthKeyOf, type MonthKey } from '@/domain/period';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 const WARN_OPTIONS = [70, 80, 90] as const;
 
@@ -241,7 +241,7 @@ function AmountEditor({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 18, paddingBottom: 48 },
   section: { gap: 10 },
   muted: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
@@ -264,4 +264,4 @@ const styles = StyleSheet.create({
   editorInput: { flex: 1 },
   editorButton: { paddingVertical: 12 },
   error: { color: colors.danger, fontSize: 13 },
-});
+}));

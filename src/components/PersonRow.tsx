@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { PersonSummary } from '@/data/repositories/people';
 import { formatMinor } from '@/domain/money/money';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 import { PressableScale } from './PressableScale';
 import { Amount, Badge } from './ui';
@@ -45,7 +45,7 @@ export function PersonRow({ person }: { person: PersonSummary }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -67,4 +67,4 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.text },
   meta: { fontSize: 13, color: colors.textMuted },
-});
+}));

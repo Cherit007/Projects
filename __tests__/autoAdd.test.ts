@@ -25,11 +25,11 @@ function sms(to: string, amount: string, { credit = false, at = NOW, extra = '' 
     : `Sent Rs.${amount} From HDFC Bank A/C *1234 To ${to} On 15/10/26 Ref ${ref}${extra} Not You? Call 18002586161`;
 }
 
-async function setup(accounts: ('bank' | 'cash' | 'wallet')[] = ['bank']): Promise<SQLiteDatabase> {
+async function setup(accounts: ('bank' | 'cash' | 'wallet')[] = ['bank'], names: string[] = []): Promise<SQLiteDatabase> {
   const db = createTestDb();
   await migrateDbIfNeeded(db);
   for (const [i, type] of accounts.entries()) {
-    await createAccount(db, { name: `${type} ${i}`, type, openingBalanceMinor: 0 });
+    await createAccount(db, { name: names[i] ?? `${type} ${i}`, type, openingBalanceMinor: 0 });
   }
   return db;
 }
@@ -221,12 +221,12 @@ describe('payee history', () => {
 
 describe('own transfers', () => {
   it('records payments to and from the user as transfers to their other account', async () => {
-    const db = await setup(['bank', 'bank', 'cash']);
+    const db = await setup(['bank', 'bank', 'cash'], ['HDFC Bank', 'SBI']);
     await setOwnerName(db, '  Cherit Reddy ');
     const out = (await added(db, await receive(db, sms('MR CHERIT REDDY', '5000.00'))))!;
-    expect(out).toMatchObject({ type: 'transfer', accountName: 'bank 0', toAccountName: 'bank 1', categoryId: null });
+    expect(out).toMatchObject({ type: 'transfer', accountName: 'HDFC Bank', toAccountName: 'SBI', categoryId: null });
     const back = (await added(db, await receive(db, sms('cherit.reddy@okaxis', '1500.00', { credit: true }))))!;
-    expect(back).toMatchObject({ type: 'transfer', accountName: 'bank 1', toAccountName: 'bank 0' });
+    expect(back).toMatchObject({ type: 'transfer', accountName: 'SBI', toAccountName: 'HDFC Bank' });
   });
 
   it('waits for review when the other account is unclear, and ignores other people with the same surname', async () => {
@@ -241,7 +241,7 @@ describe('own transfers', () => {
   });
 
   it('does nothing special without a name set', async () => {
-    const db = await setup(['bank', 'bank']);
+    const db = await setup(['bank', 'bank'], ['HDFC Bank']);
     expect(await categoryOf(db, await receive(db, sms('CHERIT REDDY', '5000.00')))).toBe('Friends');
   });
 });
@@ -290,7 +290,7 @@ describe('monthly rent', () => {
 
 describe('people', () => {
   it('lists people with totals, groups name variants and moves them to Family and back', async () => {
-    const db = await setup(['bank', 'bank']);
+    const db = await setup(['bank', 'bank'], ['HDFC Bank']);
     await receive(db, sms('RAHUL SHARMA', '2000.00'));
     await receive(db, sms('Rahul Sharma ', '300.00', { credit: true }));
     await receive(db, sms('SWIGGY', '250.00'));

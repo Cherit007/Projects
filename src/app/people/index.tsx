@@ -6,7 +6,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui';
 import { listPeople } from '@/data/repositories/people';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 
 const load = (db: SQLiteDatabase) => listPeople(db);
 
@@ -45,8 +45,8 @@ export default function PeopleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 12 },
   intro: { color: colors.textMuted, lineHeight: 20 },
   list: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, ...shadow },
-});
+}));

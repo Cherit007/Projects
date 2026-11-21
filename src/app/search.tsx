@@ -8,7 +8,7 @@ import { Chip, EmptyState, Input, LoadingState } from '@/components/ui';
 import { listTags } from '@/data/repositories/tags';
 import { listTransactions } from '@/data/repositories/transactions';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
-import { colors, radius } from '@/theme/colors';
+import { colors, radius, themedStyles } from '@/theme/colors';
 
 async function searchAll(db: SQLiteDatabase, query: string, tagName: string | null) {
   const q = query.trim();
@@ -99,7 +99,7 @@ export default function SearchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { flex: 1 },
   search: {
     flexDirection: 'row',
@@ -115,4 +115,4 @@ const styles = StyleSheet.create({
   input: { flex: 1, borderWidth: 0, backgroundColor: 'transparent' },
   tagList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
   list: { paddingHorizontal: 16, paddingBottom: 48, gap: 2 },
-});
+}));

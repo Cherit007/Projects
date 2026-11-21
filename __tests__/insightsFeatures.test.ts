@@ -190,7 +190,7 @@ describe('merchant rules', () => {
     );
     expect(parsed).not.toBeNull();
     const id = await insertCandidate(db, parsed!);
-    await autoAddCandidates(db, [id]);
+    await autoAddCandidates(db, [id!]);
     const [txn] = await listTransactions(db, { limit: 5 });
     expect(txn?.categoryName).toBe('Food and dining');
     expect(txn?.categoryName).not.toBe('Healthcare');
@@ -206,7 +206,7 @@ describe('merchant rules', () => {
     );
     expect(parsed).not.toBeNull();
     const id = await insertCandidate(db, parsed!);
-    await autoAddCandidates(db, [id]);
+    await autoAddCandidates(db, [id!]);
     const [txn] = await listTransactions(db, { limit: 5 });
     expect(txn?.type).toBe('income');
     expect(txn?.categoryName).not.toBe('Shopping');
@@ -288,12 +288,14 @@ describe('insight settings', () => {
       unusual: true,
       salary: true,
       bills: true,
+      cards: true,
     });
     await setInsightNotifyLevel(db, 'off');
     await setInsightNotifyFlag(db, 'pace', false);
     await setInsightNotifyFlag(db, 'unusual', false);
+    await setInsightNotifyFlag(db, 'cards', false);
     expect(await getInsightNotifyLevel(db)).toBe('off');
-    expect(await getInsightNotifyFlags(db)).toMatchObject({ pace: false, unusual: false, salary: true });
+    expect(await getInsightNotifyFlags(db)).toMatchObject({ pace: false, unusual: false, salary: true, cards: false });
     await setInsightLastSent(db, 'monthly', '2026-10-01');
     expect(await getInsightLastSent(db, 'monthly')).toBe('2026-10-01');
   });
@@ -325,15 +327,22 @@ describe('loadMonthInsight', () => {
     );
     await createGoal(db, { name: 'Buffer', targetMinor: 50_000_00, monthlyMinor: 3_000_00 });
 
+    // Income that never arrived (or arrives later) must not count: only balances held today.
+    await createTransaction(db, income(accountId, salary, 99_000_00, '2026-10-25T10:00:00.000Z'));
+    const card = await createAccount(db, { name: 'Amex', type: 'card', openingBalanceMinor: 0 });
+    await createTransaction(db, expense(card, food, 1_500_00, '2026-10-04T10:00:00.000Z', 'Shop'));
+
     const insight = await loadMonthInsight(db, { year: 2026, month: 9 }, new Date(2026, 9, 10));
-    expect(insight.expenseMinor).toBe(2_000_00);
-    expect(insight.incomeMinor).toBe(0);
-    expect(insight.safe.incomeBasisMinor).toBe(40_000_00);
+    expect(insight.expenseMinor).toBe(3_500_00);
+    expect(insight.incomeMinor).toBe(99_000_00);
+    // Balance today: 40k salary − 10k − 649 − 649 − 2k.
+    expect(insight.safe.availableMinor).toBe(40_000_00 - 10_000_00 - 649_00 - 649_00 - 2_000_00);
+    expect(insight.safe.cardDueMinor).toBe(1_500_00);
     expect(insight.safe.goalsMinor).toBe(3_000_00);
     expect(insight.safe.billsRemainingMinor).toBeGreaterThanOrEqual(15_000_00);
     expect(insight.safe.leftoverMinor).toBe(
-      insight.safe.incomeBasisMinor -
-        insight.safe.spentMinor -
+      insight.safe.availableMinor -
+        insight.safe.cardDueMinor -
         insight.safe.billsRemainingMinor -
         insight.safe.goalsMinor,
     );

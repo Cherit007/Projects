@@ -18,8 +18,8 @@ function stubInsight(over: Partial<MonthInsight> = {}): MonthInsight {
     pace: { projectedMinor: 24_000_00, aheadOfLastMonth: false, dailyAverageMinor: 800_00 },
     safe: {
       leftoverMinor: 20_000_00,
-      incomeBasisMinor: 50_000_00,
-      spentMinor: 12_000_00,
+      availableMinor: 50_000_00,
+      cardDueMinor: 12_000_00,
       billsRemainingMinor: 8_000_00,
       goalsMinor: 10_000_00,
     },
@@ -29,63 +29,33 @@ function stubInsight(over: Partial<MonthInsight> = {}): MonthInsight {
 }
 
 describe('safeToSpend', () => {
-  it('subtracts spent, remaining bills and goals from the income basis', () => {
+  it('takes card dues, remaining bills and goals out of the money actually held', () => {
     expect(
       safeToSpend({
-        incomeMinor: 50_000_00,
-        expectedIncomeMinor: 50_000_00,
-        spentMinor: 10_000_00,
-        billsRemainingMinor: 5_000_00,
+        availableMinor: 64_957_00,
+        cardDueMinor: 23_304_00,
+        billsRemainingMinor: 1_763_00,
         goalsMinor: 5_000_00,
-      }).leftoverMinor,
-    ).toBe(30_000_00);
-  });
-
-  it('uses expected income when this month is still empty', () => {
-    const result = safeToSpend({
-      incomeMinor: 0,
-      expectedIncomeMinor: 40_000_00,
-      spentMinor: 2_000_00,
-      billsRemainingMinor: 0,
-      goalsMinor: 0,
+      }),
+    ).toEqual({
+      leftoverMinor: 34_890_00,
+      availableMinor: 64_957_00,
+      cardDueMinor: 23_304_00,
+      billsRemainingMinor: 1_763_00,
+      goalsMinor: 5_000_00,
     });
-    expect(result.incomeBasisMinor).toBe(40_000_00);
-    expect(result.leftoverMinor).toBe(38_000_00);
   });
 
-  it('prefers actual income when it exceeds the expected amount', () => {
+  it('can go negative when card dues are more than the balance', () => {
     expect(
-      safeToSpend({
-        incomeMinor: 80_000_00,
-        expectedIncomeMinor: 50_000_00,
-        spentMinor: 0,
-        billsRemainingMinor: 0,
-        goalsMinor: 0,
-      }).incomeBasisMinor,
-    ).toBe(80_000_00);
-  });
-
-  it('can go negative when overspent', () => {
-    expect(
-      safeToSpend({
-        incomeMinor: 10_000_00,
-        expectedIncomeMinor: 10_000_00,
-        spentMinor: 12_000_00,
-        billsRemainingMinor: 5_000_00,
-        goalsMinor: 2_000_00,
-      }).leftoverMinor,
-    ).toBe(-9_000_00);
+      safeToSpend({ availableMinor: 10_000_00, cardDueMinor: 12_000_00, billsRemainingMinor: 0, goalsMinor: 0 })
+        .leftoverMinor,
+    ).toBe(-2_000_00);
   });
 
   it('treats all-zero inputs as zero leftover', () => {
     expect(
-      safeToSpend({
-        incomeMinor: 0,
-        expectedIncomeMinor: 0,
-        spentMinor: 0,
-        billsRemainingMinor: 0,
-        goalsMinor: 0,
-      }).leftoverMinor,
+      safeToSpend({ availableMinor: 0, cardDueMinor: 0, billsRemainingMinor: 0, goalsMinor: 0 }).leftoverMinor,
     ).toBe(0);
   });
 });
@@ -301,6 +271,35 @@ describe('detectSubscriptions', () => {
       '2026-10-05',
     );
     expect(paidThisMonth[0]!.nextDue.startsWith('2026-11')).toBe(true);
+  });
+
+  it('ignores shops visited often: two payments in a month, or a month that breaks the pattern', () => {
+    const shop = (day: string, amountMinor: number) => base({ counterparty: 'Lalitha Traders', day, amountMinor });
+    // Paid twice in September.
+    expect(
+      detectSubscriptions([shop('2026-08-27', 50_00), shop('2026-09-25', 50_00), shop('2026-09-28', 50_00), shop('2026-10-26', 50_00)], '2026-11-14'),
+    ).toEqual([]);
+    // September's payment is on a different day.
+    expect(
+      detectSubscriptions(
+        [
+          base({ counterparty: 'Sri Ganesh Wines', day: '2026-08-29', amountMinor: 1_100_00 }),
+          base({ counterparty: 'Sri Ganesh Wines', day: '2026-09-19', amountMinor: 1_110_00 }),
+          base({ counterparty: 'Sri Ganesh Wines', day: '2026-10-28', amountMinor: 1_050_00 }),
+        ],
+        '2026-11-14',
+      ),
+    ).toEqual([]);
+    // A real auto-debit still counts.
+    expect(
+      detectSubscriptions(
+        [
+          base({ counterparty: 'Direct debit', day: '2026-08-30', amountMinor: 1_763_00 }),
+          base({ counterparty: 'Direct debit', day: '2026-09-28', amountMinor: 1_763_00 }),
+        ],
+        '2026-11-14',
+      ).map(s => [s.counterparty, s.nextDue]),
+    ).toEqual([['Direct debit', '2026-11-28']]);
   });
 
   it('keeps nextDue on this month when the due day is still ahead and unpaid', () => {

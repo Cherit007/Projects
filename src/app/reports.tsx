@@ -26,7 +26,7 @@ import {
 } from '@/domain/reports';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import { categoryStyle } from '@/theme/categoryStyle';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 type Mode = 'month' | 'year';
 
@@ -328,7 +328,7 @@ function PayeeCard({ payees }: { payees: PayeeTotal[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 16, paddingBottom: 48 },
   section: { gap: 14 },
   flex: { flex: 1 },
@@ -378,4 +378,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     overflow: 'hidden',
   },
-});
+}));

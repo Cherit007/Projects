@@ -303,6 +303,15 @@ Local-only insights. Nothing is uploaded for these. State:
 | Budget nearing-limit alert on save | Done |
 | Recurring rules you create yourself | Done |
 | Learn category from your corrections | Done |
+| Credit card statement/due days, outstanding, limit and due-date reminders | Done |
+| First-run setup (name, salary day, accounts and cards) | Done |
+| Month starts on your salary day | Done |
+| Dark mode (same as phone, light, dark) | Done |
+| App lock with fingerprint, face or passcode | Done |
+| Hide and reorder dashboard sections | Done |
+| Dashboard: month, year to date or custom range | Done |
+| Adjustable alerts (large-payment amount, digest day, reminder timing) | Done |
+| Reorder categories | Done |
 
 ### P2 --- Full personal finance management
 

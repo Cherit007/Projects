@@ -8,14 +8,17 @@ import {
   paceBody,
 } from '@/data/queries/insights';
 import {
+  getAlertTuning,
   getInsightLastSent,
   getInsightNotifyFlags,
   getInsightNotifyLevel,
   setInsightLastSent,
 } from '@/data/repositories/settings';
+import { loadCardsOverview } from '@/data/queries/cards';
+import { cardReminders } from '@/domain/cards/billing';
 import { SALARY_CATEGORY } from '@/domain/categories/defaults';
 import { formatMinor } from '@/domain/money/money';
-import { addMonths, monthKeyOf } from '@/domain/period';
+import { addMonths, getMonthStartDay, monthKeyOf, monthProgress } from '@/domain/period';
 import { listCategories } from '@/data/repositories/categories';
 import { toLocalDateInput } from '@/utils/dates';
 
@@ -62,15 +65,16 @@ export async function runInsightNotifications(db: SQLiteDatabase, now = new Date
   const month = monthKeyOf(now);
   const insight = await loadMonthInsight(db, month, now);
 
-  // Monthly overview on the 1st (covers the previous month).
-  if (now.getDate() === 1 && (await getInsightLastSent(db, 'monthly')) !== today) {
+  // Monthly overview on the first day of the month (covers the previous month).
+  if (now.getDate() === getMonthStartDay() && (await getInsightLastSent(db, 'monthly')) !== today) {
     const last = await loadMonthInsight(db, addMonths(month, -1), now);
     await notify('Monthly overview', monthlyOverviewBody(last), `insight-monthly-${today}`);
     await setInsightLastSent(db, 'monthly', today);
   }
 
-  // Weekly digest: Sundays.
-  if (level === 'weekly' && now.getDay() === 0 && (await getInsightLastSent(db, 'weekly')) !== today) {
+  // Weekly digest on the chosen weekday (Sunday by default).
+  const { weeklyDigestDay } = await getAlertTuning(db);
+  if (level === 'weekly' && now.getDay() === weeklyDigestDay && (await getInsightLastSent(db, 'weekly')) !== today) {
     await notify(
       'This week in Many Tracker',
       `So far this month you have spent ${formatMinor(insight.expenseMinor)}. ${paceBody(insight)}`,
@@ -79,8 +83,8 @@ export async function runInsightNotifications(db: SQLiteDatabase, now = new Date
     await setInsightLastSent(db, 'weekly', today);
   }
 
-  // Mid-month pace on the 15th.
-  if (flags.pace && now.getDate() === 15 && (await getInsightLastSent(db, 'pace')) !== today) {
+  // Mid-month pace on the month's 15th day.
+  if (flags.pace && monthProgress(month, now).elapsed === 15 && (await getInsightLastSent(db, 'pace')) !== today) {
     await notify('Spending pace', paceBody(insight), `insight-pace-${today}`);
     await setInsightLastSent(db, 'pace', today);
   }
@@ -105,6 +109,53 @@ export async function runInsightNotifications(db: SQLiteDatabase, now = new Date
   }
 }
 
+const CARD_REMINDER_PREFIX = 'card-due-';
+
+/**
+ * Replaces the scheduled credit card due-date reminders with ones for each
+ * card's current bill. Runs on app open and after card transactions, so a
+ * paid bill stops reminding. Permission is only asked when a reminder is due.
+ */
+export async function scheduleCardReminders(db: SQLiteDatabase, now = new Date()): Promise<void> {
+  if (Platform.OS === 'web') {
+    return;
+  }
+  const [flags, tuning] = await Promise.all([getInsightNotifyFlags(db), getAlertTuning(db)]);
+  const reminders = flags.cards
+    ? (await loadCardsOverview(db, now)).cards.flatMap(card =>
+        card.bill
+          ? cardReminders(
+              card.account.id,
+              card.account.name,
+              card.bill,
+              now,
+              formatMinor,
+              tuning.cardReminderDaysBefore,
+              tuning.cardReminderHour,
+            )
+          : [],
+      )
+    : [];
+
+  const Notifications = await notifications();
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const request of scheduled) {
+    if (request.identifier.startsWith(CARD_REMINDER_PREFIX)) {
+      await Notifications.cancelScheduledNotificationAsync(request.identifier);
+    }
+  }
+  if (reminders.length === 0 || !(await ensurePermission())) {
+    return;
+  }
+  for (const reminder of reminders) {
+    await Notifications.scheduleNotificationAsync({
+      identifier: reminder.id,
+      content: { title: reminder.title, body: reminder.body },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.at },
+    });
+  }
+}
+
 /** Call after saving an expense or income to surface unusual spend or salary. */
 export async function notifyOnSave(
   db: SQLiteDatabase,
@@ -124,7 +175,8 @@ export async function notifyOnSave(
   const today = toLocalDateInput(new Date().toISOString());
 
   if (input.type === 'expense' && flags.unusual) {
-    if (await checkUnusualExpense(db, input.amountMinor, input.occurredAt)) {
+    const { largePaymentMinor } = await getAlertTuning(db);
+    if (await checkUnusualExpense(db, input.amountMinor, input.occurredAt, largePaymentMinor)) {
       await notify(
         'Large payment',
         `${input.counterparty || 'A payment'} for ${formatMinor(input.amountMinor)} looks bigger than usual.`,

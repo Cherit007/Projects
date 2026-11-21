@@ -29,6 +29,27 @@ struct CaptureBankSmsIntent: AppIntent {
   }
 }
 
+/// "Add expense" from Siri, the Action button, Back Tap or a Control Center
+/// shortcut: opens the app with a new expense filled in, for payments the bank
+/// sends no message about.
+@available(iOS 16.0, *)
+struct AddExpenseIntent: AppIntent {
+  static let title: LocalizedStringResource = "Add expense"
+  static let description = IntentDescription("Opens the app with a new expense filled in.")
+  static let openAppWhenRun = true
+
+  @Parameter(title: "Amount", requestValueDialog: "How much did you pay?")
+  var amount: Double
+
+  @Parameter(title: "Paid to")
+  var paidTo: String?
+
+  func perform() async throws -> some IntentResult {
+    QuickAddQueue.set(amount: amount, paidTo: paidTo)
+    return .result()
+  }
+}
+
 @available(iOS 16.0, *)
 struct FinanceTrackerShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
@@ -38,6 +59,29 @@ struct FinanceTrackerShortcuts: AppShortcutsProvider {
       shortTitle: "Capture bank SMS",
       systemImageName: "indianrupeesign.circle"
     )
+    AppShortcut(
+      intent: AddExpenseIntent(),
+      phrases: [
+        "Add expense in \(.applicationName)",
+        "Log expense in \(.applicationName)",
+        "Log a payment in \(.applicationName)",
+      ],
+      shortTitle: "Add expense",
+      systemImageName: "plus.circle"
+    )
+  }
+}
+
+/// Shared with BankSmsModule through the app's UserDefaults; keep the key in sync.
+enum QuickAddQueue {
+  static let key = "financetracker.quickAdd"
+
+  static func set(amount: Double, paidTo: String?) {
+    var item: [String: Any] = ["amount": amount, "at": Date().timeIntervalSince1970 * 1000]
+    if let paidTo, !paidTo.isEmpty {
+      item["paidTo"] = paidTo
+    }
+    UserDefaults.standard.set(item, forKey: key)
   }
 }
 
@@ -45,14 +89,22 @@ enum BankSmsFilter {
   /// The transaction amount if the text looks like a bank debit or credit
   /// alert, otherwise nil. Detailed parsing happens in the app.
   static func transactionAmount(in text: String) -> String? {
-    if matches(#"\b(otp|one[\s-]?time\s+password|upi\s+pin|mpin|cvv)\b"#, text) {
+    // Alerts (emails especially) end with "Never share your OTP"; only a real code message is dropped.
+    if matches(#"\b(otp|one[\s-]?time\s+password|upi\s+pin|mpin|cvv)\b"#, withoutSafetyWarnings(text)) {
       return nil
     }
-    guard matches(#"\b(debited|credited|sent|paid|spent|withdrawn|received|transferred|trf)\b"#, text) else {
+    guard matches(#"\b(debited|credited|sent|paid|spent|withdrawn|received|transferred|trf|added\s+to)\b"#, text) else {
       return nil
     }
     return firstCapture(#"(?:₹|\bRs\.?|\bINR)\s*([\d,]+(?:\.\d{1,2})?)"#, text)
       ?? firstCapture(#"\b(?:debited|credited)\s+(?:by|with|for)\s+([\d,]+(?:\.\d{1,2})?)"#, text)
+  }
+
+  /// Same as withoutSafetyWarnings in src/domain/upi/parser.ts.
+  private static func withoutSafetyWarnings(_ text: String) -> String {
+    let pattern = #"[^.!\n]*\b(?:never|do\s+not|don'?t|not\s+to|nor)\s+(?:share|disclose|reveal|ask)\b[^.!\n]*[.!]?"#
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return text }
+    return regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
   }
 
   private static func matches(_ pattern: String, _ text: String) -> Bool {

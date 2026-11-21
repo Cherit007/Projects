@@ -1,13 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useLocalSearchParams } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { useCallback, useMemo, useState } from 'react';
 import { SectionList, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { AddTransactionButton } from '@/components/AddButton';
+import { CategoryIcon } from '@/components/CategoryIcon';
+import { PressableScale } from '@/components/PressableScale';
 import { TransactionRow } from '@/components/TransactionRow';
 import {
   Amount,
+  Card,
   Chip,
   EmptyState,
   ErrorState,
@@ -15,15 +19,16 @@ import {
   LoadingState,
   MonthSelector,
 } from '@/components/ui';
-import { loadMonth } from '@/data/queries/monthSummary';
+import { loadMonth, loadRange } from '@/data/queries/monthSummary';
 import type { TransactionListItem } from '@/data/repositories/transactions';
 import { summarize } from '@/domain/accounting/accounting';
-import { monthKeyOf, type MonthKey } from '@/domain/period';
+import { categoryBreakdown } from '@/domain/accounting/breakdown';
+import { monthKeyOf, type DateRange, type MonthKey } from '@/domain/period';
 import type { TransactionType } from '@/domain/types';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import { useRecurring } from '@/services/RecurringProvider';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 import { toLocalDateInput } from '@/utils/dates';
 
 const typeFilters: { value: TransactionType | null; label: string; color: string }[] = [
@@ -32,6 +37,19 @@ const typeFilters: { value: TransactionType | null; label: string; color: string
   { value: 'income', label: 'Income', color: colors.income },
   { value: 'transfer', label: 'Transfers', color: colors.transfer },
 ];
+
+type Scope = { kind: 'all' } | { kind: 'month' } | { kind: 'range'; range: DateRange; label: string };
+
+/** Filters the dashboard opens this screen with, e.g. "income in March". */
+type Params = {
+  type?: string;
+  from?: string;
+  to?: string;
+  label?: string;
+  category?: string;
+  /** Changes on every tap so the same link applies again after the user changed filters. */
+  at?: string;
+};
 
 interface DaySection {
   title: string;
@@ -49,7 +67,13 @@ function dayLabel(iso: string): string {
   if (key === toLocalDateInput(yesterday.toISOString())) {
     return 'Yesterday';
   }
-  return new Date(iso).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  const date = new Date(iso);
+  return date.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+  });
 }
 
 function groupByDay(items: TransactionListItem[]): DaySection[] {
@@ -65,16 +89,53 @@ function groupByDay(items: TransactionListItem[]): DaySection[] {
   }));
 }
 
+function isType(value: string | undefined): value is TransactionType {
+  return value === 'income' || value === 'expense' || value === 'transfer';
+}
+
+/** Category filter value for transactions without a category. */
+const UNCATEGORISED = 'none';
+
 export default function TransactionsScreen() {
+  const params = useLocalSearchParams<Params>();
   const [month, setMonth] = useState<MonthKey>(() => monthKeyOf(new Date()));
+  const [scope, setScope] = useState<Scope>({ kind: 'all' });
   const [search, setSearch] = useState('');
   const [type, setType] = useState<TransactionType | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
   const { lastSyncAt } = useUpi();
   const { lastAddedAt } = useRecurring();
+
+  // Filters from a dashboard link apply once per tap; afterwards the user's own choices win.
+  const [appliedAt, setAppliedAt] = useState<string | undefined>(undefined);
+  if (params.at && params.at !== appliedAt) {
+    setAppliedAt(params.at);
+    setType(isType(params.type) ? params.type : null);
+    setCategory(params.category ?? null);
+    setSearch('');
+    if (params.from && params.to) {
+      setScope({ kind: 'range', range: { startIso: params.from, endIso: params.to }, label: params.label ?? 'Selected period' });
+    }
+  }
+
   // Detection syncs and repeating transactions add entries in the background, so they reload the list too.
   const { data, error, isLoading, reload } = useFocusQuery(
-    useCallback((db: SQLiteDatabase) => loadMonth(db, month), [month]),
+    useCallback(
+      (db: SQLiteDatabase) =>
+        scope.kind === 'all' ? loadRange(db) : scope.kind === 'range' ? loadRange(db, scope.range) : loadMonth(db, month),
+      [scope, month],
+    ),
     `${lastSyncAt}|${lastAddedAt}`,
+  );
+
+  const chooseType = (next: TransactionType | null) => {
+    setType(next);
+    setCategory(null);
+  };
+
+  const breakdown = useMemo(
+    () => (data && (type === 'income' || type === 'expense') ? categoryBreakdown(data.transactions, type) : []),
+    [data, type],
   );
 
   const sections = useMemo(() => {
@@ -82,23 +143,81 @@ export default function TransactionsScreen() {
     const filtered = (data?.transactions ?? []).filter(
       t =>
         (!type || t.type === type) &&
+        (!category || (category === UNCATEGORISED ? t.categoryId === null : t.categoryId === category)) &&
         (!query ||
           [t.counterparty, t.note, t.categoryName, t.accountName].some(field =>
             field?.toLowerCase().includes(query),
           )),
     );
     return groupByDay(filtered);
-  }, [data, search, type]);
+  }, [data, search, type, category]);
 
   const header = (
     <View style={styles.header}>
-      <MonthSelector value={month} onChange={setMonth} />
+      <View style={styles.chips}>
+        <Chip label="All time" icon="infinite" selected={scope.kind === 'all'} onPress={() => setScope({ kind: 'all' })} />
+        <Chip
+          label="By month"
+          icon="calendar-outline"
+          selected={scope.kind === 'month'}
+          onPress={() => setScope({ kind: 'month' })}
+        />
+        {scope.kind === 'range' && <Chip label={scope.label} icon="funnel-outline" selected onPress={() => undefined} />}
+      </View>
+      {scope.kind === 'month' && <MonthSelector value={month} onChange={setMonth} />}
       {data && (
         <View style={styles.totals}>
-          <Total label="Income" icon="arrow-down" amountMinor={data.summary.incomeMinor} color={colors.income} />
-          <Total label="Expenses" icon="arrow-up" amountMinor={data.summary.expenseMinor} color={colors.expense} />
+          <Total
+            label="Income"
+            icon="arrow-down"
+            amountMinor={data.summary.incomeMinor}
+            color={colors.income}
+            selected={type === 'income'}
+            onPress={() => chooseType(type === 'income' ? null : 'income')}
+          />
+          <Total
+            label="Expenses"
+            icon="arrow-up"
+            amountMinor={data.summary.expenseMinor}
+            color={colors.expense}
+            selected={type === 'expense'}
+            onPress={() => chooseType(type === 'expense' ? null : 'expense')}
+          />
           <Total label="Net" icon="analytics" amountMinor={data.summary.netMinor} color={colors.primary} />
         </View>
+      )}
+      {breakdown.length > 0 && (
+        <Card style={styles.breakdown}>
+          <Text style={styles.breakdownTitle}>
+            {type === 'income' ? 'Money in by category' : 'Spending by category'} · tap to filter
+          </Text>
+          {breakdown.map(item => {
+            const id = item.categoryId ?? UNCATEGORISED;
+            const selected = category === id;
+            return (
+              <PressableScale
+                key={id}
+                hapticKind="light"
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => setCategory(selected ? null : id)}
+                style={[styles.breakdownRow, selected && styles.breakdownRowSelected]}
+              >
+                <CategoryIcon name={item.name} type={type === 'income' ? 'income' : 'expense'} size={30} />
+                <View style={styles.breakdownText}>
+                  <Text style={styles.breakdownName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.breakdownCount}>
+                    {item.count} {item.count === 1 ? 'entry' : 'entries'}
+                  </Text>
+                </View>
+                <Amount amountMinor={item.amountMinor} style={styles.breakdownAmount} />
+                {selected && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+              </PressableScale>
+            );
+          })}
+        </Card>
       )}
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -117,7 +236,7 @@ export default function TransactionsScreen() {
             label={f.label}
             color={f.color}
             selected={type === f.value}
-            onPress={() => setType(f.value)}
+            onPress={() => chooseType(f.value)}
           />
         ))}
       </View>
@@ -157,7 +276,7 @@ export default function TransactionsScreen() {
                 index === section.data.length - 1 && styles.itemLast,
               ]}
             >
-              <TransactionRow item={item} onDeleted={reload} />
+              <TransactionRow item={item} showDate onDeleted={reload} />
             </Animated.View>
           )}
           contentContainerStyle={styles.list}
@@ -165,7 +284,13 @@ export default function TransactionsScreen() {
           ListEmptyComponent={
             <EmptyState
               icon={data?.transactions.length ? 'search' : 'receipt-outline'}
-              title={data?.transactions.length ? 'No matching transactions' : 'No transactions this month'}
+              title={
+                data?.transactions.length
+                  ? 'No matching transactions'
+                  : scope.kind === 'all'
+                    ? 'No transactions yet'
+                    : 'No transactions in this period'
+              }
               body={data?.transactions.length ? 'Try a different search or filter.' : 'Tap + to add one.'}
             />
           }
@@ -181,31 +306,74 @@ function Total({
   icon,
   amountMinor,
   color,
+  selected = false,
+  onPress,
 }: {
   label: string;
   icon: 'arrow-down' | 'arrow-up' | 'analytics';
   amountMinor: number;
   color: string;
+  selected?: boolean;
+  onPress?: () => void;
 }) {
-  return (
-    <View style={styles.total}>
+  const content = (
+    <>
       <View style={styles.totalLabelRow}>
         <Ionicons name={icon} size={12} color={color} />
         <Text style={styles.totalLabel}>{label}</Text>
       </View>
       <Amount amountMinor={amountMinor} style={{ color, fontSize: 14 }} />
-    </View>
+    </>
+  );
+  if (!onPress) {
+    return <View style={styles.total}>{content}</View>;
+  }
+  return (
+    <PressableScale
+      hapticKind="light"
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityHint={`Shows only ${label.toLowerCase()}`}
+      onPress={onPress}
+      style={[styles.total, selected && { borderColor: color, borderWidth: 1.5 }]}
+    >
+      {content}
+    </PressableScale>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { flex: 1 },
   list: { paddingBottom: 110 },
   header: { padding: 16, gap: 14 },
   totals: { flexDirection: 'row', gap: 8 },
-  total: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 4, ...shadow },
+  total: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: 12,
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    ...shadow,
+  },
   totalLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   totalLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
+  breakdown: { gap: 4 },
+  breakdownTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', marginBottom: 4 },
+  breakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: radius.md,
+  },
+  breakdownRowSelected: { backgroundColor: colors.primarySoft },
+  breakdownText: { flex: 1, gap: 1 },
+  breakdownName: { fontSize: 15, fontWeight: '600', color: colors.text },
+  breakdownCount: { fontSize: 12, color: colors.textMuted },
+  breakdownAmount: { fontSize: 15, color: colors.text },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,4 +397,4 @@ const styles = StyleSheet.create({
   itemWrap: { marginHorizontal: 16, backgroundColor: colors.surface, overflow: 'hidden' },
   itemFirst: { borderTopLeftRadius: radius.md, borderTopRightRadius: radius.md },
   itemLast: { borderBottomLeftRadius: radius.md, borderBottomRightRadius: radius.md },
-});
+}));

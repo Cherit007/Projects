@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 import { PressableScale } from './PressableScale';
 
@@ -18,13 +18,13 @@ export function AddTransactionButton() {
         onPress={() => router.push('/transaction/new')}
         style={styles.fab}
       >
-        <Ionicons name="add" size={32} color="#fff" />
+        <Ionicons name="add" size={32} color={colors.onPrimary} />
       </PressableScale>
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: { position: 'absolute', right: 20, bottom: 24 },
   fab: {
     width: 60,
@@ -39,4 +39,4 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
   },
-});
+}));

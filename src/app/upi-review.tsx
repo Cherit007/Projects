@@ -17,6 +17,12 @@ import {
   SectionTitle,
 } from '@/components/ui';
 import {
+  deleteUnreadMessage,
+  listUnreadMessages,
+  UNREAD_KEEP_DAYS,
+  type UnreadMessage,
+} from '@/data/repositories/unreadMessages';
+import {
   findPossibleDuplicate,
   listCandidates,
   setCandidateState,
@@ -26,7 +32,7 @@ import { formatMinor } from '@/domain/money/money';
 import type { UpiStatus } from '@/domain/upi/parser';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { colors, radius } from '@/theme/colors';
+import { colors, radius, themedStyles } from '@/theme/colors';
 import { formatDisplayDate } from '@/utils/dates';
 
 interface ReviewItem {
@@ -36,23 +42,24 @@ interface ReviewItem {
 
 /** `_syncedAt` only exists so the list reloads after each sync. */
 async function loadReview(db: SQLiteDatabase, _syncedAt: number) {
-  const [pending, ignored] = await Promise.all([
+  const [pending, ignored, unread] = await Promise.all([
     listCandidates(db, ['needs_review']),
     listCandidates(db, ['ignored']),
+    listUnreadMessages(db),
   ]);
   const items: ReviewItem[] = await Promise.all(
     pending.map(async candidate => ({ candidate, duplicate: await findPossibleDuplicate(db, candidate) })),
   );
-  return { items, ignored: ignored.slice(0, 20) };
+  return { items, ignored: ignored.slice(0, 20), unread };
 }
 
-const statusBadge: Record<UpiStatus, { label: string; color: string; background: string }> = {
+const statusBadge = themedStyles((): Record<UpiStatus, { label: string; color: string; background: string }> => ({
   success: { label: 'Successful', color: colors.income, background: colors.incomeSoft },
   pending: { label: 'Pending', color: colors.warning, background: colors.warningSoft },
   unknown: { label: 'Unconfirmed', color: colors.transfer, background: colors.transferSoft },
   failed: { label: 'Failed', color: colors.expense, background: colors.expenseSoft },
   request: { label: 'Payment request', color: colors.transfer, background: colors.transferSoft },
-};
+}));
 
 export default function UpiReviewScreen() {
   const db = useSQLiteContext();
@@ -78,19 +85,67 @@ export default function UpiReviewScreen() {
     await Promise.all([reload(), upi.refresh()]);
   };
 
+  const dropUnread = async (message: UnreadMessage) => {
+    haptic('light');
+    await deleteUnreadMessage(db, message.id);
+    await Promise.all([reload(), upi.refresh()]);
+  };
+
+  const addUnread = async (message: UnreadMessage) => {
+    await deleteUnreadMessage(db, message.id);
+    await upi.refresh();
+    router.push({
+      pathname: '/transaction/[id]',
+      params: { id: 'new', ...(message.amountMinor ? { amount: String(message.amountMinor / 100) } : {}) },
+    });
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {data.items.length === 0 ? (
+      {data.unread.length > 0 && (
+        <View style={styles.unread}>
+          <SectionTitle title={`Couldn't read ${data.unread.length === 1 ? 'this message' : 'these messages'}`} />
+          <Text style={styles.meta}>
+            Bank alerts in a format the app doesn&apos;t know yet. Add them yourself; they are deleted after{' '}
+            {UNREAD_KEEP_DAYS} days and never leave this phone.
+          </Text>
+          {data.unread.map(message => (
+            <Card key={message.id} style={styles.card}>
+              <Text style={styles.unreadText} selectable numberOfLines={6}>
+                {message.text}
+              </Text>
+              <Text style={styles.meta}>{formatDisplayDate(message.receivedAt)}</Text>
+              <View style={styles.actions}>
+                <Button
+                  title="Dismiss"
+                  variant="secondary"
+                  icon="close"
+                  style={styles.action}
+                  onPress={() => dropUnread(message)}
+                />
+                <Button
+                  title={message.amountMinor ? `Add ${formatMinor(message.amountMinor)}` : 'Add'}
+                  icon="add"
+                  style={styles.action}
+                  onPress={() => addUnread(message)}
+                />
+              </View>
+            </Card>
+          ))}
+        </View>
+      )}
+
+      {data.items.length === 0 && data.unread.length === 0 ? (
         <EmptyState
           icon="checkmark-done-circle"
           title="All caught up"
           body="Payments detected from your UPI apps or bank SMS will appear here for a quick review."
         />
-      ) : (
+      ) : data.items.length > 0 ? (
         <Text style={styles.intro}>
           Nothing is saved until you confirm it. Check the amount, pick a category and save.
         </Text>
-      )}
+      ) : null}
 
       {data.items.map(({ candidate, duplicate }, index) => (
         <Animated.View
@@ -181,7 +236,7 @@ export default function UpiReviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 14, paddingBottom: 48, flexGrow: 1 },
   intro: { color: colors.textMuted, lineHeight: 20 },
   card: { gap: 12 },
@@ -209,6 +264,8 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1, paddingVertical: 12 },
   ignored: { gap: 8, marginTop: 8 },
+  unread: { gap: 10 },
+  unreadText: { color: colors.text, fontSize: 14, lineHeight: 20 },
   ignoredRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -217,4 +274,4 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   ignoredText: { flex: 1, color: colors.textMuted },
-});
+}));

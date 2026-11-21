@@ -46,13 +46,14 @@ import { parseToMinor } from '@/domain/money/money';
 import { monthKeyOf } from '@/domain/period';
 import { FREQUENCY_LABEL, type Frequency } from '@/domain/recurring';
 import { isUpiAccount, type Account, type Category, type Transaction, type TransactionInput, type TransactionType } from '@/domain/types';
+import { accountForDetectedPayment } from '@/domain/upi/smsAccount';
 import { deleteReceiptPhoto, pickReceiptPhoto, storeReceiptPhoto } from '@/services/receipts';
 import { useRecurring } from '@/services/RecurringProvider';
-import { notifyOnSave } from '@/services/insights/notifications';
+import { notifyOnSave, scheduleCardReminders } from '@/services/insights/notifications';
 import { removeTransaction } from '@/services/removeTransaction';
 import { useUpi } from '@/services/upi/UpiProvider';
 import { categoryStyle, type IconName } from '@/theme/categoryStyle';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 import { formatDisplayDate, fromLocalDateInput, toLocalDateInput } from '@/utils/dates';
 
 const typeOptions = [
@@ -80,7 +81,21 @@ const repeatOptions: { value: Frequency | null; label: string }[] = [
 ];
 
 export default function TransactionForm() {
-  const { id, candidateId } = useLocalSearchParams<{ id: string; candidateId?: string }>();
+  const {
+    id,
+    candidateId,
+    payCard,
+    amount: presetAmount,
+    counterparty: presetCounterparty,
+  } = useLocalSearchParams<{
+    id: string;
+    candidateId?: string;
+    /** Opens a new transfer that pays this credit card's bill. */
+    payCard?: string;
+    amount?: string;
+    /** Filled in by "Add expense" from Siri or a shortcut, or from an unread bank message. */
+    counterparty?: string;
+  }>();
   const isNew = id === 'new';
   const db = useSQLiteContext();
   const upi = useUpi();
@@ -158,9 +173,35 @@ export default function TransactionForm() {
           return;
         }
         const active = accounts.filter(a => !a.isArchived);
-        const defaultAccount = (candidate && active.find(isUpiAccount)) || active.find(a => a.type !== 'card') || active[0];
+        const defaultAccount =
+          (candidate && (accountForDetectedPayment(candidate, active) ?? active.find(isUpiAccount))) ||
+          active.find(a => a.type !== 'card') ||
+          active[0];
         if (defaultAccount) {
           setAccountId(defaultAccount.id);
+        }
+        if (payCard && active.some(a => a.id === payCard)) {
+          const from = active.find(a => a.type === 'bank') ?? defaultAccount;
+          if (from) {
+            setAccountId(from.id);
+          }
+          setType('transfer');
+          setToAccountId(payCard);
+          if (presetAmount) {
+            setAmount(presetAmount);
+          }
+        } else if (!candidate && (presetAmount || presetCounterparty)) {
+          if (presetAmount && Number(presetAmount) > 0) {
+            setAmount(Number(presetAmount).toFixed(2));
+          }
+          if (presetCounterparty) {
+            setCounterparty(presetCounterparty);
+            const suggestion = await suggestCategory(db, presetCounterparty, 'expense');
+            if (suggestion) {
+              setCategoryId(suggestion);
+              setSuggestedCategoryId(suggestion);
+            }
+          }
         }
         if (candidate) {
           const candidateType = candidate.direction === 'credit' ? 'income' : 'expense';
@@ -191,7 +232,7 @@ export default function TransactionForm() {
         }
       })
       .catch(setLoadError);
-  }, [db, id, isNew, candidateId]);
+  }, [db, id, isNew, candidateId, payCard, presetAmount, presetCounterparty]);
 
   const categoryOptions = useMemo(() => {
     if (!loaded || type === 'transfer') {
@@ -347,6 +388,9 @@ export default function TransactionForm() {
         categoryId: input.categoryId,
         counterparty: input.counterparty,
       }).catch(() => undefined);
+      if (loaded.accounts.some(a => a.type === 'card' && (a.id === input.accountId || a.id === input.toAccountId))) {
+        scheduleCardReminders(db).catch(() => undefined);
+      }
 
       const category = loaded.categories.find(c => c.id === input.categoryId);
       const alert =
@@ -629,7 +673,7 @@ function accountIcon(type: Account['type']): IconName {
   return ACCOUNT_ICONS[type];
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: 16, gap: 18, paddingBottom: 48 },
   banner: {
@@ -661,4 +705,4 @@ const styles = StyleSheet.create({
   hint: { color: colors.textMuted, fontSize: 13 },
   receipt: { gap: 10 },
   receiptImage: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
-});
+}));

@@ -29,13 +29,14 @@ import {
 import {
   createCategory,
   listCategories,
+  moveCategory,
   renameCategory,
   setCategoryArchived,
 } from '@/data/repositories/categories';
 import type { Category, CategoryType } from '@/domain/types';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
 import { categoryStyle } from '@/theme/categoryStyle';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 
 const typeOptions = [
   { value: 'expense', label: 'Expense' },
@@ -54,6 +55,7 @@ export default function CategoriesScreen() {
   const [parentId, setParentId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [reordering, setReordering] = useState(false);
 
   if (error) {
     return <ErrorState error={error} onRetry={reload} />;
@@ -97,7 +99,7 @@ export default function CategoriesScreen() {
     setEditingId(null);
   };
 
-  const renderRow = (category: Category, parentName: string | null) => {
+  const renderRow = (category: Category, parentName: string | null, first: boolean, last: boolean) => {
     const editing = editingId === category.id;
     return (
       <View key={category.id} style={[styles.row, parentName !== null && styles.childRow]}>
@@ -127,18 +129,43 @@ export default function CategoriesScreen() {
             >
               <Text style={[styles.name, category.isArchived && styles.archived]}>{category.name}</Text>
             </Pressable>
-            <PressableScale
-              accessibilityLabel={category.isArchived ? 'Restore category' : 'Archive category'}
-              hitSlop={8}
-              hapticKind="light"
-              onPress={() => run(() => setCategoryArchived(db, category.id, !category.isArchived))}
-            >
-              <Ionicons
-                name={category.isArchived ? 'arrow-undo-outline' : 'archive-outline'}
-                size={20}
-                color={colors.textMuted}
-              />
-            </PressableScale>
+            {reordering ? (
+              <>
+                <PressableScale
+                  accessibilityLabel="Move up"
+                  hitSlop={6}
+                  hapticKind="selection"
+                  disabled={first}
+                  onPress={() => run(() => moveCategory(db, category.id, -1))}
+                  style={first && styles.disabled}
+                >
+                  <Ionicons name="chevron-up-circle-outline" size={24} color={colors.primary} />
+                </PressableScale>
+                <PressableScale
+                  accessibilityLabel="Move down"
+                  hitSlop={6}
+                  hapticKind="selection"
+                  disabled={last}
+                  onPress={() => run(() => moveCategory(db, category.id, 1))}
+                  style={last && styles.disabled}
+                >
+                  <Ionicons name="chevron-down-circle-outline" size={24} color={colors.primary} />
+                </PressableScale>
+              </>
+            ) : (
+              <PressableScale
+                accessibilityLabel={category.isArchived ? 'Restore category' : 'Archive category'}
+                hitSlop={8}
+                hapticKind="light"
+                onPress={() => run(() => setCategoryArchived(db, category.id, !category.isArchived))}
+              >
+                <Ionicons
+                  name={category.isArchived ? 'arrow-undo-outline' : 'archive-outline'}
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </PressableScale>
+            )}
           </>
         )}
       </View>
@@ -182,7 +209,12 @@ export default function CategoriesScreen() {
       </Card>
 
       <View style={styles.archivedToggle}>
-        <Text style={styles.hint}>Tap a name to rename it.</Text>
+        <Chip
+          label={reordering ? 'Done' : 'Reorder'}
+          icon={reordering ? 'checkmark' : 'swap-vertical'}
+          selected={reordering}
+          onPress={() => setReordering(r => !r)}
+        />
         <View style={styles.switchRow}>
           <Text style={styles.hint}>Show archived</Text>
           <Switch
@@ -193,20 +225,26 @@ export default function CategoriesScreen() {
           />
         </View>
       </View>
+      <Text style={styles.hint}>
+        {reordering ? 'Move categories up or down; pickers follow this order.' : 'Tap a name to rename it.'}
+      </Text>
 
       <View style={styles.list}>
-        {parents.map((parent, index) => (
-          <Animated.View key={parent.id} entering={FadeInDown.delay(Math.min(index, 10) * 30).duration(250)}>
-            {renderRow(parent, null)}
-            {childrenOf(parent.id).map(child => renderRow(child, parent.name))}
-          </Animated.View>
-        ))}
+        {parents.map((parent, index) => {
+          const kids = childrenOf(parent.id);
+          return (
+            <Animated.View key={parent.id} entering={FadeInDown.delay(Math.min(index, 10) * 30).duration(250)}>
+              {renderRow(parent, null, index === 0, index === parents.length - 1)}
+              {kids.map((child, i) => renderRow(child, parent.name, i === 0, i === kids.length - 1))}
+            </Animated.View>
+          );
+        })}
       </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 14, paddingBottom: 48 },
   addCard: { gap: 10 },
   hint: { color: colors.textMuted, fontSize: 13 },
@@ -233,4 +271,5 @@ const styles = StyleSheet.create({
   name: { fontSize: 16, color: colors.text, fontWeight: '500' },
   archived: { color: colors.textMuted, textDecorationLine: 'line-through' },
   editInput: { flex: 1, paddingVertical: 6 },
-});
+  disabled: { opacity: 0.3 },
+}));

@@ -12,7 +12,10 @@ export interface TextItem {
 /** Text of every page of a statement, as read from the PDF. */
 export type StatementPages = readonly (readonly TextItem[])[];
 
-export type StatementBank = 'HDFC Bank' | 'SBI';
+export type StatementBank = 'HDFC Bank' | 'SBI' | 'MobiKwik';
+
+/** Statements from these are for a wallet rather than a bank account. */
+export const WALLET_PROVIDERS: ReadonlySet<StatementBank> = new Set(['MobiKwik']);
 
 export interface StatementRow {
   /** Transaction date, YYYY-MM-DD. */

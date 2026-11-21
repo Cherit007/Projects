@@ -17,11 +17,13 @@ const ACCOUNT_NAMES: Readonly<Record<string, RegExp>> = {
   FDRL: /\bfederal\b/i,
   AIRP: /\bairtel\b/i,
   PYTM: /\bpaytm\b/i,
+  MOBK: /mobi\s*kwik/i,
 };
 
 export const STATEMENT_BANK_CODE: Readonly<Record<StatementBank, string>> = {
   'HDFC Bank': 'HDFC',
   SBI: 'SBIN',
+  MobiKwik: 'MOBK',
 };
 
 /** Whether an account's name says it is at the bank with this IFSC code. */

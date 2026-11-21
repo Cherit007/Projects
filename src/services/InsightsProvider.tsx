@@ -2,7 +2,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
-import { runInsightNotifications } from './insights/notifications';
+import { runInsightNotifications, scheduleCardReminders } from './insights/notifications';
 
 const InsightsContext = createContext(true);
 
@@ -13,6 +13,7 @@ export function InsightsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const run = () => {
       runInsightNotifications(db).catch(() => undefined);
+      scheduleCardReminders(db).catch(() => undefined);
     };
     run();
     const sub = AppState.addEventListener('change', state => {

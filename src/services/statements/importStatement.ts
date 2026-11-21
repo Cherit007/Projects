@@ -10,7 +10,7 @@ import { OTHER_CATEGORY, OTHER_INCOME_CATEGORY, SALARY_CATEGORY } from '../../do
 import { isOwnName, learnWords } from '../../domain/categories/payeeHistory';
 import { accountIsAtBank, STATEMENT_BANK_CODE } from '../../domain/statements/banks';
 import { parseNarration, type NarrationInfo } from '../../domain/statements/narration';
-import type { ParsedStatement, StatementRow } from '../../domain/statements/types';
+import { WALLET_PROVIDERS, type ParsedStatement, type StatementRow } from '../../domain/statements/types';
 import { isUpiAccount, type Account, type TransactionInput } from '../../domain/types';
 import { chooseCategory, type Context } from '../upi/autoAdd';
 
@@ -18,6 +18,12 @@ import { chooseCategory, type Context } from '../upi/autoAdd';
 export const NEW_ACCOUNT = 'new';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Expense category for wallet top-up fees. */
+const FEES_CATEGORY = 'Loan interest and fees';
+/** MobiKwik charges about 3% (2.997%) to add money from a credit card. */
+const TOP_UP_FEE = 0.02997;
+/** A card charge up to this much above a top-up is taken for that top-up plus its fee. */
+const MAX_TOP_UP_FEE = 0.035;
 /** Repeated credits from one payer at least this large (₹10,000) are taken for salary. */
 const SALARY_MIN_MINOR = 1_000_000;
 
@@ -29,8 +35,17 @@ export interface PlannedRow {
   input: TransactionInput;
   /** Category name, or where a transfer goes. */
   label: string;
-  /** A transaction already in the app that records this row. */
-  existing: { id: string; accountId: string } | null;
+  /**
+   * A transaction already in the app that records this row. `becomesTransfer`
+   * marks the other account's side of a move between the user's own accounts,
+   * recorded as spending or income before both accounts existed; importing
+   * turns it into the transfer instead of adding a second entry.
+   */
+  existing: { id: string; accountId: string; becomesTransfer: boolean } | null;
+  /** A wallet payment that failed and was refunded, or its refund; the two cancel out and are left out by default. */
+  reversed: boolean;
+  /** A wallet top-up from a credit card: the card's fee, saved as a separate expense on the card. */
+  fee: { amountMinor: number; accountId: string; estimated: boolean } | null;
 }
 
 export interface ImportPlan {
@@ -51,6 +66,7 @@ interface ExistingRow {
   to_account_id: string | null;
   source: string;
   external_reference: string | null;
+  counterparty: string | null;
 }
 
 /** Statement dates are local calendar days; rows are placed at noon, a second apart, in statement order. */
@@ -167,26 +183,124 @@ export async function planStatementImport(
 
   const { first, last } = dateRange(statement);
   const existing = await db.getAllAsync<ExistingRow>(
-    `SELECT id, type, amount_minor, occurred_at, account_id, to_account_id, source, external_reference
+    `SELECT id, type, amount_minor, occurred_at, account_id, to_account_id, source, external_reference, counterparty
      FROM transactions WHERE occurred_at >= ? AND occurred_at < ?`,
     new Date(Date.parse(`${first}T00:00:00Z`) - 2 * DAY_MS).toISOString(),
     new Date(Date.parse(`${last}T00:00:00Z`) + 3 * DAY_MS).toISOString(),
   );
+  // Payments detected before the user added their bank accounts were filed under cash.
   const detectedElsewhere = (t: ExistingRow) =>
     (t.source === 'upi_notification' || t.source === 'bank_sms') &&
     t.account_id !== accountId &&
-    others.some(a => a.id === t.account_id);
+    (others.some(a => a.id === t.account_id) || t.account_id === cash?.id);
   const used = new Set<string>();
+
+  const isWalletName = (payee: string | null) => !!payee && accountIsAtBank(payee, 'MOBK');
+  const walletAccount = others.find(a => a.type === 'wallet' && accountIsAtBank(a.name, 'MOBK')) ?? null;
+  /** On another account's statement, the other side of a move into or out of this one. */
+  const selfLike = (payee: string | null) =>
+    isOwn(payee) || (statement.bank === 'MobiKwik' && isWalletName(payee));
+  /** Whether `other` already records the other side of this row (as a transfer, or as an own-name entry). */
+  const counterpartIn = (other: string, row: StatementRow): boolean => {
+    const day = statementDay(row.date);
+    const debit = row.direction === 'debit';
+    return existing.some(
+      t =>
+        !used.has(t.id) &&
+        t.amount_minor === row.amountMinor &&
+        Math.abs(localDay(t.occurred_at) - day) <= 1 &&
+        ((t.type === 'transfer' &&
+          (debit
+            ? t.account_id === accountId && t.to_account_id === other
+            : t.account_id === other && t.to_account_id === accountId)) ||
+          (t.source === 'statement' &&
+            t.account_id === other &&
+            t.type === (debit ? 'income' : 'expense') &&
+            selfLike(t.counterparty))),
+    );
+  };
+  /** Accounts imported from a statement only take a transfer their statement shows. */
+  const covered = (id: string) =>
+    existing.some(t => t.source === 'statement' && (t.account_id === id || t.to_account_id === id));
+  const pairOwn = (row: StatementRow, otherBank: string | null): Account | null => {
+    const withCounterpart = others.filter(a => counterpartIn(a.id, row));
+    if (withCounterpart.length > 0) {
+      return withCounterpart.find(a => otherBank !== null && accountIsAtBank(a.name, otherBank)) ?? withCounterpart[0];
+    }
+    const fallback = pairAccount(otherBank);
+    return fallback && !covered(fallback.id) ? fallback : null;
+  };
+  /**
+   * Where money added to a wallet came from, and the fee for it:
+   * - an account whose records show the payment;
+   * - else a card charge a little above the top-up (the wallet's card fee) the same day or next;
+   * - else the only credit card, with the usual fee estimated.
+   * With several cards and no evidence it stays unknown.
+   */
+  const topUpSource = (
+    row: StatementRow,
+  ): { account: Account; charge: ExistingRow | null; feeMinor: number; estimated: boolean } | null => {
+    const shown = [...others, ...cards].find(a => counterpartIn(a.id, row));
+    if (shown) {
+      return { account: shown, charge: null, feeMinor: 0, estimated: false };
+    }
+    const day = statementDay(row.date);
+    const charge = existing.find(
+      t =>
+        !used.has(t.id) &&
+        t.type === 'expense' &&
+        cards.some(c => c.id === t.account_id) &&
+        t.amount_minor >= row.amountMinor &&
+        t.amount_minor <= Math.round(row.amountMinor * (1 + MAX_TOP_UP_FEE)) &&
+        Math.abs(localDay(t.occurred_at) - day) <= 1,
+    );
+    if (charge) {
+      const card = cards.find(c => c.id === charge.account_id)!;
+      return { account: card, charge, feeMinor: charge.amount_minor - row.amountMinor, estimated: false };
+    }
+    return cards.length === 1
+      ? { account: cards[0], charge: null, feeMinor: Math.round(row.amountMinor * TOP_UP_FEE), estimated: true }
+      : null;
+  };
+  /** Wallet payments that failed and were refunded: "Paid to X" and "Refund from X" for the same amount. */
+  const reversed = new Set<number>();
+  if (WALLET_PROVIDERS.has(statement.bank)) {
+    statement.rows.forEach((refund, i) => {
+      if (refund.direction !== 'credit' || !/^(?:Refund|Money\s+received)\s+from\s/i.test(refund.narration)) {
+        return;
+      }
+      const payee = refund.narration.replace(/^(?:Refund|Money\s+received)\s+from\s+/i, '').toLowerCase();
+      const payment = statement.rows.findIndex(
+        (paid, j) =>
+          !reversed.has(j) &&
+          paid.direction === 'debit' &&
+          paid.amountMinor === refund.amountMinor &&
+          Math.abs(statementDay(paid.date) - statementDay(refund.date)) <= 1 &&
+          paid.narration.replace(/^Paid\s+to\s+/i, '').toLowerCase() === payee,
+      );
+      if (payment >= 0) {
+        reversed.add(i);
+        reversed.add(payment);
+      }
+    });
+  }
   /**
    * An existing transfer only stands for a row that moves money between the
    * same two accounts; an income or expense stands for any row in the same
    * direction (the user may have recorded their own transfer as spending).
+   * For a transfer, the other account's statement entry for the same move
+   * (spending or income to the user's own name) also counts.
    */
-  const findExisting = (row: StatementRow, reference: string | null, input: TransactionInput): ExistingRow | null => {
+  const findExisting = (
+    row: StatementRow,
+    reference: string | null,
+    input: TransactionInput,
+    hereOnly = false,
+  ): { match: ExistingRow; becomesTransfer: boolean } | null => {
     const day = statementDay(row.date);
     const debit = row.direction === 'debit';
     const counterpart = input.type === 'transfer' ? (debit ? input.toAccountId : input.accountId) : null;
-    let best: ExistingRow | null = null;
+    let best: { match: ExistingRow; becomesTransfer: boolean } | null = null;
     let bestScore = Infinity;
     for (const t of existing) {
       const gap = Math.abs(localDay(t.occurred_at) - day);
@@ -201,16 +315,22 @@ export async function planStatementImport(
           : t.to_account_id === accountId && t.account_id === counterpart);
       const here = sameTransfer || (t.type === (debit ? 'expense' : 'income') && t.account_id === accountId);
       const elsewhere = t.type === (debit ? 'expense' : 'income') && detectedElsewhere(t);
-      if (!here && !elsewhere) {
+      const otherSide =
+        counterpart !== null &&
+        t.source === 'statement' &&
+        t.account_id === counterpart &&
+        t.type === (debit ? 'income' : 'expense') &&
+        selfLike(t.counterparty);
+      if (hereOnly ? !here : !here && !elsewhere && !otherSide) {
         continue;
       }
       const score =
         (reference && t.external_reference === reference ? 0 : 20) +
-        ((t.type === 'transfer') === (input.type === 'transfer') ? 0 : 6) +
+        ((t.type === 'transfer') === (input.type === 'transfer') || otherSide ? 0 : 6) +
         (here ? 0 : 10) +
         gap * 4;
       if (score < bestScore) {
-        best = t;
+        best = { match: t, becomesTransfer: otherSide && !here };
         bestScore = score;
       }
     }
@@ -249,12 +369,34 @@ export async function planStatementImport(
     });
 
     let plan: { input: TransactionInput; label: string };
-    const pair = isOwn(info.payee) ? pairAccount(info.otherBank) : null;
-    if (pair) {
+    // A bank entry naming the wallet is a top-up or withdrawal, unless the imported wallet shows nothing matching.
+    const toWallet =
+      walletAccount !== null &&
+      isWalletName(info.payee) &&
+      (counterpartIn(walletAccount.id, row) || !covered(walletAccount.id));
+    const own = isOwn(info.payee) || toWallet;
+    const topUp = !reversed.has(index) && !own && info.channel === 'topup' && !debit ? topUpSource(row) : null;
+    const pair = reversed.has(index)
+      ? null
+      : toWallet
+        ? walletAccount
+        : own
+          ? pairOwn(row, info.otherBank)
+          : (topUp?.account ?? null);
+    if (reversed.has(index)) {
+      const id = categoryId(debit ? OTHER_CATEGORY : OTHER_INCOME_CATEGORY, type);
+      plan = { input: { ...base, categoryId: id }, label: debit ? 'Failed payment, refunded' : 'Refund of a failed payment' };
+    } else if (pair) {
       plan = transfer(pair, debit ? `To ${pair.name}` : `From ${pair.name}`);
-    } else if (isOwn(info.payee)) {
+    } else if (own) {
       const id = categoryId(debit ? OTHER_CATEGORY : OTHER_INCOME_CATEGORY, type);
       plan = { input: { ...base, categoryId: id }, label: debit ? 'To your other account' : 'From your other account' };
+    } else if (info.channel === 'topup' || info.channel === 'cashback') {
+      const id = categoryId(debit ? OTHER_CATEGORY : OTHER_INCOME_CATEGORY, type);
+      plan = {
+        input: { ...base, categoryId: id },
+        label: info.channel === 'cashback' ? 'Cashback' : 'Top-up from an account not in the app',
+      };
     } else if (info.channel === 'atm' && debit && cash) {
       plan = transfer(cash, `To ${cash.name}`);
     } else if (debit && cards.length === 1 && /^cred\b|credit\s*card/i.test(info.payee ?? '')) {
@@ -286,17 +428,45 @@ export async function planStatementImport(
       }
     }
 
-    const match = findExisting(row, info.reference, plan.input);
-    if (match) {
-      used.add(match.id);
+    let found = reversed.has(index) ? null : findExisting(row, info.reference, plan.input);
+    // The card charge for a top-up (amount plus fee) becomes the transfer, and its fee a separate expense.
+    if (!found && topUp?.charge) {
+      found = { match: topUp.charge, becomesTransfer: true };
     }
+    if (found) {
+      used.add(found.match.id);
+    }
+    const charged = topUp !== null && (found === null || found.match === topUp.charge);
     rows.push({
       index,
       row,
       reference: info.reference,
       ...plan,
-      existing: match ? { id: match.id, accountId: match.account_id } : null,
+      label:
+        charged && topUp.feeMinor > 0
+          ? `${plan.label} + ₹${(topUp.feeMinor / 100).toFixed(2)} fee${topUp.estimated ? ' (estimated)' : ''}`
+          : plan.label,
+      existing: found
+        ? { id: found.match.id, accountId: found.match.account_id, becomesTransfer: found.becomesTransfer }
+        : null,
+      reversed: reversed.has(index),
+      fee:
+        charged && topUp.feeMinor > 0
+          ? { amountMinor: topUp.feeMinor, accountId: topUp.account.id, estimated: topUp.estimated }
+          : null,
     });
+  }
+  // Failed payments are matched last and only within this account, so they never claim the
+  // real payment of the same amount made right after them, or a payment detected elsewhere.
+  for (const planned of rows) {
+    if (!planned.reversed) {
+      continue;
+    }
+    const found = findExisting(planned.row, planned.reference, planned.input, true);
+    if (found) {
+      used.add(found.match.id);
+      planned.existing = { id: found.match.id, accountId: found.match.account_id, becomesTransfer: false };
+    }
   }
 
   const startDay = statementDay(first);
@@ -337,12 +507,47 @@ export async function applyStatementImport(
     if (accountId === NEW_ACCOUNT) {
       accountId = await createAccount(db, {
         name: plan.accountName,
-        type: 'bank',
+        type: WALLET_PROVIDERS.has(plan.statement.bank) ? 'wallet' : 'bank',
         openingBalanceMinor: plan.statement.openingBalanceMinor ?? 0,
       });
     }
     const resolve = (id: string | null) => (id === NEW_ACCOUNT ? accountId : id);
+    const feeCategory = (await listCategories(db)).find(c => c.type === 'expense' && c.name === FEES_CATEGORY)?.id ?? null;
+    const addFee = async (row: PlannedRow) => {
+      if (!row.fee) {
+        return;
+      }
+      await createTransaction(
+        db,
+        {
+          type: 'expense',
+          amountMinor: row.fee.amountMinor,
+          occurredAt: row.input.occurredAt,
+          accountId: row.fee.accountId,
+          toAccountId: null,
+          categoryId: feeCategory,
+          counterparty: `${plan.statement.bank} top-up fee${row.fee.estimated ? ' (estimated)' : ''}`,
+          note: null,
+        },
+        { source: 'statement', externalReference: null },
+      );
+    };
     for (const row of plan.rows) {
+      if (row.existing?.becomesTransfer) {
+        // A card charge for a top-up includes the fee; the transfer is the amount that reached the wallet.
+        await db.runAsync(
+          `UPDATE transactions SET type = 'transfer', amount_minor = ?, account_id = ?, to_account_id = ?,
+             category_id = NULL, updated_at = ? WHERE id = ?`,
+          row.row.amountMinor,
+          resolve(row.input.accountId),
+          resolve(row.input.toAccountId),
+          nowIso(),
+          row.existing.id,
+        );
+        await addFee(row);
+        moved += 1;
+        continue;
+      }
       if (row.existing) {
         if (row.existing.accountId !== accountId && row.input.type !== 'transfer') {
           await db.runAsync(
@@ -363,6 +568,7 @@ export async function applyStatementImport(
         { ...row.input, accountId: resolve(row.input.accountId) ?? accountId, toAccountId: resolve(row.input.toAccountId) },
         { source: 'statement', externalReference: row.reference },
       );
+      await addFee(row);
       added += 1;
     }
   });

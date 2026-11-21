@@ -3,13 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import type { BudgetLevel } from '@/domain/budgets/budgets';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
-export const levelColor: Record<BudgetLevel, string> = {
+export const levelColor = themedStyles((): Record<BudgetLevel, string> => ({
   ok: colors.income,
   warning: colors.warning,
   over: colors.expense,
-};
+}));
 
 /** Animated horizontal bar; ratios above 1 are drawn full. */
 export function ProgressBar({ ratio, color, height = 8 }: { ratio: number; color: string; height?: number }) {
@@ -25,6 +25,6 @@ export function ProgressBar({ ratio, color, height = 8 }: { ratio: number; color
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   track: { backgroundColor: colors.surfaceMuted, overflow: 'hidden' },
-});
+}));

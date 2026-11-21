@@ -57,7 +57,8 @@ describeSamples('real statement samples', () => {
     }
     for (const statement of statements) {
       const plan = await planStatementImport(db, statement, suggestAccount(accounts, statement)!.id);
-      expect(plan.rows.filter(r => !r.existing)).toEqual([]);
+      // Failed wallet payments and their refunds are left out by default, so they never count as already imported.
+      expect(plan.rows.filter(r => !r.existing && !r.reversed)).toEqual([]);
       expect(plan.notOnStatement).toBe(0);
     }
   });

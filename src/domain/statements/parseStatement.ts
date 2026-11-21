@@ -199,18 +199,152 @@ function formatRupees(minor: MinorUnits): string {
   return `₹${(minor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const WALLET_DATE = /^(\d{2})-(\d{2})-(\d{4})$/;
+const RUPEES = /Rs\.?\s*([\d,]+\.\d{1,2})/i;
+/** Right edges of the amount and wallet balance columns are about 419 and 511 points. */
+const AMOUNT_COLUMN_RIGHT = 450;
+
+function isMobikwik(firstPage: string): boolean {
+  return /Transaction statement for/i.test(firstPage) && /Wallet Balance/i.test(firstPage);
+}
+
 /**
- * Reads the transactions in an HDFC Bank or SBI account statement from the
- * text of its PDF. Debit or credit comes from the running balance where
- * possible, else from the column the amount is in. Throws StatementError for
- * other banks or when no transactions are found.
+ * Reads a MobiKwik wallet statement: rows of date, description, a +/- sign
+ * with the amount, and the wallet balance. Descriptions wrap onto following
+ * lines, the amount sometimes sits on the line below the date, and a row's
+ * last line can spill onto the next page. Rows within a day are not always in
+ * the order they happened, so the sign, not the running balance, says which way
+ * money moved.
+ */
+function parseMobikwik(pages: StatementPages, firstPage: string): ParsedStatement {
+  interface WalletRow {
+    date: string;
+    sign: '+' | '-' | null;
+    amountMinor: MinorUnits | null;
+    balanceMinor: MinorUnits | null;
+    details: string[];
+  }
+  const rows: WalletRow[] = [];
+  let started = false;
+  let stopped = false;
+  for (const items of pages) {
+    const ordered = items.filter(item => item.s.trim()).sort((a, b) => b.y - a.y || a.x - b.x);
+    for (const item of ordered) {
+      const text = item.s.trim();
+      if (stopped) {
+        break;
+      }
+      if (!started) {
+        started = /^Wallet Balance$/i.test(text);
+        continue;
+      }
+      if (/^NOTE:/i.test(text)) {
+        stopped = true;
+        break;
+      }
+      const date = item.x < 120 ? WALLET_DATE.exec(text) : null;
+      if (date) {
+        rows.push({ date: isoDate(date), sign: null, amountMinor: null, balanceMinor: null, details: [] });
+        continue;
+      }
+      const row = rows[rows.length - 1];
+      if (!row) {
+        continue;
+      }
+      const right = item.x + item.w;
+      const money = RUPEES.exec(text);
+      const value = money ? parseToMinor(money[1].replace(/,/g, '')) : null;
+      if (right > AMOUNT_COLUMN_RIGHT && money) {
+        row.balanceMinor = value;
+      } else if (item.x > 320 && /^[+-]?\s*(?:Rs\.?\s*[\d,]+\.\d{1,2})?$/i.test(text)) {
+        const sign = /^[+-]/.exec(text)?.[0] as '+' | '-' | undefined;
+        if (sign) {
+          row.sign = sign;
+        }
+        if (value !== null) {
+          row.amountMinor = value;
+        }
+      } else if (item.x >= 140) {
+        row.details.push(text);
+      }
+    }
+  }
+  if (rows.length === 0) {
+    throw new StatementError('No transactions were found in this statement.');
+  }
+
+  const problems: string[] = [];
+  const unread = rows.filter(row => row.sign === null || row.amountMinor === null).length;
+  if (unread > 0) {
+    problems.push(`${unread} ${unread === 1 ? 'entry' : 'entries'} could not be read fully and ${unread === 1 ? 'was' : 'were'} left out.`);
+  }
+  const parsed: StatementRow[] = rows
+    .filter(row => row.sign !== null && row.amountMinor !== null && row.amountMinor > 0)
+    .map(row => ({
+      date: row.date,
+      direction: row.sign === '+' ? 'credit' : 'debit',
+      amountMinor: row.amountMinor!,
+      balanceMinor: row.balanceMinor,
+      narration: row.details.join(' ').replace(/\s+/g, ' ').trim(),
+    }));
+  if (parsed.length === 0) {
+    throw new StatementError('No transactions were found in this statement.');
+  }
+
+  const text = firstPage.replace(/\s+/g, ' ');
+  const count = /Number Of Transactions\s*(\d+)/i.exec(text);
+  if (count && Number(count[1]) !== parsed.length) {
+    problems.push(`Read ${parsed.length} entries; the statement lists ${count[1]}.`);
+  }
+  const signed = (row: StatementRow) => (row.direction === 'credit' ? row.amountMinor : -row.amountMinor);
+  const first = parsed[0];
+  const opening = first.balanceMinor !== null ? first.balanceMinor - signed(first) : null;
+  const closing = opening !== null ? parsed.reduce((total, row) => total + signed(row), opening) : null;
+  const lastDate = parsed[parsed.length - 1].date;
+  if (
+    closing !== null &&
+    !parsed.some(row => row.date === lastDate && row.balanceMinor === closing)
+  ) {
+    problems.push(`The entries add up to a balance of ${formatRupees(closing)}, which the statement does not show.`);
+  }
+
+  const account = /ACCOUNT DETAILS\s*(\d{6,})/i.exec(text)?.[1] ?? null;
+  // "Bank transfer to NAME (<wallet number>@…)" sends money to the wallet holder's own bank account.
+  const holder = account
+    ? parsed
+        .map(row => new RegExp(`^Bank\\s+transfer\\s+to\\s+(.+?)\\s*\\(${account}@`, 'i').exec(row.narration)?.[1])
+        .find(Boolean)
+    : undefined;
+  const period = /statement for\s*(\d{4}-\d{2}-\d{2})\s*to\s*(\d{4}-\d{2}-\d{2})/i.exec(text);
+  return {
+    bank: 'MobiKwik',
+    holderName: holder ? titleCase(holder.trim()) : null,
+    accountLast4: account ? account.slice(-4) : null,
+    periodStart: period?.[1] ?? parsed[0].date,
+    periodEnd: period?.[2] ?? lastDate,
+    openingBalanceMinor: opening,
+    closingBalanceMinor: closing,
+    rows: parsed,
+    problems,
+  };
+}
+
+/**
+ * Reads the transactions in an HDFC Bank or SBI account statement, or a
+ * MobiKwik wallet statement, from the text of its PDF. For banks, debit or
+ * credit comes from the running balance where possible, else from the column
+ * the amount is in. Throws StatementError for other statements or when no
+ * transactions are found.
  */
 export function parseStatement(pages: StatementPages): ParsedStatement {
   const pageLines = pages.map(toLines);
   const firstPage = (pageLines[0] ?? []).map(line => line.text).join('\n');
+  if (isMobikwik(firstPage)) {
+    return parseMobikwik(pages, firstPage);
+  }
   const layout = LAYOUTS.find(candidate => candidate.detect(firstPage));
   if (!layout) {
-    throw new StatementError('Only HDFC Bank and SBI account statements can be read for now.');
+    throw new StatementError('Only HDFC Bank and SBI account statements and MobiKwik wallet statements can be read for now.');
   }
 
   const headings = pageLines.flat().find(line => line.items.length >= 4 && layout.isHeader(line));

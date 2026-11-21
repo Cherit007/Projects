@@ -19,7 +19,7 @@ import { Button, Card } from '@/components/ui';
 import { bankSmsNative } from '@/services/upi/bankSmsSync';
 import { useUpi } from '@/services/upi/UpiProvider';
 import type { IconName } from '@/theme/categoryStyle';
-import { colors, radius } from '@/theme/colors';
+import { colors, radius, themedStyles } from '@/theme/colors';
 
 export const SHORTCUT_KEYWORDS = ['debited', 'credited', 'Sent Rs'] as const;
 
@@ -33,7 +33,7 @@ interface Step {
   copy?: { label: string; value: string }[];
 }
 
-const APP_NAME = Constants.expoConfig?.name ?? 'Many Tracker';
+export const APP_NAME = Constants.expoConfig?.name ?? 'Many Tracker';
 
 /** Optional iCloud link to a shared iOS 27 shortcut that carries the automation. */
 const AUTOMATION_URL = Constants.expoConfig?.extra?.iosAutomationUrl as string | undefined;
@@ -392,7 +392,7 @@ export function ShortcutSetupGuide() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { gap: 12 },
   hint: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   step: { gap: 10, minHeight: 230 },
@@ -439,4 +439,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   dotActive: { backgroundColor: colors.primary, width: 20 },
-});
+}));

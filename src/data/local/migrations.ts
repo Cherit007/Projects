@@ -237,6 +237,37 @@ const MIGRATIONS: readonly Migration[] = [
       );
     `);
   },
+  async db => {
+    // Credit card billing cycle: local-only (backed up, not synced to Appwrite yet).
+    await db.execAsync(`
+      CREATE TABLE card_details (
+        account_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+        statement_day INTEGER NOT NULL CHECK (statement_day BETWEEN 1 AND 31),
+        due_day INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 31),
+        credit_limit_minor INTEGER CHECK (credit_limit_minor IS NULL OR credit_limit_minor > 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+  },
+  async db => {
+    // Which account a bank SMS is about, so it can be filed under the right one.
+    await db.execAsync(`
+      ALTER TABLE upi_candidates ADD COLUMN is_card INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE upi_candidates ADD COLUMN account_last4 TEXT;
+    `);
+  },
+  async db => {
+    // Bank alerts the parser could not read, kept on this device for a week so the user can add them.
+    // Never backed up or synced.
+    await db.execAsync(`
+      CREATE TABLE unread_messages (
+        id TEXT PRIMARY KEY NOT NULL,
+        text TEXT NOT NULL,
+        received_at TEXT NOT NULL
+      );
+    `);
+  },
 ];
 
 async function addCategoryIfMissing(db: SQLiteDatabase, name: string, type: 'expense' | 'income'): Promise<void> {

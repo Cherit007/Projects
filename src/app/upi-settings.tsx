@@ -6,7 +6,7 @@ import { PermissionsAndroid, Platform, ScrollView, StyleSheet, Switch, Text, Vie
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { haptic } from '@/components/PressableScale';
-import { ShortcutSetupGuide } from '@/components/ShortcutSetupGuide';
+import { APP_NAME, ShortcutSetupGuide } from '@/components/ShortcutSetupGuide';
 import { Button, Card, EmptyState, Field, Input, SectionTitle } from '@/components/ui';
 import { getAutoAddPayments, getOwnerName, setAutoAddPayments, setOwnerName } from '@/data/repositories/settings';
 import { SUPPORTED_UPI_APPS } from '@/domain/upi/parser';
@@ -14,7 +14,7 @@ import { bankSmsNative } from '@/services/upi/bankSmsSync';
 import { upiNative } from '@/services/upi/upiSync';
 import { useUpi } from '@/services/upi/UpiProvider';
 import type { IconName } from '@/theme/categoryStyle';
-import { colors, radius } from '@/theme/colors';
+import { colors, radius, themedStyles } from '@/theme/colors';
 
 const needsPostPermission = Platform.OS === 'android' && Number(Platform.Version) >= 33;
 
@@ -172,6 +172,38 @@ function SmsShortcutGuide() {
         <ShortcutSetupGuide />
       </Animated.View>
 
+      {bankSmsNative && (
+        <Animated.View entering={FadeInDown.delay(90).duration(300)} style={styles.section}>
+          <SectionTitle title="Catch bank emails too" />
+          <StepsCard
+            icon="mail-outline"
+            intro="Banks skip the SMS for small UPI payments (HDFC: under ₹100 sent, under ₹500 received) and email you instead. The same action can read those emails. Your bank's emails must arrive in Apple's Mail app."
+            steps={[
+              'In Shortcuts, open Automation, tap + and choose Email.',
+              'Tap Sender and choose your bank’s alert address, e.g. alerts@hdfcbank.net. For SBI, first turn on email alerts in YONO or SBI internet banking, then add its address in another automation.',
+              'Choose Run Immediately, then tap Next and New Blank Automation.',
+              `Add the ${APP_NAME} action Capture bank SMS. Tap Message, choose Shortcut Input, then tap it again and pick Body (or Content).`,
+              'Tap Done. Small payments now reach the app like SMS; the same payment arriving by SMS and email is added once.',
+            ]}
+          />
+        </Animated.View>
+      )}
+
+      {bankSmsNative && (
+        <Animated.View entering={FadeInDown.delay(110).duration(300)} style={styles.section}>
+          <SectionTitle title="Add a payment in seconds" />
+          <StepsCard
+            icon="flash-outline"
+            intro={`For payments no message arrives for, say “Add expense in ${APP_NAME}”. Siri asks for the amount and opens it ready to save.`}
+            steps={[
+              'Action button: Settings → Action Button → Shortcut → choose Add expense.',
+              'Control Center: swipe down, tap +, Add a Control, search Shortcuts, then choose Add expense.',
+              'Back Tap: Settings → Accessibility → Touch → Back Tap → Double Tap → Add expense.',
+            ]}
+          />
+        </Animated.View>
+      )}
+
       <Animated.View entering={FadeInDown.delay(120).duration(300)} style={styles.section}>
         <SectionTitle title="Your privacy" />
         <Card style={styles.privacy}>
@@ -179,7 +211,7 @@ function SmsShortcutGuide() {
             icon="phone-portrait-outline"
             text={
               bankSmsNative
-                ? 'Messages are read only on this phone and deleted once the payment is extracted. The text is never uploaded.'
+                ? 'Messages are read only on this phone and deleted once the payment is extracted. Bank alerts the app cannot read stay on this phone for 7 days so you can add them. The text is never uploaded or backed up.'
                 : 'Messages are read only on this phone. The text is never saved or uploaded.'
             }
           />
@@ -309,6 +341,23 @@ function StatusRow({
   );
 }
 
+function StepsCard({ icon, intro, steps }: { icon: IconName; intro: string; steps: readonly string[] }) {
+  return (
+    <Card style={styles.privacy}>
+      <View style={styles.point}>
+        <Ionicons name={icon} size={18} color={colors.primary} />
+        <Text style={styles.pointText}>{intro}</Text>
+      </View>
+      {steps.map((step, index) => (
+        <View key={step} style={styles.point}>
+          <Text style={styles.stepNumber}>{index + 1}</Text>
+          <Text style={styles.pointText}>{step}</Text>
+        </View>
+      ))}
+    </Card>
+  );
+}
+
 function PrivacyPoint({ icon, text }: { icon: IconName; text: string }) {
   return (
     <View style={styles.point}>
@@ -318,7 +367,7 @@ function PrivacyPoint({ icon, text }: { icon: IconName; text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 20, paddingBottom: 48 },
   section: { gap: 10 },
   muted: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
@@ -349,9 +398,10 @@ const styles = StyleSheet.create({
   },
   appText: { fontWeight: '600', color: colors.text },
   privacy: { gap: 14 },
+  stepNumber: { width: 18, textAlign: 'center', fontWeight: '800', color: colors.primary },
   point: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   pointText: { flex: 1, color: colors.text, lineHeight: 20 },
   dev: { gap: 6, backgroundColor: colors.surfaceMuted },
   devTitle: { fontWeight: '700', color: colors.textMuted },
   devText: { fontFamily: Platform.select({ android: 'monospace', default: 'Menlo' }), fontSize: 12, color: colors.text },
-});
+}));

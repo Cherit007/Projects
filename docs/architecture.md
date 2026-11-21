@@ -39,6 +39,25 @@ force for Milestone 1:
   not counted as spending a second time. Detected UPI payments never
   default to a card.
 
+## Credit card bills
+
+A card can have a statement day, a payment due day (days of the month,
+falling back to the last day of short months) and an optional credit limit
+in `card_details`, which is local only (backed up, not synced to Appwrite
+yet). `src/domain/cards/billing.ts` derives the bill from the card's
+ledger: transactions up to the end of the last statement day are
+"billed"; payments and refunds after it count towards that bill; the due
+date is the first due day after the statement (usually the next month).
+A bill is due, overdue (past the due day with something unpaid), paid,
+or has nothing to pay. `/cards` shows each card's outstanding amount,
+available credit, last statement, amount still due and next statement.
+
+Reminders are scheduled as dated local notifications at 9:00, three days
+before and on the due day, so they fire without opening the app. They are
+rescheduled on app open, after a card transaction is saved and after the
+card's billing days change; once a statement is paid, they move to the
+next due date if anything has been spent since.
+
 ## Reports
 
 `src/domain/reports.ts` derives month and year reports from the same
@@ -123,6 +142,44 @@ Local-only planning features (backed up, not synced to Appwrite yet):
 - **Tags** — free-text labels on transactions; search covers every month.
 - **Splits** — one expense can allocate amounts across two categories
   (`transaction_splits`); reports respect splits when present.
+
+## Personalisation
+
+Device preferences live in `settings` (backed up, not synced) and are
+loaded by `PreferencesProvider` before any screen renders.
+
+- **Month start day** (1–28, e.g. the salary day): `setMonthStartDay` in
+  `src/domain/period.ts` moves every month boundary — dashboard, budgets,
+  transaction list, reports, safe-to-spend, pace and the monthly overview
+  (sent on that day). A month is named after the calendar month it starts
+  in, so with 25 the "October" month is 25 Oct – 24 Nov. Year reports stay
+  on calendar years.
+- **Theme** (same as phone, light, dark): `src/theme/colors.ts` holds both
+  palettes; `colors.x` reads the active one, and module-level styles are
+  built with `themedStyles(() => StyleSheet.create(...))`, which rebuilds
+  them per scheme. Each navigator's `screenLayout` (`ThemedScreen`)
+  remounts screen content when the scheme changes, keeping navigation
+  history. Anything that captures a colour at module load must use
+  `themedStyles` too.
+- **App lock** (`src/components/AppLock.tsx`, `expo-local-authentication`):
+  covers the app at launch and after 30 s in the background. The in-app
+  cover is drawn too late for the system's app-switcher snapshot, so
+  `expo-screen-capture` hides it there: Android sets FLAG_SECURE while the
+  lock is on (which also blocks screenshots), iOS blurs the snapshot. It
+  uses the phone's fingerprint, face or passcode;
+  if the phone has none, it does not lock, so nobody is locked out.
+- **First-run setup** (`/onboarding`): privacy notes, your name, salary day,
+  and quick account/card entry. Installs that already have transactions
+  skip it.
+- **Dashboard layout**: sections can be hidden and reordered
+  (`src/domain/dashboard.ts`); sections added in later versions appear in
+  their default place. The dashboard shows a month, the year to date or a
+  custom range; budgets and safe-to-spend appear only for a month, and
+  card bills and upcoming bills only when the range includes today.
+- **Alert tuning**: a fixed large-payment amount (instead of the automatic
+  comparison), the weekly digest day, and card reminder days and hour.
+- **Category order**: categories move up or down among their siblings
+  (`moveCategory`); pickers and lists follow `sort_order`.
 
 ## Time
 

@@ -72,6 +72,40 @@ export async function renameCategory(
   );
 }
 
+/**
+ * Moves a category up (-1) or down (+1) among its siblings (same type and
+ * parent), which sets the order in lists and pickers. Siblings are
+ * renumbered in one transaction; only rows whose position changes are
+ * touched, so sync uploads just those.
+ */
+export async function moveCategory(db: SQLiteDatabase, id: string, delta: -1 | 1): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    const category = await db.getFirstAsync<CategoryRow>('SELECT * FROM categories WHERE id = ?', id);
+    if (!category) {
+      return;
+    }
+    const siblings = await db.getAllAsync<CategoryRow>(
+      `SELECT * FROM categories
+       WHERE type = ? AND parent_id IS ?
+       ORDER BY sort_order, name`,
+      category.type,
+      category.parent_id,
+    );
+    const from = siblings.findIndex(s => s.id === id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= siblings.length) {
+      return;
+    }
+    [siblings[from], siblings[to]] = [siblings[to]!, siblings[from]!];
+    const now = nowIso();
+    for (const [index, sibling] of siblings.entries()) {
+      if (sibling.sort_order !== index) {
+        await db.runAsync('UPDATE categories SET sort_order = ?, updated_at = ? WHERE id = ?', index, now, sibling.id);
+      }
+    }
+  });
+}
+
 /** Archiving hides a category from pickers but keeps past transactions intact. */
 export async function setCategoryArchived(
   db: SQLiteDatabase,

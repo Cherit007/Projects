@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { summarize } from '../../domain/accounting/accounting';
+import { holdings, summarize } from '../../domain/accounting/accounting';
 import { isUnusualSpend, spendingPace } from '../../domain/insights/pace';
 import { safeToSpend, type SafeToSpend } from '../../domain/insights/safeToSpend';
 import {
@@ -9,7 +9,8 @@ import {
   type DetectedSubscription,
 } from '../../domain/insights/subscriptions';
 import { formatMinor } from '../../domain/money/money';
-import { addMonths, monthKeyOf, monthRange, type MonthKey } from '../../domain/period';
+import { addMonths, formatMonth, monthKeyOf, monthProgress, monthRange, type MonthKey } from '../../domain/period';
+import { getAccountFlows, listAccounts } from '../repositories/accounts';
 import { monthlyGoalCommitmentMinor } from '../repositories/goals';
 import { listRecurringRules } from '../repositories/recurring';
 import { listTransactions } from '../repositories/transactions';
@@ -28,14 +29,14 @@ export interface MonthInsight {
 }
 
 function labelMonth(key: MonthKey): string {
-  return new Date(key.year, key.month, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  return formatMonth(key);
 }
 
 export async function loadMonthInsight(db: SQLiteDatabase, month: MonthKey, today = new Date()): Promise<MonthInsight> {
   const range = monthRange(month);
   const last = addMonths(month, -1);
   const lastRange = monthRange(last);
-  const [txns, lastTxns, older, goalsMinor, rules] = await Promise.all([
+  const [txns, lastTxns, older, goalsMinor, rules, accounts, flows] = await Promise.all([
     listTransactions(db, { range, limit: -1 }),
     listTransactions(db, { range: lastRange, limit: -1 }),
     listTransactions(db, {
@@ -45,6 +46,8 @@ export async function loadMonthInsight(db: SQLiteDatabase, month: MonthKey, toda
     }),
     monthlyGoalCommitmentMinor(db),
     listRecurringRules(db),
+    listAccounts(db),
+    getAccountFlows(db, today.toISOString()),
   ]);
 
   const summary = summarize(txns);
@@ -61,24 +64,14 @@ export async function loadMonthInsight(db: SQLiteDatabase, month: MonthKey, toda
     .sort((a, b) => b.amountMinor - a.amountMinor)
     .slice(0, 3);
 
-  const daysInMonth = new Date(month.year, month.month + 1, 0).getDate();
-  const dayOfMonth =
-    today.getFullYear() === month.year && today.getMonth() === month.month
-      ? today.getDate()
-      : daysInMonth;
+  const progress = monthProgress(month, today);
 
   const pace = spendingPace({
     spentMinor: summary.expenseMinor,
-    dayOfMonth,
-    daysInMonth,
+    dayOfMonth: Math.max(1, progress.elapsed),
+    daysInMonth: progress.days,
     lastMonthSpentMinor: lastSummary.expenseMinor,
   });
-
-  const priorIncomes = [lastSummary.incomeMinor];
-  // Average of last month income as expected when salary not yet in.
-  const expectedIncomeMinor = Math.round(
-    priorIncomes.reduce((a, b) => a + b, 0) / Math.max(1, priorIncomes.length),
-  );
 
   const past = older.map(t => ({
     counterparty: t.counterparty ?? '',
@@ -110,10 +103,10 @@ export async function loadMonthInsight(db: SQLiteDatabase, month: MonthKey, toda
     .filter(s => !txns.some(t => t.type === 'expense' && (t.counterparty ?? '').trim().toLowerCase() === s.counterparty.toLowerCase() && Math.abs(t.amountMinor - s.amountMinor) <= Math.max(100, s.amountMinor * 0.1)))
     .reduce((sum, s) => sum + s.amountMinor, 0);
 
+  const held = holdings(accounts, flows);
   const safe = safeToSpend({
-    incomeMinor: summary.incomeMinor,
-    expectedIncomeMinor,
-    spentMinor: summary.expenseMinor,
+    availableMinor: held.cashMinor,
+    cardDueMinor: held.cardDueMinor,
     billsRemainingMinor: billsFromRules + unpaidSubs,
     goalsMinor,
   });
@@ -154,11 +147,16 @@ export function paceBody(insight: MonthInsight): string {
   }.`;
 }
 
+/** A fixed `thresholdMinor` set by the user replaces the automatic comparison with recent spending. */
 export async function checkUnusualExpense(
   db: SQLiteDatabase,
   amountMinor: number,
   occurredAt: string,
+  thresholdMinor: number | null = null,
 ): Promise<boolean> {
+  if (thresholdMinor !== null) {
+    return amountMinor >= thresholdMinor;
+  }
   const end = new Date(occurredAt);
   const start = new Date(end);
   start.setDate(start.getDate() - 60);

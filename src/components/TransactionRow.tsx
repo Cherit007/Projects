@@ -7,7 +7,7 @@ import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture
 import type { TransactionListItem } from '@/data/repositories/transactions';
 import { removeTransaction } from '@/services/removeTransaction';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 import { CategoryIcon } from './CategoryIcon';
 import { haptic, PressableScale } from './PressableScale';
@@ -128,7 +128,7 @@ function DeleteAction({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -149,4 +149,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.expense,
   },
   deleteText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-});
+}));

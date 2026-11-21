@@ -18,7 +18,7 @@ import { formatMinor, type MinorUnits } from '@/domain/money/money';
 import { addMonths, formatMonth, type MonthKey } from '@/domain/period';
 import type { TransactionType } from '@/domain/types';
 import type { IconName } from '@/theme/categoryStyle';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 
 import { PressableScale, type HapticKind } from './PressableScale';
 
@@ -87,7 +87,7 @@ export function Button({
   style?: StyleProp<ViewStyle>;
   hapticKind?: HapticKind;
 }) {
-  const textColor = variant === 'primary' ? '#fff' : variant === 'danger' ? colors.danger : colors.primary;
+  const textColor = variant === 'primary' ? colors.onPrimary : variant === 'danger' ? colors.danger : colors.primary;
   return (
     <PressableScale
       accessibilityRole="button"
@@ -180,7 +180,7 @@ export function Chip({
       scaleTo={0.94}
       style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
     >
-      {icon && <Ionicons name={icon} size={15} color={selected ? '#fff' : color} />}
+      {icon && <Ionicons name={icon} size={15} color={selected ? colors.onPrimary : color} />}
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </PressableScale>
   );
@@ -212,11 +212,11 @@ export function MonthSelector({ value, onChange }: { value: MonthKey; onChange: 
   );
 }
 
-export const typeColor: Record<TransactionType, string> = {
+export const typeColor = themedStyles((): Record<TransactionType, string> => ({
   income: colors.income,
   expense: colors.expense,
   transfer: colors.transfer,
-};
+}));
 
 export function Amount({
   amountMinor,
@@ -265,7 +265,7 @@ export function TextLink({ label, onPress }: { label: string; onPress: () => voi
   );
 }
 
-export const styles = StyleSheet.create({
+export const styles = themedStyles(() => StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 8 },
   stateIcon: {
     width: 64,
@@ -303,7 +303,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
-  segmented: { flexDirection: 'row', backgroundColor: '#E6E8F2', borderRadius: radius.md, padding: 3 },
+  segmented: { flexDirection: 'row', backgroundColor: colors.track, borderRadius: radius.md, padding: 3 },
   segment: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: radius.sm },
   segmentSelected: { backgroundColor: colors.surface, ...shadow },
   segmentText: { color: colors.textMuted, fontWeight: '600' },
@@ -319,7 +319,7 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chipText: { color: colors.text, fontWeight: '500' },
-  chipTextSelected: { color: '#fff', fontWeight: '700' },
+  chipTextSelected: { color: colors.onPrimary, fontWeight: '700' },
   monthSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   monthButton: {
     width: 36,
@@ -338,4 +338,4 @@ export const styles = StyleSheet.create({
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   link: { color: colors.primary, fontWeight: '700' },
-});
+}));

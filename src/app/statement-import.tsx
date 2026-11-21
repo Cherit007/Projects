@@ -26,7 +26,7 @@ import {
 } from '@/services/statements/importStatement';
 import { PdfTextReader, type PdfTextReaderHandle } from '@/services/statements/PdfTextReader';
 import { pickStatementPdf, type StatementFile } from '@/services/statements/statementFile';
-import { colors, radius } from '@/theme/colors';
+import { colors, radius, themedStyles } from '@/theme/colors';
 
 type Step =
   | { kind: 'start' }
@@ -68,8 +68,9 @@ export default function StatementImportScreen() {
     setStep({ kind: 'busy', message: 'Matching with your transactions…' });
     const accounts = (await listAccounts(db)).filter(isUpiAccount);
     const id = accountId ?? suggestAccount(accounts, statement)?.id ?? NEW_ACCOUNT;
-    setSkipped(new Set());
-    setStep({ kind: 'preview', plan: await planStatementImport(db, statement, id), accounts });
+    const planned = await planStatementImport(db, statement, id);
+    setSkipped(new Set(planned.rows.filter(row => row.reversed && !row.existing).map(row => row.index)));
+    setStep({ kind: 'preview', plan: planned, accounts });
   };
 
   const open = async (file: StatementFile, pdfPassword: string) => {
@@ -203,8 +204,8 @@ function Start({ onChoose, error }: { onChoose: () => void; error: Error | null 
     <ScrollView contentContainerStyle={styles.content}>
       <Card style={styles.card}>
         <Text style={styles.body}>
-          Add a month or more of transactions at once from your bank&apos;s account statement. HDFC Bank and SBI PDF
-          statements are supported.
+          Add a month or more of transactions at once from your bank or wallet statement. HDFC Bank and SBI account
+          statements and MobiKwik wallet statements (PDF) are supported.
         </Text>
         <Point icon="phone-portrait-outline" text="The PDF is read on this phone. Nothing is uploaded." />
         <Point icon="copy-outline" text="Payments already in the app are recognised and not added twice." />
@@ -307,6 +308,7 @@ function Preview({
                 ? accountName(item.existing.accountId)
                 : null
             }
+            linkedWith={item.existing?.becomesTransfer ? accountName(item.existing.accountId) : null}
           />
         )}
       />
@@ -330,15 +332,23 @@ function Row({
   row,
   skipped,
   movedFrom,
+  linkedWith,
   onPress,
 }: {
   row: PlannedRow;
   skipped: boolean;
   movedFrom: string | null;
+  linkedWith: string | null;
   onPress: () => void;
 }) {
   const existing = row.existing !== null;
-  const status = existing ? (movedFrom ? `Moves here from ${movedFrom}` : 'Already in the app') : row.label;
+  const status = !existing
+    ? row.label
+    : linkedWith
+      ? `Transfer with ${linkedWith} (already in the app)`
+      : movedFrom
+        ? `Moves here from ${movedFrom}`
+        : 'Already in the app';
   const icon = existing ? 'checkmark-done' : skipped ? 'square-outline' : 'checkbox';
   return (
     <Pressable
@@ -428,7 +438,7 @@ function Point({ icon, text }: { icon: React.ComponentProps<typeof Ionicons>['na
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, gap: 14, paddingBottom: 48 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
@@ -471,4 +481,4 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-});
+}));

@@ -9,7 +9,7 @@ import { Amount, Button, Card, EmptyState, ErrorState, LoadingState } from '@/co
 import { deleteRecurringRule, listRecurringRules, type RecurringRule } from '@/data/repositories/recurring';
 import { FREQUENCY_LABEL } from '@/domain/recurring';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
-import { colors, radius, shadow } from '@/theme/colors';
+import { colors, radius, shadow, themedStyles } from '@/theme/colors';
 import { formatDisplayDate } from '@/utils/dates';
 
 const load = (db: SQLiteDatabase) => listRecurringRules(db);
@@ -92,7 +92,7 @@ function RuleCard({ rule, onStopped }: { rule: RecurringRule; onStopped: () => v
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 48 },
   intro: { color: colors.textMuted, lineHeight: 20 },
   card: { gap: 12, borderRadius: radius.lg, ...shadow },
@@ -101,4 +101,4 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700', color: colors.text },
   meta: { color: colors.textMuted, fontSize: 13 },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-});
+}));

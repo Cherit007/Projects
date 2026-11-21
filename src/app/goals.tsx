@@ -8,7 +8,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { createGoal, deleteGoal, listGoals } from '@/data/repositories/goals';
 import { formatMinor, parseToMinor } from '@/domain/money/money';
 import { useFocusQuery } from '@/hooks/useFocusQuery';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 export default function GoalsScreen() {
   const db = useSQLiteContext();
@@ -99,7 +99,7 @@ export default function GoalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 48 },
   card: { gap: 12 },
   help: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
@@ -108,4 +108,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1, gap: 2 },
   title: { fontSize: 16, fontWeight: '600', color: colors.text },
   muted: { fontSize: 13, color: colors.textMuted },
-});
+}));

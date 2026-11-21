@@ -1,6 +1,18 @@
 import { detectPayeeKind, type PayeeKind } from '../upi/payeeKind';
 
-export type Channel = 'upi' | 'imps' | 'neft' | 'ach' | 'atm' | 'card' | 'interest' | 'charges' | 'cash' | 'other';
+export type Channel =
+  | 'upi'
+  | 'imps'
+  | 'neft'
+  | 'ach'
+  | 'atm'
+  | 'card'
+  | 'interest'
+  | 'charges'
+  | 'cash'
+  | 'topup'
+  | 'cashback'
+  | 'other';
 
 export interface NarrationInfo {
   channel: Channel;
@@ -153,6 +165,23 @@ export function parseNarration(narration: string): NarrationInfo {
   }
   if (/^DIRECT\s+DR\b/i.test(text)) {
     return result('other', 'Direct debit');
+  }
+
+  // Wallet statements (MobiKwik) describe entries in plain words.
+  if (/^Add\s+money$/i.test(text)) {
+    return result('topup', 'Wallet top-up');
+  }
+  if (/cashback/i.test(text)) {
+    return result('cashback', 'Cashback');
+  }
+  match = /^Bank\s+transfer\s+to\s+(.+?)\s*\(([^)]*)\)$/i.exec(text);
+  if (match) {
+    return result('upi', match[1], { payeeKind: kindFromUpiId(match[2]) });
+  }
+  match = /^(?:Paid\s+to|Refund\s+from|Money\s+received\s+from)\s+(.+)$/i.exec(text);
+  if (match) {
+    const name = match[1].replace(/^M\/s\.?\s*/i, '');
+    return result('upi', name.charAt(0).toUpperCase() + name.slice(1));
   }
   return result('other', null);
 }

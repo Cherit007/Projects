@@ -3,18 +3,30 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { listAccounts } from '../../data/repositories/accounts';
 import { listCategories } from '../../data/repositories/categories';
 import { findMerchantRule } from '../../data/repositories/merchantRules';
+import { nowIso } from '../../data/local/ids';
 import { getAutoAddPayments, getOwnerName } from '../../data/repositories/settings';
-import { hasMonthlyRepeat, lastCategory, listCategorisedPayees } from '../../data/repositories/transactions';
+import {
+  createTransaction,
+  hasMonthlyRepeat,
+  lastCategory,
+  listCategorisedPayees,
+} from '../../data/repositories/transactions';
 import {
   confirmCandidate,
   findPossibleDuplicate,
   getCandidate,
+  linkCandidate,
   type UpiCandidate,
 } from '../../data/repositories/upiCandidates';
 import { predictCategoryName } from '../../domain/categories/autoCategory';
 import { FRIENDS_CATEGORY, RENT_CATEGORY } from '../../domain/categories/defaults';
 import { isOwnName, learnedCategoryId, learnWords, type LearnedWords } from '../../domain/categories/payeeHistory';
 import { isUpiAccount, type Account, type Category, type TransactionInput } from '../../domain/types';
+import { accountForDetectedPayment } from '../../domain/upi/smsAccount';
+import { findWalletCredit, isWalletName, pairWalletMove, splitTopUpCharge } from './walletMoves';
+
+/** Expense category for wallet top-up fees. */
+const FEES_CATEGORY = 'Loan interest and fees';
 
 /** Regular payments to a person from this amount (₹3,000) up are taken for rent. */
 const RENT_MIN_MINOR = 300_000;
@@ -90,6 +102,61 @@ function ownTransfer(candidate: UpiCandidate, account: Account, context: Context
 }
 
 /**
+ * Saves a card charge at the wallet as a transfer from the card of the amount
+ * that reached the wallet, and the rest as a fee on the card. When the
+ * wallet's own "money added" message was saved first, that becomes the transfer.
+ */
+async function recordTopUp(
+  db: SQLiteDatabase,
+  candidate: UpiCandidate,
+  chargeMinor: number,
+  card: Account,
+  wallet: Account,
+  categories: readonly Category[],
+): Promise<void> {
+  const { topUpMinor, feeMinor } = splitTopUpCharge(chargeMinor);
+  const credited = await findWalletCredit(db, wallet.id, topUpMinor, candidate.detectedAt);
+  if (credited) {
+    await db.runAsync(
+      `UPDATE transactions SET type = 'transfer', account_id = ?, to_account_id = ?, category_id = NULL,
+         counterparty = 'Wallet top-up', updated_at = ? WHERE id = ?`,
+      card.id,
+      wallet.id,
+      nowIso(),
+      credited,
+    );
+    await linkCandidate(db, candidate.id, credited);
+  } else {
+    await confirmCandidate(db, candidate, {
+      type: 'transfer',
+      amountMinor: topUpMinor,
+      occurredAt: candidate.detectedAt,
+      accountId: card.id,
+      toAccountId: wallet.id,
+      categoryId: null,
+      counterparty: 'Wallet top-up',
+      note: null,
+    });
+  }
+  if (feeMinor > 0) {
+    await createTransaction(
+      db,
+      {
+        type: 'expense',
+        amountMinor: feeMinor,
+        occurredAt: candidate.detectedAt,
+        accountId: card.id,
+        toAccountId: null,
+        categoryId: categories.find(c => c.type === 'expense' && c.name === FEES_CATEGORY)?.id ?? null,
+        counterparty: `${wallet.name} top-up fee`,
+        note: null,
+      },
+      { source: 'bank_sms', externalReference: null },
+    );
+  }
+}
+
+/**
  * Adds detected payments: transfers to the user's own name between their
  * accounts, everything else with a category from chooseCategory. Failed or
  * pending payments, possible duplicates, unpaired own transfers and archived
@@ -105,10 +172,6 @@ export async function autoAddCandidates(db: SQLiteDatabase, candidateIds: readon
     listCategorisedPayees(db),
     getOwnerName(db),
   ]);
-  const account = accounts.find(isUpiAccount) ?? accounts.find(a => a.type === 'cash');
-  if (!account) {
-    return 0;
-  }
   const context: Context = { accounts, categories, learned: learnWords(payees), ownerName };
 
   let added = 0;
@@ -124,8 +187,39 @@ export async function autoAddCandidates(db: SQLiteDatabase, candidateIds: readon
     ) {
       continue;
     }
+    const account = accountForDetectedPayment(candidate, accounts);
+    if (!account) {
+      continue;
+    }
+    const isSelf = (payee: string | null) => !payee || isOwnName(payee, ownerName) || isWalletName(payee);
+
+    // A card charge at the wallet is a top-up: a transfer of what reached the wallet, plus the fee.
+    const wallet = accounts.find(a => a.type === 'wallet' && !a.isArchived && isWalletName(a.name));
+    if (account.type === 'card' && candidate.direction === 'debit' && wallet && isWalletName(candidate.counterparty)) {
+      await recordTopUp(db, candidate, candidate.amountMinor, account, wallet, categories);
+      added += 1;
+      continue;
+    }
+    // One side of money moved from the wallet to the user's bank, the other side already saved.
+    if (account.type !== 'card' && isSelf(candidate.counterparty)) {
+      const paired = await pairWalletMove(
+        db,
+        account,
+        candidate.direction,
+        candidate.amountMinor,
+        candidate.detectedAt,
+        accounts,
+        isSelf,
+      );
+      if (paired) {
+        await linkCandidate(db, candidate.id, paired);
+        added += 1;
+        continue;
+      }
+    }
+
     let input: TransactionInput | null;
-    if (isOwnName(candidate.counterparty, ownerName)) {
+    if (isOwnName(candidate.counterparty, ownerName) && account.type !== 'card') {
       input = ownTransfer(candidate, account, context);
     } else {
       const categoryId = await chooseCategory(db, candidate, context);

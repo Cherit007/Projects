@@ -36,6 +36,12 @@ export function fromLocalDateInput(
   return date.toISOString();
 }
 
+/** Formats a local `YYYY-MM-DD` date as e.g. "7 Nov". */
+export function formatShortLocalDate(value: string, locale = 'en-IN'): string {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+}
+
 export function formatDisplayDate(iso: string, locale = 'en-IN'): string {
   return new Date(iso).toLocaleDateString(locale, {
     day: 'numeric',

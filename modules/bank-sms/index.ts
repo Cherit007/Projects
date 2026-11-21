@@ -7,11 +7,21 @@ export interface QueuedBankSms {
   receivedAt: number;
 }
 
+/** An expense started from Siri, the Action button or a Control Center shortcut. */
+export interface QuickAdd {
+  amount: number;
+  paidTo?: string;
+  /** Epoch milliseconds. */
+  at: number;
+}
+
 declare class BankSmsModule extends NativeModule<Record<never, never>> {
   getPending(): QueuedBankSms[];
   remove(ids: string[]): void;
   lastCapturedAt(): number | null;
   requestNotificationPermission(): Promise<boolean>;
+  /** Returns the pending quick add once, then clears it. Missing in builds before it was added. */
+  takeQuickAdd?(): QuickAdd | null;
 }
 
 /**

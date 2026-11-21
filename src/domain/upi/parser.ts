@@ -31,9 +31,25 @@ export interface ParsedUpiNotification {
   /** Merchant or person, when the message says so (P2M/P2A, QR or mobile-number UPI ID). */
   payeeKind: PayeeKind | null;
   postedAt: number;
+  /** Bank SMS only: the message is about a credit card rather than a bank account. */
+  card?: boolean;
+  /** Bank SMS only: last four digits of the account or card it names ("XX1234", "ending 4005"). */
+  accountLast4?: string | null;
 }
 
 export const SENSITIVE = /\b(otp|one[\s-]?time\s+password|upi\s+pin|mpin|cvv)\b/i;
+
+/**
+ * Bank alerts, especially emails, end with "Never share your OTP, PIN or CVV".
+ * That warning is not a code, so it is removed before looking for one; a real
+ * OTP message still mentions its code elsewhere and is still dropped.
+ */
+export function withoutSafetyWarnings(text: string): string {
+  return text.replace(
+    /[^.!\n]*\b(?:never|do\s+not|don'?t|not\s+to|nor)\s+(?:share|disclose|reveal|ask)\b[^.!\n]*[.!]?/gi,
+    ' ',
+  );
+}
 export const AMOUNT = /(?:₹|\bRs\.?|\bINR)\s*([\d,]+(?:\.\d{1,2})?)/i;
 const REFERENCE =
   /\b(?:UPI\s*)?(?:Ref(?:erence)?\.?\s*(?:No\.?|ID|#)?|UTR|Txn\.?\s*ID|Transaction\s*ID)[\s:#-]*([A-Za-z0-9]{6,})/i;

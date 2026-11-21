@@ -15,6 +15,7 @@ export const BACKUP_TABLES = [
   'merchant_rules',
   'transaction_splits',
   'savings_goals',
+  'card_details',
 ] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 

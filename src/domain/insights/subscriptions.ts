@@ -40,8 +40,10 @@ function monthKey(day: string): string {
 }
 
 /**
- * Merchants paid in at least two different months at about the same amount
- * (±10%) and similar day of month (±3 days) are treated as subscriptions.
+ * Payees paid once a month, in at least two months, always at about the same
+ * amount (±10%) on a similar day of the month (±3 days), are treated as
+ * subscriptions. Shops visited often fail this: some month has two payments,
+ * or an amount or date that does not fit.
  */
 export function detectSubscriptions(
   payments: readonly PastPayment[],
@@ -59,10 +61,11 @@ export function detectSubscriptions(
   const found: DetectedSubscription[] = [];
   for (const group of byPayee.values()) {
     const byMonth = new Map<string, PastPayment>();
-    for (const p of [...group].sort((a, b) => a.day.localeCompare(b.day))) {
+    const pastMonths = group.filter(p => monthKey(p.day) !== monthKey(today));
+    for (const p of [...pastMonths].sort((a, b) => a.day.localeCompare(b.day))) {
       byMonth.set(monthKey(p.day), p);
     }
-    if (byMonth.size < 2) {
+    if (byMonth.size < 2 || byMonth.size !== pastMonths.length) {
       continue;
     }
     const samples = [...byMonth.values()];
@@ -73,7 +76,7 @@ export function detectSubscriptions(
       const dayOk = Math.abs(dayOfMonth(p.day) - dayOfMonth(latest.day)) <= 3;
       return amountOk && dayOk;
     });
-    if (similar.length < 2) {
+    if (similar.length !== samples.length) {
       continue;
     }
     const avgDay = Math.round(
@@ -84,7 +87,7 @@ export function detectSubscriptions(
       nextDue = addMonths(nextDue, 1);
     }
     // If we already paid this month at that amount, push to next month.
-    if (byMonth.has(monthKey(today)) && monthKey(nextDue) === monthKey(today)) {
+    if (group.some(p => monthKey(p.day) === monthKey(today)) && monthKey(nextDue) === monthKey(today)) {
       nextDue = addMonths(nextDue, 1);
     }
     found.push({

@@ -11,7 +11,7 @@ import { pickBackup, restoreFromBackup, shareBackup } from '@/services/backupFil
 import { useCloud } from '@/services/cloud/CloudProvider';
 import { useRecurring } from '@/services/RecurringProvider';
 import { useUpi } from '@/services/upi/UpiProvider';
-import { colors } from '@/theme/colors';
+import { colors, themedStyles } from '@/theme/colors';
 
 export default function BackupScreen() {
   const db = useSQLiteContext();
@@ -123,11 +123,11 @@ function Point({ icon, text }: { icon: React.ComponentProps<typeof Ionicons>['na
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 20, paddingBottom: 48 },
   section: { gap: 10 },
   card: { gap: 12 },
   body: { color: colors.text, lineHeight: 20 },
   point: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   pointText: { flex: 1, color: colors.textMuted, fontSize: 13, lineHeight: 18 },
-});
+}));

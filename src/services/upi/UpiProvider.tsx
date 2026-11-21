@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
+import { countUnreadMessages } from '@/data/repositories/unreadMessages';
 import { countPendingCandidates, listWaitingCandidateIds } from '@/data/repositories/upiCandidates';
 
 import { autoAddCandidates } from './autoAdd';
@@ -39,7 +40,7 @@ async function loadStatus(db: SQLiteDatabase): Promise<UpiStatusSnapshot> {
   await autoAddCandidates(db, await listWaitingCandidateIds(db));
   return {
     accessGranted: upiNative?.isAccessGranted() ?? false,
-    pendingCount: await countPendingCandidates(db),
+    pendingCount: (await countPendingCandidates(db)) + (await countUnreadMessages(db)),
     lastSyncAt: Date.now(),
   };
 }
