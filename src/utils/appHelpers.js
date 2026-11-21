@@ -1101,7 +1101,15 @@ const mergeTournamentRecords = (left, right) => {
     ),
     status: completed ? 'completed' : normalizeTournamentStatus(preferred),
     teamsCount: getTournamentTeamsCount(preferred) || getTournamentTeamsCount(fallback) || 0,
-    pendingSync: Boolean(preferred?.pendingSync || fallback?.pendingSync),
+    // pendingSync means "cloud create still unresolved". Once any side has an
+    // Appwrite id, keep the richer payload but clear the sticky create flag.
+    pendingSync: (() => {
+      const hasCloudId = Boolean(
+        String(preferred?.appwriteId || fallback?.appwriteId || '').trim()
+      );
+      if (hasCloudId) return false;
+      return Boolean(preferred?.pendingSync || fallback?.pendingSync);
+    })(),
     createdAt: preferred?.createdAt || fallback?.createdAt || null,
     updatedAt: preferred?.updatedAt || fallback?.updatedAt || null,
   });

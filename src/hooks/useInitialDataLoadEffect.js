@@ -283,9 +283,14 @@ export const useInitialDataLoadEffect = ({
               }
             );
           }
+          // Always try the local active cache on Appwrite boot. Summaries strip
+          // fixtures/bracket, so without this merge a refresh shows 0 matches and
+          // resume cannot save until a detail fetch succeeds.
+          // dedupeTournamentHistory still prefers completed cloud rows over a stale
+          // cached active for the same tournament.
           const shouldUseLocalActiveCache = Boolean(isAppwriteEnabled);
           let mergedHistory = backfilledAppwriteHistory.history;
-          if (shouldUseLocalActiveCache && !activeFromCloud && !lockCandidate) {
+          if (shouldUseLocalActiveCache) {
             let cachedActive = null;
             try {
               const raw = localStorage.getItem(ACTIVE_TOURNAMENT_CACHE_KEY);
@@ -324,6 +329,7 @@ export const useInitialDataLoadEffect = ({
                   cacheTournament.tournamentFormat || cacheTournament.format || 'league'
                 ),
                 status: 'active',
+                isSummary: false,
               };
               mergedHistory = dedupeTournamentHistory([normalizedCache, ...mergedHistory]);
             }
@@ -335,11 +341,17 @@ export const useInitialDataLoadEffect = ({
             const completedBracket = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
               .flatMap((round) => (Array.isArray(round) ? round : []))
               .filter((match) => match?.completed).length;
-            return completedFixtures + completedBracket + (tournament?.champion ? 10000 : 0);
+            const fixtureDepth = Array.isArray(tournament?.fixtures) ? tournament.fixtures.length : 0;
+            const bracketDepth = (Array.isArray(tournament?.bracket) ? tournament.bracket : [])
+              .flatMap((round) => (Array.isArray(round) ? round : [])).length;
+            return completedFixtures + completedBracket + fixtureDepth + bracketDepth + (tournament?.champion ? 10000 : 0);
           };
-          const preferredActive = activeFromCloud && lockCandidate
-            ? (scoreTournament(lockCandidate) > scoreTournament(activeFromCloud) ? lockCandidate : activeFromCloud)
-            : (activeFromCloud || lockCandidate);
+          const activeFromMergedHistory = findActiveTournament(mergedHistory);
+          const preferredActive = [activeFromCloud, lockCandidate, activeFromMergedHistory]
+            .filter(Boolean)
+            .reduce((best, candidate) => (
+              !best || scoreTournament(candidate) > scoreTournament(best) ? candidate : best
+            ), null);
           const dedupedLiveTournaments = dedupeLiveTournaments([
             ...(Array.isArray(appwriteTournaments) ? appwriteTournaments : []),
             ...(lockCandidate ? [lockCandidate] : []),

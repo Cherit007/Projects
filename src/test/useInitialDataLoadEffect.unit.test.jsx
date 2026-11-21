@@ -214,4 +214,72 @@ describe('useInitialDataLoadEffect', () => {
     expect(dedupeLiveTournaments(result.current.tournamentHistory)).toHaveLength(0);
     expect(result.current.resumeActiveTournament).not.toHaveBeenCalled();
   });
+
+  it('merges local active cache fixtures into empty cloud summaries on bootstrap', async () => {
+    const cachedActive = {
+      ...buildCachedActive(),
+      id: 'local-live-1',
+      legacyTournamentId: 'local-live-1',
+      appwriteId: 'cloud-live-1',
+      name: 'Friday Night',
+      _cacheGroupId: 'group-1',
+      _cachedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(ACTIVE_TOURNAMENT_CACHE_KEY, JSON.stringify(cachedActive));
+
+    const activeSummary = {
+      id: 'cloud-live-1',
+      appwriteId: 'cloud-live-1',
+      legacyTournamentId: 'local-live-1',
+      name: 'Friday Night',
+      date: '2026-03-29',
+      teams: buildTeams(),
+      teamsCount: 3,
+      fixtures: [],
+      bracket: [],
+      finalMatch: null,
+      champion: null,
+      aiSummaries: [],
+      swapHistory: [],
+      format: '1',
+      gameMode: 'doubles',
+      tournamentFormat: 'league',
+      status: 'active',
+      isSummary: true,
+    };
+
+    tournamentServiceMock.getTournamentSummaries.mockResolvedValue([activeSummary]);
+    tournamentServiceMock.getTournamentById.mockResolvedValue(null);
+    const resumeActiveTournament = vi.fn();
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    const { result } = renderHook(
+      () => useInitialLoadHarness({ queryClient, resumeActiveTournament }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const live = dedupeLiveTournaments(result.current.tournamentHistory);
+    expect(live).toHaveLength(1);
+    expect(live[0].fixtures).toHaveLength(1);
+    expect(live[0].appwriteId).toBe('cloud-live-1');
+    expect(live[0].name).toBe('Friday Night');
+    expect(resumeActiveTournament).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Friday Night',
+        fixtures: expect.arrayContaining([
+          expect.objectContaining({ id: 1 }),
+        ]),
+      })
+    );
+  });
 });

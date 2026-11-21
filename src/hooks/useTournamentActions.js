@@ -8,7 +8,11 @@ import {
 } from '../utils/calculations';
 import { appDataService } from '../services/appDataService';
 import { tournamentService } from '../services/tournamentService';
-import { queueLocalStorageJson, queueLocalStorageValue } from '../services/localStorageWriteService';
+import {
+  flushQueuedLocalStorageWrites,
+  queueLocalStorageJson,
+  queueLocalStorageValue,
+} from '../services/localStorageWriteService';
 import { buildPlayerAchievements } from '../utils/playerAchievements';
 import { buildAiMatchSummary, detectNewlyUnlockedBadges } from '../utils/matchSummary';
 import { getUpsetAlert, predictMatchOutcome } from '../utils/matchPredictions';
@@ -1654,8 +1658,15 @@ export const useTournamentActions = ({
             });
             return;
           }
-          if (savedId) setCurrentTournamentId(savedId);
-          setTournamentHistory((prev) => upsertTournamentHistory(prev, {
+          // If the user already left for home, still persist the cloud id into
+          // history/cache/lock — but do not re-bind the cleared live session.
+          const stillOnCreatedTournament = (
+            localTournamentIdRef.current === legacyTournamentId
+          );
+          if (savedId && stillOnCreatedTournament) {
+            setCurrentTournamentId(savedId);
+          }
+          const syncedSnapshot = {
             ...saved,
             id: legacyTournamentId,
             legacyTournamentId,
@@ -1674,7 +1685,12 @@ export const useTournamentActions = ({
             oddPlayerName: selectedOddPlayerName,
             createdAt,
             updatedAt: new Date().toISOString(),
-          }));
+            pendingSync: false,
+            isSummary: false,
+          };
+          setTournamentHistory((prev) => upsertTournamentHistory(prev, syncedSnapshot));
+          persistActiveTournamentCache(syncedSnapshot);
+          flushQueuedLocalStorageWrites();
           await updateActiveTournamentLock(buildActiveTournamentSnapshot({
             id: savedId || null,
             name: selectedTournamentName,
@@ -2970,6 +2986,18 @@ export const useTournamentActions = ({
   };
 
   const goHome = () => {
+    // Snapshot before clearing live UI so home/resume still has fixtures even if
+    // cloud summaries are empty or create sync finishes later.
+    const hasLivePayload = (
+      Boolean(String(tournamentName || '').trim())
+      || (Array.isArray(teams) && teams.length > 0)
+      || (Array.isArray(fixtures) && fixtures.length > 0)
+      || (Array.isArray(bracket) && bracket.some((round) => Array.isArray(round) && round.length > 0))
+    );
+    if (hasLivePayload) {
+      persistActiveTournamentSnapshot();
+      flushQueuedLocalStorageWrites();
+    }
     setAutoResumeSuppressedTournamentId(localTournamentIdRef.current || currentTournamentId);
     setStep('setup');
     setTournamentName('');

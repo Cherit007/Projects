@@ -1845,31 +1845,55 @@ const App = () => {
       (item) => matchesTournamentId(item, targetId)
     );
     if (!isAppwriteEnabled) return existing || null;
-    if (
+
+    const existingAppwriteId = String(existing?.appwriteId || '').trim();
+    const hasRichPayload = Boolean(
       existing
+      && !existing?.isSummary
       && (
-        existing?.pendingSync
-        || !String(existing?.appwriteId || '').trim()
+        (Array.isArray(existing.fixtures) && existing.fixtures.length > 0)
+        || (
+          Array.isArray(existing.bracket)
+          && existing.bracket.some((round) => Array.isArray(round) && round.length > 0)
+        )
       )
-    ) {
+    );
+
+    // Only skip the cloud fetch for local drafts that still have no Appwrite id.
+    // A sticky pendingSync after create used to block detail refresh forever.
+    if (existing?.pendingSync && !existingAppwriteId) {
       return existing;
     }
+
+    // Resume after home can already have a full local snapshot — use it.
+    if (hasRichPayload) {
+      return existing;
+    }
+
+    const detailFetchId = existingAppwriteId || targetId;
 
     try {
       if (existing && !existing?.isSummary) {
         queryClient.setQueryData(
-          queryKeys.tournamentDetail(activeGroup?.id, targetId),
+          queryKeys.tournamentDetail(activeGroup?.id, detailFetchId),
           existing
         );
       }
       const full = await queryClient.fetchQuery({
-        queryKey: queryKeys.tournamentDetail(activeGroup?.id, targetId),
-        queryFn: () => tournamentService.getTournamentById(targetId, activeGroup?.id),
+        queryKey: queryKeys.tournamentDetail(activeGroup?.id, detailFetchId),
+        queryFn: () => tournamentService.getTournamentById(detailFetchId, activeGroup?.id),
         staleTime: TOURNAMENT_DETAIL_STALE_TIME_MS,
       });
       if (!full) return existing || null;
-      setTournamentHistory((prev) => upsertTournamentInHistory(prev, full));
-      return full;
+      const normalizedFull = {
+        ...full,
+        isSummary: false,
+        pendingSync: false,
+      };
+      setTournamentHistory((prev) => upsertTournamentInHistory(prev, normalizedFull));
+      // Prefer whichever side still has fixtures/bracket so empty cloud detail
+      // cannot wipe a richer local/cache snapshot during resume.
+      return pickPreferredTournament(existing, normalizedFull) || normalizedFull;
     } catch (error) {
       if (Number(error?.code) === 404) {
         const normalizedTargetName = normalizeTournamentName(existing?.name);

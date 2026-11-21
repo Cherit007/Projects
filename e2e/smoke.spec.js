@@ -350,6 +350,38 @@ test('smoke: resume live tournament works after refresh', async ({ page }) => {
   await expect(page.getByText(/Completed Matches \(1\/\d+\)/)).toBeVisible();
 });
 
+test('smoke: home then refresh keeps fixtures and allows scoring again', async ({ page }) => {
+  const tournamentName = 'Persist After Home Cup';
+  await loginAsAdmin(page);
+  await createLeagueTournament(page, {
+    tournamentName,
+    teams: buildLeagueTeams(3),
+  });
+
+  await scoreLiveMatch(page, 21, 16);
+  await expect(page.locator('.live-meta-chip', { hasText: 'Match 2' })).toBeVisible();
+  await expect(page.getByText(/Completed Matches \(1\/3\)/i)).toBeVisible();
+
+  await goHomeFromLiveTournament(page);
+  const liveRow = getLiveTournamentRow(page, tournamentName);
+  await expect(liveRow).toBeVisible();
+  await expect(liveRow.getByText(/1\s*\/\s*3/i)).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: /Start Tournament/i })).toBeVisible();
+  const liveRowAfterRefresh = getLiveTournamentRow(page, tournamentName);
+  await expect(liveRowAfterRefresh).toBeVisible();
+  await expect(liveRowAfterRefresh.getByText(/1\s*\/\s*3/i)).toBeVisible();
+
+  await resumeLiveTournament(page, tournamentName);
+  await expect(page.locator('.live-meta-chip', { hasText: 'Match 2' })).toBeVisible();
+  await expect(page.getByText(/Completed Matches \(1\/3\)/i)).toBeVisible();
+
+  await scoreLiveMatch(page, 21, 18);
+  await expect(page.locator('.live-meta-chip', { hasText: 'Match 3' })).toBeVisible();
+  await expect(page.getByText(/Completed Matches \(2\/3\)/i)).toBeVisible();
+});
+
 test('smoke: deleting live tournament clears resume state after refresh', async ({ page }) => {
   await loginAsAdmin(page);
   await createLeagueTournament(page);

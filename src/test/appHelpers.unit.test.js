@@ -294,6 +294,43 @@ describe('dedupeTournamentHistory', () => {
     expect(deduped[0].fixtures[0].completed).toBe(false);
   });
 
+  it('keeps fixtures from a local cache snapshot when merging an empty active summary', () => {
+    const summary = {
+      id: 'cloud-live-1',
+      appwriteId: 'cloud-live-1',
+      legacyTournamentId: 'local-live-1',
+      name: 'Friday Night',
+      status: 'active',
+      isSummary: true,
+      pendingSync: true,
+      tournamentFormat: 'league',
+      teams: [{ id: 1 }, { id: 2 }],
+      fixtures: [],
+      bracket: [],
+    };
+    const cachedDetailed = {
+      id: 'local-live-1',
+      legacyTournamentId: 'local-live-1',
+      appwriteId: 'cloud-live-1',
+      name: 'Friday Night',
+      status: 'active',
+      pendingSync: true,
+      tournamentFormat: 'league',
+      teams: [{ id: 1 }, { id: 2 }],
+      fixtures: [
+        { id: 'm1', completed: false },
+        { id: 'm2', completed: false },
+      ],
+      bracket: [],
+    };
+
+    const deduped = dedupeTournamentHistory([summary, cachedDetailed]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].fixtures).toHaveLength(2);
+    expect(deduped[0].appwriteId).toBe('cloud-live-1');
+    expect(deduped[0].pendingSync).toBe(false);
+  });
+
   it('collapses triple duplicate records from summary/lock/completed into one completed row', () => {
     const summary = {
       id: 'cloud-tour-1',
