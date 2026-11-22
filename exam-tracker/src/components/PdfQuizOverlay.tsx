@@ -12,6 +12,7 @@ import {
 } from '../utils/pdfPageQuiz'
 import { formatClock, newId } from '../utils/questionBank'
 import { putQuizSession } from '../utils/pdfPageQuizDb'
+import { QuizMathText } from './QuizMathText'
 
 type Mode = 'review' | 'solutions' | 'test' | 'result'
 
@@ -24,13 +25,10 @@ export function PdfQuizOverlay({
   busy,
   error,
   info = '',
-  hasKey,
   forceSolutions,
   onClose,
   onStartDetect,
-  onDetectOffline,
   onDetectSolutions,
-  onSaveKey,
 }: {
   store: PdfQuizDocStore
   page: number
@@ -40,13 +38,10 @@ export function PdfQuizOverlay({
   busy: boolean
   error: string
   info?: string
-  hasKey: boolean
   forceSolutions?: boolean
   onClose: () => void
   onStartDetect: () => void
-  onDetectOffline: () => void
   onDetectSolutions: () => void
-  onSaveKey: (key: string) => void
 }) {
   const [mode, setMode] = useState<Mode>(
     forceSolutions ? 'solutions' : 'review',
@@ -59,19 +54,6 @@ export function PdfQuizOverlay({
   const [session, setSession] = useState<PdfQuizSession | null>(null)
   const [qStartedAt, setQStartedAt] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
-  const [keyDraft, setKeyDraft] = useState('')
-  const [editKey, setEditKey] = useState(false)
-
-  useEffect(() => {
-    if (!error) return
-    if (
-      /api key|ai studio|rejected|403|401|gemini|unauthor|permission|quota|paste/i.test(
-        error,
-      )
-    ) {
-      setEditKey(true)
-    }
-  }, [error])
 
   const all = listStoreQuestions(store)
   const pageQs = useMemo(
@@ -222,72 +204,10 @@ export function PdfQuizOverlay({
 
         {error && <p className="pdf-status error">{error}</p>}
         {info && !busy && <p className="pdf-status muted">{info}</p>}
-        {busy && (
-          <p className="pdf-status muted">Reading page (offline text / Gemini)…</p>
-        )}
-
-        {mode === 'review' && editKey && (
-          <div className="pdf-quiz-keybox">
-            <p>
-              Optional Gemini vision key (for image-only / bilingual pages). Or
-              use <strong>Detect from page text</strong> with no key.
-            </p>
-            <div className="pdf-bm-add">
-              <input
-                type="password"
-                placeholder="Paste API key here"
-                value={keyDraft}
-                onChange={(e) => setKeyDraft(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                autoFocus
-              />
-              <button
-                type="button"
-                className="pdf-side-btn primary"
-                disabled={busy || keyDraft.trim().length < 20}
-                onClick={() => {
-                  const next = keyDraft.trim()
-                  if (next.length < 20) return
-                  onSaveKey(next)
-                  setKeyDraft('')
-                  setEditKey(false)
-                  onStartDetect()
-                }}
-              >
-                Save & detect
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  onSaveKey('')
-                  setKeyDraft('')
-                  setEditKey(true)
-                }}
-              >
-                Clear key
-              </button>
-            </div>
-          </div>
-        )}
+        {busy && <p className="pdf-status muted">Reading page text…</p>}
 
         {mode === 'review' && (
           <>
-            {!editKey && (
-              <div className="pdf-quiz-actions">
-                <button
-                  type="button"
-                  className="pdf-doubt-btn"
-                  onClick={() => {
-                    setEditKey(true)
-                    setKeyDraft('')
-                  }}
-                >
-                  {hasKey ? 'Change API key' : 'Add Gemini key (optional)'}
-                </button>
-              </div>
-            )}
             {looksLikeSolutions && (
               <div className="pdf-quiz-suggest">
                 <p>
@@ -319,17 +239,9 @@ export function PdfQuizOverlay({
                 type="button"
                 className="pdf-side-btn primary"
                 disabled={busy}
-                onClick={onDetectOffline}
-              >
-                Detect from page text
-              </button>
-              <button
-                type="button"
-                className="pdf-doubt-btn"
-                disabled={busy}
                 onClick={onStartDetect}
               >
-                {pageQs.length ? 'Re-detect (Gemini)' : 'Detect with Gemini'}
+                {pageQs.length ? 'Re-detect page' : 'Detect questions'}
               </button>
               <button
                 type="button"
@@ -341,29 +253,25 @@ export function PdfQuizOverlay({
               </button>
             </div>
             <p className="pdf-quiz-hint">
-              Page text works offline when Gemini is busy. Gemini vision helps
-              on scanned / image-only pages.
+              Reads MCQs from this page’s text (√, powers, brackets rendered
+              for BODMAS-style equations).
             </p>
 
             {pageQs.length === 0 ? (
               !looksLikeSolutions && (
                 <p className="pdf-empty-side">
-                  No questions yet — detect this page, or keep browsing the PDF
-                  as usual.
+                  No questions yet — detect this page, or keep browsing the PDF.
                 </p>
               )
             ) : (
               <>
-                <p className="pdf-quiz-hint">
-                  Start a timed test with the selected questions, or close and
-                  keep reading the PDF.
-                </p>
                 <ul className="pdf-quiz-list">
                   {pageQs.map((q) => {
                     const full = store.questions[String(q.number)] || q
                     const checked = selected.includes(q.number)
+                    const stem = 'stem' in full ? full.stem : ''
                     return (
-                      <li key={q.number}>
+                      <li key={q.number} className="pdf-quiz-item">
                         <label className="pdf-check">
                           <input
                             type="checkbox"
@@ -372,7 +280,11 @@ export function PdfQuizOverlay({
                           />
                           <strong>Q{q.number}</strong>
                         </label>
-                        <p>{'stem' in full ? full.stem : ''}</p>
+                        <QuizMathText
+                          text={stem}
+                          as="p"
+                          className="pdf-quiz-stem"
+                        />
                         <div className="pdf-quiz-opts">
                           {(['A', 'B', 'C', 'D'] as const).map((k) => {
                             const text =
@@ -383,9 +295,10 @@ export function PdfQuizOverlay({
                             return (
                               <span
                                 key={k}
-                                className={ans === k ? 'key' : undefined}
+                                className={`pdf-quiz-opt${ans === k ? ' key' : ''}`}
                               >
-                                ({k}) {text}
+                                <em>({k})</em>{' '}
+                                <QuizMathText text={text} />
                               </span>
                             )
                           })}
@@ -460,7 +373,9 @@ export function PdfQuizOverlay({
                   <strong>
                     Q{s.number} → {s.answer}
                   </strong>
-                  {s.explanation ? <p>{s.explanation}</p> : null}
+                  {s.explanation ? (
+                    <QuizMathText text={s.explanation} as="p" />
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -495,11 +410,20 @@ export function PdfQuizOverlay({
                   : ''}
               </span>
             </div>
-            <h3>
-              Q{currentQ.number}. {currentQ.stem}
-            </h3>
+            <div className="pdf-quiz-qhead">
+              <span className="pdf-quiz-qnum">Q{currentQ.number}</span>
+              <QuizMathText
+                text={currentQ.stem}
+                as="div"
+                className="pdf-quiz-stem"
+              />
+            </div>
             {currentQ.stemHi ? (
-              <p className="pdf-quiz-hi">{currentQ.stemHi}</p>
+              <QuizMathText
+                text={currentQ.stemHi}
+                as="p"
+                className="pdf-quiz-hi"
+              />
             ) : null}
             <div className="pdf-quiz-choices">
               {(['A', 'B', 'C', 'D'] as const).map((k) => {
@@ -514,7 +438,7 @@ export function PdfQuizOverlay({
                     onClick={() => choose(k)}
                   >
                     <strong>{k}</strong>
-                    <span>{text}</span>
+                    <QuizMathText text={text} />
                   </button>
                 )
               })}
@@ -564,11 +488,20 @@ export function PdfQuizOverlay({
                             : '—'
                         : '(no key yet)'}
                     </strong>
+                    {q?.stem ? (
+                      <QuizMathText
+                        text={q.stem}
+                        as="p"
+                        className="pdf-quiz-stem"
+                      />
+                    ) : null}
                     <p>
                       Your: {choice || '—'}
                       {q?.answer ? ` · Key: ${q.answer}` : ''}
                     </p>
-                    {q?.explanation ? <p>{q.explanation}</p> : null}
+                    {q?.explanation ? (
+                      <QuizMathText text={q.explanation} as="p" />
+                    ) : null}
                   </li>
                 )
               })}

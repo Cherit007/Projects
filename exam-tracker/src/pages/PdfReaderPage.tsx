@@ -825,19 +825,32 @@ export function PdfReaderPage() {
     navigate('/pdf')
   }
 
-  const getPageCanvas = useCallback(
-    () => pdfCanvasLRef.current,
-    [],
-  )
-
   const getPageText = useCallback(async () => {
     if (!pdf) return ''
     try {
       const pg = await pdf.getPage(page)
       const tc = await pg.getTextContent()
-      return tc.items
-        .map((it) => ('str' in it ? String(it.str) : ''))
-        .join(' ')
+      // Join tightly around math punctuation so √ / ^ / () stay intact
+      const parts = tc.items.map((it) =>
+        'str' in it ? String(it.str) : '',
+      )
+      let out = ''
+      for (let i = 0; i < parts.length; i += 1) {
+        const cur = parts[i]
+        if (!cur) continue
+        if (!out) {
+          out = cur
+          continue
+        }
+        const prev = out[out.length - 1] || ''
+        const next = cur[0] || ''
+        const tight =
+          /[√∛^_(\[{\\/×÷+\-=]$/.test(prev) ||
+          /^[√∛^_)\]}\/×÷+\-=]/.test(next) ||
+          /\d$/.test(prev) && /^\d/.test(next)
+        out += tight ? cur : ` ${cur}`
+      }
+      return out
     } catch {
       return ''
     }
@@ -1269,7 +1282,6 @@ export function PdfReaderPage() {
               docId={docId}
               title={meta.name}
               page={page}
-              getPageCanvas={getPageCanvas}
               getPageText={getPageText}
             />
           )}

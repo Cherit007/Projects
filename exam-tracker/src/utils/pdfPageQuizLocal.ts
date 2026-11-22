@@ -1,3 +1,4 @@
+import { tidyMathPlain } from './formatQuizMath'
 import type {
   PdfDetectedQuestion,
   PdfDetectedSolution,
@@ -8,10 +9,13 @@ import type {
 
 /** Normalize pdf.js text into a single parseable string. */
 export function normalizePageText(raw: string): string {
+  // Soft math tidy per line so question breaks stay intact
   return raw
     .replace(/\u00a0/g, ' ')
-    .replace(/[ \t]+/g, ' ')
     .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => tidyMathPlain(line))
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
@@ -26,7 +30,7 @@ function letterOf(raw: string): PdfQuizOptionKey | null {
 }
 
 /**
- * Offline MCQ parse from embedded PDF text (no Gemini).
+ * Offline MCQ parse from embedded PDF text.
  * Handles common SSC/banking layouts: "12." stems and (a)/(b)/(c)/(d) options.
  */
 export function extractQuestionsFromPageText(
@@ -85,15 +89,14 @@ export function extractQuestionsFromPageText(
         const hit = optHits[j]
         const nextAt =
           j + 1 < optHits.length ? optHits[j + 1].at : body.length
-        const optText = body
-          .slice(hit.at + hit.len, nextAt)
-          .replace(/\s+/g, ' ')
-          .trim()
-        if (optText) options[hit.letter] = optText.slice(0, 400)
+        const optText = tidyMathPlain(
+          body.slice(hit.at + hit.len, nextAt),
+        ).slice(0, 400)
+        if (optText) options[hit.letter] = optText
       }
     }
 
-    stem = stem.replace(/\s+/g, ' ').trim()
+    stem = tidyMathPlain(stem)
     if (!stem && !Object.keys(options).length) continue
 
     questions.push({
