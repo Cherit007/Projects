@@ -10,8 +10,8 @@ import {
   type PdfQuizDocStore,
 } from '../utils/pdfPageQuiz'
 import {
-  extractQuestionsFromPageText,
-  extractSolutionsFromPageText,
+  pickBestQuestionsFromTexts,
+  pickBestSolutionsFromTexts,
 } from '../utils/pdfPageQuizLocal'
 import {
   getPageExtract,
@@ -20,18 +20,24 @@ import {
   putPageExtract,
   putQuizStore,
 } from '../utils/pdfPageQuizDb'
+import type { PageTextVariants } from '../utils/pdfPageText'
 import { PdfQuizOverlay } from './PdfQuizOverlay'
+
+const SPARSE_ITEMS = 24
+const SPARSE_CHARS = 120
 
 export function PdfQuizHost({
   docId,
   title,
   page,
-  getPageText,
+  getPageVariants,
+  getPageCanvas,
 }: {
   docId: string
   title: string
   page: number
-  getPageText: () => Promise<string>
+  getPageVariants: () => Promise<PageTextVariants>
+  getPageCanvas: () => Promise<HTMLCanvasElement | null>
 }) {
   const [store, setStore] = useState<PdfQuizDocStore>(() =>
     emptyQuizStore(docId, title),
@@ -41,8 +47,10 @@ export function PdfQuizHost({
 
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [busyLabel, setBusyLabel] = useState('Reading page…')
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
+  const [extractPreview, setExtractPreview] = useState('')
   const [detectedQs, setDetectedQs] = useState<PdfDetectedQuestion[]>([])
   const [detectedSols, setDetectedSols] = useState<PdfDetectedSolution[]>([])
   const [pageKind, setPageKind] = useState<PdfPageKind | null>(null)
@@ -70,6 +78,7 @@ export function PdfQuizHost({
       setDetectedSols([])
       setInfo('')
       setError('')
+      setExtractPreview('')
     })()
     return () => {
       cancelled = true
@@ -82,11 +91,57 @@ export function PdfQuizHost({
     await putQuizStore(next)
   }, [])
 
+  const collectTexts = useCallback(
+    async (forceOcr: boolean) => {
+      setBusyLabel('Reading page text…')
+      const variants = await getPageVariants()
+      const texts = [...variants.variants]
+      if (variants.primary && !texts.includes(variants.primary)) {
+        texts.unshift(variants.primary)
+      }
+
+      const sparse =
+        variants.itemCount < SPARSE_ITEMS ||
+        variants.charCount < SPARSE_CHARS ||
+        texts.every((t) => t.trim().length < SPARSE_CHARS)
+
+      let usedOcr = false
+      if (forceOcr || sparse) {
+        setBusyLabel('OCR scanning page…')
+        try {
+          const canvas = await getPageCanvas()
+          if (canvas) {
+            const { ocrCanvasToText } = await import('../utils/pdfPageOcr')
+            const ocr = await ocrCanvasToText(canvas, (pct) => {
+              setBusyLabel(`OCR scanning page… ${pct}%`)
+            })
+            if (ocr.length >= 40) {
+              texts.push(ocr)
+              usedOcr = true
+            }
+          }
+        } catch {
+          // OCR is best-effort; keep text-layer variants
+        }
+      }
+
+      const preview =
+        texts.find((t) => t.trim().length >= 40)?.trim().slice(0, 900) ||
+        variants.primary.trim().slice(0, 900) ||
+        ''
+
+      return { texts, usedOcr, preview, sparse, itemCount: variants.itemCount }
+    },
+    [getPageCanvas, getPageVariants],
+  )
+
   const detectQuestions = useCallback(
     async (force = false) => {
       setError('')
       setInfo('')
+      setExtractPreview('')
       setBusy(true)
+      setBusyLabel('Reading page…')
       setPanel('review')
       try {
         const cached = force
@@ -99,11 +154,21 @@ export function PdfQuizHost({
           found = cached.payload as PdfDetectedQuestion[]
           setInfo('Loaded saved detect for this page.')
         } else {
-          const text = await getPageText()
-          const local = extractQuestionsFromPageText(text, page)
+          // Re-detect always includes OCR; first pass OCRs when text is sparse
+          let pack = await collectTexts(force)
+          let local = pickBestQuestionsFromTexts(pack.texts, page)
+          sols = pickBestSolutionsFromTexts(pack.texts, page)
+
+          if (!local.questions.length && !pack.usedOcr) {
+            pack = await collectTexts(true)
+            local = pickBestQuestionsFromTexts(pack.texts, page)
+            sols = pickBestSolutionsFromTexts(pack.texts, page)
+          }
+
           found = local.questions
           kind = local.pageKind
-          sols = extractSolutionsFromPageText(text, page)
+          setExtractPreview(pack.preview)
+
           await putPageExtract({
             id: pageExtractId(docId, page, 'questions'),
             docId,
@@ -139,7 +204,7 @@ export function PdfQuizHost({
             setInfo(
               `Detected ${found.length} question(s)${
                 keyed ? ` · ${keyed} with answer key` : ''
-              } from page text.`,
+              }${pack.usedOcr ? ' · OCR' : ' · page text'}.`,
             )
           }
         }
@@ -147,7 +212,7 @@ export function PdfQuizHost({
         setPageKind(kind)
         if (!found.length) {
           setError(
-            'No MCQs found in page text. Multi-column pages need selectable text — try Re-detect, or Map solutions on the answer strip.',
+            'No MCQs found. Re-detect runs OCR on the page image — or Map solutions if this is an answer key.',
           )
         } else {
           let next = mergeQuestionsIntoStore(storeRef.current, found)
@@ -162,16 +227,22 @@ export function PdfQuizHost({
         setBusy(false)
       }
     },
-    [docId, getPageText, page, persistStore],
+    [collectTexts, docId, page, persistStore],
   )
 
   const detectSolutions = useCallback(async () => {
     setError('')
     setInfo('')
     setBusy(true)
+    setBusyLabel('Reading page…')
     try {
-      const text = await getPageText()
-      const found = extractSolutionsFromPageText(text, page)
+      let pack = await collectTexts(false)
+      let found = pickBestSolutionsFromTexts(pack.texts, page)
+      if (!found.length && !pack.usedOcr) {
+        pack = await collectTexts(true)
+        found = pickBestSolutionsFromTexts(pack.texts, page)
+      }
+      setExtractPreview(pack.preview)
       await putPageExtract({
         id: pageExtractId(docId, page, 'solutions'),
         docId,
@@ -188,7 +259,9 @@ export function PdfQuizHost({
       } else {
         await persistStore(mergeSolutionsIntoStore(storeRef.current, found))
         setPanel('solutions')
-        setInfo(`Mapped ${found.length} solution(s).`)
+        setInfo(
+          `Mapped ${found.length} solution(s)${pack.usedOcr ? ' · OCR' : ''}.`,
+        )
       }
       setOpen(true)
     } catch (e) {
@@ -197,7 +270,7 @@ export function PdfQuizHost({
     } finally {
       setBusy(false)
     }
-  }, [docId, getPageText, page, persistStore])
+  }, [collectTexts, docId, page, persistStore])
 
   const count = listStoreQuestions(store).length
   const pageCount = detectedQs.length
@@ -235,8 +308,10 @@ export function PdfQuizHost({
           detectedSolutions={detectedSols}
           pageKind={pageKind}
           busy={busy}
+          busyLabel={busyLabel}
           error={error}
           info={info}
+          extractPreview={extractPreview}
           forceSolutions={panel === 'solutions'}
           onClose={() => setOpen(false)}
           onStartDetect={() => void detectQuestions(true)}

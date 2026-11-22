@@ -7664,6 +7664,31 @@ html.pdf-reader-active .main {
   color: var(--muted, #4a5c56);
 }
 
+.pdf-quiz-extract {
+  margin: 0.65rem 0 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--line, #c5d0cb) 80%, transparent);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: color-mix(in srgb, var(--surface, #fff) 88%, #e8f0ec);
+}
+
+.pdf-quiz-extract summary {
+  cursor: pointer;
+  font-size: 0.84rem;
+  color: var(--muted, #4a5c56);
+}
+
+.pdf-quiz-extract pre {
+  margin: 0.45rem 0 0;
+  max-height: 9rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: inherit;
+}
+
 .pdf-quiz-timers {
   display: flex;
   justify-content: space-between;

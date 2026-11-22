@@ -243,8 +243,9 @@ export function PdfStudyPage() {
       <section className="pdf-quiz-tip" aria-label="Auto test tip">
         <p className="lede">
           In the reader, tap <strong>Detect test</strong> on a question page to
-          pull MCQs (√, powers, brackets cleaned for BODMAS-style equations),
-          then start a timed test — or map answers on a solutions page.
+          pull MCQs via column reading order and OCR when text is sparse
+          (√, powers, brackets cleaned for BODMAS-style equations), then start a
+          timed test — or map answers on a solutions page.
         </p>
       </section>
 
