@@ -257,9 +257,9 @@ export function PdfStudyPage() {
           <h2>Auto test (Gemini)</h2>
         </header>
         <p className="lede">
-          Free Gemini vision key stays on this device. Open a PDF, tap{' '}
-          <strong>Detect test</strong> on a question page — or map answers when
-          you reach the solutions pages. Wrong key? Paste a new one anytime.
+          Detect works offline from PDF text when Gemini is busy. Optional
+          Gemini vision key helps on scanned pages. Open a PDF →{' '}
+          <strong>Detect test</strong> / <strong>Detect from page text</strong>.
         </p>
         {geminiSaved && geminiHint && (
           <p className="pdf-status muted">
