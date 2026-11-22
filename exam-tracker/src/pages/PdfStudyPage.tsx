@@ -58,7 +58,7 @@ export function PdfStudyPage() {
         <h2>Add PDF</h2>
         <p className="lede">
           Question papers, notes, mocks — open and mark them without leaving
-          ExamPulse.
+          ExamPulse. Up to ~200MB per file (stays on this device).
         </p>
         <label className="practice-file practice-file-bulk">
           Choose PDF file(s)

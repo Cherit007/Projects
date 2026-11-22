@@ -48,9 +48,10 @@ export function usePdfStudy() {
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       throw new Error('Please choose a PDF file')
     }
-    // Soft guard — keep browser storage healthy
-    if (file.size > 80 * 1024 * 1024) {
-      throw new Error('PDF is larger than 80MB — try a smaller file')
+    // Soft guard — IndexedDB can hold large files, but very big PDFs
+    // may be slow to open or get quota prompts in some browsers.
+    if (file.size > 200 * 1024 * 1024) {
+      throw new Error('PDF is larger than 200MB — compress it or split chapters')
     }
     const now = new Date().toISOString()
     const meta: PdfDocMeta = {
