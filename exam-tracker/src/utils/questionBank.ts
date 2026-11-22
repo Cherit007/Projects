@@ -20,7 +20,7 @@ export type BankQuestion = {
   /** Optional solution photo */
   solutionImageDataUrl?: string
   /** How the question entered the bank */
-  source?: 'photo' | 'ocr-screenshot' | 'pdf'
+  source?: 'photo' | 'ocr-screenshot' | 'pdf' | 'seed'
   difficulty?: 'easy' | 'medium' | 'hard'
   createdAt: string
   updatedAt: string

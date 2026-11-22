@@ -62,10 +62,13 @@ function defaultKey(q: PdfDetectedQuestion): AnswerKey {
 /**
  * Scan question screenshots (+ optional answer-key / solution shots).
  * English only — Hindi OCR noise is stripped by the shared parsers.
+ * Solutions are optional — pass `answerKeyByNumber` to map keys without solution text.
  */
 export async function importMcqsFromScreenshots(opts: {
   questionFiles: File[]
   solutionFiles?: File[]
+  /** Optional pre-known answer key by question number (solutions not required). */
+  answerKeyByNumber?: Partial<Record<number, AnswerKey>>
   onProgress?: (label: string) => void
 }): Promise<{ items: ImportedMcq[]; preview: string }> {
   const qFiles = opts.questionFiles.filter((f) => f.type.startsWith('image/'))
@@ -112,11 +115,14 @@ export async function importMcqsFromScreenshots(opts: {
   const pool =
     parsed.questions.length >= perFile.length ? parsed.questions : perFile
 
+  const keyMap = opts.answerKeyByNumber ?? {}
+
   const items: ImportedMcq[] = pool
     .filter((q) => Object.keys(q.options).length >= 2 && q.stem.length >= 20)
     .map((q, idx) => {
       const sol = solByNum.get(q.number)
-      const answerKey = sol?.answer ? sol.answer : defaultKey(q)
+      const fromMap = keyMap[q.number]
+      const answerKey = fromMap || (sol?.answer ? sol.answer : defaultKey(q))
       // Attach nearest screenshot (multi-Q page → first image; else by index)
       const imageDataUrl =
         qImages[Math.min(idx, qImages.length - 1)] || qImages[0]
@@ -127,7 +133,9 @@ export async function importMcqsFromScreenshots(opts: {
         answerKey,
         explanation: sol
           ? `Answer key: (${sol.answer.toLowerCase()})`
-          : undefined,
+          : fromMap
+            ? `Answer key: (${fromMap.toLowerCase()})`
+            : undefined,
         imageDataUrl,
         solutionImageDataUrl: solutionImage,
         confidence: q.confidence,

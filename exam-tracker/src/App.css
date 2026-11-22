@@ -5647,6 +5647,41 @@ strong {
   font-weight: 700;
 }
 
+.practice-q-thumb-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  background: linear-gradient(160deg, #1a3a4a, #0d2430);
+  color: #e8f4f8;
+  cursor: default;
+}
+
+.practice-q-thumb-text span {
+  position: static;
+  background: rgba(255, 255, 255, 0.15);
+  align-self: flex-start;
+}
+
+.practice-q-thumb-text em {
+  font-style: normal;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  opacity: 0.85;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.practice-q-stem-preview {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  opacity: 0.85;
+  margin: 0.25rem 0 0.4rem;
+}
+
 .practice-q-card p {
   margin: 0 0 0.35rem;
 }

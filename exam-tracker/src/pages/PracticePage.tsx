@@ -4,6 +4,13 @@ import { TOPICS } from '../data/topics'
 import type { TopicArea } from '../data/types'
 import { useQuestionBank } from '../hooks/useQuestionBank'
 import {
+  PERCENTAGE_ANSWER_KEY,
+  PERCENTAGE_CHAMPION_PACK,
+  PERCENTAGE_PACK_ID,
+  PERCENTAGE_PACK_TOPIC_ID,
+  STEM_ONLY_IMAGE,
+} from '../data/percentageChampionPack'
+import {
   ANSWER_KEYS,
   DEFAULT_PRACTICE_CONFIG,
   compressQuestionImage,
@@ -219,6 +226,10 @@ export function PracticePage() {
       const { items, preview } = await importMcqsFromScreenshots({
         questionFiles: Array.from(qFiles),
         solutionFiles: sFiles ? Array.from(sFiles) : [],
+        answerKeyByNumber:
+          topicId === PERCENTAGE_PACK_TOPIC_ID
+            ? PERCENTAGE_ANSWER_KEY
+            : undefined,
         onProgress: setOcrLabel,
       })
       setScanPreview(preview)
@@ -244,13 +255,61 @@ export function PracticePage() {
       setMsg(
         `Scanned & saved ${created.length} English question${
           created.length === 1 ? '' : 's'
-        } to ${selectedTopic?.title ?? 'topic'} (answers mapped from key when found).`,
+        } to ${selectedTopic?.title ?? 'topic'} (answers mapped from key when found; solutions optional).`,
       )
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Screenshot scan failed')
     } finally {
       setOcrBusy(false)
       setOcrLabel('')
+    }
+  }
+
+  const onLoadPercentagePack = async () => {
+    if (!topicId) {
+      setMsg('Pick a topic first.')
+      return
+    }
+    const target = topicId || PERCENTAGE_PACK_TOPIC_ID
+    const already = questions.filter(
+      (q) =>
+        q.topicId === target &&
+        (q.prompt?.startsWith('Pct Q') ||
+          q.prompt?.includes(PERCENTAGE_PACK_ID)),
+    )
+    if (already.length >= PERCENTAGE_CHAMPION_PACK.length) {
+      setMsg(
+        `Percentage pack already loaded (${already.length} questions). Delete them first to reload.`,
+      )
+      setTopicId(PERCENTAGE_PACK_TOPIC_ID)
+      return
+    }
+    setBusy(true)
+    setMsg('')
+    try {
+      setTopicId(PERCENTAGE_PACK_TOPIC_ID)
+      const created = await addQuestions(
+        PERCENTAGE_CHAMPION_PACK.map((it) => ({
+          topicId: PERCENTAGE_PACK_TOPIC_ID,
+          imageDataUrl: STEM_ONLY_IMAGE,
+          answerKey: it.answerKey,
+          stem: it.stem,
+          options: it.options,
+          source: 'seed' as const,
+          prompt: `Pct Q${it.number} · ${PERCENTAGE_PACK_ID}${
+            it.sourceTag ? ` · ${it.sourceTag}` : ''
+          }`,
+        })),
+      )
+      setTab('drill')
+      setMsg(
+        `Loaded ${created.length} Percentage questions (answer keys only — no solutions) into Percentage, Profit & Loss.`,
+      )
+      setQCount(Math.min(25, created.length + already.length))
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Could not load Percentage pack')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -364,12 +423,29 @@ export function PracticePage() {
 
       {tab === 'bank' ? (
         <>
+          <section className="practice-composer cardish" aria-label="Seed packs">
+            <h2>Percentage pack (Q1–53)</h2>
+            <p className="lede">
+              Load English SSC Percentage MCQs with answer keys into{' '}
+              <strong>Percentage, Profit &amp; Loss</strong>. Solutions are
+              skipped for now — drill scoring still works from the keys.
+            </p>
+            <button
+              type="button"
+              className="btn primary"
+              disabled={busy || ocrBusy}
+              onClick={() => void onLoadPercentagePack()}
+            >
+              {busy ? 'Loading…' : 'Load Percentage pack (53 Qs)'}
+            </button>
+          </section>
+
           <section className="practice-composer cardish" aria-label="Scan screenshots">
             <h2>Scan screenshots (English OCR)</h2>
             <p className="lede">
-              Upload question screenshots and optional answer-key / solution
-              screenshots. We OCR English only, store stems + options in the
-              bank, and map keys by question number.
+              Upload question screenshots. Answer-key / solution screenshots are
+              optional — for Percentage topic we also apply the built-in Q1–53
+              key map. English only; stems + options go to the bank.
             </p>
             <form
               className="practice-scan-form"
@@ -401,7 +477,7 @@ export function PracticePage() {
                 />
               </label>
               <label className="practice-file practice-file-bulk">
-                Answer key / solutions (optional)
+                Answer key screenshot (optional — solutions not required)
                 <input
                   name="sshots"
                   type="file"
@@ -568,44 +644,64 @@ export function PracticePage() {
               </p>
             ) : (
               <ul className="practice-q-list">
-                {topicQuestions.map((q, i) => (
-                  <li key={q.id} className="practice-q-card">
-                    <button
-                      type="button"
-                      className="practice-q-thumb"
-                      onClick={() =>
-                        window.open(
-                          q.imageDataUrl,
-                          '_blank',
-                          'noopener,noreferrer',
-                        )
-                      }
-                    >
-                      <img src={q.imageDataUrl} alt="" />
-                      <span>#{i + 1}</span>
-                    </button>
-                    <div>
-                      <p>
-                        Answer <strong>{q.answerKey}</strong>
-                        {q.prompt ? ` · ${q.prompt}` : ''}
-                      </p>
-                      <p className="practice-q-meta">
-                        Added {new Date(q.createdAt).toLocaleString()}
-                      </p>
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() => {
-                          if (confirm('Delete this question from the bank?')) {
-                            void removeQuestion(q.id)
+                {topicQuestions.map((q, i) => {
+                  const hasPhoto =
+                    Boolean(q.imageDataUrl) &&
+                    !q.imageDataUrl.startsWith('data:image/gif')
+                  return (
+                    <li key={q.id} className="practice-q-card">
+                      {hasPhoto ? (
+                        <button
+                          type="button"
+                          className="practice-q-thumb"
+                          onClick={() =>
+                            window.open(
+                              q.imageDataUrl,
+                              '_blank',
+                              'noopener,noreferrer',
+                            )
                           }
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                        >
+                          <img src={q.imageDataUrl} alt="" />
+                          <span>#{i + 1}</span>
+                        </button>
+                      ) : (
+                        <div className="practice-q-thumb practice-q-thumb-text">
+                          <span>#{i + 1}</span>
+                          <em>{q.stem?.slice(0, 48) || 'Text'}</em>
+                        </div>
+                      )}
+                      <div>
+                        <p>
+                          Answer <strong>{q.answerKey}</strong>
+                          {q.prompt ? ` · ${q.prompt}` : ''}
+                        </p>
+                        {q.stem ? (
+                          <p className="practice-q-stem-preview">
+                            {q.stem.slice(0, 140)}
+                            {q.stem.length > 140 ? '…' : ''}
+                          </p>
+                        ) : null}
+                        <p className="practice-q-meta">
+                          Added {new Date(q.createdAt).toLocaleString()}
+                        </p>
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => {
+                            if (
+                              confirm('Delete this question from the bank?')
+                            ) {
+                              void removeQuestion(q.id)
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </section>
