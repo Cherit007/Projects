@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import {
-  getGeminiApiKey,
+  clearGeminiApiKey,
+  geminiKeyHint,
   hasGeminiKey,
   setGeminiApiKey,
 } from '../lib/geminiVision'
@@ -46,9 +47,12 @@ export function PdfStudyPage() {
   const [tagFilter, setTagFilter] = useState<string>('all')
   const [onlyMarked, setOnlyMarked] = useState(false)
   const [uploadFolder, setUploadFolder] = useState<string>('Unfiled')
-  const [geminiDraft, setGeminiDraft] = useState(() => getGeminiApiKey())
+  const [geminiDraft, setGeminiDraft] = useState('')
   const [geminiSaved, setGeminiSaved] = useState(() => hasGeminiKey())
+  const [geminiHint, setGeminiHint] = useState(() => geminiKeyHint())
+  const [geminiNote, setGeminiNote] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const geminiInputRef = useRef<HTMLInputElement>(null)
 
   const allTags = useMemo(() => {
     const set = new Set<string>()
@@ -254,40 +258,71 @@ export function PdfStudyPage() {
         <p className="lede">
           Free Gemini vision key stays on this device. Open a PDF, tap{' '}
           <strong>Detect test</strong> on a question page — or map answers when
-          you reach the solutions pages.
+          you reach the solutions pages. Wrong key? Paste a new one anytime.
         </p>
+        {geminiSaved && geminiHint && (
+          <p className="pdf-status muted">
+            Current key on this device: <code>{geminiHint}</code>
+          </p>
+        )}
         <div className="pdf-bm-add pdf-gemini-row">
           <input
+            ref={geminiInputRef}
             type="password"
-            placeholder="AIza… Gemini API key"
+            placeholder={
+              geminiSaved
+                ? 'Paste a new key to replace…'
+                : 'AIza… Gemini API key'
+            }
             value={geminiDraft}
-            onChange={(e) => setGeminiDraft(e.target.value)}
+            onChange={(e) => {
+              setGeminiDraft(e.target.value)
+              setGeminiNote('')
+            }}
             autoComplete="off"
+            spellCheck={false}
           />
           <button
             type="button"
             className="btn primary"
             onClick={() => {
-              setGeminiApiKey(geminiDraft)
+              const next = geminiDraft.trim()
+              if (!next) {
+                setGeminiNote('Paste a key first, or use Clear.')
+                geminiInputRef.current?.focus()
+                return
+              }
+              setGeminiApiKey(next)
               setGeminiSaved(hasGeminiKey())
+              setGeminiHint(geminiKeyHint())
+              setGeminiDraft('')
+              setGeminiNote(
+                hasGeminiKey()
+                  ? 'Key updated — try Detect test in the reader.'
+                  : 'Key looks too short — paste the full AI Studio key.',
+              )
             }}
           >
-            Save key
+            {geminiSaved ? 'Replace key' : 'Save key'}
           </button>
           {geminiSaved && (
             <button
               type="button"
               className="ghost"
               onClick={() => {
-                setGeminiApiKey('')
+                clearGeminiApiKey()
                 setGeminiDraft('')
                 setGeminiSaved(false)
+                setGeminiHint('')
+                setGeminiNote('Key cleared — paste a new one below.')
+                geminiInputRef.current?.focus()
               }}
             >
               Clear
             </button>
           )}
         </div>
+        {geminiNote && <p className="pdf-status">{geminiNote}</p>}
         <p className={`pdf-status${geminiSaved ? ' muted' : ''}`}>
           {geminiSaved ? (
             'Key saved — ready for Detect test in the reader.'

@@ -56,6 +56,20 @@ export function PdfQuizOverlay({
   const [qStartedAt, setQStartedAt] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
   const [keyDraft, setKeyDraft] = useState('')
+  const [editKey, setEditKey] = useState(!hasKey)
+
+  useEffect(() => {
+    if (!hasKey) setEditKey(true)
+  }, [hasKey])
+
+  useEffect(() => {
+    if (
+      error &&
+      /api key|rejected|403|401|Gemini/i.test(error)
+    ) {
+      setEditKey(true)
+    }
+  }, [error])
 
   const all = listStoreQuestions(store)
   const pageQs = useMemo(
@@ -204,36 +218,61 @@ export function PdfQuizOverlay({
           </button>
         </header>
 
-        {!hasKey && mode === 'review' && (
+        {mode === 'review' && (editKey || !hasKey) && (
           <div className="pdf-quiz-keybox">
             <p>
-              Paste a free{' '}
-              <a
-                href="https://aistudio.google.com/apikey"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Gemini API key
-              </a>{' '}
-              (stays on this device) to auto-detect MCQs from the page image.
+              {hasKey
+                ? 'Wrong or expired key? Paste a new Gemini API key (stays on this device).'
+                : (
+                  <>
+                    Paste a free{' '}
+                    <a
+                      href="https://aistudio.google.com/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Gemini API key
+                    </a>{' '}
+                    (stays on this device) to auto-detect MCQs from the page
+                    image.
+                  </>
+                )}
             </p>
             <div className="pdf-bm-add">
               <input
                 type="password"
-                placeholder="AIza…"
+                placeholder="AIza… paste new key"
                 value={keyDraft}
                 onChange={(e) => setKeyDraft(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
               />
               <button
                 type="button"
                 className="pdf-side-btn primary"
                 onClick={() => {
-                  onSaveKey(keyDraft)
+                  if (!keyDraft.trim()) return
+                  onSaveKey(keyDraft.trim())
+                  setKeyDraft('')
+                  setEditKey(false)
                   onStartDetect()
                 }}
               >
                 Save & detect
               </button>
+              {hasKey && (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
+                    onSaveKey('')
+                    setKeyDraft('')
+                    setEditKey(true)
+                  }}
+                >
+                  Clear key
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -243,6 +282,20 @@ export function PdfQuizOverlay({
 
         {mode === 'review' && (
           <>
+            {hasKey && !editKey && (
+              <div className="pdf-quiz-actions">
+                <button
+                  type="button"
+                  className="pdf-doubt-btn"
+                  onClick={() => {
+                    setEditKey(true)
+                    setKeyDraft('')
+                  }}
+                >
+                  Change API key
+                </button>
+              </div>
+            )}
             {looksLikeSolutions && hasKey && (
               <div className="pdf-quiz-suggest">
                 <p>

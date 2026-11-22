@@ -17,7 +17,24 @@ export function getGeminiApiKey(): string {
 }
 
 export function setGeminiApiKey(key: string) {
-  localStorage.setItem(KEY_STORAGE, key.trim())
+  const trimmed = key.trim()
+  if (!trimmed) {
+    localStorage.removeItem(KEY_STORAGE)
+    return
+  }
+  localStorage.setItem(KEY_STORAGE, trimmed)
+}
+
+export function clearGeminiApiKey() {
+  localStorage.removeItem(KEY_STORAGE)
+}
+
+/** Mask for UI — never re-show the full stored key. */
+export function geminiKeyHint(): string {
+  const key = getGeminiApiKey()
+  if (!key) return ''
+  if (key.length <= 8) return '••••••••'
+  return `${key.slice(0, 4)}…${key.slice(-4)}`
 }
 
 export function getGeminiModel(): string {
@@ -85,9 +102,9 @@ export async function geminiJsonFromImage(opts: {
     if (res.status === 429) {
       throw new Error('Gemini free quota hit — try again later or use another key.')
     }
-    if (res.status === 400 || res.status === 403) {
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
       throw new Error(
-        'Gemini rejected the request — check the API key and that Vision is enabled.',
+        'Gemini rejected the API key — use Change API key / Replace key and paste a valid AI Studio key.',
       )
     }
     throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 180)}`)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  clearGeminiApiKey,
   hasGeminiKey,
   setGeminiApiKey,
 } from '../lib/geminiVision'
@@ -219,8 +220,15 @@ export function PdfQuizHost({
           onStartDetect={() => void detectQuestions(true)}
           onDetectSolutions={() => void detectSolutions()}
           onSaveKey={(key) => {
+            if (!key.trim()) {
+              clearGeminiApiKey()
+              setKeyReady(false)
+              setError('')
+              return
+            }
             setGeminiApiKey(key)
             setKeyReady(hasGeminiKey())
+            setError('')
           }}
         />
       )}
