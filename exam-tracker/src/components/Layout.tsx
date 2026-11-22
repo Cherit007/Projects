@@ -11,12 +11,12 @@ import { WeeklyDigestHost } from './WeeklyDigestHost'
 const PRIMARY = [
   { to: '/', end: true, label: 'Home', short: 'Home' },
   { to: '/topics', end: false, label: 'Topics', short: 'Topics' },
+  { to: '/pdf', end: false, label: 'PDF', short: 'PDF' },
   { to: '/practice', end: false, label: 'Practice', short: 'Drill' },
   { to: '/youtube', end: false, label: 'YouTube', short: 'Watch' },
 ] as const
 
 const MORE = [
-  { to: '/pdf', label: 'PDF desk' },
   { to: '/prep', label: 'Prep lab' },
   { to: '/roadmap', label: 'Roadmap' },
   { to: '/compare', label: 'Compare' },
@@ -26,6 +26,7 @@ const MORE = [
 const BOTTOM = [
   { to: '/', end: true, label: 'Home', icon: 'home' },
   { to: '/topics', end: false, label: 'Topics', icon: 'topics' },
+  { to: '/pdf', end: false, label: 'PDF', icon: 'pdf' },
   { to: '/practice', end: false, label: 'Drill', icon: 'prep' },
   { to: '/youtube', end: false, label: 'Watch', icon: 'watch' },
 ] as const
@@ -67,6 +68,14 @@ function NavIcon({ name }: { name: (typeof BOTTOM)[number]['icon'] }) {
       return (
         <svg {...common}>
           <path d="M8 4h8a2 2 0 0 1 2 2v14l-6-3-6 3V6a2 2 0 0 1 2-2Z" />
+        </svg>
+      )
+    case 'pdf':
+      return (
+        <svg {...common}>
+          <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+          <path d="M14 3v5h5" />
+          <path d="M9 13h6M9 17h4" />
         </svg>
       )
   }

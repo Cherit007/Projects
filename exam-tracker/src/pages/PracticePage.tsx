@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { TOPICS } from '../data/topics'
 import type { TopicArea } from '../data/types'
 import { useQuestionBank } from '../hooks/useQuestionBank'
@@ -40,6 +40,7 @@ type DraftItem = {
 
 export function PracticePage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const {
     ready,
     error,
@@ -54,6 +55,15 @@ export function PracticePage() {
 
   const [tab, setTab] = useState<Tab>('bank')
   const [topicId, setTopicId] = useState(TOPICS[0]?.id ?? '')
+
+  useEffect(() => {
+    const fromQuery = searchParams.get('topic')
+    if (!fromQuery) return
+    if (TOPICS.some((t) => t.id === fromQuery)) {
+      setTopicId(fromQuery)
+      setTab('drill')
+    }
+  }, [searchParams])
   const [areaFilter, setAreaFilter] = useState<TopicArea | 'all'>('all')
   const [qCount, setQCount] = useState(DEFAULT_PRACTICE_CONFIG.questionCount)
   const [mins, setMins] = useState(
