@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import { useAuth } from '../auth/AuthContext'
 import { usePdfStudy } from '../hooks/usePdfStudy'
 import {
   PDF_HIGHLIGHT_COLORS,
@@ -21,11 +22,19 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString()
 
 type ReaderState = 'loading' | 'ready' | 'missing' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'cloud' | 'error'
 
 export function PdfReaderPage() {
   const { docId = '' } = useParams()
   const navigate = useNavigate()
-  const { loadReader, persistInk, persistBookmarks, touchMeta } = usePdfStudy()
+  const { user } = useAuth()
+  const {
+    loadReader,
+    persistInk,
+    persistBookmarks,
+    touchMeta,
+    backupToCloud,
+  } = usePdfStudy(user?.uid)
 
   const [state, setState] = useState<ReaderState>('loading')
   const [error, setError] = useState('')
@@ -41,17 +50,32 @@ export function PdfReaderPage() {
   const [bookmarks, setBookmarks] = useState<PdfBookmark[]>([])
   const [undoStack, setUndoStack] = useState<PdfStroke[][]>([])
   const [bookmarkName, setBookmarkName] = useState('')
-  const [sidebar, setSidebar] = useState(true)
+  const [sidebar, setSidebar] = useState(false)
   const [drawing, setDrawing] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
 
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null)
   const inkCanvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const strokesRef = useRef<PdfStroke[]>([])
+  const bookmarksRef = useRef<PdfBookmark[]>([])
+  const metaRef = useRef<PdfDocMeta | null>(null)
+  const pageRef = useRef(1)
+  const zoomRef = useRef(1.15)
+  const pageCountRef = useRef(1)
   const currentStrokeRef = useRef<PdfStroke | null>(null)
   const saveTimer = useRef<number | null>(null)
+  const cloudTimer = useRef<number | null>(null)
+  const dirtyRef = useRef(false)
+  const readyRef = useRef(false)
 
   strokesRef.current = strokes
+  bookmarksRef.current = bookmarks
+  metaRef.current = meta
+  pageRef.current = page
+  zoomRef.current = zoom
+  pageCountRef.current = pageCount
+  readyRef.current = state === 'ready'
 
   useEffect(() => {
     document.documentElement.classList.add('pdf-reader-active')
@@ -83,15 +107,13 @@ export function PdfReaderPage() {
         setPdf(doc)
         setPageCount(doc.numPages)
         setPage(
-          Math.min(
-            Math.max(1, bundle.meta.lastPage || 1),
-            doc.numPages,
-          ),
+          Math.min(Math.max(1, bundle.meta.lastPage || 1), doc.numPages),
         )
         setZoom(bundle.meta.zoom || 1.15)
         setStrokes(bundle.strokes)
         setBookmarks(bundle.bookmarks)
         setState('ready')
+        setSaveStatus('saved')
         if (bundle.meta.pageCount !== doc.numPages) {
           void touchMeta({
             ...bundle.meta,
@@ -111,16 +133,101 @@ export function PdfReaderPage() {
     }
   }, [docId, loadReader, touchMeta])
 
+  const flushLocal = useCallback(async () => {
+    if (!docId || !metaRef.current || !readyRef.current) return
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    setSaveStatus('saving')
+    try {
+      await persistInk(docId, strokesRef.current)
+      await persistBookmarks(docId, bookmarksRef.current)
+      const nextMeta: PdfDocMeta = {
+        ...metaRef.current,
+        lastPage: pageRef.current,
+        zoom: zoomRef.current,
+        pageCount: pageCountRef.current,
+        updatedAt: new Date().toISOString(),
+      }
+      await touchMeta(nextMeta)
+      setMeta(nextMeta)
+      dirtyRef.current = false
+      setSaveStatus('saved')
+    } catch (e) {
+      console.warn(e)
+      setSaveStatus('error')
+    }
+  }, [docId, persistInk, persistBookmarks, touchMeta])
+
+  const queueCloudBackup = useCallback(() => {
+    if (!docId || !user) return
+    if (cloudTimer.current) window.clearTimeout(cloudTimer.current)
+    cloudTimer.current = window.setTimeout(() => {
+      void (async () => {
+        const result = await backupToCloud(
+          docId,
+          strokesRef.current,
+          bookmarksRef.current,
+        )
+        if (result === 'ok') setSaveStatus('cloud')
+        else if (result === 'error') setSaveStatus('error')
+      })()
+    }, 1800)
+  }, [backupToCloud, docId, user])
+
   const queueInkSave = useCallback(
     (next: PdfStroke[]) => {
       if (!docId) return
+      dirtyRef.current = true
+      setSaveStatus('saving')
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => {
-        void persistInk(docId, next)
-      }, 400)
+        void (async () => {
+          try {
+            await persistInk(docId, next)
+            dirtyRef.current = false
+            setSaveStatus('saved')
+            queueCloudBackup()
+          } catch (e) {
+            console.warn(e)
+            setSaveStatus('error')
+          }
+        })()
+      }, 350)
     },
-    [docId, persistInk],
+    [docId, persistInk, queueCloudBackup],
   )
+
+  // Flush on leave / hide so revisit always sees latest marks
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden' || dirtyRef.current) {
+        void flushLocal()
+        if (user && docId) {
+          void backupToCloud(
+            docId,
+            strokesRef.current,
+            bookmarksRef.current,
+          )
+        }
+      }
+    }
+    const onPageHide = () => {
+      void flushLocal()
+    }
+    window.addEventListener('pagehide', onPageHide)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', onPageHide)
+      document.removeEventListener('visibilitychange', onHide)
+      void flushLocal()
+      if (cloudTimer.current) window.clearTimeout(cloudTimer.current)
+      if (user && docId) {
+        void backupToCloud(docId, strokesRef.current, bookmarksRef.current)
+      }
+    }
+  }, [backupToCloud, docId, flushLocal, user])
 
   const paintInk = useCallback(() => {
     const canvas = inkCanvasRef.current
@@ -139,7 +246,6 @@ export function PdfReaderPage() {
     }
   }, [page])
 
-  // Render PDF page + size ink canvas
   useEffect(() => {
     if (!pdf || state !== 'ready') return
     let cancelled = false
@@ -178,7 +284,6 @@ export function PdfReaderPage() {
     paintInk()
   }, [strokes, paintInk])
 
-  // Persist last page / zoom
   useEffect(() => {
     if (!meta || state !== 'ready') return
     const t = window.setTimeout(() => {
@@ -264,9 +369,7 @@ export function PdfReaderPage() {
 
   const addBookmark = async () => {
     const name =
-      bookmarkName.trim() ||
-      prompt('Bookmark name', `Page ${page}`) ||
-      ''
+      bookmarkName.trim() || prompt('Bookmark name', `Page ${page}`) || ''
     if (!name.trim() || !docId) return
     const bm: PdfBookmark = {
       id: newPdfId('bm'),
@@ -279,7 +382,14 @@ export function PdfReaderPage() {
     )
     setBookmarks(next)
     setBookmarkName('')
-    await persistBookmarks(docId, next)
+    setSaveStatus('saving')
+    try {
+      await persistBookmarks(docId, next)
+      setSaveStatus('saved')
+      queueCloudBackup()
+    } catch {
+      setSaveStatus('error')
+    }
   }
 
   const removeBookmark = async (id: string) => {
@@ -287,6 +397,7 @@ export function PdfReaderPage() {
     const next = bookmarks.filter((b) => b.id !== id)
     setBookmarks(next)
     await persistBookmarks(docId, next)
+    queueCloudBackup()
   }
 
   const renameBookmark = async (id: string) => {
@@ -299,6 +410,15 @@ export function PdfReaderPage() {
     )
     setBookmarks(next)
     await persistBookmarks(docId, next)
+    queueCloudBackup()
+  }
+
+  const goLibrary = async () => {
+    await flushLocal()
+    if (user && docId) {
+      void backupToCloud(docId, strokesRef.current, bookmarksRef.current)
+    }
+    navigate('/pdf')
   }
 
   const pageInkCount = useMemo(
@@ -306,10 +426,21 @@ export function PdfReaderPage() {
     [strokes, page],
   )
 
+  const saveLabel =
+    saveStatus === 'saving'
+      ? 'Saving…'
+      : saveStatus === 'cloud'
+        ? 'Saved · cloud'
+        : saveStatus === 'error'
+          ? 'Save failed'
+          : saveStatus === 'saved'
+            ? 'Saved'
+            : ''
+
   if (state === 'loading') {
     return (
       <div className="pdf-reader">
-        <p className="lede">Opening PDF…</p>
+        <p className="lede pdf-reader-msg">Opening PDF…</p>
       </div>
     )
   }
@@ -317,7 +448,9 @@ export function PdfReaderPage() {
   if (state === 'missing' || state === 'error') {
     return (
       <div className="pdf-reader">
-        <p className="lede">{error || 'PDF not found on this device.'}</p>
+        <p className="lede pdf-reader-msg">
+          {error || 'PDF not found — it may not be on this device yet.'}
+        </p>
         <Link className="btn primary" to="/pdf">
           Back to PDF desk
         </Link>
@@ -329,23 +462,29 @@ export function PdfReaderPage() {
     <div className="pdf-reader">
       <header className="pdf-toolbar">
         <div className="pdf-toolbar-left">
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => navigate('/pdf')}
-          >
+          <button type="button" className="ghost" onClick={() => void goLibrary()}>
             Library
           </button>
-          <strong className="pdf-title">{meta?.name}</strong>
+          <strong className="pdf-title" title={meta?.name}>
+            {meta?.name}
+          </strong>
+          {saveLabel && (
+            <span
+              className={`pdf-save-pill${saveStatus === 'error' ? ' err' : ''}`}
+              aria-live="polite"
+            >
+              {saveLabel}
+            </span>
+          )}
         </div>
 
         <div className="pdf-toolbar-center" role="group" aria-label="Tools">
           {(
             [
               ['pen', 'Pen'],
-              ['highlighter', 'Highlight'],
-              ['eraser', 'Eraser'],
-              ['hand', 'Hand'],
+              ['highlighter', 'Mark'],
+              ['eraser', 'Erase'],
+              ['hand', 'Pan'],
             ] as Array<[PdfTool, string]>
           ).map(([t, label]) => (
             <button
@@ -360,8 +499,8 @@ export function PdfReaderPage() {
           <button type="button" onClick={undo} disabled={!undoStack.length}>
             Undo
           </button>
-          <button type="button" onClick={clearPageInk}>
-            Clear page
+          <button type="button" onClick={clearPageInk} disabled={!pageInkCount}>
+            Clear
           </button>
         </div>
 
@@ -369,6 +508,7 @@ export function PdfReaderPage() {
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.15).toFixed(2)))}
+            aria-label="Zoom out"
           >
             −
           </button>
@@ -376,45 +516,40 @@ export function PdfReaderPage() {
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(2.8, +(z + 0.15).toFixed(2)))}
+            aria-label="Zoom in"
           >
             +
-          </button>
-          <button type="button" onClick={() => setZoom(1.15)}>
-            Fit
           </button>
           <button
             type="button"
             className={sidebar ? 'active' : ''}
             onClick={() => setSidebar((s) => !s)}
           >
-            Bookmarks
+            Marks
           </button>
         </div>
       </header>
 
       <div className="pdf-subbar">
         <div className="pdf-colors" aria-label="Colors">
-          {tool === 'highlighter'
-            ? PDF_HIGHLIGHT_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`pdf-swatch${hiColor === c ? ' active' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setHiColor(c)}
-                  aria-label="Highlight color"
-                />
-              ))
-            : PDF_PEN_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`pdf-swatch${penColor === c ? ' active' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setPenColor(c)}
-                  aria-label="Pen color"
-                />
-              ))}
+          {(tool === 'highlighter' ? PDF_HIGHLIGHT_COLORS : PDF_PEN_COLORS).map(
+            (c) => (
+              <button
+                key={c}
+                type="button"
+                className={`pdf-swatch${
+                  (tool === 'highlighter' ? hiColor : penColor) === c
+                    ? ' active'
+                    : ''
+                }`}
+                style={{ background: c }}
+                onClick={() =>
+                  tool === 'highlighter' ? setHiColor(c) : setPenColor(c)
+                }
+                aria-label="Color"
+              />
+            ),
+          )}
         </div>
         <div className="pdf-pager">
           <button
@@ -425,7 +560,7 @@ export function PdfReaderPage() {
             Prev
           </button>
           <label>
-            Page
+            <span className="sr-only">Page</span>
             <input
               type="number"
               min={1}
@@ -436,7 +571,7 @@ export function PdfReaderPage() {
                 setPage(Math.min(pageCount, Math.max(1, n)))
               }}
             />
-            / {pageCount}
+            <span>/ {pageCount}</span>
           </label>
           <button
             type="button"
@@ -445,7 +580,6 @@ export function PdfReaderPage() {
           >
             Next
           </button>
-          <span className="pdf-ink-count">{pageInkCount} marks on page</span>
         </div>
       </div>
 
@@ -470,7 +604,7 @@ export function PdfReaderPage() {
             <div className="pdf-bm-add">
               <input
                 type="text"
-                placeholder={`Name for page ${page}`}
+                placeholder={`Page ${page}`}
                 value={bookmarkName}
                 maxLength={80}
                 onChange={(e) => setBookmarkName(e.target.value)}
@@ -478,15 +612,16 @@ export function PdfReaderPage() {
                   if (e.key === 'Enter') void addBookmark()
                 }}
               />
-              <button type="button" className="btn primary" onClick={() => void addBookmark()}>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => void addBookmark()}
+              >
                 Add
               </button>
             </div>
-            <p className="pdf-bm-hint">
-              Jump points for tough questions, formulas, or “come back later”.
-            </p>
             {bookmarks.length === 0 ? (
-              <p className="lede">No bookmarks yet.</p>
+              <p className="pdf-empty-side">No bookmarks yet.</p>
             ) : (
               <ul className="pdf-bm-list">
                 {bookmarks.map((b) => (
@@ -500,10 +635,18 @@ export function PdfReaderPage() {
                       <span>p. {b.page}</span>
                     </button>
                     <div className="pdf-bm-actions">
-                      <button type="button" className="ghost" onClick={() => void renameBookmark(b.id)}>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => void renameBookmark(b.id)}
+                      >
                         Rename
                       </button>
-                      <button type="button" className="ghost" onClick={() => void removeBookmark(b.id)}>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => void removeBookmark(b.id)}
+                      >
                         Delete
                       </button>
                     </div>
@@ -511,15 +654,6 @@ export function PdfReaderPage() {
                 ))}
               </ul>
             )}
-            <div className="pdf-study-tips">
-              <h3>Study tips</h3>
-              <ul>
-                <li>Pen for working / circling options</li>
-                <li>Highlight for final answers or key lines</li>
-                <li>Bookmark “Doubts”, “Revise”, “Formula”</li>
-                <li>Everything autosaves on this device</li>
-              </ul>
-            </div>
           </aside>
         )}
       </div>
