@@ -92,8 +92,9 @@ export function PdfQuizHost({
         const cached = force
           ? null
           : await getPageExtract(docId, page, 'questions')
-        let found: PdfDetectedQuestion[]
+        let found: PdfDetectedQuestion[] = []
         let kind: PdfPageKind = 'questions'
+        let sols: PdfDetectedSolution[] = []
         if (cached && Array.isArray(cached.payload) && cached.payload.length) {
           found = cached.payload as PdfDetectedQuestion[]
           setInfo('Loaded saved detect for this page.')
@@ -102,6 +103,7 @@ export function PdfQuizHost({
           const local = extractQuestionsFromPageText(text, page)
           found = local.questions
           kind = local.pageKind
+          sols = extractSolutionsFromPageText(text, page)
           await putPageExtract({
             id: pageExtractId(docId, page, 'questions'),
             docId,
@@ -110,41 +112,47 @@ export function PdfQuizHost({
             payload: found,
             extractedAt: new Date().toISOString(),
           })
-          if (found.length) {
-            setInfo(`Detected ${found.length} question(s) from page text.`)
+          if (sols.length) {
+            setDetectedSols(sols)
+            await putPageExtract({
+              id: pageExtractId(docId, page, 'solutions'),
+              docId,
+              page,
+              kind: 'solutions',
+              payload: sols,
+              extractedAt: new Date().toISOString(),
+            })
           }
-          if (kind === 'solutions' && !found.length) {
-            const sols = extractSolutionsFromPageText(text, page)
-            if (sols.length) {
-              setDetectedSols(sols)
-              await putPageExtract({
-                id: pageExtractId(docId, page, 'solutions'),
-                docId,
-                page,
-                kind: 'solutions',
-                payload: sols,
-                extractedAt: new Date().toISOString(),
-              })
-              await persistStore(
-                mergeSolutionsIntoStore(storeRef.current, sols),
-              )
-              setPanel('solutions')
-              setPageKind('solutions')
-              setInfo(`Mapped ${sols.length} solution(s) from this page.`)
-              setDetectedQs([])
-              setOpen(true)
-              return
-            }
+
+          if (kind === 'solutions' && !found.length && sols.length) {
+            await persistStore(mergeSolutionsIntoStore(storeRef.current, sols))
+            setPanel('solutions')
+            setPageKind('solutions')
+            setInfo(`Mapped ${sols.length} solution(s) from this page.`)
+            setDetectedQs([])
+            setOpen(true)
+            return
+          }
+
+          if (found.length) {
+            const keyed = found.filter((q) => q.guessedAnswer).length
+            setInfo(
+              `Detected ${found.length} question(s)${
+                keyed ? ` · ${keyed} with answer key` : ''
+              } from page text.`,
+            )
           }
         }
         setDetectedQs(found)
         setPageKind(kind)
         if (!found.length) {
           setError(
-            'No MCQs found in page text. Try a clearer question page, or Map solutions on an answer-key page.',
+            'No MCQs found in page text. Multi-column pages need selectable text — try Re-detect, or Map solutions on the answer strip.',
           )
         } else {
-          await persistStore(mergeQuestionsIntoStore(storeRef.current, found))
+          let next = mergeQuestionsIntoStore(storeRef.current, found)
+          if (sols.length) next = mergeSolutionsIntoStore(next, sols)
+          await persistStore(next)
         }
         setOpen(true)
       } catch (e) {

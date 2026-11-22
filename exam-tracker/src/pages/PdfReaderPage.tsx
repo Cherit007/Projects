@@ -830,27 +830,8 @@ export function PdfReaderPage() {
     try {
       const pg = await pdf.getPage(page)
       const tc = await pg.getTextContent()
-      // Join tightly around math punctuation so √ / ^ / () stay intact
-      const parts = tc.items.map((it) =>
-        'str' in it ? String(it.str) : '',
-      )
-      let out = ''
-      for (let i = 0; i < parts.length; i += 1) {
-        const cur = parts[i]
-        if (!cur) continue
-        if (!out) {
-          out = cur
-          continue
-        }
-        const prev = out[out.length - 1] || ''
-        const next = cur[0] || ''
-        const tight =
-          /[√∛^_(\[{\\/×÷+\-=]$/.test(prev) ||
-          /^[√∛^_)\]}\/×÷+\-=]/.test(next) ||
-          /\d$/.test(prev) && /^\d/.test(next)
-        out += tight ? cur : ` ${cur}`
-      }
-      return out
+      const { textContentToPageText } = await import('../utils/pdfPageText')
+      return textContentToPageText(tc as { items: unknown[] })
     } catch {
       return ''
     }
