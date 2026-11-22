@@ -5,6 +5,7 @@ import {
   clearGeminiApiKey,
   geminiKeyHint,
   hasGeminiKey,
+  sanitizeGeminiKey,
   setGeminiApiKey,
 } from '../lib/geminiVision'
 import { usePdfStudy } from '../hooks/usePdfStudy'
@@ -286,10 +287,16 @@ export function PdfStudyPage() {
             type="button"
             className="btn primary"
             onClick={() => {
-              const next = geminiDraft.trim()
+              const next = sanitizeGeminiKey(geminiDraft)
               if (!next) {
                 setGeminiNote('Paste a key first, or use Clear.')
                 geminiInputRef.current?.focus()
+                return
+              }
+              if (!next.startsWith('AIza') || next.length < 20) {
+                setGeminiNote(
+                  'That does not look like an AI Studio key (starts with AIza…). Use the copy icon next to the key.',
+                )
                 return
               }
               setGeminiApiKey(next)
