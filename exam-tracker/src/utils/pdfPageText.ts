@@ -93,65 +93,10 @@ function itemsToLines(items: PdfTextItem[]): string[] {
     .filter(Boolean)
 }
 
-function splitByBands(items: PdfTextItem[], colCount: number): PdfTextItem[][] {
-  if (colCount <= 1 || items.length < 8) return [items]
-  const minX = Math.min(...items.map((i) => i.x))
-  const maxX = Math.max(...items.map((i) => i.x + i.w))
-  const span = Math.max(1, maxX - minX)
-  const band = span / colCount
-  const cols: PdfTextItem[][] = Array.from({ length: colCount }, () => [])
-  for (const it of items) {
-    const cx = it.x + it.w * 0.35
-    let idx = Math.floor((cx - minX) / band)
-    if (idx < 0) idx = 0
-    if (idx >= colCount) idx = colCount - 1
-    cols[idx].push(it)
-  }
-  return cols.filter((c) => c.length >= 3)
-}
-
-function splitByGaps(items: PdfTextItem[]): PdfTextItem[][] {
-  if (!items.length) return []
-  const sorted = [...items].sort((a, b) => a.x - b.x || b.y - a.y)
-  const gaps: Array<{ i: number; gap: number }> = []
-  for (let i = 1; i < sorted.length; i += 1) {
-    gaps.push({
-      i,
-      gap: sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w),
-    })
-  }
-  const widths = sorted.map((it) => it.w).filter((w) => w > 0).sort((a, b) => a - b)
-  const medianW = widths[Math.floor(widths.length / 2)] || 8
-  const threshold = Math.max(22, medianW * 1.8)
-  const cuts = gaps
-    .filter((g) => g.gap >= threshold)
-    .sort((a, b) => b.gap - a.gap)
-    .slice(0, 3)
-    .map((g) => g.i)
-    .sort((a, b) => a - b)
-  if (!cuts.length) return [sorted]
-  const cols: PdfTextItem[][] = []
-  let start = 0
-  for (const cut of cuts) {
-    cols.push(sorted.slice(start, cut))
-    start = cut
-  }
-  cols.push(sorted.slice(start))
-  return cols.filter((c) => c.length)
-}
-
-function colsToText(cols: PdfTextItem[][]): string {
-  return cols
-    .map((col) => itemsToLines(col).join('\n'))
-    .filter(Boolean)
-    .join('\n\n')
-}
-
 function flatRowText(items: PdfTextItem[]): string {
   return itemsToLines(items).join('\n')
 }
 
-/** Drop real Devanagari glyphs (when the PDF encodes Hindi correctly). */
 function withoutDevanagari(items: PdfTextItem[]): PdfTextItem[] {
   return items.filter((it) => {
     const s = it.str.trim()
@@ -163,20 +108,18 @@ function withoutDevanagari(items: PdfTextItem[]): PdfTextItem[] {
 
 /**
  * Score how "English MCQ" a column looks.
- * Hindi columns in these books are often wrong-encoded Latin mojibake —
- * they score low on real English cue words.
+ * Hindi (Devanagari or Latin mojibake) scores low.
  */
-function englishMcqScore(text: string): number {
+export function englishMcqScore(text: string): number {
   if (!text || text.length < 20) return -100
   const cues = (
     text.match(
-      /\b(?:The|If|Find|What|How|Then|Their|Numbers?|LCM|HCF|Sum|Product|Difference|Between|Times|Digits?|Positive|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Which|Among|Equal|Ratio|Average)\b/g,
+      /\b(?:The|If|In|Find|What|How|Then|Their|Numbers?|LCM|HCF|Sum|Product|Difference|Between|Times|Digits?|Positive|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Which|Among|Equal|Ratio|Average|Given|When|After|While|Using|Division|Quotient|Divisor)\b/g,
     ) || []
   ).length
   const opts = (text.match(/\(\s*[a-dA-D]\s*\)/g) || []).length
   const qNums = (text.match(/(?:^|\n)\s*\d{1,2}\s*[.)]\s+/g) || []).length
   const dev = (text.match(/[\u0900-\u097F]/g) || []).length
-  // Mojibake Hindi often has many 1–3 letter "words"
   const tokens = text.split(/\s+/).filter(Boolean)
   const shortJunk = tokens.filter(
     (t) =>
@@ -194,34 +137,70 @@ function englishMcqScore(text: string): number {
   )
 }
 
-function leftRightSplit(items: PdfTextItem[]): {
-  left: PdfTextItem[]
-  right: PdfTextItem[]
-} {
-  if (items.length < 8) return { left: items, right: [] }
-  const xs = items.map((i) => i.x + i.w * 0.35).sort((a, b) => a - b)
-  const mid = xs[Math.floor(xs.length / 2)]
-  // Prefer a gap near the middle if one exists
-  const sorted = [...items].sort((a, b) => a.x - b.x)
-  let bestCut = mid
-  let bestGap = 0
+/** Split page into vertical columns using large X gaps. */
+function columnsByGaps(items: PdfTextItem[]): PdfTextItem[][] {
+  if (!items.length) return []
+  if (items.length < 8) return [items]
+  const sorted = [...items].sort((a, b) => a.x - b.x || b.y - a.y)
+  const widths = sorted.map((it) => it.w).filter((w) => w > 0).sort((a, b) => a - b)
+  const medianW = widths[Math.floor(widths.length / 2)] || 8
+  const minX = sorted[0].x
+  const maxX = Math.max(...sorted.map((i) => i.x + i.w))
+  const pageSpan = Math.max(1, maxX - minX)
+  const threshold = Math.max(18, medianW * 1.6, pageSpan * 0.04)
+
+  const gaps: Array<{ i: number; gap: number }> = []
   for (let i = 1; i < sorted.length; i += 1) {
     const gap = sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w)
-    const cutX = (sorted[i].x + sorted[i - 1].x + sorted[i - 1].w) / 2
-    const nearMid = Math.abs(cutX - mid) < (xs[xs.length - 1] - xs[0]) * 0.28
-    if (nearMid && gap > bestGap) {
-      bestGap = gap
-      bestCut = cutX
-    }
+    if (gap >= threshold) gaps.push({ i, gap })
   }
-  const left: PdfTextItem[] = []
-  const right: PdfTextItem[] = []
+  gaps.sort((a, b) => b.gap - a.gap)
+  const cuts = gaps
+    .slice(0, 4)
+    .map((g) => g.i)
+    .sort((a, b) => a - b)
+
+  if (!cuts.length) {
+    // Equal bands fallback (2 then 3)
+    return equalBands(items, 2)
+  }
+
+  const cols: PdfTextItem[][] = []
+  let start = 0
+  for (const cut of cuts) {
+    const slice = sorted.slice(start, cut)
+    if (slice.length >= 4) cols.push(slice)
+    start = cut
+  }
+  const last = sorted.slice(start)
+  if (last.length >= 4) cols.push(last)
+  return cols.length ? cols : [items]
+}
+
+function equalBands(items: PdfTextItem[], colCount: number): PdfTextItem[][] {
+  if (colCount <= 1 || items.length < 8) return [items]
+  const minX = Math.min(...items.map((i) => i.x))
+  const maxX = Math.max(...items.map((i) => i.x + i.w))
+  const span = Math.max(1, maxX - minX)
+  const band = span / colCount
+  const cols: PdfTextItem[][] = Array.from({ length: colCount }, () => [])
   for (const it of items) {
     const cx = it.x + it.w * 0.35
-    if (cx <= bestCut) left.push(it)
-    else right.push(it)
+    let idx = Math.floor((cx - minX) / band)
+    if (idx < 0) idx = 0
+    if (idx >= colCount) idx = colCount - 1
+    cols[idx].push(it)
   }
-  return { left, right }
+  return cols.filter((c) => c.length >= 4)
+}
+
+/** Leftmost fraction of the page (Champion English is almost always left). */
+function leftFraction(items: PdfTextItem[], frac: number): PdfTextItem[] {
+  if (!items.length) return []
+  const minX = Math.min(...items.map((i) => i.x))
+  const maxX = Math.max(...items.map((i) => i.x + i.w))
+  const cut = minX + Math.max(1, maxX - minX) * frac
+  return items.filter((it) => it.x + it.w * 0.35 <= cut)
 }
 
 export type PageTextVariants = {
@@ -231,7 +210,10 @@ export type PageTextVariants = {
   charCount: number
 }
 
-/** Build English-only reading variants — never keep the Hindi column. */
+/**
+ * Build English-only column variants.
+ * Never concatenates adjacent columns (that mixes Qs / Hindi bleed).
+ */
 export function textContentToVariants(textContent: {
   items: unknown[]
 }): PageTextVariants {
@@ -242,70 +224,36 @@ export function textContentToVariants(textContent: {
 
   const latin = withoutDevanagari(items)
   const base = latin.length >= 8 ? latin : items
-  const { left, right } = leftRightSplit(base)
-  const leftText = flatRowText(left)
-  const rightText = flatRowText(right)
-  const leftScore = englishMcqScore(leftText)
-  const rightScore = englishMcqScore(rightText)
 
-  // Champion LCM/HCF pages: English left, Hindi right (mojibake or Devanagari)
-  const englishCol =
-    leftScore >= rightScore ? left : right.length >= 8 ? right : left
-  const englishText = flatRowText(englishCol)
-
-  const variants: string[] = []
-  const push = (t: string) => {
-    const s = t.trim()
-    if (s.length >= 40 && !variants.includes(s)) variants.push(s)
+  const scoredCols: Array<{ t: string; s: number }> = []
+  const seen = new Set<string>()
+  const addCol = (colItems: PdfTextItem[]) => {
+    if (colItems.length < 4) return
+    const t = flatRowText(colItems).trim()
+    if (t.length < 40 || seen.has(t)) return
+    seen.add(t)
+    scoredCols.push({ t, s: englishMcqScore(t) })
   }
 
-  push(englishText)
-  push(colsToText(splitByBands(englishCol, 2)))
-  push(colsToText(splitByGaps(englishCol)))
-  // Also try pure left half (most Champion layouts)
-  if (left !== englishCol) push(leftText)
-  // 2-band of full latin page, then keep only the better-scoring band text
-  const bands2 = splitByBands(base, 2)
-  if (bands2.length >= 2) {
-    const scored = bands2
-      .map((col) => {
-        const t = flatRowText(col)
-        return { t, s: englishMcqScore(t) }
-      })
-      .sort((a, b) => b.s - a.s)
-    push(scored[0].t)
-  }
-  const bands3 = splitByBands(base, 3)
-  if (bands3.length >= 2) {
-    const scored = bands3
-      .map((col) => {
-        const t = flatRowText(col)
-        return { t, s: englishMcqScore(t) }
-      })
-      .sort((a, b) => b.s - a.s)
-    // Top-scoring band only (skip Hindi bands)
-    push(scored[0].t)
-    if (scored[1] && scored[1].s > 20 && scored[1].s > scored[0].s * 0.7) {
-      push(`${scored[0].t}\n\n${scored[1].t}`)
-    }
-  }
+  for (const col of columnsByGaps(base)) addCol(col)
+  for (const col of equalBands(base, 2)) addCol(col)
+  for (const col of equalBands(base, 3)) addCol(col)
+  addCol(leftFraction(base, 0.42))
+  addCol(leftFraction(base, 0.5))
+  addCol(leftFraction(base, 0.55))
 
-  const looksLikeMcq = (v: string) =>
-    /\d{1,2}\s*[.)]/.test(v) && /\(\s*[a-dA-D]\s*\)/.test(v)
+  scoredCols.sort((a, b) => b.s - a.s)
 
-  const primary =
-    [...variants].sort((a, b) => englishMcqScore(b) - englishMcqScore(a))[0] ||
-    variants.find(looksLikeMcq) ||
-    englishText ||
-    variants[0] ||
-    ''
+  // Keep only columns that look like English MCQs
+  const englishish = scoredCols.filter((c) => c.s > 0)
+  const pool = englishish.length ? englishish : scoredCols.slice(0, 2)
 
-  // Deduped list with primary first
-  const ordered = [primary, ...variants.filter((v) => v !== primary)]
+  const variants = pool.map((c) => c.t)
+  const primary = pool[0]?.t || flatRowText(leftFraction(base, 0.5)) || ''
 
   return {
     primary,
-    variants: ordered.filter(Boolean),
+    variants: variants.length ? variants : primary ? [primary] : [],
     itemCount: items.length,
     charCount: primary.length,
   }
@@ -316,5 +264,3 @@ export function textContentToPageText(textContent: {
 }): string {
   return textContentToVariants(textContent).primary
 }
-
-export { englishMcqScore }

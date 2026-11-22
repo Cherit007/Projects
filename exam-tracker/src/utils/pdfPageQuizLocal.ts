@@ -161,7 +161,12 @@ export function splitBilingualStem(raw: string): {
   }
 
   // Cut stem if a later question number leaked in
-  const leak = stem.search(/\s\d{1,2}\s*[.)]\s+(?:The|If|Find|What|How|LCM|HCF|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten)\b/i)
+  const leak = stem.search(
+    new RegExp(
+      `\\s\\d{1,2}\\s*[.)]\\s+(?:${STEM_OPEN})\\b`,
+      'i',
+    ),
+  )
   if (leak > 24) stem = stem.slice(0, leak).trim()
 
   stem = stripMojibakeJunk(stem)
@@ -240,6 +245,10 @@ function findOptionHits(
   return optHits.sort((a, b) => a.at - b.at)
 }
 
+/** Openers for SSC/banking stems — must include "In finding…". */
+const STEM_OPEN =
+  '(?:The|If|In|Find|What|How|When|Given|Among|Which|For|After|While|Using|A|An|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|LCM|HCF|SSC|Sum|Product|Difference|Ratio|Average)'
+
 function collectQuestionStarts(questionRegion: string) {
   const starts: Array<{ index: number; number: number }> = []
   const seenAt = new Set<number>()
@@ -250,21 +259,24 @@ function collectQuestionStarts(questionRegion: string) {
     starts.push({ index: idx, number })
   }
 
-  const qSplit =
-    /(?:^|\n)\s*(?:Q(?:ues(?:tion)?)?[\s.]*)?(\d{1,3})\s*[.)]\s+(?=[A-Za-z(\u0900-\u097F]|SSC|The|If|Find|What|How|LCM|HCF|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|\()/gi
+  const qSplit = new RegExp(
+    `(?:^|\\n)\\s*(?:Q(?:ues(?:tion)?)?[\\s.]*)?(\\d{1,3})\\s*[.)]\\s+(?=[A-Za-z(\\u0900-\\u097F]|${STEM_OPEN}|\\()`,
+    'gi',
+  )
   let m: RegExpExecArray | null
   while ((m = qSplit.exec(questionRegion)) != null) {
     const idx = m.index + (m[0].startsWith('\n') ? 1 : 0)
     push(idx, Number(m[1]))
   }
 
-  // Also catch mid-line numbered stems after column join (English cue words)
-  const mid =
-    /(?:^|[\n\s])(?:Q(?:ues(?:tion)?)?[\s.]*)?(\d{1,2})\s*[.)]\s+(?=The|If|Find|What|How|LCM|HCF|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten)\b/gi
+  // Mid-line after options / column join
+  const mid = new RegExp(
+    `(?:^|[\\n\\s])(?:Q(?:ues(?:tion)?)?[\\s.]*)?(\\d{1,2})\\s*[.)]\\s+(?=${STEM_OPEN})\\b`,
+    'gi',
+  )
   while ((m = mid.exec(questionRegion)) != null) {
     const prev = questionRegion.slice(Math.max(0, m.index - 12), m.index)
     if (/[A-Za-z0-9]\s*$/.test(prev) && !/(?:^|\n)\s*$/.test(prev)) {
-      // allow after option close: ") 5. The"
       if (!/[)\]]\s*$/.test(prev)) continue
     }
     push(m.index + (m[0].match(/^\s/) ? 1 : 0), Number(m[1]))
