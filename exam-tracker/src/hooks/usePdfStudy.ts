@@ -7,20 +7,26 @@ import {
   syncPdfsFromCloud,
 } from '../lib/pdfCloud'
 import {
+  defaultLayers,
   newPdfId,
+  normalizeMeta,
   type PdfBookmark,
   type PdfDocMeta,
+  type PdfStickyNote,
   type PdfStroke,
 } from '../utils/pdfStudy'
+import { makePdfCover } from '../utils/pdfThumb'
 import {
   deletePdfDoc,
   getPdfBlob,
   getPdfBookmarks,
   getPdfInk,
+  getPdfNotes,
   listPdfDocs,
   putPdfDoc,
   savePdfBookmarks,
   savePdfInk,
+  savePdfNotes,
   updatePdfMeta,
 } from '../utils/pdfStudyDb'
 
@@ -35,7 +41,6 @@ async function requestPersistentStorage() {
 }
 
 type UsePdfStudyOpts = {
-  /** Pull remote PDFs into IndexedDB (library page only). */
   syncOnMount?: boolean
 }
 
@@ -88,7 +93,7 @@ export function usePdfStudy(
   }, [refresh, uid, syncOnMount])
 
   const addPdf = useCallback(
-    async (file: File) => {
+    async (file: File, extras?: { folder?: string; tags?: string[] }) => {
       if (
         file.type !== 'application/pdf' &&
         !file.name.toLowerCase().endsWith('.pdf')
@@ -102,18 +107,24 @@ export function usePdfStudy(
       }
       await requestPersistentStorage()
       const now = new Date().toISOString()
-      const meta: PdfDocMeta = {
+      const layers = defaultLayers(now)
+      let meta: PdfDocMeta = normalizeMeta({
         id: newPdfId('pdf'),
         name: file.name.replace(/\.pdf$/i, '') || 'Untitled PDF',
         sizeBytes: file.size,
         pageCount: null,
         lastPage: 1,
         zoom: 1.1,
+        folder: extras?.folder || 'Unfiled',
+        tags: extras?.tags || [],
+        layers,
+        activeLayerId: layers[0].id,
         createdAt: now,
         updatedAt: now,
-      }
-      await putPdfDoc(meta, file, [], [])
-      // Verify round-trip so revisit won't hit a missing blob
+      })
+      const cover = await makePdfCover(file)
+      if (cover) meta = { ...meta, coverDataUrl: cover }
+      await putPdfDoc(meta, file, [], [], [])
       const check = await getPdfBlob(meta.id)
       if (!check || check.size !== file.size) {
         throw new Error('Could not verify PDF save — try again')
@@ -122,7 +133,7 @@ export function usePdfStudy(
 
       if (uid) {
         try {
-          await pushPdfToCloud(uid, meta, file, [], [])
+          await pushPdfToCloud(uid, meta, file, [], [], [])
           setCloudNote('Uploaded to your cloud library')
         } catch (e) {
           console.warn(e)
@@ -142,9 +153,7 @@ export function usePdfStudy(
     async (id: string) => {
       await deletePdfDoc(id)
       setDocs((prev) => prev.filter((d) => d.id !== id))
-      if (uid) {
-        void deletePdfFromCloud(uid, id)
-      }
+      if (uid) void deletePdfFromCloud(uid, id)
     },
     [uid],
   )
@@ -155,17 +164,18 @@ export function usePdfStudy(
       if (!cleaned) return
       const current = docs.find((d) => d.id === id)
       if (!current) return
-      const next = {
+      const next = normalizeMeta({
         ...current,
         name: cleaned,
         updatedAt: new Date().toISOString(),
-      }
+      })
       await updatePdfMeta(next)
       setDocs((prev) => prev.map((d) => (d.id === id ? next : d)))
       if (uid) {
         const strokes = await getPdfInk(id)
         const bookmarks = await getPdfBookmarks(id)
-        void pushPdfMarksToCloud(uid, next, strokes, bookmarks).catch(
+        const notes = await getPdfNotes(id)
+        void pushPdfMarksToCloud(uid, next, strokes, bookmarks, notes).catch(
           console.warn,
         )
       }
@@ -173,37 +183,78 @@ export function usePdfStudy(
     [docs, uid],
   )
 
+  const patchDoc = useCallback(
+    async (id: string, patch: Partial<PdfDocMeta>) => {
+      const current = docs.find((d) => d.id === id)
+      if (!current) return
+      const next = normalizeMeta({
+        ...current,
+        ...patch,
+        id,
+        updatedAt: new Date().toISOString(),
+      })
+      await updatePdfMeta(next)
+      setDocs((prev) =>
+        prev
+          .map((d) => (d.id === id ? next : d))
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+      )
+      return next
+    },
+    [docs],
+  )
+
   const touchMeta = useCallback(async (patch: PdfDocMeta) => {
-    await updatePdfMeta(patch)
+    const next = normalizeMeta(patch)
+    await updatePdfMeta(next)
     setDocs((prev) => {
-      const i = prev.findIndex((d) => d.id === patch.id)
-      if (i < 0) return [patch, ...prev]
-      const next = [...prev]
-      next[i] = patch
-      return next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      const i = prev.findIndex((d) => d.id === next.id)
+      if (i < 0) return [next, ...prev]
+      const copy = [...prev]
+      copy[i] = next
+      return copy.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     })
   }, [])
 
-  const loadReader = useCallback(async (id: string) => {
-    let meta = (await listPdfDocs()).find((d) => d.id === id) ?? null
-    let blob = await getPdfBlob(id)
-    let strokes = await getPdfInk(id)
-    let bookmarks = await getPdfBookmarks(id)
+  const loadReader = useCallback(
+    async (id: string) => {
+      let meta = (await listPdfDocs()).find((d) => d.id === id) ?? null
+      let blob = await getPdfBlob(id)
+      let strokes = await getPdfInk(id)
+      let bookmarks = await getPdfBookmarks(id)
+      let notes = await getPdfNotes(id)
 
-    // If local blob missing but user signed in, try cloud
-    if ((!meta || !blob) && uid) {
-      const n = await syncPdfsFromCloud(uid)
-      if (n >= 0) {
+      if ((!meta || !blob) && uid) {
+        await syncPdfsFromCloud(uid)
         meta = (await listPdfDocs()).find((d) => d.id === id) ?? null
         blob = await getPdfBlob(id)
         strokes = await getPdfInk(id)
         bookmarks = await getPdfBookmarks(id)
+        notes = await getPdfNotes(id)
       }
-    }
 
-    if (!meta || !blob) return null
-    return { meta, blob, strokes, bookmarks }
-  }, [uid])
+      if (!meta || !blob) return null
+      if (!meta.coverDataUrl) {
+        const cover = await makePdfCover(blob)
+        if (cover) {
+          meta = normalizeMeta({
+            ...meta,
+            coverDataUrl: cover,
+            updatedAt: new Date().toISOString(),
+          })
+          await updatePdfMeta(meta)
+        }
+      }
+      return {
+        meta: normalizeMeta(meta),
+        blob,
+        strokes,
+        bookmarks,
+        notes,
+      }
+    },
+    [uid],
+  )
 
   const persistInk = useCallback(async (id: string, strokes: PdfStroke[]) => {
     await savePdfInk(id, strokes)
@@ -216,14 +267,22 @@ export function usePdfStudy(
     [],
   )
 
+  const persistNotes = useCallback(
+    async (id: string, notes: PdfStickyNote[]) => {
+      await savePdfNotes(id, notes)
+    },
+    [],
+  )
+
   const backupToCloud = useCallback(
     async (
       id: string,
       strokes: PdfStroke[],
       bookmarks: PdfBookmark[],
+      notes: PdfStickyNote[] = [],
     ): Promise<'ok' | 'skipped' | 'error' | 'signed-out'> => {
       if (!uid) return 'signed-out'
-      return ensurePdfCloudBackup(uid, id, strokes, bookmarks)
+      return ensurePdfCloudBackup(uid, id, strokes, bookmarks, notes)
     },
     [uid],
   )
@@ -237,10 +296,12 @@ export function usePdfStudy(
     addPdf,
     removePdf,
     renamePdf,
+    patchDoc,
     touchMeta,
     loadReader,
     persistInk,
     persistBookmarks,
+    persistNotes,
     backupToCloud,
   }
 }

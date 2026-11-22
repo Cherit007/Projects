@@ -1,15 +1,18 @@
 import type {
   PdfBookmark,
   PdfDocMeta,
+  PdfStickyNote,
   PdfStroke,
 } from './pdfStudy'
+import { normalizeMeta } from './pdfStudy'
 
 const DB_NAME = 'exampulse-pdf-study-v1'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const META = 'docs'
 const BLOBS = 'blobs'
 const INK = 'ink'
 const MARKS = 'bookmarks'
+const NOTES = 'notes'
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -20,13 +23,16 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(META, { keyPath: 'id' })
       }
       if (!db.objectStoreNames.contains(BLOBS)) {
-        db.createObjectStore(BLOBS) // key = docId, value = Blob
+        db.createObjectStore(BLOBS)
       }
       if (!db.objectStoreNames.contains(INK)) {
-        db.createObjectStore(INK) // key = docId, value = PdfStroke[]
+        db.createObjectStore(INK)
       }
       if (!db.objectStoreNames.contains(MARKS)) {
-        db.createObjectStore(MARKS) // key = docId, value = PdfBookmark[]
+        db.createObjectStore(MARKS)
+      }
+      if (!db.objectStoreNames.contains(NOTES)) {
+        db.createObjectStore(NOTES)
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -55,9 +61,9 @@ export async function listPdfDocs(): Promise<PdfDocMeta[]> {
   const rows = await reqToPromise(tx.objectStore(META).getAll())
   await txDone(tx)
   db.close()
-  return (rows as PdfDocMeta[]).sort((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt),
-  )
+  return (rows as PdfDocMeta[])
+    .map(normalizeMeta)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
 export async function getPdfBlob(id: string): Promise<Blob | null> {
@@ -88,18 +94,37 @@ export async function getPdfBookmarks(id: string): Promise<PdfBookmark[]> {
   return list.sort((a, b) => a.page - b.page || a.name.localeCompare(b.name))
 }
 
+export async function getPdfNotes(id: string): Promise<PdfStickyNote[]> {
+  const db = await openDb()
+  if (!db.objectStoreNames.contains(NOTES)) {
+    db.close()
+    return []
+  }
+  const tx = db.transaction(NOTES, 'readonly')
+  const row = await reqToPromise(tx.objectStore(NOTES).get(id))
+  await txDone(tx)
+  db.close()
+  const list = Array.isArray(row) ? (row as PdfStickyNote[]) : []
+  return list.sort(
+    (a, b) => a.page - b.page || a.createdAt.localeCompare(b.createdAt),
+  )
+}
+
 export async function putPdfDoc(
   meta: PdfDocMeta,
   blob: Blob,
   strokes: PdfStroke[] = [],
   bookmarks: PdfBookmark[] = [],
+  notes: PdfStickyNote[] = [],
 ): Promise<void> {
   const db = await openDb()
-  const tx = db.transaction([META, BLOBS, INK, MARKS], 'readwrite')
-  tx.objectStore(META).put(meta)
+  const stores = [META, BLOBS, INK, MARKS, NOTES]
+  const tx = db.transaction(stores, 'readwrite')
+  tx.objectStore(META).put(normalizeMeta(meta))
   tx.objectStore(BLOBS).put(blob, meta.id)
   tx.objectStore(INK).put(strokes, meta.id)
   tx.objectStore(MARKS).put(bookmarks, meta.id)
+  tx.objectStore(NOTES).put(notes, meta.id)
   await txDone(tx)
   db.close()
 }
@@ -107,7 +132,7 @@ export async function putPdfDoc(
 export async function updatePdfMeta(meta: PdfDocMeta): Promise<void> {
   const db = await openDb()
   const tx = db.transaction(META, 'readwrite')
-  tx.objectStore(META).put(meta)
+  tx.objectStore(META).put(normalizeMeta(meta))
   await txDone(tx)
   db.close()
 }
@@ -120,10 +145,12 @@ export async function savePdfInk(id: string, strokes: PdfStroke[]): Promise<void
     tx.objectStore(META).get(id),
   )) as PdfDocMeta | undefined
   if (meta) {
-    tx.objectStore(META).put({
-      ...meta,
-      updatedAt: new Date().toISOString(),
-    })
+    tx.objectStore(META).put(
+      normalizeMeta({
+        ...meta,
+        updatedAt: new Date().toISOString(),
+      }),
+    )
   }
   await txDone(tx)
   db.close()
@@ -140,10 +167,34 @@ export async function savePdfBookmarks(
     tx.objectStore(META).get(id),
   )) as PdfDocMeta | undefined
   if (meta) {
-    tx.objectStore(META).put({
-      ...meta,
-      updatedAt: new Date().toISOString(),
-    })
+    tx.objectStore(META).put(
+      normalizeMeta({
+        ...meta,
+        updatedAt: new Date().toISOString(),
+      }),
+    )
+  }
+  await txDone(tx)
+  db.close()
+}
+
+export async function savePdfNotes(
+  id: string,
+  notes: PdfStickyNote[],
+): Promise<void> {
+  const db = await openDb()
+  const tx = db.transaction([NOTES, META], 'readwrite')
+  tx.objectStore(NOTES).put(notes, id)
+  const meta = (await reqToPromise(
+    tx.objectStore(META).get(id),
+  )) as PdfDocMeta | undefined
+  if (meta) {
+    tx.objectStore(META).put(
+      normalizeMeta({
+        ...meta,
+        updatedAt: new Date().toISOString(),
+      }),
+    )
   }
   await txDone(tx)
   db.close()
@@ -151,11 +202,9 @@ export async function savePdfBookmarks(
 
 export async function deletePdfDoc(id: string): Promise<void> {
   const db = await openDb()
-  const tx = db.transaction([META, BLOBS, INK, MARKS], 'readwrite')
-  tx.objectStore(META).delete(id)
-  tx.objectStore(BLOBS).delete(id)
-  tx.objectStore(INK).delete(id)
-  tx.objectStore(MARKS).delete(id)
+  const stores = [META, BLOBS, INK, MARKS, NOTES]
+  const tx = db.transaction(stores, 'readwrite')
+  for (const s of stores) tx.objectStore(s).delete(id)
   await txDone(tx)
   db.close()
 }
