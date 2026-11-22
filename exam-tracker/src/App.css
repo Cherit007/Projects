@@ -6373,6 +6373,14 @@ html.practice-exam-active .app-shell {
   color: #8a2f2f;
 }
 
+/* Lock the shell to the viewport so only .pdf-stage scrolls — sidebar stays put */
+html.pdf-reader-active,
+html.pdf-reader-active body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 html.pdf-reader-active .topbar,
 html.pdf-reader-active .bottom-nav,
 html.pdf-reader-active .footer,
@@ -6380,23 +6388,29 @@ html.pdf-reader-active .bg-atmosphere {
   display: none !important;
 }
 
-html.pdf-reader-active .main {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 0;
-}
-
 html.pdf-reader-active .app-shell {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
   background: #dce3df;
 }
 
+html.pdf-reader-active .main {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 .pdf-reader {
-  height: 100vh;
-  min-height: 100vh;
+  height: 100%;
+  max-height: 100dvh;
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
   background:
     radial-gradient(1200px 500px at 20% -10%, rgba(13, 107, 92, 0.08), transparent),
@@ -6417,13 +6431,11 @@ html.pdf-reader-active .app-shell {
   padding: 0.4rem 0.7rem;
   background: rgba(255, 255, 255, 0.94);
   border-bottom: 1px solid rgba(20, 50, 42, 0.08);
-  position: sticky;
+  position: relative;
   z-index: 6;
+  flex-shrink: 0;
   backdrop-filter: blur(8px);
 }
-
-.pdf-toolbar { top: 0; }
-.pdf-subbar { top: 48px; }
 
 .pdf-toolbar-left,
 .pdf-toolbar-center,
@@ -6560,14 +6572,17 @@ html.pdf-reader-active .app-shell {
 
 .pdf-body {
   display: grid;
-  grid-template-columns: 1fr minmax(220px, 260px);
+  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   height: 100%;
+  max-height: 100%;
   overflow: hidden;
+  align-items: stretch;
 }
 
 .pdf-body.no-side {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .pdf-stage {
@@ -6576,8 +6591,12 @@ html.pdf-reader-active .app-shell {
   display: grid;
   justify-items: center;
   align-content: start;
+  min-width: 0;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pdf-spread-row {
@@ -6623,11 +6642,19 @@ html.pdf-reader-active .app-shell {
 .pdf-side {
   display: flex;
   flex-direction: column;
+  align-self: stretch;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
   border-left: 1px solid rgba(20, 50, 42, 0.08);
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.98);
   overflow: hidden;
+  /* Independent of .pdf-stage scroll */
+  position: relative;
+  z-index: 2;
 }
 
 .pdf-side-fixed {
@@ -6645,9 +6672,11 @@ html.pdf-reader-active .app-shell {
 .pdf-side-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.55rem 0.7rem 1.1rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pdf-bm-add {
@@ -6706,24 +6735,22 @@ html.pdf-reader-active .app-shell {
 
 @media (max-width: 900px) {
   .pdf-body {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(140px, 32vh);
   }
 
   .pdf-side {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    max-height: 100%;
     border-left: 0;
     border-top: 1px solid var(--line);
-    max-height: 36vh;
-    height: auto;
   }
 
   .pdf-spread-row.double {
     flex-wrap: wrap;
-  }
-
-  .pdf-subbar {
-    top: 0;
-    position: relative;
   }
 
   .pdf-title {
