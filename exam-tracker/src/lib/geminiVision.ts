@@ -2,7 +2,16 @@
 
 const KEY_STORAGE = 'exampulse.geminiApiKey'
 const MODEL_STORAGE = 'exampulse.geminiModel'
-const DEFAULT_MODEL = 'gemini-2.0-flash'
+const DEFAULT_MODEL = 'gemini-3.8-flash'
+/** Retired ids that may still sit in localStorage from older builds */
+const RETIRED_MODELS = new Set([
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-001',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-pro',
+  'gemini-pro-vision',
+])
 
 export function getGeminiApiKey(): string {
   try {
@@ -39,14 +48,25 @@ export function geminiKeyHint(): string {
 
 export function getGeminiModel(): string {
   try {
-    return localStorage.getItem(MODEL_STORAGE)?.trim() || DEFAULT_MODEL
+    const stored = localStorage.getItem(MODEL_STORAGE)?.trim() || ''
+    if (!stored || RETIRED_MODELS.has(stored)) {
+      if (stored && RETIRED_MODELS.has(stored)) {
+        localStorage.setItem(MODEL_STORAGE, DEFAULT_MODEL)
+      }
+      return DEFAULT_MODEL
+    }
+    return stored
   } catch {
     return DEFAULT_MODEL
   }
 }
 
 export function setGeminiModel(model: string) {
-  localStorage.setItem(MODEL_STORAGE, model.trim() || DEFAULT_MODEL)
+  const next = model.trim() || DEFAULT_MODEL
+  localStorage.setItem(
+    MODEL_STORAGE,
+    RETIRED_MODELS.has(next) ? DEFAULT_MODEL : next,
+  )
 }
 
 export function hasGeminiKey(): boolean {
@@ -105,6 +125,15 @@ export async function geminiJsonFromImage(opts: {
     if (res.status === 400 || res.status === 401 || res.status === 403) {
       throw new Error(
         'Gemini rejected the API key — use Change API key / Replace key and paste a valid AI Studio key.',
+      )
+    }
+    if (res.status === 404) {
+      // Auto-heal retired model ids stuck in localStorage
+      if (RETIRED_MODELS.has(model) || /no longer available/i.test(errText)) {
+        localStorage.setItem(MODEL_STORAGE, DEFAULT_MODEL)
+      }
+      throw new Error(
+        `Gemini model unavailable — switched default to ${DEFAULT_MODEL}. Tap Detect again.`,
       )
     }
     throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 180)}`)
