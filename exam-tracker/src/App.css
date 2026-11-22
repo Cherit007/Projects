@@ -7449,6 +7449,25 @@ html.pdf-reader-active .main {
   border: 1px solid color-mix(in srgb, #1a7a6c 28%, transparent);
 }
 
+.pdf-quiz-keybox .pdf-bm-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.pdf-quiz-keybox .pdf-bm-add input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+.pdf-quiz-actions button,
+.pdf-quiz-keybox button {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .pdf-quiz-keybox p,
 .pdf-quiz-suggest p {
   margin: 0 0 0.65rem;

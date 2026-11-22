@@ -212,14 +212,9 @@ export async function geminiJsonFromImage(opts: {
   temperature?: number
 }): Promise<unknown> {
   const key = getGeminiApiKey()
-  if (!key) {
+  if (!key || key.length < 20) {
     throw new Error(
-      'Add a free Gemini API key (PDF desk → Gemini key) to auto-detect questions.',
-    )
-  }
-  if (!key.startsWith('AIza') || key.length < 20) {
-    throw new Error(
-      'That does not look like an AI Studio key (should start with AIza…). Clear and paste again from the copy icon.',
+      'Add a free Gemini API key (PDF desk → Replace key, or Change API key here).',
     )
   }
 

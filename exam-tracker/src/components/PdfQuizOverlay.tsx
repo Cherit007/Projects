@@ -63,9 +63,11 @@ export function PdfQuizOverlay({
   }, [hasKey])
 
   useEffect(() => {
+    if (!error) return
     if (
-      error &&
-      /api key|rejected|403|401|Gemini/i.test(error)
+      /api key|ai studio|rejected|403|401|gemini|unauthor|permission|quota|paste/i.test(
+        error,
+      )
     ) {
       setEditKey(true)
     }
@@ -218,41 +220,46 @@ export function PdfQuizOverlay({
           </button>
         </header>
 
+        {error && <p className="pdf-status error">{error}</p>}
+        {busy && <p className="pdf-status muted">Reading page with Gemini…</p>}
+
         {mode === 'review' && (editKey || !hasKey) && (
           <div className="pdf-quiz-keybox">
             <p>
-              {hasKey
-                ? 'Wrong or expired key? Paste a new Gemini API key (stays on this device).'
-                : (
-                  <>
-                    Paste a free{' '}
-                    <a
-                      href="https://aistudio.google.com/apikey"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Gemini API key
-                    </a>{' '}
-                    (stays on this device) to auto-detect MCQs from the page
-                    image.
-                  </>
-                )}
+              {hasKey ? (
+                'Paste a new Gemini API key from AI Studio (copy icon), then Save & detect.'
+              ) : (
+                <>
+                  Paste a free{' '}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Gemini API key
+                  </a>{' '}
+                  (stays on this device), then Save & detect.
+                </>
+              )}
             </p>
             <div className="pdf-bm-add">
               <input
                 type="password"
-                placeholder="AIza… paste new key"
+                placeholder="Paste API key here"
                 value={keyDraft}
                 onChange={(e) => setKeyDraft(e.target.value)}
                 autoComplete="off"
                 spellCheck={false}
+                autoFocus
               />
               <button
                 type="button"
                 className="pdf-side-btn primary"
+                disabled={busy || keyDraft.trim().length < 20}
                 onClick={() => {
-                  if (!keyDraft.trim()) return
-                  onSaveKey(keyDraft.trim())
+                  const next = keyDraft.trim()
+                  if (next.length < 20) return
+                  onSaveKey(next)
                   setKeyDraft('')
                   setEditKey(false)
                   onStartDetect()
@@ -260,25 +267,20 @@ export function PdfQuizOverlay({
               >
                 Save & detect
               </button>
-              {hasKey && (
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => {
-                    onSaveKey('')
-                    setKeyDraft('')
-                    setEditKey(true)
-                  }}
-                >
-                  Clear key
-                </button>
-              )}
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  onSaveKey('')
+                  setKeyDraft('')
+                  setEditKey(true)
+                }}
+              >
+                Clear key
+              </button>
             </div>
           </div>
         )}
-
-        {error && <p className="pdf-status error">{error}</p>}
-        {busy && <p className="pdf-status muted">Reading page with Gemini…</p>}
 
         {mode === 'review' && (
           <>
@@ -296,7 +298,7 @@ export function PdfQuizOverlay({
                 </button>
               </div>
             )}
-            {looksLikeSolutions && hasKey && (
+            {looksLikeSolutions && (
               <div className="pdf-quiz-suggest">
                 <p>
                   This looks like a solutions / answer-key page. Map answers to
@@ -307,7 +309,13 @@ export function PdfQuizOverlay({
                     type="button"
                     className="pdf-side-btn primary"
                     disabled={busy}
-                    onClick={onDetectSolutions}
+                    onClick={() => {
+                      if (!hasKey) {
+                        setEditKey(true)
+                        return
+                      }
+                      onDetectSolutions()
+                    }}
                   >
                     Map solutions
                   </button>
@@ -326,16 +334,28 @@ export function PdfQuizOverlay({
               <button
                 type="button"
                 className="pdf-side-btn primary"
-                disabled={busy || !hasKey}
-                onClick={onStartDetect}
+                disabled={busy}
+                onClick={() => {
+                  if (!hasKey) {
+                    setEditKey(true)
+                    return
+                  }
+                  onStartDetect()
+                }}
               >
                 {pageQs.length ? 'Re-detect page' : 'Detect questions'}
               </button>
               <button
                 type="button"
                 className="pdf-doubt-btn"
-                disabled={busy || !hasKey}
-                onClick={onDetectSolutions}
+                disabled={busy}
+                onClick={() => {
+                  if (!hasKey) {
+                    setEditKey(true)
+                    return
+                  }
+                  onDetectSolutions()
+                }}
               >
                 This page has solutions — map answers
               </button>

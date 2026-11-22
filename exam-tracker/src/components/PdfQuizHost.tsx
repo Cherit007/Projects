@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   clearGeminiApiKey,
+  getGeminiApiKey,
   hasGeminiKey,
   setGeminiApiKey,
 } from '../lib/geminiVision'
@@ -50,6 +51,17 @@ export function PdfQuizHost({
   const [pageKind, setPageKind] = useState<PdfPageKind | null>(null)
   const [keyReady, setKeyReady] = useState(() => hasGeminiKey())
   const [panel, setPanel] = useState<'review' | 'solutions'>('review')
+
+  useEffect(() => {
+    // Drop leftover junk keys that would block Detect
+    const key = getGeminiApiKey()
+    if (key && key.length < 20) {
+      clearGeminiApiKey()
+      setKeyReady(false)
+    } else {
+      setKeyReady(hasGeminiKey())
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -127,7 +139,12 @@ export function PdfQuizHost({
         }
         setOpen(true)
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Detect failed')
+        const msg = e instanceof Error ? e.message : 'Detect failed'
+        setError(msg)
+        if (/api key|ai studio|add a free gemini|paste/i.test(msg)) {
+          clearGeminiApiKey()
+          setKeyReady(false)
+        }
         setOpen(true)
       } finally {
         setBusy(false)
@@ -163,7 +180,12 @@ export function PdfQuizHost({
       }
       setOpen(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Solution detect failed')
+      const msg = e instanceof Error ? e.message : 'Solution detect failed'
+      setError(msg)
+      if (/api key|ai studio|add a free gemini|paste/i.test(msg)) {
+        clearGeminiApiKey()
+        setKeyReady(false)
+      }
       setOpen(true)
     } finally {
       setBusy(false)

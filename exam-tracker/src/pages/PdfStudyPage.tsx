@@ -293,9 +293,9 @@ export function PdfStudyPage() {
                 geminiInputRef.current?.focus()
                 return
               }
-              if (!next.startsWith('AIza') || next.length < 20) {
+              if (next.length < 20) {
                 setGeminiNote(
-                  'That does not look like an AI Studio key (starts with AIza…). Use the copy icon next to the key.',
+                  'Key looks too short — use the copy icon next to the key in AI Studio, then paste here.',
                 )
                 return
               }
