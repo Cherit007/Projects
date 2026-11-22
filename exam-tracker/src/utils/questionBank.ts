@@ -5,16 +5,22 @@ export type AnswerKey = 'A' | 'B' | 'C' | 'D' | 'E'
 export type BankQuestion = {
   id: string
   topicId: string
-  /** Compressed JPEG data URL of the question photo */
+  /** Compressed JPEG data URL of the question photo / screenshot */
   imageDataUrl: string
   /** Correct option */
   answerKey: AnswerKey
   /** Optional short text prompt / note shown above the image */
   prompt?: string
+  /** OCR / typed English stem (preferred over image-only when set) */
+  stem?: string
+  /** OCR / typed options A–E */
+  options?: Partial<Record<AnswerKey, string>>
   /** Optional explanation text shown in review */
   explanation?: string
   /** Optional solution photo */
   solutionImageDataUrl?: string
+  /** How the question entered the bank */
+  source?: 'photo' | 'ocr-screenshot' | 'pdf'
   difficulty?: 'easy' | 'medium' | 'hard'
   createdAt: string
   updatedAt: string

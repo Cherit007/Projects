@@ -80,6 +80,23 @@ export function PracticePage() {
   const [msg, setMsg] = useState('')
   const [uploading, setUploading] = useState(false)
   const [drafts, setDrafts] = useState<DraftItem[]>([])
+  const [ocrBusy, setOcrBusy] = useState(false)
+  const [ocrLabel, setOcrLabel] = useState('')
+  const [scanPreview, setScanPreview] = useState('')
+
+  const openExamWindow = (attemptId: string) => {
+    const url = new URL(window.location.href)
+    url.hash = `#/practice/exam/${attemptId}`
+    const win = window.open(
+      url.toString(),
+      `exampulse_drill_${attemptId}`,
+      'noopener,noreferrer,width=1280,height=860',
+    )
+    if (!win) {
+      // Popup blocked — fall back to same tab
+      navigate(`/practice/exam/${attemptId}`)
+    }
+  }
 
   const topicsFiltered = useMemo(() => {
     return TOPICS.filter((t) => areaFilter === 'all' || t.area === areaFilter)
@@ -179,6 +196,64 @@ export function PracticePage() {
     }
   }
 
+  const onScanScreenshots = async (
+    qFiles: FileList | null,
+    sFiles: FileList | null,
+  ) => {
+    if (!qFiles?.length) {
+      setMsg('Pick question screenshot(s) first.')
+      return
+    }
+    if (!topicId) {
+      setMsg('Pick a topic for this batch.')
+      return
+    }
+    setOcrBusy(true)
+    setOcrLabel('Starting OCR…')
+    setMsg('')
+    setScanPreview('')
+    try {
+      const { importMcqsFromScreenshots } = await import(
+        '../utils/screenshotImport'
+      )
+      const { items, preview } = await importMcqsFromScreenshots({
+        questionFiles: Array.from(qFiles),
+        solutionFiles: sFiles ? Array.from(sFiles) : [],
+        onProgress: setOcrLabel,
+      })
+      setScanPreview(preview)
+      if (!items.length) {
+        setMsg(
+          'No English MCQs found in those screenshots. Try clearer crops of the English column only.',
+        )
+        return
+      }
+      const created = await addQuestions(
+        items.map((it) => ({
+          topicId,
+          imageDataUrl: it.imageDataUrl,
+          answerKey: it.answerKey,
+          stem: it.stem,
+          options: it.options,
+          explanation: it.explanation,
+          solutionImageDataUrl: it.solutionImageDataUrl,
+          source: 'ocr-screenshot' as const,
+          prompt: `Q${it.number}`,
+        })),
+      )
+      setMsg(
+        `Scanned & saved ${created.length} English question${
+          created.length === 1 ? '' : 's'
+        } to ${selectedTopic?.title ?? 'topic'} (answers mapped from key when found).`,
+      )
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Screenshot scan failed')
+    } finally {
+      setOcrBusy(false)
+      setOcrLabel('')
+    }
+  }
+
   const onStart = async () => {
     if (available <= 0) {
       setMsg('This topic bank is empty — insert questions in the Bank tab first.')
@@ -195,7 +270,7 @@ export function PracticePage() {
         marksWrong,
         shuffle,
       })
-      navigate(`/practice/exam/${attempt.id}`)
+      openExamWindow(attempt.id)
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Could not start')
     } finally {
@@ -217,8 +292,8 @@ export function PracticePage() {
         <div>
           <h1>Practice bank</h1>
           <p className="lede">
-            First insert all question photos into a topic bank. Later, start a
-            timed drill from that bank — nothing is added during the test.
+            Build a topic bank from photos or English screenshots (OCR maps
+            questions + answer keys). Drills open in a separate exam window.
           </p>
         </div>
       </header>
@@ -289,12 +364,73 @@ export function PracticePage() {
 
       {tab === 'bank' ? (
         <>
+          <section className="practice-composer cardish" aria-label="Scan screenshots">
+            <h2>Scan screenshots (English OCR)</h2>
+            <p className="lede">
+              Upload question screenshots and optional answer-key / solution
+              screenshots. We OCR English only, store stems + options in the
+              bank, and map keys by question number.
+            </p>
+            <form
+              className="practice-scan-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const fd = new FormData(e.currentTarget)
+                const qs = fd.getAll('qshots') as File[]
+                const ss = fd.getAll('sshots') as File[]
+                const qList = qs.filter((f) => f && f.size)
+                const sList = ss.filter((f) => f && f.size)
+                const qDt = new DataTransfer()
+                qList.forEach((f) => qDt.items.add(f))
+                const sDt = new DataTransfer()
+                sList.forEach((f) => sDt.items.add(f))
+                void onScanScreenshots(
+                  qDt.files.length ? qDt.files : null,
+                  sDt.files.length ? sDt.files : null,
+                )
+              }}
+            >
+              <label className="practice-file practice-file-bulk">
+                Question screenshots
+                <input
+                  name="qshots"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={ocrBusy}
+                />
+              </label>
+              <label className="practice-file practice-file-bulk">
+                Answer key / solutions (optional)
+                <input
+                  name="sshots"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={ocrBusy}
+                />
+              </label>
+              <button
+                type="submit"
+                className="btn primary"
+                disabled={ocrBusy || !topicId}
+              >
+                {ocrBusy ? ocrLabel || 'Scanning…' : 'Scan & save to bank'}
+              </button>
+            </form>
+            {scanPreview ? (
+              <details className="practice-scan-preview">
+                <summary>OCR text preview</summary>
+                <pre>{scanPreview}</pre>
+              </details>
+            ) : null}
+          </section>
+
           <section className="practice-composer cardish" aria-label="Insert questions">
-            <h2>Insert questions (batch)</h2>
+            <h2>Or insert photos manually</h2>
             <p className="lede">
               Pick many photos at once for this topic. Set the correct option
-              for each, then save the whole batch. Do this before you start any
-              drill.
+              for each, then save the whole batch.
             </p>
             <label className="practice-file practice-file-bulk">
               Choose question photos
@@ -588,7 +724,7 @@ export function PracticePage() {
                       <button
                         type="button"
                         className="btn primary"
-                        onClick={() => navigate(`/practice/exam/${a.id}`)}
+                        onClick={() => openExamWindow(a.id)}
                       >
                         {a.status === 'submitted' ? 'Review' : 'Resume'}
                       </button>

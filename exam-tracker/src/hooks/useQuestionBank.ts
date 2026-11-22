@@ -27,8 +27,11 @@ type AddInput = {
   imageDataUrl: string
   answerKey: AnswerKey
   prompt?: string
+  stem?: string
+  options?: Partial<Record<AnswerKey, string>>
   explanation?: string
   solutionImageDataUrl?: string
+  source?: BankQuestion['source']
   difficulty?: BankQuestion['difficulty']
 }
 
@@ -78,8 +81,11 @@ export function useQuestionBank() {
       imageDataUrl: input.imageDataUrl,
       answerKey: input.answerKey,
       prompt: input.prompt?.trim() || undefined,
+      stem: input.stem?.trim() || undefined,
+      options: input.options,
       explanation: input.explanation?.trim() || undefined,
       solutionImageDataUrl: input.solutionImageDataUrl,
+      source: input.source,
       difficulty: input.difficulty,
       createdAt: now,
       updatedAt: now,
@@ -98,8 +104,11 @@ export function useQuestionBank() {
       imageDataUrl: input.imageDataUrl,
       answerKey: input.answerKey,
       prompt: input.prompt?.trim() || undefined,
+      stem: input.stem?.trim() || undefined,
+      options: input.options,
       explanation: input.explanation?.trim() || undefined,
       solutionImageDataUrl: input.solutionImageDataUrl,
+      source: input.source,
       difficulty: input.difficulty,
       createdAt: now,
       updatedAt: now,
