@@ -30,6 +30,7 @@ export function PdfQuizOverlay({
   forceSolutions,
   onClose,
   onStartDetect,
+  onOcrEnglish,
   onDetectSolutions,
 }: {
   store: PdfQuizDocStore
@@ -45,6 +46,7 @@ export function PdfQuizOverlay({
   forceSolutions?: boolean
   onClose: () => void
   onStartDetect: () => void
+  onOcrEnglish?: () => void
   onDetectSolutions: () => void
 }) {
   const [mode, setMode] = useState<Mode>(
@@ -247,18 +249,30 @@ export function PdfQuizOverlay({
               >
                 {pageQs.length ? 'Re-detect page' : 'Detect questions'}
               </button>
+              {onOcrEnglish && (
+                <button
+                  type="button"
+                  className="pdf-side-btn"
+                  disabled={busy}
+                  onClick={onOcrEnglish}
+                  title="Most accurate for English+Hindi pages — OCRs left column only"
+                >
+                  OCR English column
+                </button>
+              )}
               <button
                 type="button"
                 className="pdf-doubt-btn"
                 disabled={busy}
                 onClick={onDetectSolutions}
               >
-                This page has solutions — map answers
+                Map solutions
               </button>
             </div>
             <p className="pdf-quiz-hint">
-              English column only — Hindi is ignored. Re-detect clears the saved
-              result and re-reads the page.
+              Hindi is ignored. If stems look jumbled, use{' '}
+              <strong>OCR English column</strong> — it reads only the left
+              English side of the page (more accurate on Champion books).
             </p>
 
             {pageQs.length === 0 && extractPreview ? (

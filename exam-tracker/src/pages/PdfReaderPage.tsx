@@ -89,6 +89,8 @@ export function PdfReaderPage() {
   const [searchHits, setSearchHits] = useState<SearchHit[]>([])
   const [searchBusy, setSearchBusy] = useState(false)
   const [thumbUrls, setThumbUrls] = useState<Record<number, string>>({})
+  const thumbUrlsRef = useRef<Record<number, string>>({})
+  const [pageRotate, setPageRotate] = useState(0)
   const [pageCssSize, setPageCssSize] = useState({ w: 0, h: 0 })
 
   const pdfCanvasLRef = useRef<HTMLCanvasElement>(null)
@@ -406,7 +408,8 @@ export function PdfReaderPage() {
     ) => {
       if (!pdf || !pdfCanvas || !inkCanvas) return
       const pg = await pdf.getPage(pageNum)
-      const viewport = pg.getViewport({ scale: zoom })
+      const rot = (((pg.rotate || 0) + pageRotate) % 360 + 360) % 360
+      const viewport = pg.getViewport({ scale: zoom, rotation: rot })
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       pdfCanvas.width = Math.floor(viewport.width * dpr)
       pdfCanvas.height = Math.floor(viewport.height * dpr)
@@ -418,12 +421,14 @@ export function PdfReaderPage() {
       inkCanvas.style.height = `${viewport.height}px`
       if (pageNum === page) {
         setPageCssSize({ w: viewport.width, h: viewport.height })
-        const base = pg.getViewport({ scale: 1 })
+        const base = pg.getViewport({ scale: 1, rotation: rot })
         basePageSize.current = { w: base.width, h: base.height }
       }
       const ctx = pdfCanvas.getContext('2d')
       if (!ctx) return
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, pdfCanvas.width, pdfCanvas.height)
       await pg.render({
         canvasContext: ctx,
         viewport,
@@ -432,7 +437,7 @@ export function PdfReaderPage() {
       paintInkOn(pageNum, inkCanvas)
       await renderTextLayer(pageNum, viewport, textHost)
     },
-    [page, paintInkOn, pdf, renderTextLayer, zoom],
+    [page, pageRotate, paintInkOn, pdf, renderTextLayer, zoom],
   )
 
   useEffect(() => {
@@ -530,38 +535,58 @@ export function PdfReaderPage() {
     return () => window.clearTimeout(t)
   }, [page, zoom, pageCount, spread, theme, fitMode, layers, activeLayerId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lazy thumbs for left rail
+  // Lazy thumbs for left rail (do not depend on thumbUrls — that raced and cancelled loads)
+  useEffect(() => {
+    thumbUrlsRef.current = thumbUrls
+  }, [thumbUrls])
+
+  useEffect(() => {
+    // Rotation change invalidates cached thumbs
+    setThumbUrls({})
+    thumbUrlsRef.current = {}
+  }, [pageRotate, docId])
+
   useEffect(() => {
     if (!pdf || state !== 'ready' || !leftRail) return
     let cancelled = false
     void (async () => {
-      const start = Math.max(1, page - 4)
-      const end = Math.min(pageCount, page + 8)
+      const start = Math.max(1, page - 6)
+      const end = Math.min(pageCount, page + 14)
       for (let p = start; p <= end; p += 1) {
         if (cancelled) return
-        if (thumbUrls[p]) continue
+        if (thumbUrlsRef.current[p]) continue
         try {
           const pg = await pdf.getPage(p)
-          const vp = pg.getViewport({ scale: 0.22 })
+          const rot = (((pg.rotate || 0) + pageRotate) % 360 + 360) % 360
+          const base = pg.getViewport({ scale: 1, rotation: rot })
+          const scale = 120 / Math.max(base.width, base.height)
+          const vp = pg.getViewport({ scale, rotation: rot })
           const canvas = document.createElement('canvas')
-          canvas.width = vp.width
-          canvas.height = vp.height
+          canvas.width = Math.max(1, Math.floor(vp.width))
+          canvas.height = Math.max(1, Math.floor(vp.height))
           const ctx = canvas.getContext('2d')
           if (!ctx) continue
+          ctx.fillStyle = '#fff'
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
           await pg.render({ canvasContext: ctx, viewport: vp, canvas }).promise
-          const url = canvas.toDataURL('image/jpeg', 0.65)
+          const url = canvas.toDataURL('image/jpeg', 0.72)
           if (!cancelled) {
-            setThumbUrls((prev) => ({ ...prev, [p]: url }))
+            setThumbUrls((prev) => {
+              if (prev[p]) return prev
+              const next = { ...prev, [p]: url }
+              thumbUrlsRef.current = next
+              return next
+            })
           }
         } catch {
-          /* ignore */
+          /* ignore single-page thumb failures */
         }
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [pdf, page, pageCount, leftRail, state, thumbUrls])
+  }, [pdf, page, pageCount, leftRail, state, pageRotate])
 
   const normPoint = (
     e: React.PointerEvent<HTMLCanvasElement>,
@@ -843,7 +868,8 @@ export function PdfReaderPage() {
     if (!pdf) return null
     try {
       const pg = await pdf.getPage(page)
-      const viewport = pg.getViewport({ scale: 2 })
+      const rot = (((pg.rotate || 0) + pageRotate) % 360 + 360) % 360
+      const viewport = pg.getViewport({ scale: 2.2, rotation: rot })
       const canvas = document.createElement('canvas')
       canvas.width = Math.floor(viewport.width)
       canvas.height = Math.floor(viewport.height)
@@ -860,7 +886,7 @@ export function PdfReaderPage() {
     } catch {
       return null
     }
-  }, [pdf, page])
+  }, [pdf, page, pageRotate])
 
   const goPracticeDoubt = (bm: PdfBookmark) => {
     const topic = bm.topicId || TOPICS[0]?.id || ''
@@ -937,9 +963,6 @@ export function PdfReaderPage() {
                 ['pen', 'Pen'],
                 ['highlighter', 'Mark'],
                 ['select', 'Select'],
-                ['rect', 'Box'],
-                ['ellipse', 'Oval'],
-                ['line', 'Line'],
                 ['note', 'Note'],
                 ['eraser', 'Erase'],
                 ['hand', 'Pan'],
@@ -954,9 +977,26 @@ export function PdfReaderPage() {
                 {label}
               </button>
             ))}
+            <span className="pdf-tool-sep" aria-hidden="true" />
+            {(
+              [
+                ['rect', 'Box'],
+                ['ellipse', 'Oval'],
+                ['line', 'Line'],
+              ] as Array<[PdfTool, string]>
+            ).map(([t, label]) => (
+              <button
+                key={t}
+                type="button"
+                className={`pdf-tool-secondary${tool === t ? ' active' : ''}`}
+                onClick={() => setTool(t)}
+              >
+                {label}
+              </button>
+            ))}
             {tool === 'select' && (
               <button type="button" className="btn primary" onClick={onTextSelectHighlight}>
-                Highlight selection
+                Highlight
               </button>
             )}
             <button type="button" onClick={undo} disabled={!undoStack.length}>
@@ -968,70 +1008,6 @@ export function PdfReaderPage() {
           </div>
 
           <div className="pdf-toolbar-right">
-            <div className="pdf-spread" role="group" aria-label="Page layout">
-              <button
-                type="button"
-                className={spread === 'single' ? 'active' : ''}
-                onClick={() => setSpread('single')}
-              >
-                1
-              </button>
-              <button
-                type="button"
-                className={spread === 'double' ? 'active' : ''}
-                onClick={() => {
-                  setSpread('double')
-                  setPage((p) => (p % 2 === 0 ? p - 1 : p))
-                }}
-              >
-                2
-              </button>
-            </div>
-            <div className="pdf-spread" role="group" aria-label="Fit">
-              <button
-                type="button"
-                className={fitMode === 'width' ? 'active' : ''}
-                onClick={() => setFitMode('width')}
-                title="Fit width"
-              >
-                W
-              </button>
-              <button
-                type="button"
-                className={fitMode === 'page' ? 'active' : ''}
-                onClick={() => setFitMode('page')}
-                title="Fit page"
-              >
-                P
-              </button>
-              <button
-                type="button"
-                className={fitMode === 'actual' ? 'active' : ''}
-                onClick={() => setFitMode('actual')}
-                title="Actual size"
-              >
-                1:1
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setFitMode('actual')
-                setZoom((z) => clampZoom(z / 1.12))
-              }}
-            >
-              −
-            </button>
-            <span className="pdf-zoom">{Math.round(zoom * 100)}%</span>
-            <button
-              type="button"
-              onClick={() => {
-                setFitMode('actual')
-                setZoom((z) => clampZoom(z * 1.12))
-              }}
-            >
-              +
-            </button>
             <button
               type="button"
               className={leftRail ? 'active' : ''}
@@ -1107,6 +1083,90 @@ export function PdfReaderPage() {
             >
               Next
             </button>
+          </div>
+          <div className="pdf-view-controls" role="group" aria-label="View">
+            <div className="pdf-spread" role="group" aria-label="Page layout">
+              <button
+                type="button"
+                className={spread === 'single' ? 'active' : ''}
+                onClick={() => setSpread('single')}
+                title="Single page"
+              >
+                1p
+              </button>
+              <button
+                type="button"
+                className={spread === 'double' ? 'active' : ''}
+                onClick={() => {
+                  setSpread('double')
+                  setPage((p) => (p % 2 === 0 ? p - 1 : p))
+                }}
+                title="Two pages"
+              >
+                2p
+              </button>
+            </div>
+            <div className="pdf-spread" role="group" aria-label="Fit">
+              <button
+                type="button"
+                className={fitMode === 'width' ? 'active' : ''}
+                onClick={() => setFitMode('width')}
+                title="Fit width"
+              >
+                Width
+              </button>
+              <button
+                type="button"
+                className={fitMode === 'page' ? 'active' : ''}
+                onClick={() => setFitMode('page')}
+                title="Fit page"
+              >
+                Page
+              </button>
+              <button
+                type="button"
+                className={fitMode === 'actual' ? 'active' : ''}
+                onClick={() => setFitMode('actual')}
+                title="Actual size"
+              >
+                100%
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setFitMode('actual')
+                setZoom((z) => clampZoom(z / 1.12))
+              }}
+            >
+              −
+            </button>
+            <span className="pdf-zoom">{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              onClick={() => {
+                setFitMode('actual')
+                setZoom((z) => clampZoom(z * 1.12))
+              }}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              title="Rotate page"
+              onClick={() => setPageRotate((r) => (r + 90) % 360)}
+            >
+              Rotate
+            </button>
+            {pageRotate !== 0 && (
+              <button
+                type="button"
+                title="Reset rotation"
+                onClick={() => setPageRotate(0)}
+              >
+                Reset
+              </button>
+            )}
             <div className="pdf-spread" role="group" aria-label="Paper theme">
               {(
                 [
@@ -1210,11 +1270,11 @@ export function PdfReaderPage() {
                           onClick={() => jumpToPage(p)}
                         >
                           {thumbUrls[p] ? (
-                            <img src={thumbUrls[p]} alt="" />
+                            <img src={thumbUrls[p]} alt={`Page ${p}`} />
                           ) : (
-                            <span className="pdf-thumb-ph">{p}</span>
+                            <span className="pdf-thumb-ph" aria-hidden="true" />
                           )}
-                          <span>{p}</span>
+                          <span>p. {p}</span>
                         </button>
                       </li>
                     ),

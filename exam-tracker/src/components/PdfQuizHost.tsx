@@ -23,6 +23,22 @@ import {
 import type { PageTextVariants } from '../utils/pdfPageText'
 import { PdfQuizOverlay } from './PdfQuizOverlay'
 
+function isCleanDetect(qs: PdfDetectedQuestion[]): boolean {
+  const good = qs.filter((q) => {
+    const opts = Object.values(q.options)
+    return (
+      opts.length >= 3 &&
+      opts.every((t) => !!t && t.length <= 48) &&
+      q.stem.length >= 40 &&
+      q.stem.length <= 420 &&
+      !/[\u0900-\u097F]/.test(q.stem) &&
+      !/\b(?:ops|HCE|www|demi|Te fm|sd wd)\b/i.test(q.stem) &&
+      !/SSC|CGL|MAINS/i.test(q.stem)
+    )
+  })
+  return good.length >= Math.min(2, qs.length) && good.length > 0
+}
+
 export function PdfQuizHost({
   docId,
   title,
@@ -88,50 +104,113 @@ export function PdfQuizHost({
     await putQuizStore(next)
   }, [])
 
-  const collectTexts = useCallback(async () => {
-    setBusyLabel('Reading English column…')
-    const variants = await getPageVariants()
-    const texts = [...variants.variants]
-    if (variants.primary && !texts.includes(variants.primary)) {
-      texts.unshift(variants.primary)
-    }
+  const runEnglishColumnOcr = useCallback(async () => {
+    setBusyLabel('OCR English column…')
+    const canvas = await getPageCanvas()
+    if (!canvas) return ''
+    const { ocrEnglishColumn } = await import('../utils/pdfPageOcr')
+    return ocrEnglishColumn(canvas, (pct) => {
+      setBusyLabel(`OCR English column… ${pct}%`)
+    }, 0.48)
+  }, [getPageCanvas])
 
-    // OCR of bilingual Champion pages turns Hindi into Latin junk ("Te fm sd…").
-    // Only OCR when the text layer is essentially empty.
-    let usedOcr = false
-    const sparse =
-      variants.itemCount < 8 ||
-      variants.charCount < 40 ||
-      texts.every((t) => t.trim().length < 40)
-    if (sparse) {
-      setBusyLabel('OCR scanning page…')
-      try {
-        const canvas = await getPageCanvas()
-        if (canvas) {
-          const { ocrCanvasToText } = await import('../utils/pdfPageOcr')
-          const ocr = await ocrCanvasToText(canvas, (pct) => {
-            setBusyLabel(`OCR scanning page… ${pct}%`)
-          })
+  const collectTexts = useCallback(
+    async (withOcr: boolean) => {
+      setBusyLabel('Reading English column…')
+      const variants = await getPageVariants()
+      const texts = [...variants.variants]
+      if (variants.primary && !texts.includes(variants.primary)) {
+        texts.unshift(variants.primary)
+      }
+
+      let usedOcr = false
+      if (withOcr) {
+        try {
+          const ocr = await runEnglishColumnOcr()
           if (ocr.length >= 40) {
-            texts.push(ocr)
+            texts.unshift(ocr) // prefer OCR English column when requested
             usedOcr = true
           }
+        } catch {
+          // keep text-layer variants
         }
-      } catch {
-        // keep text-layer variants
       }
-    }
 
-    const preview =
-      texts.find((t) => t.trim().length >= 40)?.trim().slice(0, 900) ||
-      variants.primary.trim().slice(0, 900) ||
-      ''
+      const preview =
+        texts.find((t) => t.trim().length >= 40)?.trim().slice(0, 900) ||
+        variants.primary.trim().slice(0, 900) ||
+        ''
 
-    return { texts, usedOcr, preview, sparse, itemCount: variants.itemCount }
-  }, [getPageCanvas, getPageVariants])
+      return { texts, usedOcr, preview, itemCount: variants.itemCount }
+    },
+    [getPageVariants, runEnglishColumnOcr],
+  )
+
+  const finishDetect = useCallback(
+    async (
+      found: PdfDetectedQuestion[],
+      kind: PdfPageKind,
+      sols: PdfDetectedSolution[],
+      pack: { preview: string; usedOcr: boolean },
+    ) => {
+      setExtractPreview(pack.preview)
+      await putPageExtract({
+        id: pageExtractId(docId, page, 'questions'),
+        docId,
+        page,
+        kind: 'questions',
+        payload: found,
+        extractedAt: new Date().toISOString(),
+      })
+      if (sols.length) {
+        setDetectedSols(sols)
+        await putPageExtract({
+          id: pageExtractId(docId, page, 'solutions'),
+          docId,
+          page,
+          kind: 'solutions',
+          payload: sols,
+          extractedAt: new Date().toISOString(),
+        })
+      }
+
+      if (kind === 'solutions' && !found.length && sols.length) {
+        await persistStore(mergeSolutionsIntoStore(storeRef.current, sols))
+        setPanel('solutions')
+        setPageKind('solutions')
+        setInfo(`Mapped ${sols.length} solution(s) from this page.`)
+        setDetectedQs([])
+        setOpen(true)
+        return
+      }
+
+      if (found.length) {
+        const keyed = found.filter((q) => q.guessedAnswer).length
+        setInfo(
+          `Detected ${found.length} question(s)${
+            keyed ? ` · ${keyed} with answer key` : ''
+          }${pack.usedOcr ? ' · English OCR' : ' · page text'}.`,
+        )
+      }
+
+      setDetectedQs(found)
+      setPageKind(kind)
+      if (!found.length) {
+        setError(
+          'No MCQs found. Try “OCR English column” — it reads only the left English side.',
+        )
+      } else {
+        let next = mergeQuestionsIntoStore(storeRef.current, found)
+        if (sols.length) next = mergeSolutionsIntoStore(next, sols)
+        await persistStore(next)
+      }
+      setOpen(true)
+    },
+    [docId, page, persistStore],
+  )
 
   const detectQuestions = useCallback(
-    async (force = false) => {
+    async (force = false, preferOcr = false) => {
       setError('')
       setInfo('')
       setExtractPreview('')
@@ -142,73 +221,27 @@ export function PdfQuizHost({
         const cached = force
           ? null
           : await getPageExtract(docId, page, 'questions')
-        let found: PdfDetectedQuestion[] = []
-        let kind: PdfPageKind = 'questions'
-        let sols: PdfDetectedSolution[] = []
         if (cached && Array.isArray(cached.payload) && cached.payload.length) {
-          found = cached.payload as PdfDetectedQuestion[]
+          setDetectedQs(cached.payload as PdfDetectedQuestion[])
+          setPageKind('questions')
           setInfo('Loaded saved detect for this page.')
-        } else {
-          // English column only — never OCR bilingual pages (Hindi → Latin junk).
-          const pack = await collectTexts()
-          const local = pickBestQuestionsFromTexts(pack.texts, page)
+          setOpen(true)
+          return
+        }
+
+        // 1) Text-layer English columns
+        let pack = await collectTexts(preferOcr)
+        let local = pickBestQuestionsFromTexts(pack.texts, page)
+        let sols = pickBestSolutionsFromTexts(pack.texts, page)
+
+        // 2) If messy / empty → accurate path: OCR left English column only
+        if (!isCleanDetect(local.questions) && !pack.usedOcr) {
+          pack = await collectTexts(true)
+          local = pickBestQuestionsFromTexts(pack.texts, page)
           sols = pickBestSolutionsFromTexts(pack.texts, page)
-
-          found = local.questions
-          kind = local.pageKind
-          setExtractPreview(pack.preview)
-
-          await putPageExtract({
-            id: pageExtractId(docId, page, 'questions'),
-            docId,
-            page,
-            kind: 'questions',
-            payload: found,
-            extractedAt: new Date().toISOString(),
-          })
-          if (sols.length) {
-            setDetectedSols(sols)
-            await putPageExtract({
-              id: pageExtractId(docId, page, 'solutions'),
-              docId,
-              page,
-              kind: 'solutions',
-              payload: sols,
-              extractedAt: new Date().toISOString(),
-            })
-          }
-
-          if (kind === 'solutions' && !found.length && sols.length) {
-            await persistStore(mergeSolutionsIntoStore(storeRef.current, sols))
-            setPanel('solutions')
-            setPageKind('solutions')
-            setInfo(`Mapped ${sols.length} solution(s) from this page.`)
-            setDetectedQs([])
-            setOpen(true)
-            return
-          }
-
-          if (found.length) {
-            const keyed = found.filter((q) => q.guessedAnswer).length
-            setInfo(
-              `Detected ${found.length} question(s)${
-                keyed ? ` · ${keyed} with answer key` : ''
-              }${pack.usedOcr ? ' · OCR' : ' · page text'}.`,
-            )
-          }
         }
-        setDetectedQs(found)
-        setPageKind(kind)
-        if (!found.length) {
-          setError(
-            'No MCQs found. Re-detect runs OCR on the page image — or Map solutions if this is an answer key.',
-          )
-        } else {
-          let next = mergeQuestionsIntoStore(storeRef.current, found)
-          if (sols.length) next = mergeSolutionsIntoStore(next, sols)
-          await persistStore(next)
-        }
-        setOpen(true)
+
+        await finishDetect(local.questions, local.pageKind, sols, pack)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Detect failed')
         setOpen(true)
@@ -216,7 +249,7 @@ export function PdfQuizHost({
         setBusy(false)
       }
     },
-    [collectTexts, docId, page, persistStore],
+    [collectTexts, docId, finishDetect, page],
   )
 
   const detectSolutions = useCallback(async () => {
@@ -225,8 +258,12 @@ export function PdfQuizHost({
     setBusy(true)
     setBusyLabel('Reading page…')
     try {
-      const pack = await collectTexts()
-      const found = pickBestSolutionsFromTexts(pack.texts, page)
+      let pack = await collectTexts(false)
+      let found = pickBestSolutionsFromTexts(pack.texts, page)
+      if (!found.length) {
+        pack = await collectTexts(true)
+        found = pickBestSolutionsFromTexts(pack.texts, page)
+      }
       setExtractPreview(pack.preview)
       await putPageExtract({
         id: pageExtractId(docId, page, 'solutions'),
@@ -298,6 +335,7 @@ export function PdfQuizHost({
           forceSolutions={panel === 'solutions'}
           onClose={() => setOpen(false)}
           onStartDetect={() => void detectQuestions(true)}
+          onOcrEnglish={() => void detectQuestions(true, true)}
           onDetectSolutions={() => void detectSolutions()}
         />
       )}
