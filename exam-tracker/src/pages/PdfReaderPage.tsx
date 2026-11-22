@@ -830,6 +830,19 @@ export function PdfReaderPage() {
     [],
   )
 
+  const getPageText = useCallback(async () => {
+    if (!pdf) return ''
+    try {
+      const pg = await pdf.getPage(page)
+      const tc = await pg.getTextContent()
+      return tc.items
+        .map((it) => ('str' in it ? String(it.str) : ''))
+        .join(' ')
+    } catch {
+      return ''
+    }
+  }, [pdf, page])
+
   const goPracticeDoubt = (bm: PdfBookmark) => {
     const topic = bm.topicId || TOPICS[0]?.id || ''
     navigate(`/practice?topic=${encodeURIComponent(topic)}&from=pdf-doubt`)
@@ -1257,6 +1270,7 @@ export function PdfReaderPage() {
               title={meta.name}
               page={page}
               getPageCanvas={getPageCanvas}
+              getPageText={getPageText}
             />
           )}
         </div>

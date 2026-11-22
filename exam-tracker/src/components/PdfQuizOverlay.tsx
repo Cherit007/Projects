@@ -23,10 +23,12 @@ export function PdfQuizOverlay({
   pageKind,
   busy,
   error,
+  info = '',
   hasKey,
   forceSolutions,
   onClose,
   onStartDetect,
+  onDetectOffline,
   onDetectSolutions,
   onSaveKey,
 }: {
@@ -37,10 +39,12 @@ export function PdfQuizOverlay({
   pageKind?: PdfPageKind | null
   busy: boolean
   error: string
+  info?: string
   hasKey: boolean
   forceSolutions?: boolean
   onClose: () => void
   onStartDetect: () => void
+  onDetectOffline: () => void
   onDetectSolutions: () => void
   onSaveKey: (key: string) => void
 }) {
@@ -56,11 +60,7 @@ export function PdfQuizOverlay({
   const [qStartedAt, setQStartedAt] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
   const [keyDraft, setKeyDraft] = useState('')
-  const [editKey, setEditKey] = useState(!hasKey)
-
-  useEffect(() => {
-    if (!hasKey) setEditKey(true)
-  }, [hasKey])
+  const [editKey, setEditKey] = useState(false)
 
   useEffect(() => {
     if (!error) return
@@ -221,26 +221,16 @@ export function PdfQuizOverlay({
         </header>
 
         {error && <p className="pdf-status error">{error}</p>}
-        {busy && <p className="pdf-status muted">Reading page with Gemini…</p>}
+        {info && !busy && <p className="pdf-status muted">{info}</p>}
+        {busy && (
+          <p className="pdf-status muted">Reading page (offline text / Gemini)…</p>
+        )}
 
-        {mode === 'review' && (editKey || !hasKey) && (
+        {mode === 'review' && editKey && (
           <div className="pdf-quiz-keybox">
             <p>
-              {hasKey ? (
-                'Paste a new Gemini API key from AI Studio (copy icon), then Save & detect.'
-              ) : (
-                <>
-                  Paste a free{' '}
-                  <a
-                    href="https://aistudio.google.com/apikey"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Gemini API key
-                  </a>{' '}
-                  (stays on this device), then Save & detect.
-                </>
-              )}
+              Optional Gemini vision key (for image-only / bilingual pages). Or
+              use <strong>Detect from page text</strong> with no key.
             </p>
             <div className="pdf-bm-add">
               <input
@@ -284,7 +274,7 @@ export function PdfQuizOverlay({
 
         {mode === 'review' && (
           <>
-            {hasKey && !editKey && (
+            {!editKey && (
               <div className="pdf-quiz-actions">
                 <button
                   type="button"
@@ -294,7 +284,7 @@ export function PdfQuizOverlay({
                     setKeyDraft('')
                   }}
                 >
-                  Change API key
+                  {hasKey ? 'Change API key' : 'Add Gemini key (optional)'}
                 </button>
               </div>
             )}
@@ -309,13 +299,7 @@ export function PdfQuizOverlay({
                     type="button"
                     className="pdf-side-btn primary"
                     disabled={busy}
-                    onClick={() => {
-                      if (!hasKey) {
-                        setEditKey(true)
-                        return
-                      }
-                      onDetectSolutions()
-                    }}
+                    onClick={onDetectSolutions}
                   >
                     Map solutions
                   </button>
@@ -335,31 +319,31 @@ export function PdfQuizOverlay({
                 type="button"
                 className="pdf-side-btn primary"
                 disabled={busy}
-                onClick={() => {
-                  if (!hasKey) {
-                    setEditKey(true)
-                    return
-                  }
-                  onStartDetect()
-                }}
+                onClick={onDetectOffline}
               >
-                {pageQs.length ? 'Re-detect page' : 'Detect questions'}
+                Detect from page text
               </button>
               <button
                 type="button"
                 className="pdf-doubt-btn"
                 disabled={busy}
-                onClick={() => {
-                  if (!hasKey) {
-                    setEditKey(true)
-                    return
-                  }
-                  onDetectSolutions()
-                }}
+                onClick={onStartDetect}
+              >
+                {pageQs.length ? 'Re-detect (Gemini)' : 'Detect with Gemini'}
+              </button>
+              <button
+                type="button"
+                className="pdf-doubt-btn"
+                disabled={busy}
+                onClick={onDetectSolutions}
               >
                 This page has solutions — map answers
               </button>
             </div>
+            <p className="pdf-quiz-hint">
+              Page text works offline when Gemini is busy. Gemini vision helps
+              on scanned / image-only pages.
+            </p>
 
             {pageQs.length === 0 ? (
               !looksLikeSolutions && (
