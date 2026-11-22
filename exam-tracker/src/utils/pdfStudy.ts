@@ -29,6 +29,8 @@ export type PdfDocMeta = {
   pageCount: number | null
   lastPage: number
   zoom: number
+  /** Reader layout — one page or side-by-side spread */
+  spread?: 'single' | 'double'
   createdAt: string
   updatedAt: string
 }
