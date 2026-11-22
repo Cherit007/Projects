@@ -253,8 +253,8 @@ export function PdfQuizOverlay({
               </button>
             </div>
             <p className="pdf-quiz-hint">
-              Reads MCQs from this page’s text (√, powers, brackets rendered
-              for BODMAS-style equations).
+              Works on multi-column English+Hindi pages — uses column reading
+              order, keeps English stems, and picks up same-page answer keys.
             </p>
 
             {pageQs.length === 0 ? (
