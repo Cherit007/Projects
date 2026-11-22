@@ -6424,17 +6424,20 @@ html.pdf-reader-active .main {
 .pdf-toolbar,
 .pdf-subbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.45rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4rem 0.7rem;
+  padding: 0.35rem 0.65rem;
   background: rgba(255, 255, 255, 0.94);
   border-bottom: 1px solid rgba(20, 50, 42, 0.08);
   position: relative;
   z-index: 6;
   flex-shrink: 0;
   backdrop-filter: blur(8px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .pdf-toolbar-left,
@@ -6443,15 +6446,23 @@ html.pdf-reader-active .main {
 .pdf-pager,
 .pdf-colors {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.pdf-toolbar-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+  overflow-x: auto;
 }
 
 .pdf-title {
   font-family: var(--font-body);
-  font-size: 0.9rem;
-  max-width: min(14rem, 36vw);
+  font-size: 0.88rem;
+  max-width: min(11rem, 22vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6474,15 +6485,18 @@ html.pdf-reader-active .main {
 
 .pdf-toolbar-center button,
 .pdf-toolbar-right button,
-.pdf-pager button {
+.pdf-pager button,
+.pdf-toolbar-left > button.ghost {
   border: 1px solid transparent;
   background: transparent;
   color: var(--ink-soft);
-  padding: 0.32rem 0.58rem;
+  padding: 0.28rem 0.48rem;
   border-radius: 8px;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 650;
   cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .pdf-toolbar-center button:hover,
@@ -6534,15 +6548,24 @@ html.pdf-reader-active .main {
   font-size: 0.78rem;
   font-weight: 650;
   color: var(--muted);
+  margin: 0;
+  line-height: 1;
 }
 
 .pdf-pager input {
-  width: 3.1rem;
+  width: 2.8rem;
+  height: 1.7rem;
   border: 1px solid var(--line);
   border-radius: 7px;
-  padding: 0.25rem 0.35rem;
+  padding: 0 0.3rem;
   font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.7rem;
   background: #fff;
+  color: var(--ink);
+  text-align: center;
+  box-sizing: border-box;
+  vertical-align: middle;
 }
 
 .pdf-spread {
@@ -6694,15 +6717,30 @@ html.pdf-reader-active .main {
 
 .pdf-bm-add {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.35rem;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .pdf-bm-add input {
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.4rem 0.5rem;
   font: inherit;
+  background: #fff;
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+.pdf-bm-add .btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pdf-bm-list {
@@ -7053,9 +7091,37 @@ html.pdf-reader-active .main {
   padding: 0 0 0 0.35rem;
 }
 
+.pdf-side-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pdf-side-btn.primary {
+  background: var(--teal);
+  color: #f4fffb;
+}
+
 .pdf-doubt-btn {
+  display: block;
   width: 100%;
   margin-top: 0.45rem;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--ink-soft);
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: center;
 }
 
 .pdf-bm-list > li.doubt {
@@ -7111,26 +7177,181 @@ html.pdf-reader-active .main {
   filter: sepia(0.35) contrast(0.95);
 }
 
+/* —— Night / dark chrome (force contrast; don't rely on inheritance) —— */
 .pdf-reader.theme-night {
-  background: #121816;
+  --pdf-night-bg: #121816;
+  --pdf-night-panel: #1b2420;
+  --pdf-night-panel-2: #222c28;
+  --pdf-night-text: #e6f0eb;
+  --pdf-night-muted: #9bb0a7;
+  --pdf-night-line: rgba(230, 240, 235, 0.14);
+  --pdf-night-accent: #7dcdc0;
+  --pdf-night-accent-bg: rgba(125, 205, 192, 0.16);
+  background: var(--pdf-night-bg);
+  color: var(--pdf-night-text);
 }
 
 .pdf-reader.theme-night .pdf-stage {
-  background: #0e1311;
+  background: #0c100e;
 }
 
 .pdf-reader.theme-night .pdf-page-stack {
-  filter: invert(0.92) hue-rotate(180deg);
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.95) contrast(0.95);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 .pdf-reader.theme-night .pdf-toolbar,
 .pdf-reader.theme-night .pdf-subbar,
 .pdf-reader.theme-night .pdf-side,
 .pdf-reader.theme-night .pdf-left,
-.pdf-reader.theme-night .pdf-focus-bar {
-  background: #1a221f;
-  color: #d7e4df;
-  border-color: rgba(255, 255, 255, 0.08);
+.pdf-reader.theme-night .pdf-focus-bar,
+.pdf-reader.theme-night .pdf-side-fixed {
+  background: var(--pdf-night-panel) !important;
+  color: var(--pdf-night-text) !important;
+  border-color: var(--pdf-night-line) !important;
+}
+
+.pdf-reader.theme-night .pdf-title,
+.pdf-reader.theme-night .pdf-zoom,
+.pdf-reader.theme-night .pdf-pager label,
+.pdf-reader.theme-night .pdf-pager span,
+.pdf-reader.theme-night .pdf-empty-side,
+.pdf-reader.theme-night .pdf-bm-jump span,
+.pdf-reader.theme-night .pdf-thumbs button,
+.pdf-reader.theme-night .pdf-outline-list span,
+.pdf-reader.theme-night .pdf-search-hits span,
+.pdf-reader.theme-night .pdf-check {
+  color: var(--pdf-night-muted) !important;
+}
+
+.pdf-reader.theme-night .pdf-toolbar-center button,
+.pdf-reader.theme-night .pdf-toolbar-right button,
+.pdf-reader.theme-night .pdf-pager button,
+.pdf-reader.theme-night .pdf-toolbar-left > button,
+.pdf-reader.theme-night .pdf-toolbar-left .ghost,
+.pdf-reader.theme-night .pdf-rail-tabs button,
+.pdf-reader.theme-night .pdf-layer-list button,
+.pdf-reader.theme-night .pdf-bm-jump,
+.pdf-reader.theme-night .pdf-bm-jump strong,
+.pdf-reader.theme-night .pdf-bm-actions .ghost,
+.pdf-reader.theme-night .pdf-outline-list button,
+.pdf-reader.theme-night .pdf-search-hits button,
+.pdf-reader.theme-night .pdf-thumbs button,
+.pdf-reader.theme-night .pdf-focus-bar button {
+  color: var(--pdf-night-text) !important;
+  border-color: transparent;
+  background: transparent;
+}
+
+.pdf-reader.theme-night .pdf-toolbar-center button:hover,
+.pdf-reader.theme-night .pdf-toolbar-right button:hover,
+.pdf-reader.theme-night .pdf-pager button:hover,
+.pdf-reader.theme-night .pdf-rail-tabs button:hover,
+.pdf-reader.theme-night .pdf-outline-list button:hover,
+.pdf-reader.theme-night .pdf-search-hits button:hover,
+.pdf-reader.theme-night .pdf-thumbs button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.pdf-reader.theme-night .pdf-toolbar-center button.active,
+.pdf-reader.theme-night .pdf-toolbar-right button.active,
+.pdf-reader.theme-night .pdf-rail-tabs button.active,
+.pdf-reader.theme-night .pdf-layer-list button.active,
+.pdf-reader.theme-night .pdf-thumbs button.active,
+.pdf-reader.theme-night .pdf-spread button.active {
+  background: var(--pdf-night-accent-bg) !important;
+  color: var(--pdf-night-accent) !important;
+}
+
+.pdf-reader.theme-night .pdf-save-pill {
+  color: var(--pdf-night-accent);
+  background: var(--pdf-night-accent-bg);
+}
+
+.pdf-reader.theme-night .pdf-spread {
+  border-color: var(--pdf-night-line);
+}
+
+.pdf-reader.theme-night .pdf-spread button + button {
+  border-left-color: var(--pdf-night-line) !important;
+}
+
+.pdf-reader.theme-night .pdf-pager input,
+.pdf-reader.theme-night .pdf-bm-add input,
+.pdf-reader.theme-night .pdf-search-box input {
+  background: var(--pdf-night-panel-2) !important;
+  color: var(--pdf-night-text) !important;
+  border-color: var(--pdf-night-line) !important;
+  caret-color: var(--pdf-night-accent);
+}
+
+.pdf-reader.theme-night .pdf-pager input::placeholder,
+.pdf-reader.theme-night .pdf-bm-add input::placeholder,
+.pdf-reader.theme-night .pdf-search-box input::placeholder {
+  color: var(--pdf-night-muted);
+}
+
+.pdf-reader.theme-night .pdf-bm-list > li,
+.pdf-reader.theme-night .pdf-bm-list > li.doubt {
+  background: var(--pdf-night-panel-2);
+  color: var(--pdf-night-text);
+}
+
+.pdf-reader.theme-night .pdf-bm-list > li.doubt {
+  background: rgba(196, 122, 44, 0.18);
+}
+
+.pdf-reader.theme-night .pdf-doubt-btn,
+.pdf-reader.theme-night .pdf-side .ghost {
+  background: var(--pdf-night-panel-2) !important;
+  color: var(--pdf-night-text) !important;
+  border: 1px solid var(--pdf-night-line) !important;
+}
+
+.pdf-reader.theme-night .pdf-doubt-btn:hover,
+.pdf-reader.theme-night .pdf-side .ghost:hover {
+  color: var(--pdf-night-accent) !important;
+  border-color: rgba(125, 205, 192, 0.4) !important;
+}
+
+.pdf-reader.theme-night .pdf-side-btn.primary,
+.pdf-reader.theme-night .pdf-search-box .btn.primary {
+  background: #1f8f7e !important;
+  color: #f4fffb !important;
+  box-shadow: none;
+}
+
+.pdf-reader.theme-night .pdf-left-scroll,
+.pdf-reader.theme-night .pdf-side-scroll {
+  background: var(--pdf-night-panel);
+}
+
+.pdf-reader.theme-night .pdf-thumb-ph {
+  background: #2a3531;
+  color: var(--pdf-night-muted);
+}
+
+.pdf-reader.theme-night .pdf-sticky {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+.pdf-reader.theme-night .pdf-swatch.active {
+  border-color: var(--pdf-night-text);
+  box-shadow: 0 0 0 2px var(--pdf-night-panel) inset;
+}
+
+@media (max-width: 1100px) {
+  .pdf-toolbar,
+  .pdf-subbar {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .pdf-toolbar-center {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 900px) {
