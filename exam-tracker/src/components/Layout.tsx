@@ -16,6 +16,7 @@ const PRIMARY = [
 ] as const
 
 const MORE = [
+  { to: '/pdf', label: 'PDF desk' },
   { to: '/prep', label: 'Prep lab' },
   { to: '/roadmap', label: 'Roadmap' },
   { to: '/compare', label: 'Compare' },
