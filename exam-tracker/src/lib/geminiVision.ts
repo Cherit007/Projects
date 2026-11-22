@@ -2,13 +2,13 @@
 
 const KEY_STORAGE = 'exampulse.geminiApiKey'
 const MODEL_STORAGE = 'exampulse.geminiModel'
-const DEFAULT_MODEL = 'gemini-3.8-flash'
-/** Prefer flash models that support vision + free tier */
+/** Prefer lighter free Flash models — 3.8 often returns 503 under load */
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 const MODEL_FALLBACKS = [
-  'gemini-3.8-flash',
-  'gemini-3.6-flash',
   'gemini-3.5-flash-lite',
   'gemini-3.1-flash-lite',
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
 ] as const
 /** Retired ids that may still sit in localStorage from older builds */
 const RETIRED_MODELS = new Set([
@@ -36,7 +36,11 @@ export function getGeminiApiKey(): string {
   }
 }
 
-/** Strip copy/paste junk (quotes, Bearer, zero-width, newlines). */
+/**
+ * Strip copy/paste junk. New AI Studio keys look like `AQ.…`;
+ * older ones look like `AIza…`. Headers must be Latin-1, so drop
+ * anything outside printable ASCII.
+ */
 export function sanitizeGeminiKey(raw: string): string {
   return raw
     .replace(/^\uFEFF/, '')
@@ -45,6 +49,7 @@ export function sanitizeGeminiKey(raw: string): string {
     .replace(/^["'`]+|["'`]+$/g, '')
     .replace(/^Bearer\s+/i, '')
     .replace(/\s+/g, '')
+    .replace(/[^\x20-\x7E]/g, '')
 }
 
 export function setGeminiApiKey(key: string) {
@@ -93,7 +98,7 @@ export function setGeminiModel(model: string) {
 
 export function hasGeminiKey(): boolean {
   const key = getGeminiApiKey()
-  // Real AI Studio keys are long and usually start with AIza
+  // AI Studio: AIza… (classic) or AQ.… (newer)
   return key.length >= 20
 }
 
@@ -122,10 +127,13 @@ function parseGeminiError(status: number, errText: string): string {
       blob,
     )
   ) {
-    return 'Gemini rejected the API key — open PDF desk → Clear → paste the key again from AI Studio (copy icon).'
+    return 'Gemini rejected the API key — PDF desk → Clear → paste again from AI Studio copy icon.'
   }
   if (status === 429 || /resource_exhausted|quota|rate/.test(blob)) {
-    return 'Gemini free quota hit — wait a bit or try again tomorrow.'
+    return 'Gemini free quota hit — wait a bit or try again later.'
+  }
+  if (status === 503 || /unavailable|high demand/.test(blob)) {
+    return 'Gemini is busy (high demand) — try Detect again in a minute.'
   }
   if (status === 404 || /not found|no longer available/.test(blob)) {
     return message || 'Gemini model not found — trying another free Flash model.'
@@ -139,6 +147,10 @@ function modelCandidates(preferred: string): string[] {
   return [...new Set(list.filter((m) => m && !RETIRED_MODELS.has(m)))]
 }
 
+type GenResult =
+  | { ok: true; text: string }
+  | { ok: false; status: number; errText: string }
+
 async function generateOnce(opts: {
   key: string
   model: string
@@ -146,38 +158,58 @@ async function generateOnce(opts: {
   imageBase64: string
   mimeType: string
   temperature: number
-}): Promise<{ ok: true; text: string } | { ok: false; status: number; errText: string }> {
+  withThinking: boolean
+}): Promise<GenResult> {
+  // Put key in query string — avoids browser "non ISO-8859-1" header errors
+  // with some pasted AQ.… keys / invisible unicode leftovers.
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     opts.model,
-  )}:generateContent`
+  )}:generateContent?key=${encodeURIComponent(opts.key)}`
 
-  const parts: GeminiPart[] = [
-    { text: opts.prompt },
-    {
-      inline_data: {
-        mime_type: opts.mimeType,
-        data: opts.imageBase64,
-      },
-    },
-  ]
+  const generationConfig: Record<string, unknown> = {
+    temperature: opts.temperature,
+    responseMimeType: 'application/json',
+  }
+  if (opts.withThinking) {
+    generationConfig.thinkingConfig = { thinkingLevel: 'low' }
+  }
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': opts.key,
-    },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: {
-        temperature: opts.temperature,
-        // snake_case also accepted; camelCase is the REST JSON form
-        responseMimeType: 'application/json',
-        // Keep free-tier vision extracts cheap/fast on 3.x Flash
-        thinkingConfig: { thinkingLevel: 'low' },
-      },
-    }),
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: opts.prompt },
+              {
+                inline_data: {
+                  mime_type: opts.mimeType,
+                  data: opts.imageBase64,
+                },
+              },
+            ] satisfies GeminiPart[],
+          },
+        ],
+        generationConfig,
+      }),
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return {
+      ok: false,
+      status: 0,
+      errText: JSON.stringify({
+        error: {
+          message: msg.includes('ISO-8859-1')
+            ? 'Bad characters in the API key — Clear key and paste again from the AI Studio copy icon.'
+            : msg,
+        },
+      }),
+    }
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
@@ -202,6 +234,16 @@ async function generateOnce(opts: {
     }
   }
   return { ok: true, text }
+}
+
+function parseJsonText(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/)
+    if (!match) throw new Error('Could not parse Gemini JSON')
+    return JSON.parse(match[0])
+  }
 }
 
 export async function geminiJsonFromImage(opts: {
@@ -224,89 +266,89 @@ export async function geminiJsonFromImage(opts: {
   let lastErr = ''
 
   for (const model of models) {
-    const result = await generateOnce({
+    let result = await generateOnce({
       key,
       model,
       prompt: opts.prompt,
       imageBase64: opts.imageBase64,
       mimeType: opts.mimeType || 'image/jpeg',
       temperature: opts.temperature ?? 0.1,
+      withThinking: true,
     })
+
+    if (
+      !result.ok &&
+      result.status === 400 &&
+      /thinking|thinkinglevel|thinking_level/i.test(result.errText)
+    ) {
+      result = await generateOnce({
+        key,
+        model,
+        prompt: opts.prompt,
+        imageBase64: opts.imageBase64,
+        mimeType: opts.mimeType || 'image/jpeg',
+        temperature: opts.temperature ?? 0.1,
+        withThinking: false,
+      })
+    }
+
     if (result.ok) {
       if (model !== preferred) setGeminiModel(model)
-      try {
-        return JSON.parse(result.text)
-      } catch {
-        const match = result.text.match(/\{[\s\S]*\}/)
-        if (!match) throw new Error('Could not parse Gemini JSON')
-        return JSON.parse(match[0])
-      }
+      return parseJsonText(result.text)
     }
 
     lastStatus = result.status
     lastErr = result.errText
     const msg = parseGeminiError(result.status, result.errText).toLowerCase()
-    const tryNext =
-      result.status === 404 ||
-      /no longer available|not found|not supported|unknown model|invalid model/.test(
-        msg,
-      ) ||
-      (result.status === 400 && /thinking|thinkinglevel|thinking_level/.test(msg))
 
-    // Auth failures: don't keep trying other models
     if (
       result.status === 401 ||
       result.status === 403 ||
-      /api[_ ]?key|permission_denied|unauthenticated|consumer_invalid/.test(msg)
+      result.status === 0 ||
+      /api[_ ]?key|permission_denied|unauthenticated|consumer_invalid|bad characters/.test(
+        msg,
+      )
     ) {
       throw new Error(parseGeminiError(result.status, result.errText))
     }
 
+    const tryNext =
+      result.status === 404 ||
+      result.status === 503 ||
+      /no longer available|not found|not supported|unknown model|invalid model|high demand|unavailable/.test(
+        msg,
+      )
+
     if (!tryNext) {
-      // Retry once without thinkingConfig for odd 400s
+      // one more attempt without thinking for generic 400s
       if (result.status === 400) {
-        const retry = await generateOnceNoThinking({
+        const retry = await generateOnce({
           key,
           model,
           prompt: opts.prompt,
           imageBase64: opts.imageBase64,
           mimeType: opts.mimeType || 'image/jpeg',
           temperature: opts.temperature ?? 0.1,
+          withThinking: false,
         })
         if (retry.ok) {
           if (model !== preferred) setGeminiModel(model)
-          try {
-            return JSON.parse(retry.text)
-          } catch {
-            const match = retry.text.match(/\{[\s\S]*\}/)
-            if (!match) throw new Error('Could not parse Gemini JSON')
-            return JSON.parse(match[0])
-          }
+          return parseJsonText(retry.text)
         }
         lastStatus = retry.status
         lastErr = retry.errText
-        const retryMsg = parseGeminiError(retry.status, retry.errText)
         if (
-          retry.status === 401 ||
-          retry.status === 403 ||
-          /api[_ ]?key|permission_denied/i.test(retryMsg)
-        ) {
-          throw new Error(retryMsg)
-        }
-        // fall through to next model only for model/feature issues
-        if (
-          !(
-            retry.status === 404 ||
-            /no longer available|not found|not supported|unknown model/i.test(
-              retryMsg,
-            )
+          retry.status === 404 ||
+          retry.status === 503 ||
+          /no longer available|not found|high demand/i.test(
+            parseGeminiError(retry.status, retry.errText),
           )
         ) {
-          throw new Error(retryMsg)
+          continue
         }
-      } else {
-        throw new Error(parseGeminiError(result.status, result.errText))
+        throw new Error(parseGeminiError(retry.status, retry.errText))
       }
+      throw new Error(parseGeminiError(result.status, result.errText))
     }
 
     if (RETIRED_MODELS.has(model) || result.status === 404) {
@@ -317,75 +359,10 @@ export async function geminiJsonFromImage(opts: {
   throw new Error(parseGeminiError(lastStatus, lastErr))
 }
 
-async function generateOnceNoThinking(opts: {
-  key: string
-  model: string
-  prompt: string
-  imageBase64: string
-  mimeType: string
-  temperature: number
-}): Promise<{ ok: true; text: string } | { ok: false; status: number; errText: string }> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    opts.model,
-  )}:generateContent`
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': opts.key,
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: opts.prompt },
-            {
-              inline_data: {
-                mime_type: opts.mimeType,
-                data: opts.imageBase64,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: opts.temperature,
-        responseMimeType: 'application/json',
-      },
-    }),
-  })
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '')
-    return { ok: false, status: res.status, errText }
-  }
-
-  const data = (await res.json()) as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> }
-    }>
-  }
-  const text =
-    data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') ||
-    ''
-  if (!text.trim()) {
-    return {
-      ok: false,
-      status: 502,
-      errText: JSON.stringify({
-        error: { message: 'Gemini returned an empty response' },
-      }),
-    }
-  }
-  return { ok: true, text }
-}
-
 export function canvasToJpegBase64(
   canvas: HTMLCanvasElement,
   quality = 0.72,
 ): { base64: string; dataUrl: string } {
-  // Downscale huge pages so free-tier payloads stay under limits
   const maxEdge = 1600
   const w = canvas.width
   const h = canvas.height

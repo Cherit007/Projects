@@ -273,7 +273,7 @@ export function PdfStudyPage() {
             placeholder={
               geminiSaved
                 ? 'Paste a new key to replace…'
-                : 'AIza… Gemini API key'
+                : 'Paste Gemini API key (AQ… or AIza…)'
             }
             value={geminiDraft}
             onChange={(e) => {
