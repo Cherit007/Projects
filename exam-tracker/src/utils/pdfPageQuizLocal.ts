@@ -15,6 +15,9 @@ const EXAM_DATE =
 const EXAM_HEADER =
   /^(?:SSC|IBPS|RRB|SBI|UPSC|BANK|RAILWAY|CHSL|CGL|MTS|GD|STENO|TIER[- ]?[IVX0-9]+|MAINS?|PRE(?:LIM(?:S|INARY)?)?|SHIFT|SEPT?|OCT|NOV|DEC|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG)\b/i
 
+const KEEP_SHORT =
+  /^(a|an|the|of|or|to|is|in|if|on|at|by|as|be|it|no|so|do|we|he|me|my|up|its|for|and|are|was|has|had|not|but|one|two|sum|lcm|hcf|x|y|n|r|p|q)$/i
+
 /** Strip bilingual bleed / exam chrome that pollutes stems & options. */
 export function scrubExamNoise(raw: string): string {
   return raw
@@ -22,10 +25,35 @@ export function scrubExamNoise(raw: string): string {
     .replace(EXAM_TAG, ' ')
     .replace(EXAM_DATE, ' ')
     .replace(/\bTier[- ]?[IVX0-9]+\b/gi, ' ')
-    .replace(/[®©§]/g, ' ')
+    .replace(/[®©§#]+/g, ' ')
     .replace(/[^\S\n]+/g, ' ')
     .replace(/[ \t]*\n[ \t]*/g, '\n')
     .trim()
+}
+
+/**
+ * Hindi columns often appear as Latin mojibake ("Te fm sd wd…").
+ * Drop short junk tokens that are not real English glue words.
+ */
+export function stripMojibakeJunk(raw: string): string {
+  const tokens = scrubExamNoise(raw).split(/\s+/).filter(Boolean)
+  const out: string[] = []
+  let junkRun = 0
+  for (const t of tokens) {
+    const isJunk =
+      (/^[A-Za-z]{1,3}$/.test(t) && !KEEP_SHORT.test(t)) ||
+      /^[^\w√∛×÷=+\-.,/()]+$/.test(t)
+    if (isJunk) {
+      junkRun += 1
+      // Keep a single short token occasionally (x, y); drop runs of junk
+      if (junkRun >= 2) continue
+      if (!KEEP_SHORT.test(t) && !/^[xy]$/i.test(t)) continue
+    } else {
+      junkRun = 0
+    }
+    out.push(t)
+  }
+  return out.join(' ').replace(/\s+/g, ' ').trim()
 }
 
 /** Normalize pdf.js / OCR text into a single parseable string. */
@@ -136,15 +164,12 @@ export function splitBilingualStem(raw: string): {
   const leak = stem.search(/\s\d{1,2}\s*[.)]\s+(?:The|If|Find|What|How|LCM|HCF|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten)\b/i)
   if (leak > 24) stem = stem.slice(0, leak).trim()
 
+  stem = stripMojibakeJunk(stem)
   return { stem: stem || tidyMathPlain(scrubExamNoise(raw)).slice(0, 500), stemHi }
 }
 
 function cleanOptionText(raw: string): string {
-  let t = scrubExamNoise(raw)
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => Boolean(l) && (!DEVANAGARI.test(l) || /[0-9A-Za-z(]/.test(l)))
-    .join(' ')
+  let t = stripMojibakeJunk(raw)
   // Stop at next question / option bleed
   t = t.split(
     /\s(?=\d{1,2}\s*[.)]\s+(?:The|If|Find|What|How|LCM|HCF|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten)\b)/i,
@@ -152,13 +177,41 @@ function cleanOptionText(raw: string): string {
   t = t.split(/\s(?=[\(\[]?\s*[a-dA-D]\s*[\)\].:])/)[0]
   const hiAt = t.search(DEVANAGARI)
   if (hiAt > 0) t = t.slice(0, hiAt)
-  // Maths options are usually short; truncate runaway OCR
   const cleaned = tidyMathPlain(t).trim()
-  if (cleaned.length > 80 && /^[\d.,\-\/+×÷√^=\sA-Za-z()]{1,40}/.test(cleaned)) {
-    const short = cleaned.match(/^[\d.,\-\/+×÷√^=\s]+|^[A-Za-z0-9][\w.\-\/+×÷√^=\s]{0,36}/)
-    if (short) return short[0].trim().slice(0, 60)
+  // Maths MCQs: keep a short numeric / algebraic answer
+  const numish = cleaned.match(
+    /^[+\-]?[\d.,]+(?:\s*[:/÷×x]\s*[\d.,]+)?|^[xyXY]\s*[+\-=]\s*[\d.]+|^[\d.,]+\s*[+\-]\s*[\d.,]+/,
+  )
+  if (numish) return numish[0].trim().slice(0, 40)
+  if (cleaned.length > 36) {
+    const short = cleaned.match(/^[\d.,\-\/+×÷√^=\sA-Za-z()]{1,36}/)
+    if (short) return short[0].trim()
   }
-  return cleaned.slice(0, 120)
+  return cleaned.slice(0, 48)
+}
+
+/** Champion packed line: (a) 14 (b) 17 (c) 18 (d) 15 */
+function parsePackedOptions(
+  body: string,
+): {
+  options: Partial<Record<PdfQuizOptionKey, string>>
+  stemEnd: number
+} | null {
+  const re =
+    /\(\s*a\s*\)\s*([^\n(]+?)\s*\(\s*b\s*\)\s*([^\n(]+?)\s*\(\s*c\s*\)\s*([^\n(]+?)\s*\(\s*d\s*\)\s*([^\n(]+?)(?=\s*(?:\n|$|\d{1,2}\s*[.)]|SSC\b))/i
+  const m = re.exec(body)
+  if (!m) return null
+  const options: Partial<Record<PdfQuizOptionKey, string>> = {
+    A: cleanOptionText(m[1]),
+    B: cleanOptionText(m[2]),
+    C: cleanOptionText(m[3]),
+    D: cleanOptionText(m[4]),
+  }
+  const filled = Object.values(options).filter((t) => t && t.length > 0)
+  if (filled.length < 3) return null
+  // Reject if options look like sentence fragments (column bleed)
+  if (filled.filter((t) => (t || '').length <= 24).length < 3) return null
+  return { options, stemEnd: m.index }
 }
 
 function findOptionHits(
@@ -268,22 +321,34 @@ export function extractQuestionsFromPageText(
     )
     if (!body) continue
 
-    const optHits = findOptionHits(body)
     const options: Partial<Record<PdfQuizOptionKey, string>> = {}
     let stemRaw = body
 
-    if (optHits.length >= 2) {
-      stemRaw = body.slice(0, Math.max(0, optHits[0].at)).trim()
-      for (let j = 0; j < optHits.length; j += 1) {
-        const hit = optHits[j]
-        const nextAt =
-          j + 1 < optHits.length ? optHits[j + 1].at : body.length
-        const optText = cleanOptionText(body.slice(hit.at + hit.len, nextAt))
-        if (optText) options[hit.letter] = optText
+    const packed = parsePackedOptions(body)
+    if (packed) {
+      stemRaw = body.slice(0, Math.max(0, packed.stemEnd)).trim()
+      Object.assign(options, packed.options)
+    } else {
+      const optHits = findOptionHits(body)
+      if (optHits.length >= 2) {
+        stemRaw = body.slice(0, Math.max(0, optHits[0].at)).trim()
+        for (let j = 0; j < optHits.length; j += 1) {
+          const hit = optHits[j]
+          const nextAt =
+            j + 1 < optHits.length ? optHits[j + 1].at : body.length
+          // Only take text until next option / next question — never rest of page
+          let slice = body.slice(hit.at + hit.len, nextAt)
+          const cutQ = slice.search(
+            /\s\d{1,2}\s*[.)]\s+(?:The|If|Find|What|How|LCM|HCF)\b/i,
+          )
+          if (cutQ > 0) slice = slice.slice(0, cutQ)
+          const optText = cleanOptionText(slice)
+          if (optText) options[hit.letter] = optText
+        }
       }
     }
 
-    const { stem, stemHi } = splitBilingualStem(stemRaw)
+    const { stem } = splitBilingualStem(stemRaw)
     if (!stem && Object.keys(options).length < 2) continue
     // Reject hopeless OCR mashups
     if (garbageScore(stem, options) > 55 && Object.keys(options).length < 3) {
@@ -294,7 +359,6 @@ export function extractQuestionsFromPageText(
     questions.push({
       number: cur.number,
       stem: stem || `Question ${cur.number}`,
-      stemHi,
       options,
       confidence:
         Object.keys(options).length >= 4
@@ -352,19 +416,27 @@ function questionScore(q: PdfDetectedQuestion): number {
   const cleanOpts = Object.values(q.options).filter(
     (t) => t && t.length <= 48 && !DEVANAGARI.test(t) && !/\d{1,2}\s*[.)]\s+[A-Z]/.test(t),
   ).length
-  // Prefer readable English stems — long OCR mashups must lose
+  // Prefer complete readable English stems — truncated/mojibake must lose
   const readable =
     /\b(?:the|and|their|of|is|are|find|what|how|if|two|numbers|lcm|hcf)\b/i.test(
       stem,
-    ) && !/\b(?:ops|Te fm|sd wd|HCE|www)\b/.test(stem)
-  const nonsenseTokens = (stem.match(/\b[A-Za-z]{1,2}\b/g) || []).length
+    ) && !/\b(?:ops|HCE|www|demi)\b/i.test(stem)
+  const endsWell = /[?:.]$/.test(stem) || /\b(?:is|are|then|find|number|digits?|equals?)\s*:?$/i.test(stem)
+  const truncated = /\b(?:if their|then the|times the of)\s*$/i.test(stem)
+  const cueWords = (
+    stem.match(
+      /\b(?:HCF|LCM|numbers?|sum|product|difference|digits?|between|times)\b/gi,
+    ) || []
+  ).length
   return (
     opts * 14 +
     cleanOpts * 18 +
-    Math.min(stem.length, 160) / 20 +
+    Math.min(stem.length, 220) / 8 +
+    cueWords * 4 +
     (readable ? 25 : 0) +
+    (endsWell ? 12 : 0) +
+    (truncated ? -40 : 0) +
     (q.guessedAnswer ? 8 : 0) -
-    nonsenseTokens * 2 -
     garbageScore(stem, q.options)
   )
 }

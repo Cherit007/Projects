@@ -93,7 +93,6 @@ function itemsToLines(items: PdfTextItem[]): string[] {
     .filter(Boolean)
 }
 
-/** Equal-width column bands (best for Champion 2/3-col layouts). */
 function splitByBands(items: PdfTextItem[], colCount: number): PdfTextItem[][] {
   if (colCount <= 1 || items.length < 8) return [items]
   const minX = Math.min(...items.map((i) => i.x))
@@ -111,7 +110,6 @@ function splitByBands(items: PdfTextItem[], colCount: number): PdfTextItem[][] {
   return cols.filter((c) => c.length >= 3)
 }
 
-/** Gap-based column cuts. */
 function splitByGaps(items: PdfTextItem[]): PdfTextItem[][] {
   if (!items.length) return []
   const sorted = [...items].sort((a, b) => a.x - b.x || b.y - a.y)
@@ -153,52 +151,87 @@ function flatRowText(items: PdfTextItem[]): string {
   return itemsToLines(items).join('\n')
 }
 
-function rawJoinText(items: PdfTextItem[]): string {
-  return items
-    .slice()
-    .sort((a, b) => b.y - a.y || a.x - b.x)
-    .map((i) => i.str)
-    .join(' ')
-    .replace(/[ \t]+/g, ' ')
-    .trim()
-}
-
-const DEVANAGARI_CHAR = /[\u0900-\u097F]/
-
-/** Keep Latin/math glyphs — drops Hindi column bleed on bilingual pages. */
-function englishOnlyItems(items: PdfTextItem[]): PdfTextItem[] {
+/** Drop real Devanagari glyphs (when the PDF encodes Hindi correctly). */
+function withoutDevanagari(items: PdfTextItem[]): PdfTextItem[] {
   return items.filter((it) => {
     const s = it.str.trim()
     if (!s) return false
-    if (!DEVANAGARI_CHAR.test(s)) return true
-    // Keep mixed tokens that are mostly Latin/digits (rare)
     const dev = (s.match(/[\u0900-\u097F]/g) || []).length
-    return dev / s.length < 0.2
+    return dev / s.length < 0.15
   })
 }
 
+/**
+ * Score how "English MCQ" a column looks.
+ * Hindi columns in these books are often wrong-encoded Latin mojibake —
+ * they score low on real English cue words.
+ */
+function englishMcqScore(text: string): number {
+  if (!text || text.length < 20) return -100
+  const cues = (
+    text.match(
+      /\b(?:The|If|Find|What|How|Then|Their|Numbers?|LCM|HCF|Sum|Product|Difference|Between|Times|Digits?|Positive|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Which|Among|Equal|Ratio|Average)\b/g,
+    ) || []
+  ).length
+  const opts = (text.match(/\(\s*[a-dA-D]\s*\)/g) || []).length
+  const qNums = (text.match(/(?:^|\n)\s*\d{1,2}\s*[.)]\s+/g) || []).length
+  const dev = (text.match(/[\u0900-\u097F]/g) || []).length
+  // Mojibake Hindi often has many 1–3 letter "words"
+  const tokens = text.split(/\s+/).filter(Boolean)
+  const shortJunk = tokens.filter(
+    (t) =>
+      /^[A-Za-z]{1,3}$/.test(t) &&
+      !/^(a|an|the|of|or|to|is|in|if|on|at|by|as|be|it|no|so|do|we|he|me|my|up|its|for|and|are|was|has|had|not|but|one|two|sum|lcm|hcf|x|y)$/i.test(
+        t,
+      ),
+  ).length
+  return (
+    cues * 8 +
+    Math.min(opts, 16) * 5 +
+    Math.min(qNums, 12) * 6 -
+    dev * 2 -
+    shortJunk * 3
+  )
+}
+
+function leftRightSplit(items: PdfTextItem[]): {
+  left: PdfTextItem[]
+  right: PdfTextItem[]
+} {
+  if (items.length < 8) return { left: items, right: [] }
+  const xs = items.map((i) => i.x + i.w * 0.35).sort((a, b) => a - b)
+  const mid = xs[Math.floor(xs.length / 2)]
+  // Prefer a gap near the middle if one exists
+  const sorted = [...items].sort((a, b) => a.x - b.x)
+  let bestCut = mid
+  let bestGap = 0
+  for (let i = 1; i < sorted.length; i += 1) {
+    const gap = sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w)
+    const cutX = (sorted[i].x + sorted[i - 1].x + sorted[i - 1].w) / 2
+    const nearMid = Math.abs(cutX - mid) < (xs[xs.length - 1] - xs[0]) * 0.28
+    if (nearMid && gap > bestGap) {
+      bestGap = gap
+      bestCut = cutX
+    }
+  }
+  const left: PdfTextItem[] = []
+  const right: PdfTextItem[] = []
+  for (const it of items) {
+    const cx = it.x + it.w * 0.35
+    if (cx <= bestCut) left.push(it)
+    else right.push(it)
+  }
+  return { left, right }
+}
+
 export type PageTextVariants = {
-  /** Best-effort primary (English-only 3-band when available) */
   primary: string
   variants: string[]
   itemCount: number
   charCount: number
 }
 
-function pushVariants(items: PdfTextItem[], variants: string[]) {
-  const push = (t: string) => {
-    const s = t.trim()
-    if (s.length >= 40 && !variants.includes(s)) variants.push(s)
-  }
-  if (items.length < 4) return
-  push(colsToText(splitByBands(items, 3)))
-  push(colsToText(splitByBands(items, 2)))
-  push(colsToText(splitByGaps(items)))
-  push(flatRowText(items))
-  push(rawJoinText(items))
-}
-
-/** Build several reading-order variants; caller parses each and merges. */
+/** Build English-only reading variants — never keep the Hindi column. */
 export function textContentToVariants(textContent: {
   items: unknown[]
 }): PageTextVariants {
@@ -207,24 +240,72 @@ export function textContentToVariants(textContent: {
     return { primary: '', variants: [], itemCount: 0, charCount: 0 }
   }
 
+  const latin = withoutDevanagari(items)
+  const base = latin.length >= 8 ? latin : items
+  const { left, right } = leftRightSplit(base)
+  const leftText = flatRowText(left)
+  const rightText = flatRowText(right)
+  const leftScore = englishMcqScore(leftText)
+  const rightScore = englishMcqScore(rightText)
+
+  // Champion LCM/HCF pages: English left, Hindi right (mojibake or Devanagari)
+  const englishCol =
+    leftScore >= rightScore ? left : right.length >= 8 ? right : left
+  const englishText = flatRowText(englishCol)
+
   const variants: string[] = []
-  const enItems = englishOnlyItems(items)
-  // English-only first — Champion pages put Hindi in a parallel column
-  pushVariants(enItems, variants)
-  pushVariants(items, variants)
+  const push = (t: string) => {
+    const s = t.trim()
+    if (s.length >= 40 && !variants.includes(s)) variants.push(s)
+  }
+
+  push(englishText)
+  push(colsToText(splitByBands(englishCol, 2)))
+  push(colsToText(splitByGaps(englishCol)))
+  // Also try pure left half (most Champion layouts)
+  if (left !== englishCol) push(leftText)
+  // 2-band of full latin page, then keep only the better-scoring band text
+  const bands2 = splitByBands(base, 2)
+  if (bands2.length >= 2) {
+    const scored = bands2
+      .map((col) => {
+        const t = flatRowText(col)
+        return { t, s: englishMcqScore(t) }
+      })
+      .sort((a, b) => b.s - a.s)
+    push(scored[0].t)
+  }
+  const bands3 = splitByBands(base, 3)
+  if (bands3.length >= 2) {
+    const scored = bands3
+      .map((col) => {
+        const t = flatRowText(col)
+        return { t, s: englishMcqScore(t) }
+      })
+      .sort((a, b) => b.s - a.s)
+    // Top-scoring band only (skip Hindi bands)
+    push(scored[0].t)
+    if (scored[1] && scored[1].s > 20 && scored[1].s > scored[0].s * 0.7) {
+      push(`${scored[0].t}\n\n${scored[1].t}`)
+    }
+  }
 
   const looksLikeMcq = (v: string) =>
-    /\n\s*\d{1,2}\s*[.)]/.test(v) && /\(\s*[a-dA-D]\s*\)/.test(v)
+    /\d{1,2}\s*[.)]/.test(v) && /\(\s*[a-dA-D]\s*\)/.test(v)
 
   const primary =
+    [...variants].sort((a, b) => englishMcqScore(b) - englishMcqScore(a))[0] ||
     variants.find(looksLikeMcq) ||
-    variants.find((v) => /\(\s*[a-dA-D]\s*\)/.test(v)) ||
+    englishText ||
     variants[0] ||
     ''
 
+  // Deduped list with primary first
+  const ordered = [primary, ...variants.filter((v) => v !== primary)]
+
   return {
     primary,
-    variants: variants.length ? variants : primary ? [primary] : [],
+    variants: ordered.filter(Boolean),
     itemCount: items.length,
     charCount: primary.length,
   }
@@ -235,3 +316,5 @@ export function textContentToPageText(textContent: {
 }): string {
   return textContentToVariants(textContent).primary
 }
+
+export { englishMcqScore }

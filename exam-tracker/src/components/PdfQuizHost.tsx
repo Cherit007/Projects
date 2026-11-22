@@ -23,9 +23,6 @@ import {
 import type { PageTextVariants } from '../utils/pdfPageText'
 import { PdfQuizOverlay } from './PdfQuizOverlay'
 
-const SPARSE_ITEMS = 24
-const SPARSE_CHARS = 120
-
 export function PdfQuizHost({
   docId,
   title,
@@ -91,49 +88,47 @@ export function PdfQuizHost({
     await putQuizStore(next)
   }, [])
 
-  const collectTexts = useCallback(
-    async (forceOcr: boolean) => {
-      setBusyLabel('Reading page text…')
-      const variants = await getPageVariants()
-      const texts = [...variants.variants]
-      if (variants.primary && !texts.includes(variants.primary)) {
-        texts.unshift(variants.primary)
-      }
+  const collectTexts = useCallback(async () => {
+    setBusyLabel('Reading English column…')
+    const variants = await getPageVariants()
+    const texts = [...variants.variants]
+    if (variants.primary && !texts.includes(variants.primary)) {
+      texts.unshift(variants.primary)
+    }
 
-      const sparse =
-        variants.itemCount < SPARSE_ITEMS ||
-        variants.charCount < SPARSE_CHARS ||
-        texts.every((t) => t.trim().length < SPARSE_CHARS)
-
-      let usedOcr = false
-      if (forceOcr || sparse) {
-        setBusyLabel('OCR scanning page…')
-        try {
-          const canvas = await getPageCanvas()
-          if (canvas) {
-            const { ocrCanvasToText } = await import('../utils/pdfPageOcr')
-            const ocr = await ocrCanvasToText(canvas, (pct) => {
-              setBusyLabel(`OCR scanning page… ${pct}%`)
-            })
-            if (ocr.length >= 40) {
-              texts.push(ocr)
-              usedOcr = true
-            }
+    // OCR of bilingual Champion pages turns Hindi into Latin junk ("Te fm sd…").
+    // Only OCR when the text layer is essentially empty.
+    let usedOcr = false
+    const sparse =
+      variants.itemCount < 8 ||
+      variants.charCount < 40 ||
+      texts.every((t) => t.trim().length < 40)
+    if (sparse) {
+      setBusyLabel('OCR scanning page…')
+      try {
+        const canvas = await getPageCanvas()
+        if (canvas) {
+          const { ocrCanvasToText } = await import('../utils/pdfPageOcr')
+          const ocr = await ocrCanvasToText(canvas, (pct) => {
+            setBusyLabel(`OCR scanning page… ${pct}%`)
+          })
+          if (ocr.length >= 40) {
+            texts.push(ocr)
+            usedOcr = true
           }
-        } catch {
-          // OCR is best-effort; keep text-layer variants
         }
+      } catch {
+        // keep text-layer variants
       }
+    }
 
-      const preview =
-        texts.find((t) => t.trim().length >= 40)?.trim().slice(0, 900) ||
-        variants.primary.trim().slice(0, 900) ||
-        ''
+    const preview =
+      texts.find((t) => t.trim().length >= 40)?.trim().slice(0, 900) ||
+      variants.primary.trim().slice(0, 900) ||
+      ''
 
-      return { texts, usedOcr, preview, sparse, itemCount: variants.itemCount }
-    },
-    [getPageCanvas, getPageVariants],
-  )
+    return { texts, usedOcr, preview, sparse, itemCount: variants.itemCount }
+  }, [getPageCanvas, getPageVariants])
 
   const detectQuestions = useCallback(
     async (force = false) => {
@@ -154,28 +149,10 @@ export function PdfQuizHost({
           found = cached.payload as PdfDetectedQuestion[]
           setInfo('Loaded saved detect for this page.')
         } else {
-          // Prefer selectable English text (bilingual OCR mashups look like the screenshot).
-          // OCR only when the page is sparse or text-layer detect is weak.
-          let pack = await collectTexts(false)
-          let local = pickBestQuestionsFromTexts(pack.texts, page)
+          // English column only — never OCR bilingual pages (Hindi → Latin junk).
+          const pack = await collectTexts()
+          const local = pickBestQuestionsFromTexts(pack.texts, page)
           sols = pickBestSolutionsFromTexts(pack.texts, page)
-
-          const cleanEnough =
-            local.questions.filter((q) => {
-              const opts = Object.values(q.options)
-              return (
-                opts.length >= 3 &&
-                opts.every((t) => !!t && t.length <= 64) &&
-                !/[\u0900-\u097F]/.test(q.stem) &&
-                !/SSC|CGL|MAINS/i.test(q.stem)
-              )
-            }).length >= 2
-
-          if ((!local.questions.length || !cleanEnough) && !pack.usedOcr) {
-            pack = await collectTexts(true)
-            local = pickBestQuestionsFromTexts(pack.texts, page)
-            sols = pickBestSolutionsFromTexts(pack.texts, page)
-          }
 
           found = local.questions
           kind = local.pageKind
@@ -248,12 +225,8 @@ export function PdfQuizHost({
     setBusy(true)
     setBusyLabel('Reading page…')
     try {
-      let pack = await collectTexts(false)
-      let found = pickBestSolutionsFromTexts(pack.texts, page)
-      if (!found.length && !pack.usedOcr) {
-        pack = await collectTexts(true)
-        found = pickBestSolutionsFromTexts(pack.texts, page)
-      }
+      const pack = await collectTexts()
+      const found = pickBestSolutionsFromTexts(pack.texts, page)
       setExtractPreview(pack.preview)
       await putPageExtract({
         id: pageExtractId(docId, page, 'solutions'),
@@ -271,9 +244,7 @@ export function PdfQuizHost({
       } else {
         await persistStore(mergeSolutionsIntoStore(storeRef.current, found))
         setPanel('solutions')
-        setInfo(
-          `Mapped ${found.length} solution(s)${pack.usedOcr ? ' · OCR' : ''}.`,
-        )
+        setInfo(`Mapped ${found.length} solution(s).`)
       }
       setOpen(true)
     } catch (e) {
