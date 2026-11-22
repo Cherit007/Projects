@@ -7341,23 +7341,17 @@ html.pdf-reader-active .main {
   box-shadow: 0 0 0 2px var(--pdf-night-panel) inset;
 }
 
-/* PDF auto-test (Gemini) */
-.pdf-gemini-settings {
-  margin: 1.25rem 0 1.75rem;
-  padding: 1rem 1.1rem;
+.pdf-quiz-tip {
+  margin: 0.5rem 0 1.25rem;
+  padding: 0.85rem 1rem;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--surface) 92%, var(--accent, #1f8f7e) 8%);
+  background: color-mix(in srgb, var(--surface) 92%, #1a7a6c 8%);
 }
 
-.pdf-gemini-settings .lede {
-  margin: 0.35rem 0 0.85rem;
+.pdf-quiz-tip .lede {
+  margin: 0;
   max-width: 42rem;
-}
-
-.pdf-gemini-row {
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 .pdf-quiz-fab-row {
@@ -7497,24 +7491,147 @@ html.pdf-reader-active .main {
   background: color-mix(in srgb, var(--surface, #fff) 80%, #e8f2ef 20%);
 }
 
-.pdf-quiz-list p {
-  margin: 0.35rem 0 0;
-  font-size: 0.9rem;
-  line-height: 1.4;
+.pdf-quiz-list p,
+.pdf-quiz-stem {
+  margin: 0.4rem 0 0;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.pdf-quiz-item {
+  font-family: "Source Serif 4", "Iowan Old Style", "Palatino Linotype",
+    Palatino, Georgia, serif;
 }
 
 .pdf-quiz-opts {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  margin-top: 0.4rem;
-  font-size: 0.82rem;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+  font-size: 0.92rem;
   color: var(--muted, #4a5c56);
 }
 
-.pdf-quiz-opts .key {
+.pdf-quiz-opt {
+  display: block;
+  padding: 0.25rem 0;
+  line-height: 1.45;
+}
+
+.pdf-quiz-opt em {
+  font-style: normal;
+  font-weight: 650;
+  color: #1a7a6c;
+  margin-right: 0.2rem;
+}
+
+.pdf-quiz-opts .key,
+.pdf-quiz-opt.key {
   color: #0f6b5c;
   font-weight: 650;
+}
+
+/* BODMAS / exam math rendering */
+.qmath {
+  font-variant-numeric: tabular-nums;
+}
+
+.qmath-op {
+  display: inline-block;
+  padding: 0 0.12em;
+  font-weight: 650;
+  color: #1a7a6c;
+}
+
+.qmath-sup {
+  font-size: 0.72em;
+  font-weight: 650;
+  line-height: 0;
+  vertical-align: super;
+}
+
+.qmath-sub {
+  font-size: 0.72em;
+  vertical-align: sub;
+}
+
+.qmath-group {
+  white-space: nowrap;
+}
+
+.qmath-sqrt {
+  display: inline-flex;
+  align-items: stretch;
+  vertical-align: middle;
+  margin: 0 0.08em;
+  line-height: 1.15;
+}
+
+.qmath-sqrt-sym {
+  font-size: 1.15em;
+  line-height: 1;
+  align-self: center;
+  transform: translateY(-0.02em);
+}
+
+.qmath-sqrt-rad {
+  border-top: 1.5px solid currentColor;
+  padding: 0 0.18em 0.02em;
+  margin-left: -0.08em;
+  white-space: nowrap;
+}
+
+.qmath-cbrt .qmath-sqrt-sym {
+  font-size: 1.05em;
+}
+
+.qmath-frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0 0.2em;
+  line-height: 1.1;
+}
+
+.qmath-num,
+.qmath-den {
+  padding: 0 0.2em;
+  white-space: nowrap;
+}
+
+.qmath-bar {
+  display: block;
+  width: 100%;
+  height: 1.5px;
+  background: currentColor;
+  margin: 0.08em 0;
+}
+
+.pdf-quiz-qhead {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin: 0 0 0.75rem;
+}
+
+.pdf-quiz-qnum {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #1a7a6c;
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+
+.pdf-quiz-runner .pdf-quiz-stem {
+  flex: 1;
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.55;
+  font-family: "Source Serif 4", "Iowan Old Style", "Palatino Linotype",
+    Palatino, Georgia, serif;
 }
 
 .pdf-quiz-setup {
@@ -7583,11 +7700,19 @@ html.pdf-reader-active .main {
   text-align: left;
   border: 1px solid var(--line, #d5e0db);
   border-radius: 10px;
-  padding: 0.65rem 0.75rem;
+  padding: 0.75rem 0.85rem;
   background: var(--surface, #fff);
   color: inherit;
-  font: inherit;
+  font-family: "Source Serif 4", "Iowan Old Style", "Palatino Linotype",
+    Palatino, Georgia, serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  min-height: 3rem;
   cursor: pointer;
+}
+
+.pdf-quiz-choices button .qmath-op {
+  color: inherit;
 }
 
 .pdf-quiz-choices button strong {

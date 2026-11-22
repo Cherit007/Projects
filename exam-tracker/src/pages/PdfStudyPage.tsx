@@ -1,13 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import {
-  clearGeminiApiKey,
-  geminiKeyHint,
-  hasGeminiKey,
-  sanitizeGeminiKey,
-  setGeminiApiKey,
-} from '../lib/geminiVision'
 import { usePdfStudy } from '../hooks/usePdfStudy'
 import {
   PDF_FOLDERS,
@@ -48,12 +41,7 @@ export function PdfStudyPage() {
   const [tagFilter, setTagFilter] = useState<string>('all')
   const [onlyMarked, setOnlyMarked] = useState(false)
   const [uploadFolder, setUploadFolder] = useState<string>('Unfiled')
-  const [geminiDraft, setGeminiDraft] = useState('')
-  const [geminiSaved, setGeminiSaved] = useState(() => hasGeminiKey())
-  const [geminiHint, setGeminiHint] = useState(() => geminiKeyHint())
-  const [geminiNote, setGeminiNote] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const geminiInputRef = useRef<HTMLInputElement>(null)
 
   const allTags = useMemo(() => {
     const set = new Set<string>()
@@ -252,100 +240,11 @@ export function PdfStudyPage() {
         />
       </section>
 
-      <section className="pdf-gemini-settings" aria-label="Gemini API key">
-        <header className="pdf-library-head">
-          <h2>Auto test (Gemini)</h2>
-        </header>
+      <section className="pdf-quiz-tip" aria-label="Auto test tip">
         <p className="lede">
-          Detect works offline from PDF text when Gemini is busy. Optional
-          Gemini vision key helps on scanned pages. Open a PDF →{' '}
-          <strong>Detect test</strong> / <strong>Detect from page text</strong>.
-        </p>
-        {geminiSaved && geminiHint && (
-          <p className="pdf-status muted">
-            Current key on this device: <code>{geminiHint}</code>
-          </p>
-        )}
-        <div className="pdf-bm-add pdf-gemini-row">
-          <input
-            ref={geminiInputRef}
-            type="password"
-            placeholder={
-              geminiSaved
-                ? 'Paste a new key to replace…'
-                : 'Paste Gemini API key (AQ… or AIza…)'
-            }
-            value={geminiDraft}
-            onChange={(e) => {
-              setGeminiDraft(e.target.value)
-              setGeminiNote('')
-            }}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              const next = sanitizeGeminiKey(geminiDraft)
-              if (!next) {
-                setGeminiNote('Paste a key first, or use Clear.')
-                geminiInputRef.current?.focus()
-                return
-              }
-              if (next.length < 20) {
-                setGeminiNote(
-                  'Key looks too short — use the copy icon next to the key in AI Studio, then paste here.',
-                )
-                return
-              }
-              setGeminiApiKey(next)
-              setGeminiSaved(hasGeminiKey())
-              setGeminiHint(geminiKeyHint())
-              setGeminiDraft('')
-              setGeminiNote(
-                hasGeminiKey()
-                  ? 'Key updated — try Detect test in the reader.'
-                  : 'Key looks too short — paste the full AI Studio key.',
-              )
-            }}
-          >
-            {geminiSaved ? 'Replace key' : 'Save key'}
-          </button>
-          {geminiSaved && (
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                clearGeminiApiKey()
-                setGeminiDraft('')
-                setGeminiSaved(false)
-                setGeminiHint('')
-                setGeminiNote('Key cleared — paste a new one below.')
-                geminiInputRef.current?.focus()
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-        {geminiNote && <p className="pdf-status">{geminiNote}</p>}
-        <p className={`pdf-status${geminiSaved ? ' muted' : ''}`}>
-          {geminiSaved ? (
-            'Key saved — ready for Detect test in the reader.'
-          ) : (
-            <>
-              Get a free key at{' '}
-              <a
-                href="https://aistudio.google.com/apikey"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Google AI Studio
-              </a>
-              .
-            </>
-          )}
+          In the reader, tap <strong>Detect test</strong> on a question page to
+          pull MCQs (√, powers, brackets cleaned for BODMAS-style equations),
+          then start a timed test — or map answers on a solutions page.
         </p>
       </section>
 
