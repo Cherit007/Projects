@@ -1,0 +1,7 @@
+# ExamPulse (exam-tracker/) deploys via GitHub Pages, not Netlify.
+# A separate Netlify site (shreesadguruengineers) is still linked to this
+# GitHub repo and was failing every PR. Exit 0 here cancels those builds
+# so they no longer report red checks. To remove the checks entirely,
+# unlink the site from this repo in the Netlify dashboard.
+[build]
+  ignore = "exit 0"
