@@ -4,6 +4,7 @@ import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { TextLayer } from 'pdfjs-dist'
 import { useAuth } from '../auth/AuthContext'
+import { PdfQuizHost } from '../components/PdfQuizHost'
 import { TOPICS } from '../data/topics'
 import { usePdfStudy } from '../hooks/usePdfStudy'
 import {
@@ -824,6 +825,11 @@ export function PdfReaderPage() {
     navigate('/pdf')
   }
 
+  const getPageCanvas = useCallback(
+    () => pdfCanvasLRef.current,
+    [],
+  )
+
   const goPracticeDoubt = (bm: PdfBookmark) => {
     const topic = bm.topicId || TOPICS[0]?.id || ''
     navigate(`/practice?topic=${encodeURIComponent(topic)}&from=pdf-doubt`)
@@ -1245,6 +1251,14 @@ export function PdfReaderPage() {
               />
             )}
           </div>
+          {!focusMode && docId && meta && (
+            <PdfQuizHost
+              docId={docId}
+              title={meta.name}
+              page={page}
+              getPageCanvas={getPageCanvas}
+            />
+          )}
         </div>
 
         {sidebar && !focusMode && (

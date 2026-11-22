@@ -1,6 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import {
+  getGeminiApiKey,
+  hasGeminiKey,
+  setGeminiApiKey,
+} from '../lib/geminiVision'
 import { usePdfStudy } from '../hooks/usePdfStudy'
 import {
   PDF_FOLDERS,
@@ -41,6 +46,8 @@ export function PdfStudyPage() {
   const [tagFilter, setTagFilter] = useState<string>('all')
   const [onlyMarked, setOnlyMarked] = useState(false)
   const [uploadFolder, setUploadFolder] = useState<string>('Unfiled')
+  const [geminiDraft, setGeminiDraft] = useState(() => getGeminiApiKey())
+  const [geminiSaved, setGeminiSaved] = useState(() => hasGeminiKey())
   const inputRef = useRef<HTMLInputElement>(null)
 
   const allTags = useMemo(() => {
@@ -238,6 +245,66 @@ export function PdfStudyPage() {
             e.target.value = ''
           }}
         />
+      </section>
+
+      <section className="pdf-gemini-settings" aria-label="Gemini API key">
+        <header className="pdf-library-head">
+          <h2>Auto test (Gemini)</h2>
+        </header>
+        <p className="lede">
+          Free Gemini vision key stays on this device. Open a PDF, tap{' '}
+          <strong>Detect test</strong> on a question page — or map answers when
+          you reach the solutions pages.
+        </p>
+        <div className="pdf-bm-add pdf-gemini-row">
+          <input
+            type="password"
+            placeholder="AIza… Gemini API key"
+            value={geminiDraft}
+            onChange={(e) => setGeminiDraft(e.target.value)}
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => {
+              setGeminiApiKey(geminiDraft)
+              setGeminiSaved(hasGeminiKey())
+            }}
+          >
+            Save key
+          </button>
+          {geminiSaved && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setGeminiApiKey('')
+                setGeminiDraft('')
+                setGeminiSaved(false)
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <p className={`pdf-status${geminiSaved ? ' muted' : ''}`}>
+          {geminiSaved ? (
+            'Key saved — ready for Detect test in the reader.'
+          ) : (
+            <>
+              Get a free key at{' '}
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Google AI Studio
+              </a>
+              .
+            </>
+          )}
+        </p>
       </section>
 
       <section className="pdf-library" aria-label="Your PDFs">
