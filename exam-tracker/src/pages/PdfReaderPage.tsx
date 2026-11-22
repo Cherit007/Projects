@@ -825,15 +825,40 @@ export function PdfReaderPage() {
     navigate('/pdf')
   }
 
-  const getPageText = useCallback(async () => {
-    if (!pdf) return ''
+  const getPageVariants = useCallback(async () => {
+    if (!pdf) {
+      return { primary: '', variants: [], itemCount: 0, charCount: 0 }
+    }
     try {
       const pg = await pdf.getPage(page)
       const tc = await pg.getTextContent()
-      const { textContentToPageText } = await import('../utils/pdfPageText')
-      return textContentToPageText(tc as { items: unknown[] })
+      const { textContentToVariants } = await import('../utils/pdfPageText')
+      return textContentToVariants(tc as { items: unknown[] })
     } catch {
-      return ''
+      return { primary: '', variants: [], itemCount: 0, charCount: 0 }
+    }
+  }, [pdf, page])
+
+  const getPageCanvas = useCallback(async () => {
+    if (!pdf) return null
+    try {
+      const pg = await pdf.getPage(page)
+      const viewport = pg.getViewport({ scale: 2 })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.floor(viewport.width)
+      canvas.height = Math.floor(viewport.height)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      await pg.render({
+        canvasContext: ctx,
+        viewport,
+        canvas,
+      }).promise
+      return canvas
+    } catch {
+      return null
     }
   }, [pdf, page])
 
@@ -1263,7 +1288,8 @@ export function PdfReaderPage() {
               docId={docId}
               title={meta.name}
               page={page}
-              getPageText={getPageText}
+              getPageVariants={getPageVariants}
+              getPageCanvas={getPageCanvas}
             />
           )}
         </div>

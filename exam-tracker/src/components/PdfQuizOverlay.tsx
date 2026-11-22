@@ -23,8 +23,10 @@ export function PdfQuizOverlay({
   detectedSolutions,
   pageKind,
   busy,
+  busyLabel = 'Reading page…',
   error,
   info = '',
+  extractPreview = '',
   forceSolutions,
   onClose,
   onStartDetect,
@@ -36,8 +38,10 @@ export function PdfQuizOverlay({
   detectedSolutions: PdfDetectedSolution[]
   pageKind?: PdfPageKind | null
   busy: boolean
+  busyLabel?: string
   error: string
   info?: string
+  extractPreview?: string
   forceSolutions?: boolean
   onClose: () => void
   onStartDetect: () => void
@@ -204,7 +208,7 @@ export function PdfQuizOverlay({
 
         {error && <p className="pdf-status error">{error}</p>}
         {info && !busy && <p className="pdf-status muted">{info}</p>}
-        {busy && <p className="pdf-status muted">Reading page text…</p>}
+        {busy && <p className="pdf-status muted">{busyLabel}</p>}
 
         {mode === 'review' && (
           <>
@@ -253,9 +257,16 @@ export function PdfQuizOverlay({
               </button>
             </div>
             <p className="pdf-quiz-hint">
-              Works on multi-column English+Hindi pages — uses column reading
-              order, keeps English stems, and picks up same-page answer keys.
+              Tries several column layouts, then OCR if the page text is empty
+              or sparse. Re-detect always re-reads the page (including OCR).
             </p>
+
+            {pageQs.length === 0 && extractPreview ? (
+              <details className="pdf-quiz-extract">
+                <summary>Text we read from this page</summary>
+                <pre>{extractPreview}</pre>
+              </details>
+            ) : null}
 
             {pageQs.length === 0 ? (
               !looksLikeSolutions && (

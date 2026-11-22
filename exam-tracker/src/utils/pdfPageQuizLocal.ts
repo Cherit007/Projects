@@ -11,11 +11,15 @@ const DEVANAGARI = /[\u0900-\u097F]/
 const EXAM_HEADER =
   /^(?:SSC|IBPS|RRB|SBI|UPSC|BANK|RAILWAY|CHSL|CGL|MTS|GD|STENO|TIER[- ]?[IVX0-9]+|MAINS?|PRE(?:LIM(?:S|INARY)?)?|SHIFT|SEPT?|OCT|NOV|DEC|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG)\b/i
 
-/** Normalize pdf.js text into a single parseable string. */
+/** Normalize pdf.js / OCR text into a single parseable string. */
 export function normalizePageText(raw: string): string {
   return raw
     .replace(/\u00a0/g, ' ')
     .replace(/\r/g, '')
+    // OCR spacing: "( a )" / "1 ." / "Q . 12"
+    .replace(/\(\s*([a-dA-D])\s*\)/g, '($1)')
+    .replace(/(?:^|\n)\s*(?:Q(?:ues(?:tion)?)?\s*)?(\d{1,3})\s+[.)]\s+/gi, '\n$1. ')
+    .replace(/(?:^|\n)\s*Q\s*[.]\s*(\d{1,3})\s*[.)]?\s+/gi, '\n$1. ')
     .split('\n')
     .map((line) => tidyMathPlain(line.replace(/[ \t]+/g, ' ').trim()))
     .filter(Boolean)
@@ -176,7 +180,7 @@ export function extractQuestionsFromPageText(
   // Fallback: looser pattern if few hits (broken columns)
   if (starts.length < 2) {
     const loose =
-      /(?:^|\n|\s)(?:Q(?:ues(?:tion)?)?[\s.]*)?(\d{1,2})\s*[.)]\s+/gi
+      /(?:^|\n|(?<=\s{2,})|(?<=[|;•]))\s*(?:Q(?:ues(?:tion)?)?[\s.]*)?(\d{1,2})\s*[.)]\s+/gi
     starts.length = 0
     seenAt.clear()
     while ((m = loose.exec(questionRegion)) != null) {
@@ -184,7 +188,9 @@ export function extractQuestionsFromPageText(
       if (!Number.isFinite(number) || number <= 0 || number > 80) continue
       const idx = m.index
       if ([...seenAt].some((s) => Math.abs(s - idx) < 3)) continue
-      // Require nearby option markers soon after
+      // Skip mid-sentence values like "is 48. The numbers"
+      const prev = questionRegion.slice(Math.max(0, idx - 16), idx)
+      if (/[A-Za-z0-9]\s*$/.test(prev) && !/(?:^|\n)\s*$/.test(prev)) continue
       const window = questionRegion.slice(idx, idx + 700)
       if (!/\([a-dA-D]\)/.test(window) && !/\b[a-dA-D]\)/.test(window)) continue
       seenAt.add(idx)
@@ -262,6 +268,72 @@ export function extractQuestionsFromPageText(
     pageKind,
     questions: questions.sort((a, b) => a.number - b.number),
   }
+}
+
+function questionScore(q: PdfDetectedQuestion): number {
+  const opts = Object.keys(q.options).length
+  const stem = (q.stem || '').trim().length
+  return opts * 12 + Math.min(stem, 280) / 10 + (q.guessedAnswer ? 8 : 0)
+}
+
+/**
+ * Parse several reading-order / OCR text variants and keep the strongest
+ * question per number (best for 2/3-column Champion pages).
+ */
+export function pickBestQuestionsFromTexts(
+  texts: string[],
+  sourcePage: number,
+): PdfQuestionExtractResult {
+  const byNum = new Map<number, PdfDetectedQuestion>()
+  let bestKind: PdfPageKind = 'other'
+  let bestKindScore = -1
+
+  for (const raw of texts) {
+    if (!raw || raw.trim().length < 20) continue
+    const local = extractQuestionsFromPageText(raw, sourcePage)
+    const withOpts = local.questions.filter(
+      (q) => Object.keys(q.options).length >= 2,
+    ).length
+    const kindScore =
+      withOpts * 10 +
+      local.questions.length +
+      (local.pageKind === 'questions' || local.pageKind === 'mixed' ? 5 : 0)
+    if (kindScore > bestKindScore) {
+      bestKindScore = kindScore
+      bestKind = local.pageKind
+    }
+    for (const q of local.questions) {
+      const prev = byNum.get(q.number)
+      if (!prev || questionScore(q) > questionScore(prev)) {
+        byNum.set(q.number, q)
+      }
+    }
+  }
+
+  const questions = [...byNum.values()].sort((a, b) => a.number - b.number)
+  if (questions.some((q) => Object.keys(q.options).length >= 2)) {
+    if (bestKind === 'other') bestKind = 'questions'
+  } else if (!questions.length && bestKind === 'other') {
+    bestKind = 'other'
+  }
+
+  return { pageKind: bestKind, questions }
+}
+
+/** Merge answer keys found across text variants. */
+export function pickBestSolutionsFromTexts(
+  texts: string[],
+  solutionPage: number,
+): PdfDetectedSolution[] {
+  const byNum = new Map<number, PdfDetectedSolution>()
+  for (const raw of texts) {
+    if (!raw || raw.trim().length < 8) continue
+    for (const s of extractSolutionsFromPageText(raw, solutionPage)) {
+      const prev = byNum.get(s.number)
+      if (!prev || s.confidence > prev.confidence) byNum.set(s.number, s)
+    }
+  }
+  return [...byNum.values()].sort((a, b) => a.number - b.number)
 }
 
 /** Offline answer-key parse including footer strips: "1. (d) 2. (d) 3. (c)" */
