@@ -154,12 +154,24 @@ export function PdfQuizHost({
           found = cached.payload as PdfDetectedQuestion[]
           setInfo('Loaded saved detect for this page.')
         } else {
-          // Re-detect always includes OCR; first pass OCRs when text is sparse
-          let pack = await collectTexts(force)
+          // Prefer selectable English text (bilingual OCR mashups look like the screenshot).
+          // OCR only when the page is sparse or text-layer detect is weak.
+          let pack = await collectTexts(false)
           let local = pickBestQuestionsFromTexts(pack.texts, page)
           sols = pickBestSolutionsFromTexts(pack.texts, page)
 
-          if (!local.questions.length && !pack.usedOcr) {
+          const cleanEnough =
+            local.questions.filter((q) => {
+              const opts = Object.values(q.options)
+              return (
+                opts.length >= 3 &&
+                opts.every((t) => !!t && t.length <= 64) &&
+                !/[\u0900-\u097F]/.test(q.stem) &&
+                !/SSC|CGL|MAINS/i.test(q.stem)
+              )
+            }).length >= 2
+
+          if ((!local.questions.length || !cleanEnough) && !pack.usedOcr) {
             pack = await collectTexts(true)
             local = pickBestQuestionsFromTexts(pack.texts, page)
             sols = pickBestSolutionsFromTexts(pack.texts, page)

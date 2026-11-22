@@ -257,8 +257,9 @@ export function PdfQuizOverlay({
               </button>
             </div>
             <p className="pdf-quiz-hint">
-              Tries several column layouts, then OCR if the page text is empty
-              or sparse. Re-detect always re-reads the page (including OCR).
+              Reads English column text first (skips Hindi bleed), then OCR only
+              if the page is empty or still looks messy. Re-detect clears the
+              saved result and re-reads the page.
             </p>
 
             {pageQs.length === 0 && extractPreview ? (

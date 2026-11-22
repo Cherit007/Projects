@@ -163,12 +163,39 @@ function rawJoinText(items: PdfTextItem[]): string {
     .trim()
 }
 
+const DEVANAGARI_CHAR = /[\u0900-\u097F]/
+
+/** Keep Latin/math glyphs — drops Hindi column bleed on bilingual pages. */
+function englishOnlyItems(items: PdfTextItem[]): PdfTextItem[] {
+  return items.filter((it) => {
+    const s = it.str.trim()
+    if (!s) return false
+    if (!DEVANAGARI_CHAR.test(s)) return true
+    // Keep mixed tokens that are mostly Latin/digits (rare)
+    const dev = (s.match(/[\u0900-\u097F]/g) || []).length
+    return dev / s.length < 0.2
+  })
+}
+
 export type PageTextVariants = {
-  /** Best-effort primary (3-band columns) */
+  /** Best-effort primary (English-only 3-band when available) */
   primary: string
   variants: string[]
   itemCount: number
   charCount: number
+}
+
+function pushVariants(items: PdfTextItem[], variants: string[]) {
+  const push = (t: string) => {
+    const s = t.trim()
+    if (s.length >= 40 && !variants.includes(s)) variants.push(s)
+  }
+  if (items.length < 4) return
+  push(colsToText(splitByBands(items, 3)))
+  push(colsToText(splitByBands(items, 2)))
+  push(colsToText(splitByGaps(items)))
+  push(flatRowText(items))
+  push(rawJoinText(items))
 }
 
 /** Build several reading-order variants; caller parses each and merges. */
@@ -181,19 +208,17 @@ export function textContentToVariants(textContent: {
   }
 
   const variants: string[] = []
-  const push = (t: string) => {
-    const s = t.trim()
-    if (s.length >= 40 && !variants.includes(s)) variants.push(s)
-  }
+  const enItems = englishOnlyItems(items)
+  // English-only first — Champion pages put Hindi in a parallel column
+  pushVariants(enItems, variants)
+  pushVariants(items, variants)
 
-  push(colsToText(splitByBands(items, 3)))
-  push(colsToText(splitByBands(items, 2)))
-  push(colsToText(splitByGaps(items)))
-  push(flatRowText(items))
-  push(rawJoinText(items))
+  const looksLikeMcq = (v: string) =>
+    /\n\s*\d{1,2}\s*[.)]/.test(v) && /\(\s*[a-dA-D]\s*\)/.test(v)
 
   const primary =
-    variants.find((v) => /\n\s*\d{1,2}\s*[.)]/.test(v) || /\(\s*[a-dA-D]\s*\)/.test(v)) ||
+    variants.find(looksLikeMcq) ||
+    variants.find((v) => /\(\s*[a-dA-D]\s*\)/.test(v)) ||
     variants[0] ||
     ''
 
