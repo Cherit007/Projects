@@ -1288,7 +1288,7 @@ export function PdfReaderPage() {
                     />
                     <button
                       type="button"
-                      className="btn primary"
+                      className="pdf-side-btn primary"
                       onClick={() => void addBookmark('normal')}
                     >
                       Add
@@ -1296,7 +1296,7 @@ export function PdfReaderPage() {
                   </div>
                   <button
                     type="button"
-                    className="btn ghost pdf-doubt-btn"
+                    className="pdf-doubt-btn"
                     onClick={() => void addBookmark('doubt')}
                   >
                     Doubt → Practice
