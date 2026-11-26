@@ -5,6 +5,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { TextLayer } from 'pdfjs-dist'
 import { useAuth } from '../auth/AuthContext'
 import { PdfQuizHost } from '../components/PdfQuizHost'
+import { PdfSolveTimer } from '../components/PdfSolveTimer'
 import { TOPICS } from '../data/topics'
 import { usePdfStudy } from '../hooks/usePdfStudy'
 import {
@@ -1206,6 +1207,8 @@ export function PdfReaderPage() {
           </button>
         </div>
       )}
+
+      <PdfSolveTimer />
 
       <div
         className={`pdf-body${sidebar && !focusMode ? '' : ' no-side'}${

@@ -7001,6 +7001,7 @@ html.pdf-reader-active .main {
 }
 
 .pdf-reader {
+  position: relative;
   height: 100%;
   max-height: 100dvh;
   display: grid;
@@ -7976,6 +7977,82 @@ html.pdf-reader-active .main {
 .pdf-quiz-tip .lede {
   margin: 0;
   max-width: 42rem;
+}
+
+.pdf-solve-timer {
+  position: absolute;
+  left: 0.85rem;
+  bottom: 0.85rem;
+  z-index: 42;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.45rem 0.35rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(20, 50, 42, 0.12);
+  box-shadow: 0 6px 18px rgba(12, 40, 36, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+.pdf-solve-timer.running {
+  border-color: rgba(13, 107, 92, 0.45);
+  box-shadow: 0 6px 18px rgba(13, 107, 92, 0.22);
+}
+
+.pdf-solve-timer-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #5a6b66);
+}
+
+.pdf-solve-timer-clock {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.92rem;
+  min-width: 4.6rem;
+  color: var(--ink, #142822);
+}
+
+.pdf-solve-timer button {
+  border: 0;
+  background: rgba(13, 107, 92, 0.1);
+  color: var(--teal-deep, #0d6b5c);
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.pdf-solve-timer button:hover:not(:disabled) {
+  background: rgba(13, 107, 92, 0.18);
+}
+
+.pdf-solve-timer button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pdf-reader.theme-night .pdf-solve-timer {
+  background: rgba(18, 28, 26, 0.92);
+  border-color: rgba(180, 220, 210, 0.16);
+}
+
+.pdf-reader.theme-night .pdf-solve-timer-label {
+  color: rgba(200, 220, 214, 0.7);
+}
+
+.pdf-reader.theme-night .pdf-solve-timer-clock {
+  color: #e8f4f0;
+}
+
+.pdf-reader.theme-night .pdf-solve-timer button {
+  background: rgba(120, 200, 180, 0.14);
+  color: #b8ebe0;
 }
 
 .pdf-quiz-fab-row {
