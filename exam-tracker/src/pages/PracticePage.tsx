@@ -288,9 +288,22 @@ export function PracticePage() {
       (q) =>
         q.topicId === opts.topicId &&
         (q.prompt?.startsWith(opts.promptPrefix) ||
-          q.prompt?.includes(opts.packId)),
+          q.prompt?.includes(opts.packId) ||
+          // older P&L pack id before Discount append
+          q.prompt?.includes('pl-champion-ssc-1-63')),
     )
-    if (already.length >= opts.items.length) {
+    const existingNums = new Set(
+      already
+        .map((q) => {
+          const m = q.prompt?.match(
+            new RegExp(`${opts.promptPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`),
+          )
+          return m ? Number(m[1]) : NaN
+        })
+        .filter((n) => Number.isFinite(n)),
+    )
+    const toAdd = opts.items.filter((it) => !existingNums.has(it.number))
+    if (!toAdd.length) {
       setMsg(
         `${opts.label} already loaded (${already.length} questions). Delete them first to reload.`,
       )
@@ -302,7 +315,7 @@ export function PracticePage() {
     try {
       setTopicId(opts.topicId)
       const created = await addQuestions(
-        opts.items.map((it) => ({
+        toAdd.map((it) => ({
           topicId: opts.topicId,
           imageDataUrl: STEM_ONLY_IMAGE,
           answerKey: it.answerKey,
@@ -316,7 +329,13 @@ export function PracticePage() {
       )
       setTab('drill')
       setMsg(
-        `Loaded ${created.length} ${opts.label} questions (answer keys only — no solutions) into Percentage, Profit & Loss.`,
+        `Loaded ${created.length} ${opts.label} question${
+          created.length === 1 ? '' : 's'
+        } (answer keys only — no solutions) into Percentage, Profit & Loss${
+          already.length
+            ? ` · ${already.length} were already in the bank`
+            : ''
+        }.`,
       )
       setQCount(Math.min(25, created.length + already.length))
     } catch (e) {
@@ -478,7 +497,7 @@ export function PracticePage() {
                 disabled={busy || ocrBusy}
                 onClick={onLoadProfitLossPack}
               >
-                {busy ? 'Loading…' : 'Load Profit & Loss (63 Qs)'}
+                {busy ? 'Loading…' : 'Load Profit & Loss (73 Qs)'}
               </button>
             </div>
           </section>

@@ -6,7 +6,7 @@
 import type { AnswerKey } from '../utils/questionBank'
 
 export const PROFIT_LOSS_PACK_TOPIC_ID = 'qa-percent-pl'
-export const PROFIT_LOSS_PACK_ID = 'pl-champion-ssc-1-63'
+export const PROFIT_LOSS_PACK_ID = 'pl-champion-ssc-1-73'
 
 export type ProfitLossPackItem = {
   number: number
@@ -43,7 +43,7 @@ function q(
   }
 }
 
-/** Answer letters for Q1–63 from the printed Profit & Loss key. */
+/** Answer letters for Q1–63 (P&L) + Q64–73 (Discount chapter). */
 export const PROFIT_LOSS_ANSWER_KEY: Record<number, AnswerKey> = {
   1: D,
   2: B,
@@ -108,6 +108,17 @@ export const PROFIT_LOSS_ANSWER_KEY: Record<number, AnswerKey> = {
   61: A,
   62: B,
   63: C,
+  // Discount chapter (printed Q1–10 → pack Q64–73)
+  64: C,
+  65: D,
+  66: C,
+  67: D,
+  68: D,
+  69: A,
+  70: D,
+  71: D,
+  72: B,
+  73: B,
 }
 
 export const PROFIT_LOSS_CHAMPION_PACK: ProfitLossPackItem[] = [
@@ -519,5 +530,81 @@ export const PROFIT_LOSS_CHAMPION_PACK: ProfitLossPackItem[] = [
     'If two LED TVs and one mobile phone cost ₹31,000, while two mobile phones and one LED TV cost ₹35,000, then the value of one mobile phone is:',
     ['₹13,500', '₹12,500', '₹13,000', '₹12,000'],
     2,
+  ),
+  // ── Discount chapter (printed as Q1–10; stored as 64–73 under P&L topic) ──
+  q(
+    64,
+    'The marked price of an article is ₹1500. If two successive discounts, each of x%, on the marked price is equal to a single discount of ₹587.40, then what will be the selling price of the article if a single discount of x% is given on the marked price?',
+    ['₹1,025', '₹1,155', '₹1,170', '₹1,200'],
+    2,
+    'Discount · SSC CGL MAINS 2018 {13 Sept. 2019}',
+  ),
+  q(
+    65,
+    'An umbrella is marked for ₹150 and sold for ₹138. The rate of discount is:',
+    ['9%', '6%', '5%', '8%'],
+    3,
+    'Discount · SSC CGL MAINS 2019 {18 Nov. 2020}',
+  ),
+  q(
+    66,
+    'An article is listed at ₹7,600 and the discount offered is 10%. What additional discount must be given to bring the net selling price to ₹5814?',
+    ['10%', '8%', '15%', '12%'],
+    2,
+    'Discount · SSC CGL MAINS 2019 {18 Nov. 2020}',
+  ),
+  q(
+    67,
+    'When an article is sold at 5 percent discount, then there is a profit of 14 percent. If the discount is 11 percent, then what will be the profit?',
+    ['7.6 percent', '8.4 percent', '7.2 percent', '6.8 percent'],
+    3,
+    'Discount · SSC CGL MAINS 2021 {08 Aug. 2022}',
+  ),
+  q(
+    68,
+    'Marked price of an article is ₹28000. It can be sold at one of the following ways: Way A — a single discount of 24 percent; Way B — two successive discounts of 16 percent and 10 percent. Which way will have lowest selling price and what will be the value of it?',
+    [
+      'Way A, ₹21168',
+      'Way B, ₹21280',
+      'Way A, ₹21280',
+      'Way B, ₹21168',
+    ],
+    3,
+    'Discount',
+  ),
+  q(
+    69,
+    'An article is sold for ₹54120 after two successive discounts of 12 percent and 18 percent. What is the marked price of the article?',
+    ['₹75000', '₹78000', '₹72000', '₹81000'],
+    0,
+    'Discount',
+  ),
+  q(
+    70,
+    'Find the single equivalent discount for successive discounts of 12%, 18% and 25% on the marked price of a car.',
+    ['35.28%', '42.65%', '40.25%', '45.88%'],
+    3,
+    'Discount · SSC CGL 2022 Tier-II',
+  ),
+  q(
+    71,
+    'A dishonest dealer marks up his goods by 50% and then gives a discount of 20% on the marked price. Apart from this, he uses a faulty balance which reads 1 kg for 900 gm. What is his net profit percentage (rounded off to the nearest integer)?',
+    ['24', '27', '36', '33'],
+    3,
+    'Discount',
+  ),
+  q(
+    72,
+    'Successive discounts of 10% and 10% are equivalent to a single discount of:',
+    ['18%', '19%', '20%', '21%'],
+    1,
+    'Discount',
+  ),
+  q(
+    73,
+    'At a clearance sale, a shopkeeper gives 45% discount. If a customer paid ₹330 during the sale, then what is the marked price of that shirt?',
+    ['₹550', '₹600', '₹500', '₹650'],
+    1,
+    'Discount',
   ),
 ]
