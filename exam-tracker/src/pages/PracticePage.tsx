@@ -11,6 +11,11 @@ import {
   STEM_ONLY_IMAGE,
 } from '../data/percentageChampionPack'
 import {
+  PROFIT_LOSS_CHAMPION_PACK,
+  PROFIT_LOSS_PACK_ID,
+  PROFIT_LOSS_PACK_TOPIC_ID,
+} from '../data/profitLossChampionPack'
+import {
   ANSWER_KEYS,
   DEFAULT_PRACTICE_CONFIG,
   compressQuestionImage,
@@ -226,6 +231,7 @@ export function PracticePage() {
       const { items, preview } = await importMcqsFromScreenshots({
         questionFiles: Array.from(qFiles),
         solutionFiles: sFiles ? Array.from(sFiles) : [],
+        // Prefer Percentage key map for OCR on this shared topic (P&L uses seed button).
         answerKeyByNumber:
           topicId === PERCENTAGE_PACK_TOPIC_ID
             ? PERCENTAGE_ANSWER_KEY
@@ -265,53 +271,80 @@ export function PracticePage() {
     }
   }
 
-  const onLoadPercentagePack = async () => {
-    if (!topicId) {
-      setMsg('Pick a topic first.')
-      return
-    }
-    const target = topicId || PERCENTAGE_PACK_TOPIC_ID
+  const loadSeedPack = async (opts: {
+    packId: string
+    topicId: string
+    promptPrefix: string
+    items: Array<{
+      number: number
+      stem: string
+      options: Partial<Record<AnswerKey, string>>
+      answerKey: AnswerKey
+      sourceTag?: string
+    }>
+    label: string
+  }) => {
     const already = questions.filter(
       (q) =>
-        q.topicId === target &&
-        (q.prompt?.startsWith('Pct Q') ||
-          q.prompt?.includes(PERCENTAGE_PACK_ID)),
+        q.topicId === opts.topicId &&
+        (q.prompt?.startsWith(opts.promptPrefix) ||
+          q.prompt?.includes(opts.packId)),
     )
-    if (already.length >= PERCENTAGE_CHAMPION_PACK.length) {
+    if (already.length >= opts.items.length) {
       setMsg(
-        `Percentage pack already loaded (${already.length} questions). Delete them first to reload.`,
+        `${opts.label} already loaded (${already.length} questions). Delete them first to reload.`,
       )
-      setTopicId(PERCENTAGE_PACK_TOPIC_ID)
+      setTopicId(opts.topicId)
       return
     }
     setBusy(true)
     setMsg('')
     try {
-      setTopicId(PERCENTAGE_PACK_TOPIC_ID)
+      setTopicId(opts.topicId)
       const created = await addQuestions(
-        PERCENTAGE_CHAMPION_PACK.map((it) => ({
-          topicId: PERCENTAGE_PACK_TOPIC_ID,
+        opts.items.map((it) => ({
+          topicId: opts.topicId,
           imageDataUrl: STEM_ONLY_IMAGE,
           answerKey: it.answerKey,
           stem: it.stem,
           options: it.options,
           source: 'seed' as const,
-          prompt: `Pct Q${it.number} · ${PERCENTAGE_PACK_ID}${
+          prompt: `${opts.promptPrefix}${it.number} · ${opts.packId}${
             it.sourceTag ? ` · ${it.sourceTag}` : ''
           }`,
         })),
       )
       setTab('drill')
       setMsg(
-        `Loaded ${created.length} Percentage questions (answer keys only — no solutions) into Percentage, Profit & Loss.`,
+        `Loaded ${created.length} ${opts.label} questions (answer keys only — no solutions) into Percentage, Profit & Loss.`,
       )
       setQCount(Math.min(25, created.length + already.length))
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'Could not load Percentage pack')
+      setMsg(
+        e instanceof Error ? e.message : `Could not load ${opts.label} pack`,
+      )
     } finally {
       setBusy(false)
     }
   }
+
+  const onLoadPercentagePack = () =>
+    void loadSeedPack({
+      packId: PERCENTAGE_PACK_ID,
+      topicId: PERCENTAGE_PACK_TOPIC_ID,
+      promptPrefix: 'Pct Q',
+      items: PERCENTAGE_CHAMPION_PACK,
+      label: 'Percentage',
+    })
+
+  const onLoadProfitLossPack = () =>
+    void loadSeedPack({
+      packId: PROFIT_LOSS_PACK_ID,
+      topicId: PROFIT_LOSS_PACK_TOPIC_ID,
+      promptPrefix: 'P&L Q',
+      items: PROFIT_LOSS_CHAMPION_PACK,
+      label: 'Profit & Loss',
+    })
 
   const onStart = async () => {
     if (available <= 0) {
@@ -424,20 +457,30 @@ export function PracticePage() {
       {tab === 'bank' ? (
         <>
           <section className="practice-composer cardish" aria-label="Seed packs">
-            <h2>Percentage pack (Q1–53)</h2>
+            <h2>SSC packs (keys only)</h2>
             <p className="lede">
-              Load English SSC Percentage MCQs with answer keys into{' '}
-              <strong>Percentage, Profit &amp; Loss</strong>. Solutions are
-              skipped for now — drill scoring still works from the keys.
+              Load English MCQs with answer keys into{' '}
+              <strong>Percentage, Profit &amp; Loss</strong>. Solutions skipped
+              for now — drill scoring still works from the keys.
             </p>
-            <button
-              type="button"
-              className="btn primary"
-              disabled={busy || ocrBusy}
-              onClick={() => void onLoadPercentagePack()}
-            >
-              {busy ? 'Loading…' : 'Load Percentage pack (53 Qs)'}
-            </button>
+            <div className="practice-seed-actions">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy || ocrBusy}
+                onClick={onLoadPercentagePack}
+              >
+                {busy ? 'Loading…' : 'Load Percentage (53 Qs)'}
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy || ocrBusy}
+                onClick={onLoadProfitLossPack}
+              >
+                {busy ? 'Loading…' : 'Load Profit & Loss (63 Qs)'}
+              </button>
+            </div>
           </section>
 
           <section className="practice-composer cardish" aria-label="Scan screenshots">

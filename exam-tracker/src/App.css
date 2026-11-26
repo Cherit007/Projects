@@ -6268,6 +6268,13 @@ html.practice-exam-active .app-shell {
   }
 }
 
+.practice-seed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
 .practice-scan-form {
   display: grid;
   gap: 0.75rem;
